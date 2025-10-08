@@ -142,6 +142,56 @@
                 }
             };
 
+            const playAudio = async (text, messageIndex) => {
+                try {
+                    // Stop any currently playing audio
+                    if (audioRef.current) {
+                        audioRef.current.pause();
+                        audioRef.current = null;
+                    }
+
+                    setPlayingAudio(messageIndex);
+
+                    const response = await fetch('/.netlify/functions/tts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: text.replace('PÖNTUN_STAÐFEST', '').replace(/[😊🎉👍]/g, '').trim(),
+                            voice: 'nova'
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.audio) {
+                        const audioBlob = new Blob(
+                            [Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))],
+                            { type: 'audio/mpeg' }
+                        );
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const audio = new Audio(audioUrl);
+                        
+                        audioRef.current = audio;
+
+                        audio.onended = () => {
+                            setPlayingAudio(null);
+                            URL.revokeObjectURL(audioUrl);
+                        };
+
+                        audio.onerror = () => {
+                            setPlayingAudio(null);
+                            console.error('Audio playback error');
+                        };
+
+                        await audio.play();
+                    }
+                } catch (error) {
+                    console.error('TTS error:', error);
+                    setPlayingAudio(null);
+                    alert('Ekki tókst að spila hljóð. Reyndu aftur.');
+                }
+            };
+
             const sendMessage = async () => {
                 if (!input.trim() || loading) return;
 
@@ -352,17 +402,29 @@ Ekki nota bullet points nema beðið sé um það. Talaðu eins og vingjarnlegur
                                                     key={idx}
                                                     className={`flex ${msg.role === 'user' ? 'justify-end' : msg.role === 'feedback' ? 'justify-center' : 'justify-start'}`}
                                                 >
-                                                    <div
-                                                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                                                            msg.role === 'user'
-                                                                ? 'bg-orange-500 text-white'
-                                                                : msg.role === 'feedback'
-                                                                ? 'bg-blue-50 text-blue-800 border-2 border-blue-200 text-sm italic'
-                                                                : 'bg-gray-100 text-gray-800'
-                                                        }`}
-                                                    >
-                                                        {msg.role === 'feedback' && <span className="font-semibold">📚 Málfar: </span>}
-                                                        {msg.content.replace('PÖNTUN_STAÐFEST', '').trim()}
+                                                    <div className="flex items-start gap-2">
+                                                        {msg.role === 'assistant' && (
+                                                            <button
+                                                                onClick={() => playAudio(msg.content, idx)}
+                                                                disabled={playingAudio === idx}
+                                                                className="mt-2 p-2 text-orange-600 hover:text-orange-700 disabled:text-gray-400 transition-colors"
+                                                                title="Hlusta"
+                                                            >
+                                                                {playingAudio === idx ? '⏸️' : '🔊'}
+                                                            </button>
+                                                        )}
+                                                        <div
+                                                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                                                msg.role === 'user'
+                                                                    ? 'bg-orange-500 text-white'
+                                                                    : msg.role === 'feedback'
+                                                                    ? 'bg-blue-50 text-blue-800 border-2 border-blue-200 text-sm italic'
+                                                                    : 'bg-gray-100 text-gray-800'
+                                                            }`}
+                                                        >
+                                                            {msg.role === 'feedback' && <span className="font-semibold">📚 Málfar: </span>}
+                                                            {msg.content.replace('PÖNTUN_STAÐFEST', '').trim()}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
