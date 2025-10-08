@@ -62,7 +62,7 @@ Lögreglan fann líka út að hann hafði reynt að drepa Victoriu áður – ha
     }
 
     const App = () => {
-      const [stage, setStage] = useState('text'); // text | tfQuiz | written | vocab | results
+      const [stage, setStage] = useState('text');
       const [tfAnswers, setTfAnswers] = useState(Array(5).fill(null));
       const [tfFeedback, setTfFeedback] = useState(Array(5).fill(null));
       const [writtenAnswers, setWrittenAnswers] = useState(['', '', '']);
@@ -113,8 +113,10 @@ VERKEFNI:
 2. Samþykkja mismunandi orðalag ef merkingin er rétt.
 3. Gefðu stutta, hvetjandi endurgjöf (1-2 setningar).
 
-SVARAÐU Á ÞESSU SNIÐI (JSON):
-{"correct": true/false, "feedback": "þín endurgjöf hér"}`;
+SVARAÐU AÐEINS MEÐ JSON:
+{"correct": true, "feedback": "þín endurgjöf hér"}
+
+EKKERT ANNAÐ EN JSON.`;
 
           const result = await callOpenAI({
             model: 'gpt-4',
@@ -123,12 +125,18 @@ SVARAÐU Á ÞESSU SNIÐI (JSON):
             messages: [{ role: 'user', content: prompt }]
           });
 
-          const parsed = JSON.parse(result);
+          // Clean result - strip markdown code blocks if present
+          let cleanResult = result.trim();
+          if (cleanResult.startsWith('```')) {
+            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          }
+
+          const parsed = JSON.parse(cleanResult);
           const newFb = [...writtenFeedback];
           newFb[index] = parsed;
           setWrittenFeedback(newFb);
         } catch (e) {
-          console.error(e);
+          console.error('Error:', e);
           const newFb = [...writtenFeedback];
           newFb[index] = { correct: false, feedback: 'Villa kom upp. Reyndu aftur.' };
           setWrittenFeedback(newFb);
@@ -157,11 +165,13 @@ SKILGREINING NEMANDA:
 VERKEFNI:
 1. Mettu hvort skilgreiningin sé rétt eða nálægt rétt.
 2. Samþykkja skilgreiningar á íslensku eða öðrum tungumálum.
-3. Samþykkja einfaldar útskýringar (ekki bara bókstaflegar þýðingar).
+3. Samþykkja einfaldar útskýringar.
 4. Gefðu stutta endurgjöf.
 
-SVARAÐU Á ÞESSU SNIÐI (JSON):
-{"correct": true/false, "feedback": "þín endurgjöf"}`;
+SVARAÐU AÐEINS MEÐ JSON:
+{"correct": true, "feedback": "þín endurgjöf"}
+
+EKKERT ANNAÐ EN JSON.`;
 
           const result = await callOpenAI({
             model: 'gpt-4',
@@ -170,12 +180,18 @@ SVARAÐU Á ÞESSU SNIÐI (JSON):
             messages: [{ role: 'user', content: prompt }]
           });
 
-          const parsed = JSON.parse(result);
+          // Clean result
+          let cleanResult = result.trim();
+          if (cleanResult.startsWith('```')) {
+            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          }
+
+          const parsed = JSON.parse(cleanResult);
           const newFb = [...vocabFeedback];
           newFb[index] = parsed;
           setVocabFeedback(newFb);
         } catch (e) {
-          console.error(e);
+          console.error('Error:', e);
           const newFb = [...vocabFeedback];
           newFb[index] = { correct: false, feedback: 'Villa kom upp. Reyndu aftur.' };
           setVocabFeedback(newFb);
@@ -184,17 +200,29 @@ SVARAÐU Á ÞESSU SNIÐI (JSON):
         }
       };
 
+      const StoryPanel = () => (
+        <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Textinn</h3>
+          <div className="prose prose-sm max-w-none">
+            {STORY_TEXT.split('\n\n').map((p, i) => (
+              <p key={i} className="mb-3 text-gray-700 leading-relaxed text-sm">{p}</p>
+            ))}
+          </div>
+        </div>
+      );
+
       return (
         <div className="min-h-screen pb-12">
           <header className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-4xl mx-auto px-6 py-8">
+            <div className="max-w-7xl mx-auto px-6 py-8">
+              <a href="verkefni.html" className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block">← Til baka</a>
               <h1 className="text-3xl font-light text-gray-800 mb-2">Fallhlífin opnaðist ekki</h1>
               <p className="text-gray-500 text-sm font-light">Lesskilningur · A2-B1</p>
             </div>
           </header>
 
-          <main className="max-w-4xl mx-auto px-6 mt-8">
-            {stage === 'text' && (
+          {stage === 'text' && (
+            <main className="max-w-4xl mx-auto px-6 mt-8">
               <section className="bg-white rounded-lg shadow-sm p-8 mb-6">
                 <div className="prose prose-lg max-w-none">
                   {STORY_TEXT.split('\n\n').map((p, i) => (
@@ -210,172 +238,202 @@ SVARAÐU Á ÞESSU SNIÐI (JSON):
                   </button>
                 </div>
               </section>
-            )}
+            </main>
+          )}
 
-            {stage === 'tfQuiz' && (
-              <section className="bg-white rounded-lg shadow-sm p-8">
-                <h2 className="text-2xl font-light text-gray-800 mb-6">A. Rétt eða rangt?</h2>
-                <div className="space-y-6">
-                  {TRUE_FALSE.map((item, i) => (
-                    <div key={i} className="pb-6 border-b border-gray-100 last:border-0">
-                      <p className="text-gray-700 mb-3 font-light">{i + 1}. {item.q}</p>
-                      <div className="flex gap-4 items-center">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`tf-${i}`}
-                            checked={tfAnswers[i] === true}
-                            onChange={() => {
-                              const newA = [...tfAnswers];
-                              newA[i] = true;
-                              setTfAnswers(newA);
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span className="text-gray-600 font-light">Rétt</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`tf-${i}`}
-                            checked={tfAnswers[i] === false}
-                            onChange={() => {
-                              const newA = [...tfAnswers];
-                              newA[i] = false;
-                              setTfAnswers(newA);
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span className="text-gray-600 font-light">Rangt</span>
-                        </label>
-                        {tfFeedback[i] && (
-                          <span className={`ml-4 text-sm ${tfFeedback[i].correct ? 'text-green-600' : 'text-red-600'}`}>
-                            {tfFeedback[i].message}
-                          </span>
-                        )}
+          {(stage === 'tfQuiz' || stage === 'written' || stage === 'vocab') && (
+            <main className="max-w-7xl mx-auto px-6 mt-8">
+              <div className="grid lg:grid-cols-3 gap-6">
+                {/* Left: Story (hidden on mobile) */}
+                <div className="hidden lg:block">
+                  <StoryPanel />
+                </div>
+
+                {/* Right: Quiz */}
+                <div className="lg:col-span-2">
+                  {/* Mobile: Collapsible story */}
+                  <details className="lg:hidden mb-6 bg-white rounded-lg shadow-sm">
+                    <summary className="p-4 cursor-pointer font-medium text-gray-700">
+                      📖 Sjá textann
+                    </summary>
+                    <div className="p-4 pt-0 border-t">
+                      <div className="prose prose-sm max-w-none">
+                        {STORY_TEXT.split('\n\n').map((p, i) => (
+                          <p key={i} className="mb-3 text-gray-700 leading-relaxed text-sm">{p}</p>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-8 flex gap-4">
-                  <button
-                    onClick={handleTfSubmit}
-                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
-                  >
-                    Athuga svör
-                  </button>
-                  <button
-                    onClick={() => setStage('written')}
-                    className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
-                  >
-                    Áfram →
-                  </button>
-                </div>
-              </section>
-            )}
+                  </details>
 
-            {stage === 'written' && (
-              <section className="bg-white rounded-lg shadow-sm p-8">
-                <h2 className="text-2xl font-light text-gray-800 mb-6">B. Skrifaðu</h2>
-                <div className="space-y-8">
-                  {WRITTEN.map((q, i) => (
-                    <div key={i}>
-                      <label className="block text-gray-700 mb-2 font-light">{i + 1}. {q}</label>
-                      <textarea
-                        value={writtenAnswers[i]}
-                        onChange={(e) => {
-                          const newA = [...writtenAnswers];
-                          newA[i] = e.target.value;
-                          setWrittenAnswers(newA);
-                        }}
-                        rows="3"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
-                        placeholder="Skrifaðu svarið þitt hér..."
-                      />
-                      {writtenFeedback[i] && (
-                        <div className={`mt-2 p-3 rounded-md ${writtenFeedback[i].correct ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
-                          <p className="text-sm font-light">{writtenFeedback[i].feedback}</p>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleWrittenSubmit(i)}
-                        disabled={loading || !writtenAnswers[i].trim()}
-                        className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed font-light"
-                      >
-                        {loading ? 'Athuga...' : 'Athuga svar'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-8 flex gap-4">
-                  <button
-                    onClick={() => setStage('tfQuiz')}
-                    className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
-                  >
-                    ← Til baka
-                  </button>
-                  <button
-                    onClick={() => setStage('vocab')}
-                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
-                  >
-                    Áfram →
-                  </button>
-                </div>
-              </section>
-            )}
+                  {stage === 'tfQuiz' && (
+                    <section className="bg-white rounded-lg shadow-sm p-8">
+                      <h2 className="text-2xl font-light text-gray-800 mb-6">A. Rétt eða rangt?</h2>
+                      <div className="space-y-6">
+                        {TRUE_FALSE.map((item, i) => (
+                          <div key={i} className="pb-6 border-b border-gray-100 last:border-0">
+                            <p className="text-gray-700 mb-3 font-light">{i + 1}. {item.q}</p>
+                            <div className="flex gap-4 items-center flex-wrap">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`tf-${i}`}
+                                  checked={tfAnswers[i] === true}
+                                  onChange={() => {
+                                    const newA = [...tfAnswers];
+                                    newA[i] = true;
+                                    setTfAnswers(newA);
+                                  }}
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-gray-600 font-light">Rétt</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`tf-${i}`}
+                                  checked={tfAnswers[i] === false}
+                                  onChange={() => {
+                                    const newA = [...tfAnswers];
+                                    newA[i] = false;
+                                    setTfAnswers(newA);
+                                  }}
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-gray-600 font-light">Rangt</span>
+                              </label>
+                              {tfFeedback[i] && (
+                                <span className={`ml-4 text-sm ${tfFeedback[i].correct ? 'text-green-600' : 'text-red-600'}`}>
+                                  {tfFeedback[i].message}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-8 flex gap-4">
+                        <button
+                          onClick={handleTfSubmit}
+                          className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                        >
+                          Athuga svör
+                        </button>
+                        <button
+                          onClick={() => setStage('written')}
+                          className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
+                        >
+                          Áfram →
+                        </button>
+                      </div>
+                    </section>
+                  )}
 
-            {stage === 'vocab' && (
-              <section className="bg-white rounded-lg shadow-sm p-8">
-                <h2 className="text-2xl font-light text-gray-800 mb-6">C. Ný orð</h2>
-                <p className="text-gray-600 mb-6 font-light">Hvað þýða þessi orð? Skrifaðu skýringu á íslensku eða þínu tungumáli.</p>
-                <div className="space-y-6">
-                  {VOCAB.map((word, i) => (
-                    <div key={i}>
-                      <label className="block text-gray-700 mb-2 font-light">• {word}</label>
-                      <input
-                        type="text"
-                        value={vocabAnswers[i]}
-                        onChange={(e) => {
-                          const newA = [...vocabAnswers];
-                          newA[i] = e.target.value;
-                          setVocabAnswers(newA);
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
-                        placeholder="Skrifaðu skilgreiningu..."
-                      />
-                      {vocabFeedback[i] && (
-                        <div className={`mt-2 p-3 rounded-md ${vocabFeedback[i].correct ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
-                          <p className="text-sm font-light">{vocabFeedback[i].feedback}</p>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleVocabSubmit(i)}
-                        disabled={loading || !vocabAnswers[i].trim()}
-                        className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed font-light"
-                      >
-                        {loading ? 'Athuga...' : 'Athuga svar'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-8 flex gap-4">
-                  <button
-                    onClick={() => setStage('written')}
-                    className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
-                  >
-                    ← Til baka
-                  </button>
-                  <button
-                    onClick={() => setStage('results')}
-                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
-                  >
-                    Sjá niðurstöður
-                  </button>
-                </div>
-              </section>
-            )}
+                  {stage === 'written' && (
+                    <section className="bg-white rounded-lg shadow-sm p-8">
+                      <h2 className="text-2xl font-light text-gray-800 mb-6">B. Skrifaðu</h2>
+                      <div className="space-y-8">
+                        {WRITTEN.map((q, i) => (
+                          <div key={i}>
+                            <label className="block text-gray-700 mb-2 font-light">{i + 1}. {q}</label>
+                            <textarea
+                              value={writtenAnswers[i]}
+                              onChange={(e) => {
+                                const newA = [...writtenAnswers];
+                                newA[i] = e.target.value;
+                                setWrittenAnswers(newA);
+                              }}
+                              rows="3"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                              placeholder="Skrifaðu svarið þitt hér..."
+                            />
+                            {writtenFeedback[i] && (
+                              <div className={`mt-2 p-3 rounded-md ${writtenFeedback[i].correct ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                                <p className="text-sm font-light">{writtenFeedback[i].feedback}</p>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => handleWrittenSubmit(i)}
+                              disabled={loading || !writtenAnswers[i].trim()}
+                              className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed font-light"
+                            >
+                              {loading ? 'Athuga...' : 'Athuga svar'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-8 flex gap-4">
+                        <button
+                          onClick={() => setStage('tfQuiz')}
+                          className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
+                        >
+                          ← Til baka
+                        </button>
+                        <button
+                          onClick={() => setStage('vocab')}
+                          className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                        >
+                          Áfram →
+                        </button>
+                      </div>
+                    </section>
+                  )}
 
-            {stage === 'results' && (
+                  {stage === 'vocab' && (
+                    <section className="bg-white rounded-lg shadow-sm p-8">
+                      <h2 className="text-2xl font-light text-gray-800 mb-6">C. Ný orð</h2>
+                      <p className="text-gray-600 mb-6 font-light">Hvað þýða þessi orð? Skrifaðu skýringu á íslensku eða þínu tungumáli.</p>
+                      <div className="space-y-6">
+                        {VOCAB.map((word, i) => (
+                          <div key={i}>
+                            <label className="block text-gray-700 mb-2 font-light">• {word}</label>
+                            <input
+                              type="text"
+                              value={vocabAnswers[i]}
+                              onChange={(e) => {
+                                const newA = [...vocabAnswers];
+                                newA[i] = e.target.value;
+                                setVocabAnswers(newA);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                              placeholder="Skrifaðu skilgreiningu..."
+                            />
+                            {vocabFeedback[i] && (
+                              <div className={`mt-2 p-3 rounded-md ${vocabFeedback[i].correct ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                                <p className="text-sm font-light">{vocabFeedback[i].feedback}</p>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => handleVocabSubmit(i)}
+                              disabled={loading || !vocabAnswers[i].trim()}
+                              className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed font-light"
+                            >
+                              {loading ? 'Athuga...' : 'Athuga svar'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-8 flex gap-4">
+                        <button
+                          onClick={() => setStage('written')}
+                          className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
+                        >
+                          ← Til baka
+                        </button>
+                        <button
+                          onClick={() => setStage('results')}
+                          className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                        >
+                          Sjá niðurstöður
+                        </button>
+                      </div>
+                    </section>
+                  )}
+                </div>
+              </div>
+            </main>
+          )}
+
+          {stage === 'results' && (
+            <main className="max-w-4xl mx-auto px-6 mt-8">
               <section className="bg-white rounded-lg shadow-sm p-8 text-center">
                 <div className="text-6xl mb-4">🎉</div>
                 <h2 className="text-3xl font-light text-gray-800 mb-4">Vel gert!</h2>
@@ -384,7 +442,7 @@ SVARAÐU Á ÞESSU SNIÐI (JSON):
                   <p className="text-5xl font-light text-gray-800">{totalScore()}/13</p>
                 </div>
                 <p className="text-gray-600 mb-8 font-light">Þú hefur klárað æfinguna!</p>
-                <div className="flex gap-4 justify-center">
+                <div className="flex gap-4 justify-center flex-wrap">
                   <button
                     onClick={() => {
                       setStage('text');
@@ -400,15 +458,15 @@ SVARAÐU Á ÞESSU SNIÐI (JSON):
                     Byrja aftur
                   </button>
                   <a
-                    href="malmenni.html"
+                    href="verkefni.html"
                     className="bg-white text-gray-800 px-6 py-3 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light inline-block"
                   >
-                    Til baka á Málmenni
+                    Til baka á Verkefni
                   </a>
                 </div>
               </section>
-            )}
-          </main>
+            </main>
+          )}
         </div>
       );
     };
