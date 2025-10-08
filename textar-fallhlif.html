@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📖 Fallhlífin opnaðist ekki – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const STORY_TEXT = `Victoria Cilliers er bresk kona sem stundar fallhlífastökk. Hún var vanur stökkvari og hafði gert þetta oft áður. Einn dag í apríl 2015 fór hún í fallhlífastökk. Hún stökk úr flugvél í um 1.200 metra hæð. En eitthvað var að. Fallhlífin opnaðist ekki. Hún reyndi að nota varafallhlífina – en hún opnaðist heldur ekki. Victoria féll hratt til jarðar og slasaðist mikið. Hún braut mjaðmir, rifbein og fætur. Hún slapp lifandi – sem er ótrúlegt, en þurfti að vera lengi á sjúkrahúsi.
+
+Lögreglan fór að rannsaka málið. Hvers vegna opnuðust ekki fallhlífarnar? Bráðum kom í ljós að einhver hafði skemmt þær viljandi. Sá grunaði var eiginmaður Victoriu. Hann hét Emile Cilliers. Hann var hermaður og vann í breska hernum. Hann skuldaði mikla peninga og átti í ástarsambandi við aðra konu.
+
+Lögreglan fann líka út að hann hafði reynt að drepa Victoriu áður – hann reyndi að búa til gasleka í eldhúsinu þeirra nokkrum dögum fyrir slysið. Árið 2018 var Emile dæmdur sekur fyrir tvær morðtilraunir. Hann fékk lífstíðarfangelsi og sleppur ekki fyrr en eftir 18 ár. Victoria lifði af og sagði síðar í viðtali að hún væri heppin að vera á lífi.`;
+
+    const TRUE_FALSE = [
+      { q: 'Victoria hafði aldrei áður farið í fallhlífastökk.', correct: false },
+      { q: 'Báðar fallhlífarnar hennar biluðu.', correct: true },
+      { q: 'Eiginmaður Victoriu vann í hernum.', correct: true },
+      { q: 'Victoria slapp lifandi en slasaðist.', correct: true },
+      { q: 'Emile fékk 5 ára fangelsi.', correct: false }
+    ];
+
+    const WRITTEN = [
+      'Hvernig slasaðist Victoria þegar hún féll?',
+      'Af hverju grunaði lögreglan eiginmanninn?',
+      'Hvað finnst þér um söguna? Var eitthvað sem kom þér á óvart?'
+    ];
+
+    const VOCAB = [
+      'fallhlíf',
+      'varafallhlíf',
+      'gasleki',
+      'morðtilraun',
+      'lífstíðarfangelsi'
+    ];
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const App = () => {
+      const [stage, setStage] = useState('text'); // text | tfQuiz | written | vocab | results
+      const [tfAnswers, setTfAnswers] = useState(Array(5).fill(null));
+      const [tfFeedback, setTfFeedback] = useState(Array(5).fill(null));
+      const [writtenAnswers, setWrittenAnswers] = useState(['', '', '']);
+      const [writtenFeedback, setWrittenFeedback] = useState([null, null, null]);
+      const [vocabAnswers, setVocabAnswers] = useState(['', '', '', '', '']);
+      const [vocabFeedback, setVocabFeedback] = useState([null, null, null, null, null]);
+      const [loading, setLoading] = useState(false);
+
+      const totalScore = () => {
+        let correct = 0;
+        tfAnswers.forEach((ans, i) => ans === TRUE_FALSE[i].correct && correct++);
+        writtenFeedback.forEach(fb => fb?.correct && correct++);
+        vocabFeedback.forEach(fb => fb?.correct && correct++);
+        return correct;
+      };
+
+      const handleTfSubmit = () => {
+        const feedback = tfAnswers.map((ans, i) => {
+          if (ans === null) return null;
+          const isCorrect = ans === TRUE_FALSE[i].correct;
+          return {
+            correct: isCorrect,
+            message: isCorrect ? 'Rétt! ✓' : 'Rangt ✗'
+          };
+        });
+        setTfFeedback(feedback);
+      };
+
+      const handleWrittenSubmit = async (index) => {
+        const answer = writtenAnswers[index].trim();
+        if (!answer) return;
+        setLoading(true);
+
+        try {
+          const prompt = `Þú ert kennari í íslensku sem metur svör nemenda við lesskilningsspurningum.
+
+TEXTI:
+${STORY_TEXT}
+
+SPURNING:
+${WRITTEN[index]}
+
+SVAR NEMANDA:
+"${answer}"
+
+VERKEFNI:
+1. Mettu hvort svarið sé rétt miðað við textann.
+2. Samþykkja mismunandi orðalag ef merkingin er rétt.
+3. Gefðu stutta, hvetjandi endurgjöf (1-2 setningar).
+
+SVARAÐU Á ÞESSU SNIÐI (JSON):
+{"correct": true/false, "feedback": "þín endurgjöf hér"}`;
+
+          const result = await callOpenAI({
+            model: 'gpt-4',
+            temperature: 0.3,
+            max_tokens: 150,
+            messages: [{ role: 'user', content: prompt }]
+          });
+
+          const parsed = JSON.parse(result);
+          const newFb = [...writtenFeedback];
+          newFb[index] = parsed;
+          setWrittenFeedback(newFb);
+        } catch (e) {
+          console.error(e);
+          const newFb = [...writtenFeedback];
+          newFb[index] = { correct: false, feedback: 'Villa kom upp. Reyndu aftur.' };
+          setWrittenFeedback(newFb);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleVocabSubmit = async (index) => {
+        const answer = vocabAnswers[index].trim();
+        if (!answer) return;
+        setLoading(true);
+
+        try {
+          const prompt = `Þú ert kennari í íslensku sem metur skilgreiningar nemenda á orðum.
+
+ORÐ:
+"${VOCAB[index]}"
+
+SAMHENGI (textinn sem orðið kom úr):
+${STORY_TEXT}
+
+SKILGREINING NEMANDA:
+"${answer}"
+
+VERKEFNI:
+1. Mettu hvort skilgreiningin sé rétt eða nálægt rétt.
+2. Samþykkja skilgreiningar á íslensku eða öðrum tungumálum.
+3. Samþykkja einfaldar útskýringar (ekki bara bókstaflegar þýðingar).
+4. Gefðu stutta endurgjöf.
+
+SVARAÐU Á ÞESSU SNIÐI (JSON):
+{"correct": true/false, "feedback": "þín endurgjöf"}`;
+
+          const result = await callOpenAI({
+            model: 'gpt-4',
+            temperature: 0.3,
+            max_tokens: 150,
+            messages: [{ role: 'user', content: prompt }]
+          });
+
+          const parsed = JSON.parse(result);
+          const newFb = [...vocabFeedback];
+          newFb[index] = parsed;
+          setVocabFeedback(newFb);
+        } catch (e) {
+          console.error(e);
+          const newFb = [...vocabFeedback];
+          newFb[index] = { correct: false, feedback: 'Villa kom upp. Reyndu aftur.' };
+          setVocabFeedback(newFb);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Fallhlífin opnaðist ekki</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur · A2-B1</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'text' && (
+              <section className="bg-white rounded-lg shadow-sm p-8 mb-6">
+                <div className="prose prose-lg max-w-none">
+                  {STORY_TEXT.split('\n\n').map((p, i) => (
+                    <p key={i} className="mb-4 text-gray-700 leading-relaxed font-light">{p}</p>
+                  ))}
+                </div>
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => setStage('tfQuiz')}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Byrja æfingar →
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {stage === 'tfQuiz' && (
+              <section className="bg-white rounded-lg shadow-sm p-8">
+                <h2 className="text-2xl font-light text-gray-800 mb-6">A. Rétt eða rangt?</h2>
+                <div className="space-y-6">
+                  {TRUE_FALSE.map((item, i) => (
+                    <div key={i} className="pb-6 border-b border-gray-100 last:border-0">
+                      <p className="text-gray-700 mb-3 font-light">{i + 1}. {item.q}</p>
+                      <div className="flex gap-4 items-center">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`tf-${i}`}
+                            checked={tfAnswers[i] === true}
+                            onChange={() => {
+                              const newA = [...tfAnswers];
+                              newA[i] = true;
+                              setTfAnswers(newA);
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-gray-600 font-light">Rétt</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`tf-${i}`}
+                            checked={tfAnswers[i] === false}
+                            onChange={() => {
+                              const newA = [...tfAnswers];
+                              newA[i] = false;
+                              setTfAnswers(newA);
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-gray-600 font-light">Rangt</span>
+                        </label>
+                        {tfFeedback[i] && (
+                          <span className={`ml-4 text-sm ${tfFeedback[i].correct ? 'text-green-600' : 'text-red-600'}`}>
+                            {tfFeedback[i].message}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-8 flex gap-4">
+                  <button
+                    onClick={handleTfSubmit}
+                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Athuga svör
+                  </button>
+                  <button
+                    onClick={() => setStage('written')}
+                    className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
+                  >
+                    Áfram →
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {stage === 'written' && (
+              <section className="bg-white rounded-lg shadow-sm p-8">
+                <h2 className="text-2xl font-light text-gray-800 mb-6">B. Skrifaðu</h2>
+                <div className="space-y-8">
+                  {WRITTEN.map((q, i) => (
+                    <div key={i}>
+                      <label className="block text-gray-700 mb-2 font-light">{i + 1}. {q}</label>
+                      <textarea
+                        value={writtenAnswers[i]}
+                        onChange={(e) => {
+                          const newA = [...writtenAnswers];
+                          newA[i] = e.target.value;
+                          setWrittenAnswers(newA);
+                        }}
+                        rows="3"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                        placeholder="Skrifaðu svarið þitt hér..."
+                      />
+                      {writtenFeedback[i] && (
+                        <div className={`mt-2 p-3 rounded-md ${writtenFeedback[i].correct ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                          <p className="text-sm font-light">{writtenFeedback[i].feedback}</p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleWrittenSubmit(i)}
+                        disabled={loading || !writtenAnswers[i].trim()}
+                        className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed font-light"
+                      >
+                        {loading ? 'Athuga...' : 'Athuga svar'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-8 flex gap-4">
+                  <button
+                    onClick={() => setStage('tfQuiz')}
+                    className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
+                  >
+                    ← Til baka
+                  </button>
+                  <button
+                    onClick={() => setStage('vocab')}
+                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Áfram →
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {stage === 'vocab' && (
+              <section className="bg-white rounded-lg shadow-sm p-8">
+                <h2 className="text-2xl font-light text-gray-800 mb-6">C. Ný orð</h2>
+                <p className="text-gray-600 mb-6 font-light">Hvað þýða þessi orð? Skrifaðu skýringu á íslensku eða þínu tungumáli.</p>
+                <div className="space-y-6">
+                  {VOCAB.map((word, i) => (
+                    <div key={i}>
+                      <label className="block text-gray-700 mb-2 font-light">• {word}</label>
+                      <input
+                        type="text"
+                        value={vocabAnswers[i]}
+                        onChange={(e) => {
+                          const newA = [...vocabAnswers];
+                          newA[i] = e.target.value;
+                          setVocabAnswers(newA);
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                        placeholder="Skrifaðu skilgreiningu..."
+                      />
+                      {vocabFeedback[i] && (
+                        <div className={`mt-2 p-3 rounded-md ${vocabFeedback[i].correct ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                          <p className="text-sm font-light">{vocabFeedback[i].feedback}</p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleVocabSubmit(i)}
+                        disabled={loading || !vocabAnswers[i].trim()}
+                        className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed font-light"
+                      >
+                        {loading ? 'Athuga...' : 'Athuga svar'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-8 flex gap-4">
+                  <button
+                    onClick={() => setStage('written')}
+                    className="bg-white text-gray-800 px-6 py-2 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light"
+                  >
+                    ← Til baka
+                  </button>
+                  <button
+                    onClick={() => setStage('results')}
+                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Sjá niðurstöður
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {stage === 'results' && (
+              <section className="bg-white rounded-lg shadow-sm p-8 text-center">
+                <div className="text-6xl mb-4">🎉</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">Vel gert!</h2>
+                <div className="bg-gray-50 rounded-lg p-6 mb-6 inline-block">
+                  <p className="text-gray-600 mb-2 font-light">Þín einkunn:</p>
+                  <p className="text-5xl font-light text-gray-800">{totalScore()}/13</p>
+                </div>
+                <p className="text-gray-600 mb-8 font-light">Þú hefur klárað æfinguna!</p>
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={() => {
+                      setStage('text');
+                      setTfAnswers(Array(5).fill(null));
+                      setTfFeedback(Array(5).fill(null));
+                      setWrittenAnswers(['', '', '']);
+                      setWrittenFeedback([null, null, null]);
+                      setVocabAnswers(['', '', '', '', '']);
+                      setVocabFeedback([null, null, null, null, null]);
+                    }}
+                    className="bg-gray-800 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Byrja aftur
+                  </button>
+                  <a
+                    href="malmenni.html"
+                    className="bg-white text-gray-800 px-6 py-3 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors font-light inline-block"
+                  >
+                    Til baka á Málmenni
+                  </a>
+                </div>
+              </section>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
