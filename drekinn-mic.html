@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐉 Drekinn - Skyndibitastaður</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        const SendIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        );
+
+        const MicIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+        );
+
+        const CreditCardIcon = () => (
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                <line x1="1" y1="10" x2="23" y2="10"></line>
+            </svg>
+        );
+
+        const Drekinn = () => {
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [stage, setStage] = useState('ordering');
+            const [orderNumber, setOrderNumber] = useState(null);
+            const [paymentStep, setPaymentStep] = useState('idle');
+            const [isListening, setIsListening] = useState(false);
+            const [recognition, setRecognition] = useState(null);
+            const messagesEndRef = useRef(null);
+
+            const menu = {
+                hamborgarar: [
+                    { name: 'Drekaborgarinn', price: 1590 },
+                    { name: 'Ostaborgarinn', price: 1690 },
+                    { name: 'Bacon Deluxe', price: 1890 },
+                    { name: 'Grísakinn', price: 1990 },
+                    { name: 'Kjúklingaborgarinn', price: 1790 }
+                ],
+                medlaeti: [
+                    { name: 'Franskar litlar', price: 490 },
+                    { name: 'Franskar stórar', price: 690 },
+                    { name: 'Hringir', price: 590 },
+                    { name: 'Nuggets', price: 890 }
+                ],
+                drykkir: [
+                    { name: 'Gos stórt', price: 390 },
+                    { name: 'Gos lítið', price: 290 },
+                    { name: 'Milkshake', price: 690 },
+                    { name: 'Kaffi', price: 390 }
+                ],
+                tilbod: [
+                    { name: 'Hamborgaratilboð', price: 2290 },
+                    { name: 'Stóra tilboðið', price: 2990 }
+                ]
+            };
+
+            useEffect(() => {
+                const initialGreeting = {
+                    role: 'assistant',
+                    content: 'Hæ og velkomin á Drekann! Hvað má bjóða þér í dag? 😊'
+                };
+                setMessages([initialGreeting]);
+
+                // Setup speech recognition
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    const recognitionInstance = new SpeechRecognition();
+                    recognitionInstance.continuous = false;
+                    recognitionInstance.interimResults = false;
+                    recognitionInstance.lang = 'is-IS';
+
+                    recognitionInstance.onstart = () => {
+                        setIsListening(true);
+                    };
+
+                    recognitionInstance.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        setInput(transcript);
+                        setIsListening(false);
+                    };
+
+                    recognitionInstance.onerror = (event) => {
+                        console.error('Speech recognition error:', event.error);
+                        setIsListening(false);
+                        if (event.error === 'no-speech') {
+                            alert('Engin talgreining. Reyndu aftur og talaðu skýrt.');
+                        }
+                    };
+
+                    recognitionInstance.onend = () => {
+                        setIsListening(false);
+                    };
+
+                    setRecognition(recognitionInstance);
+                }
+            }, []);
+
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            const toggleListening = async () => {
+                if (!recognition) {
+                    alert('Því miður styður vafrinn þinn ekki talgreiningu. Prófaðu Chrome eða Edge.');
+                    return;
+                }
+
+                if (isListening) {
+                    recognition.stop();
+                    setIsListening(false);
+                } else {
+                    try {
+                        await navigator.mediaDevices.getUserMedia({ audio: true });
+                        recognition.start();
+                    } catch (error) {
+                        console.error('Microphone access error:', error);
+                        alert('Ekki tókst að fá aðgang að hljóðnema. Vinsamlegast leyfðu aðgang í vafranum þínum.');
+                    }
+                }
+            };
+
+            const sendMessage = async () => {
+                if (!input.trim() || loading) return;
+
+                const userMessage = { role: 'user', content: input };
+                setMessages(prev => [...prev, userMessage]);
+                setInput('');
+                setLoading(true);
+
+                // Get language feedback first
+                try {
+                    const feedbackPrompt = `Þú ert íslenskukennari sem gefur stutt og hvetjandi endurgjöf á málfar.
+
+Skilaboð notanda: "${input}"
+
+Gefðu MJÖG STUTTAR endurgjöf (1-2 setningar). Ef málfræðin er góð, gefðu stutt hrós. Ef það eru smávægilegar villur, leiðréttu þær vinsamlega. Vertu alltaf jákvæð og hvetjandi.
+
+Dæmi um góð svör:
+- "Frábært mál! 👍"
+- "Vel sagt! Bara smámunur: 'ég vil' frekar en 'ég vill'. 😊"
+- "Gott mál! Muna að 'hamborgarann' (ekki 'hamborgaran')"
+
+Svaraðu BARA með endurgjöfinni, engu öðru.`;
+
+                    const feedbackResponse = await fetch('/.netlify/functions/openai', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            model: 'gpt-4',
+                            max_tokens: 150,
+                            messages: [
+                                { role: 'system', content: 'Þú ert íslenskukennari.' },
+                                { role: 'user', content: feedbackPrompt }
+                            ]
+                        })
+                    });
+
+                    const feedbackData = await feedbackResponse.json();
+                    const feedback = feedbackData.content;
+
+                    setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
+                    await new Promise(resolve => setTimeout(resolve, 800));
+
+                } catch (error) {
+                    console.error('Feedback error:', error);
+                }
+
+                try {
+                    const conversationHistory = messages.filter(m => m.role !== 'feedback');
+                    
+                    const systemPrompt = `Þú ert vingjarnlegur starfsmaður á Drekanum, vinsælum íslenskum skyndibitastað. 
+
+MATSEÐILL DREKANS:
+Hamborgarar:
+- Drekaborgarinn: 1.590 kr
+- Ostaborgarinn: 1.690 kr
+- Bacon Deluxe: 1.890 kr
+- Grísakinn: 1.990 kr
+- Kjúklingaborgarinn: 1.790 kr
+
+Meðlæti:
+- Franskar litlar: 490 kr
+- Franskar stórar: 690 kr
+- Hringir: 590 kr
+- Nuggets: 890 kr
+
+Drykkir:
+- Gos stórt: 390 kr
+- Gos lítið: 290 kr
+- Milkshake: 690 kr
+- Kaffi: 390 kr
+
+Tilboð:
+- Hamborgaratilboð (borgari, franskar, gos): 2.290 kr
+- Stóra tilboðið (2 borgarar, stórar franskar, 2 gos): 2.990 kr
+
+VERKEFNI:
+1. Hjálpa viðskiptavinum að velja af matseðlinum
+2. Reikna heildarverð pöntunarinnar
+3. Staðfesta pöntunina þegar viðskiptavinur er tilbúinn
+4. Þegar pöntun er staðfest, segðu NÁKVÆMLEGA: "PÖNTUN_STAÐFEST"
+
+TÓNN: Vinalegur, afslöppuð, íslenskt mál. Notaðu emoji af og til. Vertu náttúrulegur í samtali.
+
+Ekki nota bullet points nema beðið sé um það. Talaðu eins og vingjarnlegur starfsmaður.`;
+
+                    const response = await fetch('/.netlify/functions/openai', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            model: 'gpt-4',
+                            max_tokens: 1000,
+                            messages: [
+                                { role: 'system', content: systemPrompt },
+                                ...conversationHistory.map(msg => ({
+                                    role: msg.role,
+                                    content: msg.content
+                                })),
+                                userMessage
+                            ]
+                        })
+                    });
+
+                    const data = await response.json();
+                    const claudeResponse = data.content;
+
+                    setMessages(prev => [...prev, { role: 'assistant', content: claudeResponse }]);
+
+                    if (claudeResponse.includes('PÖNTUN_STAÐFEST')) {
+                        setTimeout(() => {
+                            setStage('payment');
+                        }, 1000);
+                    }
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    setMessages(prev => [...prev, { 
+                        role: 'assistant', 
+                        content: 'Úps, það kom upp villa. Reyndu aftur!' 
+                    }]);
+                }
+
+                setLoading(false);
+            };
+
+            const handlePayment = () => {
+                setPaymentStep('inserting');
+                
+                setTimeout(() => {
+                    setPaymentStep('processing');
+                    
+                    setTimeout(() => {
+                        setPaymentStep('success');
+                        const randomOrderNum = Math.floor(Math.random() * 900) + 100;
+                        setOrderNumber(randomOrderNum);
+                        
+                        setTimeout(() => {
+                            setStage('complete');
+                        }, 1500);
+                    }, 2000);
+                }, 1500);
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50">
+                    <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 shadow-lg">
+                        <h1 className="text-4xl font-bold text-center">🐉 Drekinn</h1>
+                        <p className="text-center text-orange-100 mt-2">Besti skyndibitastaðurinn á Íslandi</p>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto p-4">
+                        <div className="grid md:grid-cols-3 gap-6">
+                            <div className="md:col-span-1 bg-white rounded-lg shadow-lg p-6">
+                                <h2 className="text-2xl font-bold text-orange-600 mb-4">Matseðill</h2>
+                                
+                                <div className="space-y-6">
+                                    <div>
+                                        <h3 className="font-bold text-lg text-gray-700 mb-2">🍔 Hamborgarar</h3>
+                                        {menu.hamborgarar.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between py-1 text-sm">
+                                                <span>{item.name}</span>
+                                                <span className="font-semibold">{item.price} kr</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div>
+                                        <h3 className="font-bold text-lg text-gray-700 mb-2">🍟 Meðlæti</h3>
+                                        {menu.medlaeti.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between py-1 text-sm">
+                                                <span>{item.name}</span>
+                                                <span className="font-semibold">{item.price} kr</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div>
+                                        <h3 className="font-bold text-lg text-gray-700 mb-2">🥤 Drykkir</h3>
+                                        {menu.drykkir.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between py-1 text-sm">
+                                                <span>{item.name}</span>
+                                                <span className="font-semibold">{item.price} kr</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div>
+                                        <h3 className="font-bold text-lg text-orange-600 mb-2">⭐ Tilboð</h3>
+                                        {menu.tilbod.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between py-1 text-sm">
+                                                <span>{item.name}</span>
+                                                <span className="font-bold text-orange-600">{item.price} kr</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="md:col-span-2 bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-[600px]">
+                                {stage === 'ordering' && (
+                                    <>
+                                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                            {messages.map((msg, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className={`flex ${msg.role === 'user' ? 'justify-end' : msg.role === 'feedback' ? 'justify-center' : 'justify-start'}`}
+                                                >
+                                                    <div
+                                                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                                            msg.role === 'user'
+                                                                ? 'bg-orange-500 text-white'
+                                                                : msg.role === 'feedback'
+                                                                ? 'bg-blue-50 text-blue-800 border-2 border-blue-200 text-sm italic'
+                                                                : 'bg-gray-100 text-gray-800'
+                                                        }`}
+                                                    >
+                                                        {msg.role === 'feedback' && <span className="font-semibold">📚 Málfar: </span>}
+                                                        {msg.content.replace('PÖNTUN_STAÐFEST', '').trim()}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {loading && (
+                                                <div className="flex justify-start">
+                                                    <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                                                        <div className="flex space-x-2">
+                                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div ref={messagesEndRef} />
+                                        </div>
+
+                                        <div className="border-t p-4">
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={toggleListening}
+                                                    disabled={loading}
+                                                    className={`px-4 py-2 rounded-lg transition-colors ${
+                                                        isListening
+                                                            ? 'bg-red-500 text-white animate-pulse'
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    } disabled:bg-gray-300 disabled:cursor-not-allowed`}
+                                                    title={isListening ? 'Hætta að hlusta' : 'Tala'}
+                                                >
+                                                    <MicIcon />
+                                                </button>
+                                                <input
+                                                    type="text"
+                                                    value={input}
+                                                    onChange={(e) => setInput(e.target.value)}
+                                                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                                                    placeholder="Skrifaðu eða talaðu pöntunina þína..."
+                                                    className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    disabled={loading}
+                                                />
+                                                <button
+                                                    onClick={sendMessage}
+                                                    disabled={loading || !input.trim()}
+                                                    className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                                >
+                                                    <SendIcon />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {stage === 'payment' && (
+                                    <div className="flex-1 flex items-center justify-center p-6">
+                                        <div className="text-center">
+                                            <h2 className="text-3xl font-bold text-gray-800 mb-8">Greiðsla</h2>
+                                            
+                                            <div className="bg-gray-800 rounded-lg p-8 mb-6 relative overflow-hidden">
+                                                <div className="w-64 h-40 bg-gradient-to-br from-gray-700 to-gray-900 rounded-lg flex items-center justify-center">
+                                                    {paymentStep === 'idle' && (
+                                                        <div className="text-gray-400">
+                                                            <CreditCardIcon />
+                                                        </div>
+                                                    )}
+                                                    {paymentStep === 'inserting' && (
+                                                        <div className="text-yellow-400 animate-pulse">
+                                                            <CreditCardIcon />
+                                                            <p className="mt-2 text-sm">Setjið kortið á posa...</p>
+                                                        </div>
+                                                    )}
+                                                    {paymentStep === 'processing' && (
+                                                        <div className="text-blue-400">
+                                                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto"></div>
+                                                            <p className="mt-4 text-sm">Vinnsla...</p>
+                                                        </div>
+                                                    )}
+                                                    {paymentStep === 'success' && (
+                                                        <div className="text-green-400">
+                                                            <div className="text-6xl mb-2">✓</div>
+                                                            <p className="text-lg font-bold">BIP! 🎉</p>
+                                                            <p className="text-sm">Greitt!</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {paymentStep === 'idle' && (
+                                                <button
+                                                    onClick={handlePayment}
+                                                    className="bg-orange-500 text-white px-8 py-4 rounded-lg text-xl font-bold hover:bg-orange-600 transition-colors shadow-lg"
+                                                >
+                                                    Setja kort á posa
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {stage === 'complete' && (
+                                    <div className="flex-1 flex items-center justify-center p-6">
+                                        <div className="text-center">
+                                            <div className="text-6xl mb-4">🎉</div>
+                                            <h2 className="text-3xl font-bold text-gray-800 mb-4">Takk fyrir!</h2>
+                                            <div className="bg-orange-100 rounded-lg p-6 mb-6">
+                                                <p className="text-gray-600 mb-2">Pöntunarnúmer:</p>
+                                                <p className="text-5xl font-bold text-orange-600">#{orderNumber}</p>
+                                            </div>
+                                            <p className="text-xl text-gray-600 mb-8">
+                                                Við látum þig vita þegar pöntunin er tilbúin!
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    setStage('ordering');
+                                                    setMessages([{ role: 'assistant', content: 'Hæ og velkomin aftur á Drekann! Hvað má bjóða þér í dag? 😊' }]);
+                                                    setPaymentStep('idle');
+                                                    setOrderNumber(null);
+                                                }}
+                                                className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition-colors"
+                                            >
+                                                Ný pöntun
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<Drekinn />, document.getElementById('root'));
+    </script>
+</body>
+</html>
