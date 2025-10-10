@@ -64,19 +64,18 @@
       { id: "row-3-column-3", label: "lesa bók" },
     ];
 
+    const shuffle = (array) => array.sort(() => Math.random() - 0.5);
+
     const OrdMyndir = () => {
       const [matches, setMatches] = useState({});
       const [done, setDone] = useState(false);
+      const [words] = useState(shuffle([...items]));
 
       const handleDrop = (e, targetId) => {
         e.preventDefault();
         const draggedId = e.dataTransfer.getData("text/plain");
         const correct = draggedId === targetId;
         setMatches(prev => ({ ...prev, [targetId]: { draggedId, correct } }));
-        setTimeout(() => {
-          const zone = document.getElementById(`zone-${targetId}`);
-          if (zone) zone.classList.remove("correct", "wrong");
-        }, 1000);
       };
 
       const handleDragStart = (e, id) => {
@@ -104,10 +103,27 @@
                 <div className="text-6xl mb-4">🎯</div>
                 <h2 className="text-2xl font-light text-gray-800 mb-4">Dragðu orðin að réttri mynd</h2>
                 <p className="text-gray-600 font-light max-w-xl mx-auto mb-6">
-                  Veldu orð og dragðu það að myndinni sem passar best.
+                  Dragðu orðin úr listanum að myndunum fyrir neðan.
                 </p>
               </div>
 
+              {/* Orðin efst */}
+              <div className="flex flex-wrap justify-center gap-4 mb-8">
+                {words.map(item => (
+                  !Object.values(matches).some(m => m.draggedId === item.id) && (
+                    <div
+                      key={item.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item.id)}
+                      className="draggable shadow-sm"
+                    >
+                      {item.label}
+                    </div>
+                  )
+                ))}
+              </div>
+
+              {/* Myndir */}
               <div className="grid grid-cols-3 gap-8 mb-12">
                 {items.map(item => (
                   <div
@@ -119,17 +135,20 @@
                   >
                     <img src={`images/${item.id}.png`} alt={item.label} />
                     {matches[item.id]?.draggedId && (
-                      <p className="mt-2 text-gray-700 text-lg">{items.find(i => i.id === matches[item.id].draggedId)?.label}</p>
+                      <p className="mt-2 text-gray-700 text-lg">
+                        {items.find(i => i.id === matches[item.id].draggedId)?.label}
+                      </p>
                     )}
                   </div>
                 ))}
               </div>
 
+              {/* Orðin endurtekin fyrir neðan (sjáanleg fyrir alla) */}
               <div className="flex flex-wrap justify-center gap-4 mb-8">
-                {items.map(item => (
+                {words.map(item => (
                   !Object.values(matches).some(m => m.draggedId === item.id) && (
                     <div
-                      key={item.id}
+                      key={`${item.id}-bottom`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, item.id)}
                       className="draggable shadow-sm"
