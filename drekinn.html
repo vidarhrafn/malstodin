@@ -3,13 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🐉 Drekinn - Skyndibitastaður</title>
+  <title>💬 Málmenni – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-orange-50 to-yellow-50">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
@@ -44,7 +51,6 @@
     }
 
     function parseActionFromAssistant(text) {
-      // les síðustu línu og reynir JSON-parse
       const lines = text.trim().split('\n');
       const last = lines[lines.length - 1].trim();
       try {
@@ -60,9 +66,9 @@
       const [messages, setMessages] = useState([]);
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
-      const [stage, setStage] = useState('ordering');  // ordering | payment | complete
+      const [stage, setStage] = useState('ordering');
       const [orderNumber, setOrderNumber] = useState(null);
-      const [paymentStep, setPaymentStep] = useState('idle'); // idle | inserting | processing | success
+      const [paymentStep, setPaymentStep] = useState('idle');
       const messagesEndRef = useRef(null);
 
       const menu = {
@@ -90,7 +96,6 @@
         ],
       };
 
-      // Fyrsta kveðja
       useEffect(() => {
         setMessages([{ role: 'assistant', content: 'Hæ og velkomin á Drekann! Hvað má bjóða þér í dag? 😊' }]);
       }, []);
@@ -105,10 +110,9 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        // Function skilar alltaf { content } eða { error }
         const data = await r.json();
         if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
-        return data.content; // strengur
+        return data.content;
       }
 
       const sendMessage = async () => {
@@ -120,7 +124,7 @@
         setInput('');
         setLoading(true);
 
-        // 1) Stutt málfarsendurgjöf (A2–B1, 1–2 setn.)
+        // Málfarsendurgjöf
         try {
           const feedbackMessages = [
             {
@@ -149,15 +153,13 @@ REGLUR:
 
           if (feedback && typeof feedback === 'string') {
             setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
-            // smá "mannleg" töf
             await new Promise(res => setTimeout(res, 500));
           }
         } catch (e) {
           console.error('Feedback error:', e);
-          // látum þetta falla hljóðlega; ekki trufla samtalið
         }
 
-        // 2) Aðal-svar frá "starfsmanni"
+        // Aðal-svar
         try {
           const sys = `
 Þú ert vingjarnlegur starfsmaður á Drekanum, vinsælum íslenskum skyndibitastað.
@@ -177,17 +179,12 @@ STÍLL:
 
 MÁLFRÆÐIREGLUR:
 - Gættu að fallbeygingu og samræmi (kyn, tala, fall).
-- Dæmi: frábærir hamborgarar (nf.ft.), frábæra hamborgara (þf.ft.), skoða þá valmöguleika (þf. kk. ft.; ekki „þau“).
 
 ÚTTAK:
 - Fyrst svartexti (náttúrulegt samtal).
-- **Síðasta lína**: JSON með aðgerðinni á einni línu (án forkóða og án skýringa).
-DÆMI:
-„Frábært – það verður ostaborgari, stórar franskar og lítið gos. Viltu staðfesta?
-{"action":"none"}“
+- **Síðasta lína**: JSON með aðgerðinni á einni línu.
 `.trim();
 
-          // Sía samtalssögu: aðeins user/assistant (ekkert feedback)
           const conversationHistory = messages
             .filter(m => m.role === 'assistant' || m.role === 'user')
             .map(m => ({ role: m.role, content: m.content }));
@@ -235,55 +232,64 @@ DÆMI:
       };
 
       return (
-        <div className="min-h-screen">
-          <header className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 shadow-lg">
-            <h1 className="text-4xl font-bold text-center">🐉 Drekinn</h1>
-            <p className="text-center text-orange-100 mt-2">Besti skyndibitastaðurinn á Íslandi</p>
+        <div className="min-h-screen pb-12">
+          {/* Header með Málstöðin útliti */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Drekinn – Skyndibitastaður</h1>
+              <p className="text-gray-500 text-sm font-light">Samtalsæfing · A2-B1</p>
+            </div>
           </header>
 
-          <main className="max-w-7xl mx-auto p-4">
+          <main className="max-w-7xl mx-auto px-6 mt-8">
             <div className="grid md:grid-cols-3 gap-6">
               {/* Matseðill */}
-              <aside className="md:col-span-1 bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-orange-600 mb-4">Matseðill</h2>
+              <aside className="md:col-span-1 bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-light text-gray-800 mb-4">Matseðill</h2>
 
                 <section className="space-y-6">
                   <div>
-                    <h3 className="font-bold text-lg text-gray-700 mb-2">🍔 Hamborgarar</h3>
+                    <h3 className="font-normal text-base text-gray-700 mb-2">🍔 Hamborgarar</h3>
                     {menu.hamborgarar.map((item, idx) => (
-                      <div key={idx} className="flex justify-between py-1 text-sm">
+                      <div key={idx} className="flex justify-between py-1 text-sm font-light">
                         <span>{item.name}</span>
-                        <span className="font-semibold">{item.price} kr</span>
+                        <span className="font-normal">{item.price} kr</span>
                       </div>
                     ))}
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-lg text-gray-700 mb-2">🍟 Meðlæti</h3>
+                    <h3 className="font-normal text-base text-gray-700 mb-2">🍟 Meðlæti</h3>
                     {menu.medlaeti.map((item, idx) => (
-                      <div key={idx} className="flex justify-between py-1 text-sm">
+                      <div key={idx} className="flex justify-between py-1 text-sm font-light">
                         <span>{item.name}</span>
-                        <span className="font-semibold">{item.price} kr</span>
+                        <span className="font-normal">{item.price} kr</span>
                       </div>
                     ))}
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-lg text-gray-700 mb-2">🥤 Drykkir</h3>
+                    <h3 className="font-normal text-base text-gray-700 mb-2">🥤 Drykkir</h3>
                     {menu.drykkir.map((item, idx) => (
-                      <div key={idx} className="flex justify-between py-1 text-sm">
+                      <div key={idx} className="flex justify-between py-1 text-sm font-light">
                         <span>{item.name}</span>
-                        <span className="font-semibold">{item.price} kr</span>
+                        <span className="font-normal">{item.price} kr</span>
                       </div>
                     ))}
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-lg text-orange-600 mb-2">⭐ Tilboð</h3>
+                    <h3 className="font-normal text-base text-gray-700 mb-2">⭐ Tilboð</h3>
                     {menu.tilbod.map((item, idx) => (
-                      <div key={idx} className="flex justify-between py-1 text-sm">
+                      <div key={idx} className="flex justify-between py-1 text-sm font-light">
                         <span>{item.name}</span>
-                        <span className="font-bold text-orange-600">{item.price} kr</span>
+                        <span className="font-normal text-gray-700">{item.price} kr</span>
                       </div>
                     ))}
                   </div>
@@ -291,7 +297,7 @@ DÆMI:
               </aside>
 
               {/* Spjall + greiðsla */}
-              <section className="md:col-span-2 bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-[600px]">
+              <section className="md:col-span-2 bg-white rounded-lg shadow-sm overflow-hidden flex flex-col h-[600px]">
                 {stage === 'ordering' && (
                   <>
                     <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -307,15 +313,15 @@ DÆMI:
                           }`}
                         >
                           <div
-                            className={`max-w-lg px-4 py-2 rounded-lg ${
+                            className={`max-w-lg px-4 py-2 rounded-lg font-light ${
                               msg.role === 'user'
-                                ? 'bg-orange-500 text-white'
+                                ? 'bg-gray-800 text-white'
                                 : msg.role === 'feedback'
                                 ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm italic'
                                 : 'bg-gray-100 text-gray-800'
                             }`}
                           >
-                            {msg.role === 'feedback' && <span className="font-semibold">📚 Málfar: </span>}
+                            {msg.role === 'feedback' && <span className="font-normal">📚 Málfar: </span>}
                             {msg.content}
                           </div>
                         </div>
@@ -343,13 +349,13 @@ DÆMI:
                           onChange={(e) => setInput(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
                           placeholder="Skrifaðu pöntunina þína..."
-                          className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
                           disabled={loading}
                         />
                         <button
                           onClick={sendMessage}
                           disabled={loading || !input.trim()}
-                          className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                          className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
                           aria-label="Senda skilaboð"
                           title="Senda"
                         >
@@ -363,7 +369,7 @@ DÆMI:
                 {stage === 'payment' && (
                   <div className="flex-1 flex items-center justify-center p-6">
                     <div className="text-center">
-                      <h2 className="text-3xl font-bold text-gray-800 mb-8">Greiðsla</h2>
+                      <h2 className="text-3xl font-light text-gray-800 mb-8">Greiðsla</h2>
 
                       <div className="bg-gray-800 rounded-lg p-8 mb-6 relative overflow-hidden">
                         <div className="w-64 h-40 bg-gradient-to-br from-gray-700 to-gray-900 rounded-lg flex items-center justify-center">
@@ -375,20 +381,20 @@ DÆMI:
                           {paymentStep === 'inserting' && (
                             <div className="text-yellow-400 animate-pulse">
                               <CreditCardIcon />
-                              <p className="mt-2 text-sm">Setjið kortið á posa...</p>
+                              <p className="mt-2 text-sm font-light">Setjið kortið á posa...</p>
                             </div>
                           )}
                           {paymentStep === 'processing' && (
                             <div className="text-blue-400">
                               <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto"></div>
-                              <p className="mt-4 text-sm">Vinnsla...</p>
+                              <p className="mt-4 text-sm font-light">Vinnsla...</p>
                             </div>
                           )}
                           {paymentStep === 'success' && (
                             <div className="text-green-400">
                               <div className="text-6xl mb-2">✓</div>
-                              <p className="text-lg font-bold">BIP! 🎉</p>
-                              <p className="text-sm">Greitt!</p>
+                              <p className="text-lg font-normal">BIP! 🎉</p>
+                              <p className="text-sm font-light">Greitt!</p>
                             </div>
                           )}
                         </div>
@@ -397,7 +403,7 @@ DÆMI:
                       {paymentStep === 'idle' && (
                         <button
                           onClick={handlePayment}
-                          className="bg-orange-500 text-white px-8 py-4 rounded-lg text-xl font-bold hover:bg-orange-600 transition-colors shadow-lg"
+                          className="bg-gray-800 text-white px-8 py-4 rounded-md text-xl font-light hover:bg-gray-700 transition-colors shadow-sm"
                         >
                           Setja kort á posa
                         </button>
@@ -410,12 +416,12 @@ DÆMI:
                   <div className="flex-1 flex items-center justify-center p-6">
                     <div className="text-center">
                       <div className="text-6xl mb-4">🎉</div>
-                      <h2 className="text-3xl font-bold text-gray-800 mb-4">Takk fyrir!</h2>
-                      <div className="bg-orange-100 rounded-lg p-6 mb-6">
-                        <p className="text-gray-600 mb-2">Pöntunarnúmer:</p>
-                        <p className="text-5xl font-bold text-orange-600">#{orderNumber}</p>
+                      <h2 className="text-3xl font-light text-gray-800 mb-4">Takk fyrir!</h2>
+                      <div className="bg-gray-50 rounded-lg p-6 mb-6 border border-gray-200">
+                        <p className="text-gray-600 mb-2 font-light">Pöntunarnúmer:</p>
+                        <p className="text-5xl font-light text-gray-800">#{orderNumber}</p>
                       </div>
-                      <p className="text-xl text-gray-600 mb-8">
+                      <p className="text-xl text-gray-600 mb-8 font-light">
                         Við látum þig vita þegar pöntunin er tilbúin!
                       </p>
                       <button
@@ -425,7 +431,7 @@ DÆMI:
                           setPaymentStep('idle');
                           setOrderNumber(null);
                         }}
-                        className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition-colors"
+                        className="bg-gray-800 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
                       >
                         Ný pöntun
                       </button>
