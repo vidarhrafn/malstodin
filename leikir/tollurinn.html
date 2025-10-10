@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🚪 Tollinn – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SendIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    );
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const Tollinn = () => {
+      const [stage, setStage] = useState('intro'); // intro | playing | won
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [attempts, setAttempts] = useState(0);
+      const [successCount, setSuccessCount] = useState(0);
+      const endRef = useRef(null);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (stage === 'playing' && inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, [messages, loading, stage]);
+
+      const startGame = async () => {
+        setStage('playing');
+        setLoading(true);
+        
+        try {
+          // AI velur leynireglu og gefur fyrsta dæmið
+          const sys = `
+Þú ert að leika leikinn "Ég kemst í gegnum tollinn með..."
+
+HLUTVERK:
+Þú velur EINA leynilega reglu sem ákvarðar hvað má fara í gegnum tollinn. Nemandinn reynir að átta sig á reglunni með því að giska á orð.
+
+LEYFÐAR REGLUR (veldu eina af þessum):
+1. **Tvöfaldur stafur**: Orð þarf að innihalda tvöfaldan staf (t.d. "kaffi" með ff, "sokkar" með kk)
+2. **Byrjar á sérhljóða**: Orð byrjar á a, á, e, é, i, í, o, ó, u, ú, y, ý, æ, ö (t.d. "epli", "ísbíltúr")
+3. **Endar á sérhljóða**: Orð endar á sérhljóða (t.d. "ketó", "sæti")
+4. **Inniheldur "a"**: Orð þarf að innihalda stafinn "a" (t.d. "hattur", "bananí")
+5. **3 stafir eða færri**: Stuttorð (t.d. "ís", "te", "bar")
+6. **6+ stafir**: Langorð (t.d. "appelsína", "tölvuleikir")
+7. **Inniheldur "r"**: Orð þarf að innihalda stafinn "r" (t.d. "kjör", "rósir")
+
+MIKILVÆGT:
+- Veldu EINA reglu í FYRSTU skilaboðunum þínum og haltu þig ALLTAF við hana
+- Segðu ALDREI regluna beint
+- Byrjaðu með: "Ég kemst í gegnum tollinn með [ORÐIÐ ÞÍN SEM PASSAR VIÐ REGLUNA]. Hvað kemstu með?"
+- Þegar nemandi giskar, svaraðu: "✅ Já, [orð] kemst í gegnum!" EÐA "❌ Nei, [orð] kemst ekki í gegnum."
+- Ef nemandi giskar á regluna sjálfa (t.d. "Er reglan tvöfaldur stafur?"), staðfestu ef rétt: "🎉 RÉTT! Reglan var [regla]!"
+
+DÆMI SVAR:
+Þú: "Ég kemst í gegnum tollinn með kaffi. Hvað kemstu með?"
+Nemandi: "bananí"
+Þú: "✅ Já, bananí kemst í gegnum!"
+Nemandi: "hattur"  
+Þú: "❌ Nei, hattur kemst ekki í gegnum."
+Nemandi: "Er reglan tvöfaldur stafur?"
+Þú: "🎉 RÉTT! Reglan var tvöfaldur stafur! Til hamingju!"
+`.trim();
+
+          const reply = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.8,
+            max_tokens: 100,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Byrjum leikinn! Veldu leynireglu og byrjaðu.' }
+            ]
+          });
+
+          if (reply) {
+            setMessages([{ role: 'assistant', content: reply }]);
+          }
+        } catch (e) {
+          console.error('Error:', e);
+          setMessages([{ role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis.' }]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const sendMessage = async () => {
+        const trimmed = input.trim();
+        if (!trimmed || loading) return;
+
+        const userMsg = { role: 'user', content: trimmed };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
+        setAttempts(prev => prev + 1);
+
+        try {
+          // Málfarsendurgjöf
+          const feedbackSys = `
+Þú ert íslenskukennari sem gefur örstutta endurgjöf (1-2 setningar).
+Nemandinn er að æfa orðaforða í leiknum "Tollinn".
+Leiðréttu aðeins ef >80% viss. Vertu hvetjandi.
+`.trim();
+
+          const feedback = await callOpenAI({
+            model: 'gpt-4o-mini',
+            temperature: 0.2,
+            max_tokens: 60,
+            messages: [
+              { role: 'system', content: feedbackSys },
+              { role: 'user', content: `Nemandi sagði: "${trimmed}". Gefðu endurgjöf.` }
+            ]
+          });
+
+          if (feedback) {
+            setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
+            await new Promise(r => setTimeout(r, 500));
+          }
+
+          // Aðal leikur
+          const gameSys = `
+Þú ert að leika leikinn "Ég kemst í gegnum tollinn með..."
+
+Þú hefur valið EINA leynilega reglu í upphafi leiksins. Haltu þig ALLTAF við sömu regluna.
+
+ÞEGAR NEMANDI GISKAR Á ORÐ:
+- Ef orðið passar við regluna: "✅ Já, [orð] kemst í gegnum!"
+- Ef orðið passar EKKI: "❌ Nei, [orð] kemst ekki í gegnum."
+- Vertu stöðugur!
+
+ÞEGAR NEMANDI GISKAR Á REGLUNA (t.d. "Er þetta tvöfaldur stafur?"):
+- Ef RÉTT: "🎉 RÉTT! Reglan var [regla]! Til hamingju!"
+- Ef RANGT: "Nei, það er ekki reglan. Prófaðu áfram!"
+
+Ef nemandinn spyr "Er þetta..." um regluna, svaraðu já/nei.
+Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
+`.trim();
+
+          const history = messages
+            .filter(m => m.role === 'assistant' || m.role === 'user')
+            .map(m => ({ role: m.role, content: m.content }));
+
+          const reply = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.7,
+            max_tokens: 100,
+            messages: [
+              { role: 'system', content: gameSys },
+              ...history,
+              userMsg
+            ]
+          });
+
+          if (reply) {
+            setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+            
+            // Athuga hvort nemandi vann
+            if (reply.includes('🎉 RÉTT!') || reply.includes('Til hamingju!')) {
+              setTimeout(() => {
+                setStage('won');
+              }, 2500);
+            }
+            
+            // Telja árangur
+            if (reply.includes('✅')) {
+              setSuccessCount(prev => prev + 1);
+            }
+          }
+        } catch (e) {
+          console.error('Error:', e);
+          setMessages(prev => [...prev, { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis.' }]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const resetGame = () => {
+        setStage('intro');
+        setMessages([]);
+        setAttempts(0);
+        setSuccessCount(0);
+        setInput('');
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Tollinn</h1>
+              <p className="text-gray-500 text-sm font-light">Ráðgátu- og orðaleikur · A2-B2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'intro' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">🚪</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Ég kemst í gegnum tollinn með...</h2>
+                  <p className="text-gray-600 font-light leading-relaxed max-w-xl mx-auto mb-6">
+                    Gervigreindin hefur leynireglu um hvað má fara í gegnum tollinn. 
+                    Prófaðu mismunandi orð og reyndu að átta þig á reglunni!
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-6 mb-6 max-w-xl mx-auto">
+                  <h3 className="font-normal text-gray-800 mb-3">Hvernig á að spila:</h3>
+                  <ol className="space-y-2 text-gray-600 font-light text-sm">
+                    <li>1. Gervigreindin byrjar með dæmi: "Ég kemst í gegnum með kaffi"</li>
+                    <li>2. Þú giskar á orð: "bananí", "hattur", "bíll"...</li>
+                    <li>3. Gervigreindin segir þér hvort orðið kemst í gegnum</li>
+                    <li>4. Þegar þú heldur að þú vitir regluna, giskaðu á hana!</li>
+                    <li>5. T.d. "Er þetta tvöfaldur stafur?" eða "Inniheldur a?"</li>
+                  </ol>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={startGame}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                  >
+                    Byrja leik
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'playing' && (
+              <div className="bg-white rounded-lg shadow-sm overflow-hidden flex flex-col h-[600px]">
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600 font-light">
+                      🚪 Finndu regluna
+                    </span>
+                    <div className="flex gap-4 text-sm text-gray-500 font-light">
+                      <span>✅ {successCount} komin í gegnum</span>
+                      <span>📝 {attempts} tilraunir</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${
+                        msg.role === 'user' ? 'justify-end' : msg.role === 'feedback' ? 'justify-center' : 'justify-start'
+                      }`}
+                    >
+                      <div
+                        className={`max-w-lg px-4 py-2 rounded-lg font-light ${
+                          msg.role === 'user'
+                            ? 'bg-gray-800 text-white'
+                            : msg.role === 'feedback'
+                            ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm italic'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {msg.role === 'feedback' && <span className="font-normal">📚 Málfar: </span>}
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+
+                  {loading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                        <div className="flex space-x-2">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0.1s'}}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0.2s'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={endRef} />
+                </div>
+
+                <div className="border-t p-4">
+                  <div className="flex gap-2">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                      placeholder="Giskaðu á orð eða regluna..."
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                      disabled={loading}
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={loading || !input.trim()}
+                      className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                    >
+                      <SendIcon />
+                    </button>
+                  </div>
+                  <button
+                    onClick={resetGame}
+                    className="mt-3 text-sm text-gray-500 hover:text-gray-700 font-light"
+                  >
+                    ← Nýr leikur
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'won' && (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <div className="text-6xl mb-6">🎉</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">Til hamingju!</h2>
+                <p className="text-xl text-gray-600 mb-2 font-light">
+                  Þú giskaðir rétt á regluna!
+                </p>
+                <p className="text-gray-500 mb-8 font-light">
+                  {attempts} tilraunir · {successCount} orð komin í gegnum
+                </p>
+                <button
+                  onClick={resetGame}
+                  className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
+                >
+                  Spila aftur
+                </button>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Tollinn />);
+  </script>
+</body>
+</html>
