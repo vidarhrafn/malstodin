@@ -21,6 +21,7 @@
       cursor: pointer;
       transition: all 0.2s;
       font-weight: 500;
+      padding: 0 2px;
     }
     .vocab-word:hover {
       background-color: #e3f2fd;
@@ -50,19 +51,42 @@
       const [savedLanguage, setSavedLanguage] = useState('');
       const [popup, setPopup] = useState(null);
       const [loadingTranslation, setLoadingTranslation] = useState(false);
+      const [translatedHint, setTranslatedHint] = useState('');
 
       useEffect(() => {
         const saved = localStorage.getItem('userLanguage');
         if (saved) {
           setSavedLanguage(saved);
           setLanguage(saved);
+          translateHint(saved);
         }
       }, []);
+
+      const translateHint = async (lang) => {
+        try {
+          const sys = `Translate this instruction to ${lang}: "Tip: Click on underlined words to see translation in your native language!" Return ONLY the translation, nothing else.`;
+          
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 100,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Translate please' }
+            ]
+          });
+
+          setTranslatedHint(response.trim());
+        } catch (e) {
+          console.error('Hint translation error:', e);
+        }
+      };
 
       const saveLanguage = () => {
         if (language.trim()) {
           localStorage.setItem('userLanguage', language.trim());
           setSavedLanguage(language.trim());
+          translateHint(language.trim());
         }
       };
 
@@ -123,8 +147,8 @@
 
           <main className="max-w-4xl mx-auto px-6 mt-8">
             {/* Language Selection */}
-            <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-              <div className="flex items-center gap-4">
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="flex items-center gap-4 mb-4">
                 <div className="flex-1">
                   <label className="block text-sm font-light text-gray-600 mb-2">
                     🌍 Hvað er þitt móðurmál?
@@ -145,53 +169,45 @@
                   Vista
                 </button>
               </div>
+              
               {savedLanguage && (
-                <p className="text-sm text-green-600 mt-2 font-light">
+                <p className="text-sm text-green-600 mb-3 font-light">
                   ✓ Móðurmál vistað: {savedLanguage}
                 </p>
               )}
+
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800 font-light">
+                  💡 {savedLanguage && translatedHint ? (
+                    <><strong>Ábending:</strong> {translatedHint}</>
+                  ) : (
+                    <><strong>Ábending:</strong> Smelltu á undirstrikuð orð til að sjá þýðingu á þínu móðurmáli!</>
+                  )}
+                </p>
+              </div>
             </div>
 
             {/* Introduction Text */}
             <div className="bg-white rounded-lg shadow-sm p-8 mb-8">
-              <div className="prose prose-lg max-w-none">
-                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
-                  Halló og velkomin/n! Þetta er byrjunarefni fyrir þig sem ert að <VocabWord>læra</VocabWord> íslensku. 
-                  Hér geturðu <VocabWord>æft</VocabWord> grunninn - það sem þú þarft til að <VocabWord>tala</VocabWord> og 
-                  <VocabWord>skilja</VocabWord> í daglegu lífi.
-                </p>
-
-                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
-                  Í æfingunum hér fyrir neðan muntu nota orð eins og "<VocabWord>heita</VocabWord>", 
-                  "<VocabWord>vera</VocabWord>", "<VocabWord>búa</VocabWord>", "<VocabWord>koma</VocabWord> frá" 
-                  og "<VocabWord>tala</VocabWord>". Þetta eru orðin sem þú notar þegar þú <VocabWord>kynnir</VocabWord> þig 
-                  fyrir fólki. Til dæmis: "Ég <VocabWord>heiti</VocabWord> Anna. Ég <VocabWord>er</VocabWord> frá Svíþjóð. 
-                  Ég <VocabWord>bý</VocabWord> í Reykjavík og ég <VocabWord>tala</VocabWord> íslensku og ensku."
-                </p>
-
-                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
-                  Þú munt líka <VocabWord>læra</VocabWord> að <VocabWord>panta</VocabWord> á kaffihúsi. 
-                  Þá notarðu orð eins og "<VocabWord>vilja</VocabWord>", "<VocabWord>fá</VocabWord>", 
-                  "<VocabWord>taka</VocabWord>" og "<VocabWord>borða</VocabWord>". Til dæmis: "Ég <VocabWord>vil</VocabWord> fá 
-                  <VocabWord>kaffi</VocabWord> og <VocabWord>kökur</VocabWord>."
-                </p>
-
-                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
-                  Það er alveg í lagi að <VocabWord>gera</VocabWord> villur! Það er hluti af því að 
-                  <VocabWord>læra</VocabWord>. Gervigreindin <VocabWord>hjálpar</VocabWord> þér og 
-                  <VocabWord>leiðréttir</VocabWord> þig á góðan hátt. Þú færð hrós fyrir það sem þú 
-                  <VocabWord>gerir</VocabWord> rétt!
+              <div className="prose prose-lg max-w-none space-y-4">
+                <p className="text-gray-700 leading-relaxed font-light text-lg">
+                  Hæ! Ég <VocabWord>heiti</VocabWord> <VocabWord>Mia</VocabWord>. Ég <VocabWord>er</VocabWord> frá <VocabWord>Úkraínu</VocabWord>. Ég <VocabWord>kom</VocabWord> til <VocabWord>Íslands</VocabWord> árið 2023. Ég <VocabWord>bý</VocabWord> í <VocabWord>Reykjavík</VocabWord> <VocabWord>núna</VocabWord>.
                 </p>
 
                 <p className="text-gray-700 leading-relaxed font-light text-lg">
-                  Ef þú <VocabWord>skilur</VocabWord> ekki orð, geturðu <VocabWord>smellt</VocabWord> á það og 
-                  <VocabWord>fengið</VocabWord> þýðingu á þínu móðurmáli. Gangi þér vel! 🎉
+                  Ég <VocabWord>er</VocabWord> 28 <VocabWord>ára</VocabWord>. Ég <VocabWord>er</VocabWord> <VocabWord>leikskólakennari</VocabWord>. Ég <VocabWord>vinn</VocabWord> á <VocabWord>leikskóla</VocabWord> með <VocabWord>litlum</VocabWord> <VocabWord>börnum</VocabWord>. Ég <VocabWord>elska</VocabWord> <VocabWord>starfið</VocabWord> mitt.
                 </p>
-              </div>
 
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-800 font-light">
-                  💡 <strong>Ábending:</strong> Smelltu á undirstrikuð orð til að sjá þýðingu á þínu móðurmáli!
+                <p className="text-gray-700 leading-relaxed font-light text-lg">
+                  Ég <VocabWord>tala</VocabWord> <VocabWord>úkraínsku</VocabWord> og <VocabWord>ensku</VocabWord>. Ég <VocabWord>er</VocabWord> að <VocabWord>læra</VocabWord> <VocabWord>íslensku</VocabWord> <VocabWord>núna</VocabWord>. <VocabWord>Íslenska</VocabWord> <VocabWord>er</VocabWord> <VocabWord>erfið</VocabWord> en <VocabWord>skemmtileg</VocabWord>. Ég <VocabWord>skil</VocabWord> <VocabWord>mikið</VocabWord> en <VocabWord>tala</VocabWord> ekki <VocabWord>mikið</VocabWord> <VocabWord>ennþá</VocabWord>.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed font-light text-lg">
+                  Á <VocabWord>morgnana</VocabWord> <VocabWord>drekk</VocabWord> ég <VocabWord>kaffi</VocabWord> og <VocabWord>borða</VocabWord> <VocabWord>brauð</VocabWord>. Ég <VocabWord>fer</VocabWord> á <VocabWord>leikskólann</VocabWord> klukkan <VocabWord>átta</VocabWord>. Eftir <VocabWord>vinnu</VocabWord> <VocabWord>fer</VocabWord> ég í <VocabWord>líkamsrækt</VocabWord> eða á <VocabWord>kaffihús</VocabWord> með <VocabWord>vinum</VocabWord>.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed font-light text-lg">
+                  Um <VocabWord>helgar</VocabWord> <VocabWord>vil</VocabWord> ég <VocabWord>fara</VocabWord> <VocabWord>út</VocabWord> í <VocabWord>náttúruna</VocabWord>. Ég <VocabWord>elska</VocabWord> að <VocabWord>taka</VocabWord> <VocabWord>myndir</VocabWord>. <VocabWord>Stundum</VocabWord> <VocabWord>fer</VocabWord> ég í <VocabWord>bíó</VocabWord> eða <VocabWord>les</VocabWord> <VocabWord>bók</VocabWord> <VocabWord>heima</VocabWord>.
                 </p>
               </div>
             </div>
