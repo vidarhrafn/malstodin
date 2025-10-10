@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎭 Hver er maðurinn? – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SendIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    );
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const HverErMadurinn = () => {
+      const [stage, setStage] = useState('choose'); // choose | user-asks | ai-asks | game-over
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [questionCount, setQuestionCount] = useState(0);
+      const [winner, setWinner] = useState(null); // 'user' | 'ai' | null
+      const endRef = useRef(null);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if ((stage === 'user-asks' || stage === 'ai-asks') && inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, [messages, loading, stage]);
+
+      const startUserAsks = () => {
+        setStage('user-asks');
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: 'Ég er að hugsa um fræga persónu (íslenska eða erlenda). Spurðu mig já/nei spurningar til að giska á hver það er! 🤔' 
+          }
+        ]);
+        setQuestionCount(0);
+      };
+
+      const startAiAsks = () => {
+        setStage('ai-asks');
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: 'Hugsaðu um fræga persónu (íslenska eða erlenda). Segðu mér þegar þú ert tilbúin/n og ég byrja að spyrja! 🎯' 
+          }
+        ]);
+        setQuestionCount(0);
+      };
+
+      const sendMessage = async () => {
+        const trimmed = input.trim();
+        if (!trimmed || loading) return;
+
+        const userMsg = { role: 'user', content: trimmed };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
+
+        if (stage === 'user-asks') {
+          // Nemandi spyr, AI svarar
+          try {
+            const sys = `
+Þú ert að leika leikinn "Hver er maðurinn?" / "20 spurningar".
+
+Þú hefur hugsað um fræga persónu (íslenska eða erlenda). Nemandinn spyr þig já/nei spurningar á íslensku.
+
+REGLUR:
+1. Svaraðu aðeins "Já", "Nei", eða "Að hluta til" / "Kannski"
+2. Ef nemandinn giskar á persónuna með fullu nafni:
+   - Ef RÉTT: Svara "🎉 RÉTT! Til hamingju! Þetta var [nafn persónu]!"
+   - Ef RANGT: Svara "Nei, ekki [nafn]. Haltu áfram að spyrja!"
+3. Vertu stöðugur - ekki breyta persónunni!
+4. Ef spurning er óskýr, biddu um skýringu
+5. Vertu vingjarnlegur og hvetjandi
+
+Haltu þig við stuttar setningar. Ef nemandinn giskar RÉTT, þá segðu ALLTAF "🎉 RÉTT!" í byrjun svarsins.
+
+Núna ertu að hugsa um: [AI velur persónu í fyrstu spurningu og heldur sig við hana]
+`.trim();
+
+            const history = messages
+              .filter(m => m.role === 'assistant' || m.role === 'user')
+              .map(m => ({ role: m.role, content: m.content }));
+
+            const reply = await callOpenAI({
+              model: 'gpt-4o',
+              temperature: 0.7,
+              max_tokens: 150,
+              messages: [{ role: 'system', content: sys }, ...history, userMsg]
+            });
+
+            if (reply) {
+              setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+              setQuestionCount(prev => prev + 1);
+              
+              // Athuga hvort nemandi vann
+              if (reply.includes('🎉 RÉTT') || reply.includes('Til hamingju')) {
+                setTimeout(() => {
+                  setWinner('user');
+                  setStage('game-over');
+                }, 1000);
+              }
+            }
+          } catch (e) {
+            console.error('Error:', e);
+            setMessages(prev => [...prev, { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis.' }]);
+          } finally {
+            setLoading(false);
+          }
+        } else if (stage === 'ai-asks') {
+          // AI spyr, nemandi svarar
+          try {
+            // Fyrst: Málfarsendurgjöf
+            const feedbackSys = `
+Þú ert íslenskukennari sem gefur örstutta endurgjöf (1-2 setningar).
+Nemandinn er að svara spurningum í leiknum "Hver er maðurinn?".
+Leiðréttu aðeins ef >80% viss. Vertu hvetjandi.
+`.trim();
+
+            const feedback = await callOpenAI({
+              model: 'gpt-4o-mini',
+              temperature: 0.2,
+              max_tokens: 60,
+              messages: [
+                { role: 'system', content: feedbackSys },
+                { role: 'user', content: `Nemandi sagði: "${trimmed}". Gefðu endurgjöf.` }
+              ]
+            });
+
+            if (feedback) {
+              setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
+              await new Promise(r => setTimeout(r, 500));
+            }
+
+            // Síðan: AI spyr næstu spurningu eða giskar
+            const gameSys = `
+Þú ert að leika "Hver er maðurinn?" og reynir að giska á persónu sem nemandinn hugsar um.
+
+SAMHENGI:
+- Nemandinn er að hugsa um fræga persónu
+- Þú spyrð já/nei spurningar
+- Þú reynir að giska á persónuna með sem fæstum spurningum
+
+REGLUR:
+1. Spyrðu eina já/nei spurningu í einu
+2. Byrjaðu með almennar spurningar (kyn, lifandi/dáinn, starfsgrein)
+3. Verðu nákvæmari eftir því sem þú færð fleiri svör
+4. Eftir 5-7 spurningar, byrjaðu að giska á nöfn
+5. Ef nemandinn segir "Já" við nafn, þá hefurðu unnið! Fagnaðu!
+6. Ef nemandinn segir "Nei" við nafn, haltu áfram að spyrja
+7. Vertu vingjarnlegur og skemmtilegur
+
+DÆMI SPURNINGA:
+- Er þetta maður?
+- Er hann/hún lifandi?
+- Er hann/hún íslensk/ur?
+- Er hann/hún í skemmtanabransanum?
+- Leikur hann/hún fótbolta?
+
+Þegar þú giskar á nafn, byrjaðu með "Er þetta [nafn]?"
+`.trim();
+
+            const history = messages
+              .filter(m => m.role === 'assistant' || m.role === 'user')
+              .map(m => ({ role: m.role, content: m.content }));
+
+            const reply = await callOpenAI({
+              model: 'gpt-4o',
+              temperature: 0.8,
+              max_tokens: 100,
+              messages: [{ role: 'system', content: gameSys }, ...history, userMsg]
+            });
+
+            if (reply) {
+              setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+              setQuestionCount(prev => prev + 1);
+              
+              // Athuga hvort AI vann (nemandi sagði "Já" við nafnagisk)
+              const lowerInput = trimmed.toLowerCase();
+              const isGuessQuestion = history.length > 0 && 
+                history[history.length - 1].content.toLowerCase().includes('er þetta');
+              
+              if (isGuessQuestion && (lowerInput.includes('já') || lowerInput.includes('ja'))) {
+                setTimeout(() => {
+                  setWinner('ai');
+                  setStage('game-over');
+                }, 1000);
+              }
+            }
+          } catch (e) {
+            console.error('Error:', e);
+            setMessages(prev => [...prev, { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis.' }]);
+          } finally {
+            setLoading(false);
+          }
+        }
+      };
+
+      const resetGame = () => {
+        setStage('choose');
+        setMessages([]);
+        setQuestionCount(0);
+        setWinner(null);
+        setInput('');
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Hver er maðurinn?</h1>
+              <p className="text-gray-500 text-sm font-light">Giskaleikur · A2-B2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'choose' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <h2 className="text-2xl font-light text-gray-800 mb-6 text-center">Veldu leikstíl</h2>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <button
+                    onClick={startUserAsks}
+                    className="bg-white border-2 border-gray-200 rounded-lg p-8 hover:border-gray-400 hover:shadow-md transition-all text-left"
+                  >
+                    <div className="text-5xl mb-4">🤔</div>
+                    <h3 className="text-xl font-normal text-gray-800 mb-3">Ég spyr</h3>
+                    <p className="text-gray-600 font-light leading-relaxed">
+                      AI hugsar um persónu og þú spyrð spurningar til að giska á hver það er.
+                    </p>
+                    <p className="text-sm text-gray-500 mt-4 font-light">
+                      ✓ Æfir spurnarorðalag<br/>
+                      ✓ Lærir orðaforða
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={startAiAsks}
+                    className="bg-white border-2 border-gray-200 rounded-lg p-8 hover:border-gray-400 hover:shadow-md transition-all text-left"
+                  >
+                    <div className="text-5xl mb-4">🎯</div>
+                    <h3 className="text-xl font-normal text-gray-800 mb-3">AI spyr</h3>
+                    <p className="text-gray-600 font-light leading-relaxed">
+                      Þú hugsar um persónu og AI spyr spurningar til að giska á hver það er.
+                    </p>
+                    <p className="text-sm text-gray-500 mt-4 font-light">
+                      ✓ Æfir að svara<br/>
+                      ✓ Skemmtilegra fyrir byrjendur
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(stage === 'user-asks' || stage === 'ai-asks') && (
+              <div className="bg-white rounded-lg shadow-sm overflow-hidden flex flex-col h-[600px]">
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600 font-light">
+                      {stage === 'user-asks' ? '🤔 Þú spyrð' : '🎯 AI spyr'}
+                    </span>
+                    <span className="text-sm text-gray-500 font-light">
+                      {questionCount} spurningar
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${
+                        msg.role === 'user' ? 'justify-end' : msg.role === 'feedback' ? 'justify-center' : 'justify-start'
+                      }`}
+                    >
+                      <div
+                        className={`max-w-lg px-4 py-2 rounded-lg font-light ${
+                          msg.role === 'user'
+                            ? 'bg-gray-800 text-white'
+                            : msg.role === 'feedback'
+                            ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm italic'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {msg.role === 'feedback' && <span className="font-normal">📚 Málfar: </span>}
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+
+                  {loading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                        <div className="flex space-x-2">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0.1s'}}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0.2s'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={endRef} />
+                </div>
+
+                <div className="border-t p-4">
+                  <div className="flex gap-2">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                      placeholder={stage === 'user-asks' ? 'Spurðu spurninguna þína...' : 'Svaraðu spurningunni...'}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                      disabled={loading}
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={loading || !input.trim()}
+                      className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                    >
+                      <SendIcon />
+                    </button>
+                  </div>
+                  <button
+                    onClick={resetGame}
+                    className="mt-3 text-sm text-gray-500 hover:text-gray-700 font-light"
+                  >
+                    ← Til baka í valmynd
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'game-over' && (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <div className="text-6xl mb-6">🎉</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">
+                  {winner === 'user' ? 'Til hamingju!' : 'Ég vann!'}
+                </h2>
+                <p className="text-xl text-gray-600 mb-8 font-light">
+                  {winner === 'user' 
+                    ? `Þú giskaðir rétt á ${questionCount} spurningum! 🎯`
+                    : `Ég giskaði rétt á persónuna! 🧠`
+                  }
+                </p>
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={resetGame}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Leika aftur
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<HverErMadurinn />);
+  </script>
+</body>
+</html>
