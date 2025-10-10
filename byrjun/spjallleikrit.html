@@ -81,31 +81,43 @@ SPURNINGAR (dæmi):
 SKILAÐU JSON:
 {
   "next_prompt": "Næsta spurning (1 setning)",
-  "score_last_answer": 0-2,
-  "correction": "Mjúk leiðrétting ef þarf (eða null)",
-  "praise": "Stutt hrós (t.d. 'Frábært!' eða 'Vel gert!')",
+  "praise": "Hvetjandi hrós (t.d. 'Frábært!' eða 'Vel gert!' eða 'Gott!')",
+  "correction": "Mjúk, stutt leiðrétting ef þarf (eða null). T.d. 'Passaðu: 'Ég heiti' ekki 'Ég heitir'",
   "end_if_ready": boolean (true eftir 5-6 spurningar)
 }
 
-REGLUR:
+REGLUR - HVETJANDI EN GAGNLEGT:
 - Byrjaðu með: "Hæ! Ég heiti [nafn]. Hvað heitir þú?"
-- Vertu þolinmóður með villur
-- Gefðu hrós fyrir hvert svar
-- Leiðréttu mjúklega ef þarf
-- Eftir 5-6 spurningar → end_if_ready: true, segðu "Gaman að hitta þig!"
+- ALLTAF hrósaðu fyrst! Jafnvel þótt það séu villur
+- Ef nemandi skilur og reynir → mikið hrós!
+- Leiðréttingar eiga að vera STUTTAR og MILDAR
+- Dæmi um góða leiðréttingu: "Frábært! (En við segjum 'ég heiti' ekki 'ég heitir')"
+- Ef málfræðin er rétt en óvenjuleg → hrósaðu samt, engin leiðrétting
+- Eftir 5-6 spurningar → end_if_ready: true, segðu "Gaman að hitta þig! Takk fyrir að spjalla við mig!"
+- Vertu NÁTTÚRULEG, ekki of formleg
+
+MIKILVÆGT: Svarið þitt má BARA vera JSON. Ekkert annað.
 `.trim();
 
           const response = await callOpenAI({
             model: 'gpt-4o',
             temperature: 0.7,
-            max_tokens: 150,
+            max_tokens: 200,
             messages: [
               { role: 'system', content: sys },
-              { role: 'user', content: 'Byrjum samtals!' }
+              { role: 'user', content: 'Byrjum samtal! SKILAÐU BARA JSON.' }
             ]
           });
 
-          let cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          // Better JSON cleaning
+          let cleanResponse = response
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .replace(/^[^{]*/g, '')
+            .replace(/[^}]*$/g, '')
+            .trim();
+
+          console.log('Start response:', cleanResponse);
           const data = JSON.parse(cleanResponse);
           
           setMessages([{ role: 'assistant', content: data.next_prompt, data: data }]);
@@ -129,26 +141,29 @@ REGLUR:
 
         try {
           const sys = `
-Þú ert vingjarnleg manneskja sem er að spjalla við A1 nemanda.
+Þú ert vingjarnleg manneskja sem er að spjalla við A1 íslenskunemanda.
 
-STÖÐU:
+STAÐA:
 - Þú hefur spurt ${questionCount + 1} spurningar
-- Ef ${questionCount + 1} >= 5 → end_if_ready: true og segðu "Gaman að hitta þig! Bless!"
+- Ef ${questionCount + 1} >= 5 → end_if_ready: true og segðu "Gaman að hitta þig! Takk fyrir að spjalla við mig! Bless!"
 
 SKILAÐU JSON:
 {
   "next_prompt": "Næsta spurning (1 setning) eða lokaorð",
-  "score_last_answer": 0-2,
-  "correction": "Leiðrétting ef þarf (eða null)",
-  "praise": "Hrós",
+  "praise": "Hvetjandi hrós",
+  "correction": "Mjúk, stutt leiðrétting ef þarf (eða null)",
   "end_if_ready": boolean
 }
 
-REGLUR:
-- Vertu náttúrulegur
-- Hrósaðu fyrir hvert svar
-- Leiðréttu mjúklega
+REGLUR - HVETJANDI EN GAGNLEGT:
+- ALLTAF hrósaðu fyrst!
+- Leiðréttingar á að vera STUTTAR (1 setning) og MILDAR
+- Dæmi: "Frábært! (En við segjum 'ég er frá Íslandi' ekki 'ég eru frá Íslandi')"
+- Ef málfræðin er rétt → engin leiðrétting, bara hrós
+- Vertu NÁTTÚRULEG
 - Notaðu einfaldar spurningar
+
+MIKILVÆGT: Svarið þitt má BARA vera JSON. Ekkert annað.
 `.trim();
 
           const history = messages
@@ -158,7 +173,7 @@ REGLUR:
           const response = await callOpenAI({
             model: 'gpt-4o',
             temperature: 0.7,
-            max_tokens: 150,
+            max_tokens: 200,
             messages: [
               { role: 'system', content: sys },
               ...history,
@@ -166,7 +181,15 @@ REGLUR:
             ]
           });
 
-          let cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          // Better JSON cleaning
+          let cleanResponse = response
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .replace(/^[^{]*/g, '')
+            .replace(/[^}]*$/g, '')
+            .trim();
+
+          console.log('Follow-up response:', cleanResponse);
           const data = JSON.parse(cleanResponse);
           
           // Bæta við hrósi/leiðréttingu fyrst
