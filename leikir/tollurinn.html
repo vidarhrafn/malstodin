@@ -41,7 +41,8 @@
     }
 
     const Tollinn = () => {
-      const [stage, setStage] = useState('intro'); // intro | playing | won
+      const [stage, setStage] = useState('choose'); // choose | intro-ai | intro-user | playing-ai | playing-user | won
+      const [mode, setMode] = useState(null); // 'ai-rule' | 'user-rule'
       const [messages, setMessages] = useState([]);
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
@@ -52,13 +53,23 @@
 
       useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth' });
-        if (stage === 'playing' && inputRef.current) {
+        if ((stage === 'playing-ai' || stage === 'playing-user') && inputRef.current) {
           inputRef.current.focus();
         }
       }, [messages, loading, stage]);
 
+      const chooseAiRule = () => {
+        setMode('ai-rule');
+        setStage('intro-ai');
+      };
+
+      const chooseUserRule = () => {
+        setMode('user-rule');
+        setStage('intro-user');
+      };
+
       const startGame = async () => {
-        setStage('playing');
+        setStage('playing-ai');
         setLoading(true);
         
         try {
@@ -70,6 +81,8 @@ HLUTVERK:
 Þú velur EINA leynilega reglu sem ákvarðar hvað má fara í gegnum tollinn. Nemandinn reynir að átta sig á reglunni með því að giska á orð.
 
 LEYFÐAR REGLUR (veldu eina af þessum):
+
+**MÁLFARSLEGAR REGLUR:**
 1. **Tvöfaldur stafur**: Orð þarf að innihalda tvöfaldan staf (t.d. "kaffi" með ff, "sokkar" með kk)
 2. **Byrjar á sérhljóða**: Orð byrjar á a, á, e, é, i, í, o, ó, u, ú, y, ý, æ, ö (t.d. "epli", "ísbíltúr")
 3. **Endar á sérhljóða**: Orð endar á sérhljóða (t.d. "ketó", "sæti")
@@ -77,6 +90,18 @@ LEYFÐAR REGLUR (veldu eina af þessum):
 5. **3 stafir eða færri**: Stuttorð (t.d. "ís", "te", "bar")
 6. **6+ stafir**: Langorð (t.d. "appelsína", "tölvuleikir")
 7. **Inniheldur "r"**: Orð þarf að innihalda stafinn "r" (t.d. "kjör", "rósir")
+
+**HUGTAKSLEGAR REGLUR:**
+8. **Gert úr tré**: Hlutir sem eru gerðir úr tré (t.d. "stóll", "borð", "blýantur", "papír")
+9. **Flýtur á vatni**: Hlutir sem flýta (t.d. "bátur", "bolti", "korkur", "ís")
+10. **Matur**: Eitthvað sem hægt er að borða (t.d. "epli", "brauð", "omasúr", "ís")
+11. **Dýr**: Öll dýr (t.d. "hundur", "köttur", "fugl", "fiskur")
+12. **Föt/fatnaður**: Hlutir sem þú klæðir þig í (t.d. "skór", "jakki", "buxur", "húfa")
+13. **Í eldhúsi**: Hlutir sem eru í eldhúsi (t.d. "pottur", "hnípur", "diskur", "örbylgjuofn")
+14. **Ferðast**: Hlutir sem geta ferðast/hreyft sig (t.d. "bíll", "fluga", "reiðhjól", "skip")
+15. **Rautt**: Hlutir sem eru oft rauðir (t.d. "epli", "rós", "eldvarnabíll")
+16. **Lifandi**: Lifandi hlutir (t.d. "tré", "fugl", "maður", "blóm")
+17. **Í náttúrunni**: Náttúrulegir hlutir (t.d. "fjall", "straumur", "steinn", "sól")
 
 MIKILVÆGT:
 - Veldu EINA reglu í FYRSTU skilaboðunum þínum og haltu þig ALLTAF við hana
@@ -127,30 +152,32 @@ Nemandi: "Er reglan tvöfaldur stafur?"
         setAttempts(prev => prev + 1);
 
         try {
-          // Málfarsendurgjöf
-          const feedbackSys = `
+          if (mode === 'ai-rule') {
+            // AI á regluna, nemandi giskar
+            // Málfarsendurgjöf
+            const feedbackSys = `
 Þú ert íslenskukennari sem gefur örstutta endurgjöf (1-2 setningar).
 Nemandinn er að æfa orðaforða í leiknum "Tollinn".
 Leiðréttu aðeins ef >80% viss. Vertu hvetjandi.
 `.trim();
 
-          const feedback = await callOpenAI({
-            model: 'gpt-4o-mini',
-            temperature: 0.2,
-            max_tokens: 60,
-            messages: [
-              { role: 'system', content: feedbackSys },
-              { role: 'user', content: `Nemandi sagði: "${trimmed}". Gefðu endurgjöf.` }
-            ]
-          });
+            const feedback = await callOpenAI({
+              model: 'gpt-4o-mini',
+              temperature: 0.2,
+              max_tokens: 60,
+              messages: [
+                { role: 'system', content: feedbackSys },
+                { role: 'user', content: `Nemandi sagði: "${trimmed}". Gefðu endurgjöf.` }
+              ]
+            });
 
-          if (feedback) {
-            setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
-            await new Promise(r => setTimeout(r, 500));
-          }
+            if (feedback) {
+              setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
+              await new Promise(r => setTimeout(r, 500));
+            }
 
-          // Aðal leikur
-          const gameSys = `
+            // Aðal leikur
+            const gameSys = `
 Þú ert að leika leikinn "Ég kemst í gegnum tollinn með..."
 
 Þú hefur valið EINA leynilega reglu í upphafi leiksins. Haltu þig ALLTAF við sömu regluna.
@@ -168,34 +195,97 @@ Ef nemandinn spyr "Er þetta..." um regluna, svaraðu já/nei.
 Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
 `.trim();
 
-          const history = messages
-            .filter(m => m.role === 'assistant' || m.role === 'user')
-            .map(m => ({ role: m.role, content: m.content }));
+            const history = messages
+              .filter(m => m.role === 'assistant' || m.role === 'user')
+              .map(m => ({ role: m.role, content: m.content }));
 
-          const reply = await callOpenAI({
-            model: 'gpt-4o',
-            temperature: 0.7,
-            max_tokens: 100,
-            messages: [
-              { role: 'system', content: gameSys },
-              ...history,
-              userMsg
-            ]
-          });
+            const reply = await callOpenAI({
+              model: 'gpt-4o',
+              temperature: 0.7,
+              max_tokens: 100,
+              messages: [
+                { role: 'system', content: gameSys },
+                ...history,
+                userMsg
+              ]
+            });
 
-          if (reply) {
-            setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-            
-            // Athuga hvort nemandi vann
-            if (reply.includes('🎉 RÉTT!') || reply.includes('Til hamingju!')) {
-              setTimeout(() => {
-                setStage('won');
-              }, 2500);
+            if (reply) {
+              setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+              
+              // Athuga hvort nemandi vann
+              if (reply.includes('🎉 RÉTT!') || reply.includes('Til hamingju!')) {
+                setTimeout(() => {
+                  setStage('won');
+                }, 2500);
+              }
+              
+              // Telja árangur
+              if (reply.includes('✅')) {
+                setSuccessCount(prev => prev + 1);
+              }
             }
-            
-            // Telja árangur
-            if (reply.includes('✅')) {
-              setSuccessCount(prev => prev + 1);
+          } else if (mode === 'user-rule') {
+            // Nemandi á regluna, AI giskar
+            const gameSys = `
+Þú ert að leika "Tollinn" og reynir að átta þig á leynireglunni sem nemandinn hefur valið.
+
+HLUTVERK:
+Giskaðu á hluti/orð til að prófa að komast í gegnum tollinn.
+Nemandinn svarar hvort hlutir komast í gegnum eða ekki.
+Þú reynir að átta þig á reglunni.
+
+AÐFERÐ:
+1. Byrjaðu með fjölbreytt orð til að prófa mismunandi hluti
+2. Eftir 3-5 svör, byrjaðu að giska á regluna
+3. Prófaðu málfarslegar reglur: "Er þetta orð með tvöfaldan staf?" "Byrjar á sérhljóða?" "Inniheldur 'a'?"
+4. Prófaðu hugtakslegar reglur: "Er þetta matur?" "Gert úr tré?" "Flýtur á vatni?" "Dýr?"
+
+SVARA Á ÍSLENSKU:
+"Ég kemst í gegnum tollinn með [orð]. Kemst ég í gegnum?"
+eða
+"Er reglan [gisk]?"
+
+Vertu náttúrulegur og skemmtilegur. Notaðu fjölbreytt orð frá byrjun.
+`.trim();
+
+            const history = messages
+              .filter(m => m.role === 'assistant' || m.role === 'user')
+              .map(m => ({ role: m.role, content: m.content }));
+
+            const reply = await callOpenAI({
+              model: 'gpt-4o',
+              temperature: 0.8,
+              max_tokens: 80,
+              messages: [
+                { role: 'system', content: gameSys },
+                ...history,
+                userMsg
+              ]
+            });
+
+            if (reply) {
+              setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+              
+              // Athuga hvort AI vann (nemandi sagði já við reglugisk)
+              const lowerInput = trimmed.toLowerCase();
+              const lastAiMessage = history.length > 0 ? 
+                history[history.length - 1].content.toLowerCase() : '';
+              
+              const wasRuleGuess = lastAiMessage.includes('er reglan') || 
+                                   lastAiMessage.includes('er þetta') && 
+                                   !lastAiMessage.includes('kemst ég');
+              
+              if (wasRuleGuess && (lowerInput.includes('já') || lowerInput.includes('ja') || lowerInput.includes('rétt'))) {
+                setTimeout(() => {
+                  setStage('won');
+                }, 2500);
+              }
+              
+              // Telja árangur
+              if (lowerInput.includes('já') || lowerInput.includes('ja')) {
+                setSuccessCount(prev => prev + 1);
+              }
             }
           }
         } catch (e) {
@@ -206,8 +296,21 @@ Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
         }
       };
 
+      const startUserRule = () => {
+        setStage('playing-user');
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: 'Frábært! Hugsaðu um HVAÐA reglu sem er - málfarslega eða hugtakslega. T.d. "eitthvað hættulegt", "allt sem flýtur", "orð með a", "eitthvað dýrt". Segðu mér þegar þú ert tilbúin/n og ég byrja að giska! 🎯' 
+          }
+        ]);
+        setAttempts(0);
+        setSuccessCount(0);
+      };
+
       const resetGame = () => {
-        setStage('intro');
+        setStage('choose');
+        setMode(null);
         setMessages([]);
         setAttempts(0);
         setSuccessCount(0);
@@ -230,7 +333,45 @@ Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
           </header>
 
           <main className="max-w-4xl mx-auto px-6 mt-8">
-            {stage === 'intro' && (
+            {stage === 'choose' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <h2 className="text-2xl font-light text-gray-800 mb-6 text-center">Veldu leikstíl</h2>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <button
+                    onClick={chooseAiRule}
+                    className="bg-white border-2 border-gray-200 rounded-lg p-8 hover:border-gray-400 hover:shadow-md transition-all text-left"
+                  >
+                    <div className="text-5xl mb-4">🤔</div>
+                    <h3 className="text-xl font-normal text-gray-800 mb-3">Gervigreindin á regluna</h3>
+                    <p className="text-gray-600 font-light leading-relaxed">
+                      Gervigreindin velur leynireglu og þú giskar á hluti til að finna út hver reglan er.
+                    </p>
+                    <p className="text-sm text-gray-500 mt-4 font-light">
+                      ✓ Æfir orðaforða<br/>
+                      ✓ Ráðgátu-leikur
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={chooseUserRule}
+                    className="bg-white border-2 border-gray-200 rounded-lg p-8 hover:border-gray-400 hover:shadow-md transition-all text-left"
+                  >
+                    <div className="text-5xl mb-4">🎯</div>
+                    <h3 className="text-xl font-normal text-gray-800 mb-3">Þú átt regluna</h3>
+                    <p className="text-gray-600 font-light leading-relaxed">
+                      Þú velur leynireglu og gervigreindin giskar á hluti. Þú segir já/nei.
+                    </p>
+                    <p className="text-sm text-gray-500 mt-4 font-light">
+                      ✓ Æfir að svara<br/>
+                      ✓ Auðveldara fyrir byrjendur
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'intro-ai' && (
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <div className="text-center mb-8">
                   <div className="text-6xl mb-4">🚪</div>
@@ -263,12 +404,53 @@ Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
               </div>
             )}
 
-            {stage === 'playing' && (
+            {stage === 'intro-user' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">🎯</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Þú átt regluna</h2>
+                  <p className="text-gray-600 font-light leading-relaxed max-w-xl mx-auto mb-6">
+                    Hugsaðu um HVAÐA REGLU SEM ER! Það getur verið málfarslegt ("orð með 'a'") 
+                    eða hugtakslegt ("eitthvað hættulegt", "eitthvað sem flýtur", "eitthvað sem er dýrt"). 
+                    Gervigreindin mun giska á hluti og þú svarar já eða nei!
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-6 mb-6 max-w-xl mx-auto">
+                  <h3 className="font-normal text-gray-800 mb-3">Hvernig á að spila:</h3>
+                  <ol className="space-y-2 text-gray-600 font-light text-sm">
+                    <li>1. Hugsaðu um HVAÐA leynireglu sem er</li>
+                    <li>2. Gervigreindin giskar: "Ég kemst í gegnum með stól. Kemst ég í gegnum?"</li>
+                    <li>3. Þú svarar "Já" eða "Nei" eftir því hvort stóll passar við regluna þína</li>
+                    <li>4. Gervigreindin reynir að átta sig á reglunni</li>
+                    <li>5. Þegar hún giskar rétt á regluna hefur hún unnið!</li>
+                  </ol>
+                  
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 font-light">
+                      <strong>Dæmi um reglur:</strong> "allt sem flýtur", "eitthvað hættulegt", "gert úr tré", 
+                      "eitthvað rautt", "orð með tvöfaldan staf", "matur", "stærra en maður", o.s.frv.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={startUserRule}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                  >
+                    Byrja leik
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(stage === 'playing-ai' || stage === 'playing-user') && (
               <div className="bg-white rounded-lg shadow-sm overflow-hidden flex flex-col h-[600px]">
                 <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600 font-light">
-                      🚪 Finndu regluna
+                      {mode === 'ai-rule' ? '🤔 Finndu regluna' : '🎯 Gervigreindin finnur regluna'}
                     </span>
                     <div className="flex gap-4 text-sm text-gray-500 font-light">
                       <span>✅ {successCount} komin í gegnum</span>
@@ -322,7 +504,7 @@ Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      placeholder="Giskaðu á orð eða regluna..."
+                      placeholder={mode === 'ai-rule' ? 'Giskaðu á orð eða regluna...' : 'Svaraðu já eða nei...'}
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
                       disabled={loading}
                     />
@@ -338,7 +520,7 @@ Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
                     onClick={resetGame}
                     className="mt-3 text-sm text-gray-500 hover:text-gray-700 font-light"
                   >
-                    ← Nýr leikur
+                    ← Til baka í valmynd
                   </button>
                 </div>
               </div>
@@ -347,12 +529,16 @@ Segðu ALDREI regluna nema nemandinn giskar rétt á hana.
             {stage === 'won' && (
               <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                 <div className="text-6xl mb-6">🎉</div>
-                <h2 className="text-3xl font-light text-gray-800 mb-4">Til hamingju!</h2>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">
+                  {mode === 'ai-rule' ? 'Til hamingju!' : 'Gervigreindin vann!'}
+                </h2>
                 <p className="text-xl text-gray-600 mb-2 font-light">
-                  Þú giskaðir rétt á regluna!
+                  {mode === 'ai-rule' 
+                    ? 'Þú giskaðir rétt á regluna!' 
+                    : 'Gervigreindin fann út regluna þína!'}
                 </p>
                 <p className="text-gray-500 mb-8 font-light">
-                  {attempts} tilraunir · {successCount} orð komin í gegnum
+                  {attempts} tilraunir · {successCount} komin í gegnum
                 </p>
                 <button
                   onClick={resetGame}
