@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>🎨 Teiknileikur – Málstöðin</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      color: #1a1a1a;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 300;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    .instructions {
+      font-size: 0.95rem;
+      color: #6b6b6b;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+      font-weight: 300;
+    }
+
+    .game-area {
+      background: white;
+      border-radius: 12px;
+      padding: 3rem 2rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      min-height: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .word-display {
+      font-size: 3.5rem;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 2rem;
+      letter-spacing: 0.02em;
+      animation: fadeIn 0.3s ease-in;
+      text-transform: lowercase;
+    }
+
+    .timer {
+      font-size: 5rem;
+      font-weight: 700;
+      color: #2e7d32;
+      margin-bottom: 2rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .timer.warning {
+      color: #f57c00;
+      animation: pulse 1s infinite;
+    }
+
+    .timer.danger {
+      color: #d32f2f;
+      animation: pulse 0.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    button {
+      background: #1a1a1a;
+      color: white;
+      border: none;
+      padding: 1.25rem 3rem;
+      font-size: 1.25rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 400;
+      transition: all 0.2s;
+      font-family: inherit;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:hover {
+      background: #333;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .icon {
+      font-size: 4rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .ready-text {
+      font-size: 1.2rem;
+      color: #6b6b6b;
+      margin-bottom: 2rem;
+      font-weight: 300;
+    }
+
+    .back-link {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      color: #6b6b6b;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover {
+      color: #1a1a1a;
+    }
+
+    @media (max-width: 480px) {
+      .word-display {
+        font-size: 2.5rem;
+      }
+
+      .timer {
+        font-size: 4rem;
+      }
+
+      button {
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#" onclick="window.history.back(); return false;" class="back-link">← Til baka</a>
+
+  <div class="container">
+    <h1>🎨 Teiknileikur</h1>
+    <p class="instructions">
+      Ýttu á hnappinn til að fá orð. Teiknaðu orðið á pappír og félagi þinn giskar!
+    </p>
+
+    <div class="game-area" id="gameArea">
+      <div class="icon">🎨</div>
+      <p class="ready-text">Tilbúin/n?</p>
+      <button onclick="startGame()">Fá orð</button>
+    </div>
+  </div>
+
+  <script>
+    // 75 A1 nafnorð sem auðvelt er að teikna
+    const words = [
+      'hundur', 'köttur', 'fiskur', 'fugl', 'hús', 'bíll', 'reiðhjól', 'bát',
+      'sól', 'stjarna', 'tungl', 'ský', 'tré', 'blóm', 'gras', 'steinn',
+      'vatn', 'eldur', 'bók', 'blýantur', 'stóll', 'borð', 'rúm', 'hurð',
+      'gluggi', 'hattur', 'skór', 'buxur', 'skyrta', 'kjóll', 'boli',
+      'epli', 'banani', 'appelsína', 'brauð', 'mjólk', 'vatn', 'kaffi',
+      'bolti', 'leikfang', 'tölva', 'sími', 'sjónvarp', 'úr', 'lykill',
+      'töska', 'bréf', 'mynd', 'spegill', 'hempa', 'diskur', 'glas',
+      'hnífur', 'gaffall', 'skeið', 'potti', 'panna', 'ísskápur',
+      'maður', 'kona', 'barn', 'baby', 'andlit', 'auga', 'nef', 'munnur',
+      'eyra', 'hönd', 'fingur', 'fótur', 'hjarta', 'tá', 'höfuð', 'hár'
+    ];
+
+    let timer;
+    let timeLeft = 60;
+    let usedWords = [];
+
+    function getRandomWord() {
+      // Ef öll orð hafa verið notuð, byrja upp á nýtt
+      if (usedWords.length === words.length) {
+        usedWords = [];
+      }
+
+      // Finna orð sem hefur ekki verið notað
+      let availableWords = words.filter(w => !usedWords.includes(w));
+      let randomWord = availableWords[Math.floor(Math.random() * availableWords.length)];
+      usedWords.push(randomWord);
+      
+      return randomWord;
+    }
+
+    function startGame() {
+      const word = getRandomWord();
+      timeLeft = 60;
+
+      const gameArea = document.getElementById('gameArea');
+      gameArea.innerHTML = `
+        <div class="word-display">${word}</div>
+        <div class="timer" id="timer">60</div>
+      `;
+
+      startTimer();
+    }
+
+    function startTimer() {
+      timer = setInterval(() => {
+        timeLeft--;
+        const timerEl = document.getElementById('timer');
+        
+        if (timerEl) {
+          timerEl.textContent = timeLeft;
+
+          // Breyta lit eftir tíma
+          if (timeLeft <= 10) {
+            timerEl.classList.add('danger');
+            timerEl.classList.remove('warning');
+          } else if (timeLeft <= 20) {
+            timerEl.classList.add('warning');
+          }
+        }
+
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          endGame();
+        }
+      }, 1000);
+    }
+
+    function endGame() {
+      const gameArea = document.getElementById('gameArea');
+      gameArea.innerHTML = `
+        <div class="icon">⏰</div>
+        <p class="ready-text">Tíminn er búinn!</p>
+        <button onclick="startGame()">Fá nýtt orð</button>
+      `;
+    }
+
+    // Hreinsa timer ef notandi fer af síðu
+    window.addEventListener('beforeunload', () => {
+      if (timer) clearInterval(timer);
+    });
+  </script>
+</body>
+</html>
