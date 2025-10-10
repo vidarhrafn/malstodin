@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🔍 Finndu villuna – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const FinnduVilluna = () => {
+      const [stage, setStage] = useState('intro');
+      const [corrections, setCorrections] = useState(['', '', '', '', '']);
+      const [results, setResults] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      // Setningar með villum
+      const sentences = [
+        'Ég heittu María.',
+        'Hann eru kennari.',
+        'Við komum frá Ísland.',
+        'Þau borðar súpu.',
+        'Hún tala ensku.'
+      ];
+
+      const handleSubmit = async () => {
+        setLoading(true);
+        try {
+          const sys = `
+Þú ert íslenskukennari sem metur leiðréttingaræfingar fyrir A1 nemendur.
+
+VERKEFNI:
+Notandinn á að leiðrétta þessar setningar sem hafa villur:
+
+1. "Ég heittu María." → Rétt: "Ég heiti María."
+2. "Hann eru kennari." → Rétt: "Hann er kennari."
+3. "Við komum frá Ísland." → Rétt: "Við komum frá Íslandi."
+4. "Þau borðar súpu." → Rétt: "Þau borða súpu."
+5. "Hún tala ensku." → Rétt: "Hún talar ensku."
+
+SVÖR NOTANDA:
+${corrections.map((c, i) => `${i + 1}. "${c || '(tómt)'}"`).join('\n')}
+
+SKILAÐU JSON:
+{
+  "items": [
+    {
+      "original": "Ég heittu María.",
+      "user": "svör notanda",
+      "expected": "Ég heiti María.",
+      "ok": boolean,
+      "note": "Útskýring á 1 setningu"
+    },
+    ...
+  ],
+  "score_pct": number,
+  "overall": "Heildarendurgjöf"
+}
+
+REGLUR:
+- Ef svar er rétt eða nálægt rétt → ok: true
+- Ef tómt → ok: false, "Þú gleymdir að leiðrétta þetta"
+- Útskýrðu villu stuttlega (t.d. "Beygðu 'heita' rétt: ég heiti")
+- Vertu hvetjandi
+`.trim();
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 600,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Mettu leiðréttingarnar mínar.' }
+            ]
+          });
+
+          let cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const data = JSON.parse(cleanResponse);
+          setResults(data);
+          setStage('results');
+        } catch (e) {
+          console.error('Error:', e);
+          alert('Úps, eitthvað fór úrskeiðis. Reyndu aftur.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const reset = () => {
+        setStage('intro');
+        setCorrections(['', '', '', '', '']);
+        setResults(null);
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Finndu villuna</h1>
+              <p className="text-gray-500 text-sm font-light">Leiðréttingaræfing · A1</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'intro' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">🔍</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Leiðréttu setningarnar</h2>
+                  <p className="text-gray-600 font-light leading-relaxed max-w-xl mx-auto mb-6">
+                    Allar setningarnar hafa villur. Lestu þær og skrifaðu rétta útgáfu í reitina fyrir neðan.
+                  </p>
+                </div>
+
+                <div className="space-y-6 mb-8">
+                  {sentences.map((sent, idx) => (
+                    <div key={idx} className="border-l-4 border-red-300 bg-red-50 p-4 rounded-r-lg">
+                      <p className="text-gray-800 mb-3 font-normal">
+                        <span className="font-semibold">{idx + 1}.</span> {sent}
+                      </p>
+                      <input
+                        type="text"
+                        value={corrections[idx]}
+                        onChange={(e) => {
+                          const newCorr = [...corrections];
+                          newCorr[idx] = e.target.value;
+                          setCorrections(newCorr);
+                        }}
+                        placeholder="Skrifaðu rétta setningu hér..."
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={handleSubmit}
+                    disabled={loading || corrections.every(c => !c.trim())}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg"
+                  >
+                    {loading ? 'Athuga...' : 'Athuga svörin'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'results' && results && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">
+                    {results.score_pct >= 80 ? '🎉' : results.score_pct >= 60 ? '👍' : '💪'}
+                  </div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-2">
+                    Þú fékkst {results.score_pct}%
+                  </h2>
+                  <p className="text-gray-600 font-light">{results.overall}</p>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  {results.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-lg border-2 ${
+                        item.ok
+                          ? 'bg-green-50 border-green-200'
+                          : 'bg-red-50 border-red-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">
+                          {item.ok ? '✅' : '❌'}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-500 mb-1">
+                            <span className="line-through">{item.original}</span>
+                          </p>
+                          <p className="font-normal text-gray-800 mb-1">
+                            Þitt svar: <span className="font-mono">{item.user || '(tómt)'}</span>
+                          </p>
+                          {!item.ok && (
+                            <p className="text-sm text-gray-600 mb-1">
+                              Rétt svar: <span className="font-mono font-semibold">{item.expected}</span>
+                            </p>
+                          )}
+                          <p className="text-sm text-gray-600 font-light mt-2">{item.note}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={reset}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Prófa aftur
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<FinnduVilluna />);
+  </script>
+</body>
+</html>

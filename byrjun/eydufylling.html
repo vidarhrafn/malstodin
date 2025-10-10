@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>📝 Eyðufylling – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .input-blank {
+      border-bottom: 2px solid #333;
+      padding: 0.25rem 0.5rem;
+      min-width: 100px;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+    .input-blank:focus {
+      outline: none;
+      border-bottom-color: #1565c0;
+    }
+    .correct {
+      border-bottom-color: #2e7d32;
+      background-color: #e8f5e9;
+    }
+    .incorrect {
+      border-bottom-color: #d32f2f;
+      background-color: #ffebee;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const Eydufylling = () => {
+      const [stage, setStage] = useState('intro');
+      const [answers, setAnswers] = useState(['', '', '', '', '']);
+      const [results, setResults] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      // Textinn með eyðum
+      const text = "Ég _____ Anna. Ég _____ frá Svíþjóð. Ég _____ í Reykjavík. Ég _____ íslensku og ensku. Ég _____ 25 ára.";
+      const correctAnswers = ['heiti', 'er', 'bý', 'tala', 'er'];
+
+      const handleSubmit = async () => {
+        setLoading(true);
+        try {
+          const sys = `
+Þú ert íslenskukennari sem metur eyðufyllingaræfingar fyrir A1 nemendur.
+
+VERKEFNI:
+Notandinn á að fylla í 5 eyður í þessum texta:
+"Ég _____ Anna. Ég _____ frá Svíþjóð. Ég _____ í Reykjavík. Ég _____ íslensku og ensku. Ég _____ 25 ára."
+
+RÉTTU SVÖRIN:
+1. heiti
+2. er
+3. bý
+4. tala
+5. er
+
+SVAR NOTANDA:
+${answers.map((a, i) => `${i + 1}. ${a || '(tómt)'}`).join('\n')}
+
+SKILAÐU JSON:
+{
+  "items": [
+    {"i": 0, "correct": boolean, "expected": "heiti", "feedback": "Stutt útskýring"},
+    ...
+  ],
+  "score_pct": number,
+  "explain_overall": "Heildarendurgjöf á 1-2 setningum"
+}
+
+REGLUR:
+- Vertu þolinmóður og hvetjandi
+- Ef svar er nálægt rétt (t.d. "heitti" í stað "heiti"), gefðu mjúka leiðrétting u
+- Ef tómt, segðu "Þú gleymdir að fylla þetta út"
+- Notaðu einfaldar setningar
+`.trim();
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 500,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Vinsamlegast mettu svörin mín.' }
+            ]
+          });
+
+          // Parse JSON response
+          let cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const data = JSON.parse(cleanResponse);
+          setResults(data);
+          setStage('results');
+        } catch (e) {
+          console.error('Error:', e);
+          alert('Úps, eitthvað fór úrskeiðis. Reyndu aftur.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const reset = () => {
+        setStage('intro');
+        setAnswers(['', '', '', '', '']);
+        setResults(null);
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Eyðufylling</h1>
+              <p className="text-gray-500 text-sm font-light">Grunnmálfræðiæfing · A1</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'intro' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">📝</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Fylltu í eyðurnar</h2>
+                  <p className="text-gray-600 font-light leading-relaxed max-w-xl mx-auto mb-6">
+                    Lestu textann og fylltu í eyðurnar með réttum orðum. Notaðu rétta beygingu!
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-8 mb-8 text-center">
+                  <p className="text-xl leading-relaxed text-gray-800">
+                    Ég{' '}
+                    <input
+                      type="text"
+                      className="input-blank"
+                      value={answers[0]}
+                      onChange={(e) => setAnswers([e.target.value, answers[1], answers[2], answers[3], answers[4]])}
+                      placeholder="?"
+                    />
+                    {' '}Anna. Ég{' '}
+                    <input
+                      type="text"
+                      className="input-blank"
+                      value={answers[1]}
+                      onChange={(e) => setAnswers([answers[0], e.target.value, answers[2], answers[3], answers[4]])}
+                      placeholder="?"
+                    />
+                    {' '}frá Svíþjóð. Ég{' '}
+                    <input
+                      type="text"
+                      className="input-blank"
+                      value={answers[2]}
+                      onChange={(e) => setAnswers([answers[0], answers[1], e.target.value, answers[3], answers[4]])}
+                      placeholder="?"
+                    />
+                    {' '}í Reykjavík. Ég{' '}
+                    <input
+                      type="text"
+                      className="input-blank"
+                      value={answers[3]}
+                      onChange={(e) => setAnswers([answers[0], answers[1], answers[2], e.target.value, answers[4]])}
+                      placeholder="?"
+                    />
+                    {' '}íslensku og ensku. Ég{' '}
+                    <input
+                      type="text"
+                      className="input-blank"
+                      value={answers[4]}
+                      onChange={(e) => setAnswers([answers[0], answers[1], answers[2], answers[3], e.target.value])}
+                      placeholder="?"
+                    />
+                    {' '}25 ára.
+                  </p>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={handleSubmit}
+                    disabled={loading || answers.every(a => !a.trim())}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg"
+                  >
+                    {loading ? 'Athuga...' : 'Athuga svörin'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {stage === 'results' && results && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">
+                    {results.score_pct >= 80 ? '🎉' : results.score_pct >= 60 ? '👍' : '💪'}
+                  </div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-2">
+                    Þú fékkst {results.score_pct}%
+                  </h2>
+                  <p className="text-gray-600 font-light">{results.explain_overall}</p>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  {results.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-lg border-2 ${
+                        item.correct
+                          ? 'bg-green-50 border-green-200'
+                          : 'bg-red-50 border-red-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">
+                          {item.correct ? '✅' : '❌'}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-normal text-gray-800 mb-1">
+                            Eyða {idx + 1}: <span className="font-mono">{answers[idx] || '(tómt)'}</span>
+                          </p>
+                          {!item.correct && (
+                            <p className="text-sm text-gray-600 mb-1">
+                              Rétt svar: <span className="font-mono font-semibold">{item.expected}</span>
+                            </p>
+                          )}
+                          <p className="text-sm text-gray-600 font-light">{item.feedback}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={reset}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Prófa aftur
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Eydufylling />);
+  </script>
+</body>
+</html>
