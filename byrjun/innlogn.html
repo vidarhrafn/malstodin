@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Innlögn – Byrjun – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .vocab-word {
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-decoration-color: #1565c0;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .vocab-word:hover {
+      background-color: #e3f2fd;
+      text-decoration-style: solid;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const Innlogn = () => {
+      const [language, setLanguage] = useState('');
+      const [savedLanguage, setSavedLanguage] = useState('');
+      const [popup, setPopup] = useState(null);
+      const [loadingTranslation, setLoadingTranslation] = useState(false);
+
+      useEffect(() => {
+        const saved = localStorage.getItem('userLanguage');
+        if (saved) {
+          setSavedLanguage(saved);
+          setLanguage(saved);
+        }
+      }, []);
+
+      const saveLanguage = () => {
+        if (language.trim()) {
+          localStorage.setItem('userLanguage', language.trim());
+          setSavedLanguage(language.trim());
+        }
+      };
+
+      const translateWord = async (word) => {
+        if (!savedLanguage) {
+          setPopup({ word, translation: 'Veldu fyrst þitt móðurmál!' });
+          return;
+        }
+
+        setLoadingTranslation(true);
+        setPopup({ word, translation: '...' });
+
+        try {
+          const sys = `You are a helpful translation assistant. Translate the Icelandic word "${word}" to ${savedLanguage}. Return ONLY the translation, nothing else. If it's a verb, give the infinitive form.`;
+          
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 50,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: word }
+            ]
+          });
+
+          setPopup({ word, translation: response.trim() });
+        } catch (e) {
+          console.error('Translation error:', e);
+          setPopup({ word, translation: 'Villa við þýðingu' });
+        } finally {
+          setLoadingTranslation(false);
+        }
+      };
+
+      const VocabWord = ({ children }) => (
+        <span 
+          className="vocab-word"
+          onClick={() => translateWord(children)}
+        >
+          {children}
+        </span>
+      );
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Byrjun</h1>
+              <p className="text-gray-500 text-sm font-light">Æfingar fyrir byrjendur · A1</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {/* Language Selection */}
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-light text-gray-600 mb-2">
+                    🌍 Hvað er þitt móðurmál?
+                  </label>
+                  <input
+                    type="text"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveLanguage()}
+                    placeholder="t.d. English, Español, Polski..."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
+                  />
+                </div>
+                <button
+                  onClick={saveLanguage}
+                  className="mt-6 bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                >
+                  Vista
+                </button>
+              </div>
+              {savedLanguage && (
+                <p className="text-sm text-green-600 mt-2 font-light">
+                  ✓ Móðurmál vistað: {savedLanguage}
+                </p>
+              )}
+            </div>
+
+            {/* Introduction Text */}
+            <div className="bg-white rounded-lg shadow-sm p-8 mb-8">
+              <div className="prose prose-lg max-w-none">
+                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
+                  Halló og velkomin/n! Þetta er byrjunarefni fyrir þig sem ert að <VocabWord>læra</VocabWord> íslensku. 
+                  Hér geturðu <VocabWord>æft</VocabWord> grunninn - það sem þú þarft til að <VocabWord>tala</VocabWord> og 
+                  <VocabWord>skilja</VocabWord> í daglegu lífi.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
+                  Í æfingunum hér fyrir neðan muntu nota orð eins og "<VocabWord>heita</VocabWord>", 
+                  "<VocabWord>vera</VocabWord>", "<VocabWord>búa</VocabWord>", "<VocabWord>koma</VocabWord> frá" 
+                  og "<VocabWord>tala</VocabWord>". Þetta eru orðin sem þú notar þegar þú <VocabWord>kynnir</VocabWord> þig 
+                  fyrir fólki. Til dæmis: "Ég <VocabWord>heiti</VocabWord> Anna. Ég <VocabWord>er</VocabWord> frá Svíþjóð. 
+                  Ég <VocabWord>bý</VocabWord> í Reykjavík og ég <VocabWord>tala</VocabWord> íslensku og ensku."
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
+                  Þú munt líka <VocabWord>læra</VocabWord> að <VocabWord>panta</VocabWord> á kaffihúsi. 
+                  Þá notarðu orð eins og "<VocabWord>vilja</VocabWord>", "<VocabWord>fá</VocabWord>", 
+                  "<VocabWord>taka</VocabWord>" og "<VocabWord>borða</VocabWord>". Til dæmis: "Ég <VocabWord>vil</VocabWord> fá 
+                  <VocabWord>kaffi</VocabWord> og <VocabWord>kökur</VocabWord>."
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-4 font-light text-lg">
+                  Það er alveg í lagi að <VocabWord>gera</VocabWord> villur! Það er hluti af því að 
+                  <VocabWord>læra</VocabWord>. Gervigreindin <VocabWord>hjálpar</VocabWord> þér og 
+                  <VocabWord>leiðréttir</VocabWord> þig á góðan hátt. Þú færð hrós fyrir það sem þú 
+                  <VocabWord>gerir</VocabWord> rétt!
+                </p>
+
+                <p className="text-gray-700 leading-relaxed font-light text-lg">
+                  Ef þú <VocabWord>skilur</VocabWord> ekki orð, geturðu <VocabWord>smellt</VocabWord> á það og 
+                  <VocabWord>fengið</VocabWord> þýðingu á þínu móðurmáli. Gangi þér vel! 🎉
+                </p>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800 font-light">
+                  💡 <strong>Ábending:</strong> Smelltu á undirstrikuð orð til að sjá þýðingu á þínu móðurmáli!
+                </p>
+              </div>
+            </div>
+
+            {/* Translation Popup */}
+            {popup && (
+              <div 
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                onClick={() => setPopup(null)}
+              >
+                <div 
+                  className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-xl font-light text-gray-800">Þýðing</h3>
+                    <button 
+                      onClick={() => setPopup(null)}
+                      className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm text-gray-500 font-light">Íslenska:</p>
+                      <p className="text-2xl font-normal text-gray-800">{popup.word}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 font-light">{savedLanguage || 'Þýðing'}:</p>
+                      <p className="text-2xl font-normal text-blue-600">
+                        {loadingTranslation ? '...' : popup.translation}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPopup(null)}
+                    className="mt-6 w-full bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
+                  >
+                    Loka
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Innlogn />);
+  </script>
+</body>
+</html>
