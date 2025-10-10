@@ -117,20 +117,30 @@ REGLUR:
 - Ef alveg röng málfræði (t.d. "ég eru") → correct: false, útskýrðu
 - ALDREI slá á fingur nemanda fyrir málfræðilega rétt íslensku!
 - Vertu MJÖG hvetjandi
+
+MIKILVÆGT: Svarið þitt má BARA vera JSON. Ekkert annað. Ekki texti fyrir framan eða aftan.
 `.trim();
 
           const response = await callOpenAI({
             model: 'gpt-4o',
             temperature: 0.3,
-            max_tokens: 500,
+            max_tokens: 800,
             messages: [
               { role: 'system', content: sys },
-              { role: 'user', content: 'Vinsamlegast mettu svörin mín.' }
+              { role: 'user', content: 'Vinsamlegast mettu svörin mín. SKILAÐU BARA JSON, EKKERT ANNAÐ.' }
             ]
           });
 
-          // Parse JSON response
-          let cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          // Clean response - remove markdown, extra text, etc.
+          let cleanResponse = response
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .replace(/^[^{]*/g, '')  // Remove everything before first {
+            .replace(/[^}]*$/g, '')  // Remove everything after last }
+            .trim();
+
+          console.log('Clean response:', cleanResponse);
+          
           const data = JSON.parse(cleanResponse);
           setResults(data);
           setStage('results');
