@@ -3,13 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>👗 Fatabúðin – Málmenni</title>
+  <title>👗 Fatabúðin – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-pink-50 to-violet-50 min-h-screen">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
@@ -24,15 +31,15 @@
     );
 
     /* ================ Helpers ================ */
-function parseActionFromAssistant(text) {
-  const lines = text.trim().split('\n');
-  const last = lines[lines.length - 1].trim();
-  try { 
-    return JSON.parse(last)?.action || 'none'; 
-  } catch { 
-    return 'none'; 
-  }
-}
+    function parseActionFromAssistant(text) {
+      const lines = text.trim().split('\n');
+      const last = lines[lines.length - 1].trim();
+      try { 
+        return JSON.parse(last)?.action || 'none'; 
+      } catch { 
+        return 'none'; 
+      }
+    }
 
     async function callOpenAI(payload) {
       const r = await fetch('/.netlify/functions/openai', {
@@ -47,18 +54,24 @@ function parseActionFromAssistant(text) {
 
     /* ================== App ================== */
     const Fatabudin = () => {
-      const [messages, setMessages] = useState([]); // {role:'assistant'|'user'|'feedback', content}
+      const [messages, setMessages] = useState([]);
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
-      const [stage, setStage] = useState('shopping'); // shopping | checkout | done
+      const [stage, setStage] = useState('shopping');
       const [orderNumber, setOrderNumber] = useState(null);
       const endRef = useRef(null);
+      const inputRef = useRef(null);
 
       useEffect(() => {
         setMessages([{ role: 'assistant', content: 'Hæ og velkomin/nn í fatabúðina! 👋 Hverju ertu að leita að í dag? Hvernig get ég aðstoðað?' }]);
       }, []);
 
-      useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+      useEffect(() => { 
+        endRef.current?.scrollIntoView({ behavior: 'smooth' }); 
+        if (stage === 'shopping' && inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, [messages, loading, stage]);
 
       async function sendMessage() {
         const trimmed = input.trim();
@@ -69,7 +82,7 @@ function parseActionFromAssistant(text) {
         setInput('');
         setLoading(true);
 
-        // 1) Örstutt málfarsendurgjöf
+        // Málfarsendurgjöf
         try {
           const feedbackMessages = [
             { role: 'system', content: `
@@ -90,7 +103,7 @@ REGLUR:
           }
         } catch (e) { console.warn('feedback error', e); }
 
-        // 2) Aðal-svar starfsmanns
+        // Aðal-svar
         try {
           const sys = `
 Þú ert vingjarnleg/ur starfsmaður í íslenskri fatabúð og aðstoðar viðskiptavin á einföldu, náttúrulegu íslensku.
@@ -103,12 +116,12 @@ VERKEFNI:
 
 STÍLL:
 - Stuttar, eðlilegar setningar; sparlega emoji.
-- Ekki nota „kennslumál“ eða punktalista nema beðið sé um það.
-- Gættu að fallbeygingu og samræmi (kyn, tala, fall). Dæmi: „fallegar buxur (kvk.ft.)“, „svarta jakka (þf. kk.et.)“.
+- Ekki nota „kennslumál" eða punktalista nema beðið sé um það.
+- Gættu að fallbeygingu og samræmi (kyn, tala, fall). Dæmi: „fallegar buxur (kvk.ft.)", „svarta jakka (þf. kk.et.)".
 
 DÆMI ÚTTÁKS:
 „Við eigum bæði svartar jogger-buxur og gallabuxur. Viltu frekar þröngt eða laust snið og hvaða stærð ertu yfirleitt í?
-{"action":"none"}“`.trim();
+{"action":"none"}"`.trim();
 
           const history = messages
             .filter(m => m.role === 'assistant' || m.role === 'user')
@@ -135,22 +148,31 @@ DÆMI ÚTTÁKS:
       }
 
       return (
-        <div>
-          <header className="bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white p-6 shadow-lg">
-            <h1 className="text-4xl font-bold text-center">👗 Fatabúðin</h1>
-            <p className="text-center text-pink-100 mt-2">Spurðu um stærðir, snið og lit – ég hjálpa!</p>
+        <div className="min-h-screen pb-12">
+          {/* Header með Málstöðin útliti */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Fatabúðin</h1>
+              <p className="text-gray-500 text-sm font-light">Samtalsæfing · A2-B1</p>
+            </div>
           </header>
 
-          <main className="max-w-4xl mx-auto p-4">
+          <main className="max-w-4xl mx-auto px-6 mt-8">
             {/* Spjall + afgreiðsla */}
-            <section className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-[600px]">
+            <section className="bg-white rounded-lg shadow-sm overflow-hidden flex flex-col h-[600px]">
               {stage === 'shopping' && (
                 <>
                   <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {messages.map((msg, idx) => (
                       <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : msg.role === 'feedback' ? 'justify-center' : 'justify-start'}`}>
-                        <div className={`max-w-lg px-4 py-2 rounded-lg ${msg.role === 'user' ? 'bg-fuchsia-500 text-white' : msg.role === 'feedback' ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm italic' : 'bg-gray-100 text-gray-800'}`}>
-                          {msg.role === 'feedback' && <span className="font-semibold">📚 Málfar: </span>}
+                        <div className={`max-w-lg px-4 py-2 rounded-lg font-light ${msg.role === 'user' ? 'bg-gray-800 text-white' : msg.role === 'feedback' ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm italic' : 'bg-gray-100 text-gray-800'}`}>
+                          {msg.role === 'feedback' && <span className="font-normal">📚 Málfar: </span>}
                           {msg.content}
                         </div>
                       </div>
@@ -174,17 +196,18 @@ DÆMI ÚTTÁKS:
                     <div className="flex gap-2">
                       <input
                         type="text"
+                        ref={inputRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                        placeholder="Hvað ertu að leita að? (t.d. „svartar buxur í M“ )"
-                        className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                        placeholder="Hvað ertu að leita að? (t.d. „svartar buxur í M" )"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
                         disabled={loading}
                       />
                       <button
                         onClick={sendMessage}
                         disabled={loading || !input.trim()}
-                        className="bg-fuchsia-500 text-white px-6 py-2 rounded-lg hover:bg-fuchsia-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                        className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
                         aria-label="Senda skilaboð"
                         title="Senda"
                       >
@@ -198,18 +221,18 @@ DÆMI ÚTTÁKS:
               {stage === 'checkout' && (
                 <div className="flex-1 flex items-center justify-center p-6">
                   <div className="text-center">
-                    <h2 className="text-3xl font-bold text-gray-800 mb-4">Kassi</h2>
-                    <p className="text-gray-600">Staðfesta kaup?
-                      <br/><span className="text-sm">(Hægt er að færa sig aftur og spyrja meira ef þarf)</span>
+                    <h2 className="text-3xl font-light text-gray-800 mb-4">Kassi</h2>
+                    <p className="text-gray-600 font-light">Staðfesta kaup?
+                      <br/><span className="text-sm">( Hægt er að færa sig aftur og spyrja meira ef þarf )</span>
                     </p>
                     <button
                       onClick={() => { const n = Math.floor(Math.random()*900)+100; setOrderNumber(n); setStage('done'); }}
-                      className="mt-6 bg-fuchsia-500 text-white px-8 py-3 rounded-lg text-lg font-bold hover:bg-fuchsia-600 transition-colors shadow"
+                      className="mt-6 bg-gray-800 text-white px-8 py-3 rounded-md text-lg font-light hover:bg-gray-700 transition-colors shadow-sm"
                     >
                       Staðfesta kaup
                     </button>
                     <div className="mt-4">
-                      <button onClick={() => setStage('shopping')} className="text-fuchsia-600 underline text-sm">Til baka</button>
+                      <button onClick={() => setStage('shopping')} className="text-gray-600 hover:text-gray-800 underline text-sm font-light">Til baka</button>
                     </div>
                   </div>
                 </div>
@@ -219,15 +242,15 @@ DÆMI ÚTTÁKS:
                 <div className="flex-1 flex items-center justify-center p-6">
                   <div className="text-center">
                     <div className="text-6xl mb-4">🛍️</div>
-                    <h2 className="text-3xl font-bold text-gray-800 mb-4">Takk fyrir komuna!</h2>
-                    <div className="bg-pink-100 rounded-lg p-6 mb-6">
-                      <p className="text-gray-600 mb-2">Pöntunarnúmer:</p>
-                      <p className="text-5xl font-bold text-fuchsia-600">#{orderNumber}</p>
+                    <h2 className="text-3xl font-light text-gray-800 mb-4">Takk fyrir komuna!</h2>
+                    <div className="bg-gray-50 rounded-lg p-6 mb-6 border border-gray-200">
+                      <p className="text-gray-600 mb-2 font-light">Pöntunarnúmer:</p>
+                      <p className="text-5xl font-light text-gray-800">#{orderNumber}</p>
                     </div>
-                    <p className="text-xl text-gray-600 mb-8">Við látum þig vita þegar varan er klár til afhendingar 👗</p>
+                    <p className="text-xl text-gray-600 mb-8 font-light">Við látum þig vita þegar varan er klár til afhendingar 👗</p>
                     <button
                       onClick={() => { setStage('shopping'); setMessages([{ role: 'assistant', content: 'Hæ aftur! Hvað má ég aðstoða þig með núna? 😊' }]); setOrderNumber(null); }}
-                      className="bg-fuchsia-500 text-white px-6 py-3 rounded-lg hover:bg-fuchsia-600 transition-colors"
+                      className="bg-gray-800 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-light"
                     >
                       Ný fyrirspurn
                     </button>
