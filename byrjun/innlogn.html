@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Innlögn – Byrjun – Málstöðin</title>
+  <script src="lesson-config.js"></script>
+  <script src="lesson-navigation.js"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -47,19 +49,15 @@
     }
 
     const Innlogn = () => {
-      const [language, setLanguage] = useState('');
-      const [savedLanguage, setSavedLanguage] = useState('');
+      const [savedLanguage, setSavedLanguage] = useState('English');
       const [popup, setPopup] = useState(null);
       const [loadingTranslation, setLoadingTranslation] = useState(false);
       const [translatedHint, setTranslatedHint] = useState('');
 
       useEffect(() => {
-        const saved = localStorage.getItem('userLanguage');
-        if (saved) {
-          setSavedLanguage(saved);
-          setLanguage(saved);
-          translateHint(saved);
-        }
+        const saved = localStorage.getItem('userLanguage') || 'English';
+        setSavedLanguage(saved);
+        translateHint(saved);
       }, []);
 
       const translateHint = async (lang) => {
@@ -79,14 +77,6 @@
           setTranslatedHint(response.trim());
         } catch (e) {
           console.error('Hint translation error:', e);
-        }
-      };
-
-      const saveLanguage = () => {
-        if (language.trim()) {
-          localStorage.setItem('userLanguage', language.trim());
-          setSavedLanguage(language.trim());
-          translateHint(language.trim());
         }
       };
 
@@ -146,39 +136,29 @@
           </header>
 
           <main className="max-w-4xl mx-auto px-6 mt-8">
-            {/* Language Selection */}
+            {/* Progress Bar - injected by navigation system */}
+            <div id="lesson-progress-top"></div>
+            
+            {/* Navigation Top */}
+            <div id="lesson-nav-top"></div>
+
+            {/* Language Info */}
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-light text-gray-600 mb-2">
-                    🌍 Hvað er þitt móðurmál?
-                  </label>
-                  <input
-                    type="text"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && saveLanguage()}
-                    placeholder="t.d. English, Español, Polski..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light"
-                  />
-                </div>
-                <button
-                  onClick={saveLanguage}
-                  className="mt-6 bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"
-                >
-                  Vista
-                </button>
-              </div>
-              
-              {savedLanguage && (
-                <p className="text-sm text-green-600 mb-3 font-light">
-                  ✓ Móðurmál vistað: {savedLanguage}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-600 font-light">
+                  🌍 Móðurmál: <strong>{savedLanguage}</strong>
                 </p>
-              )}
+                <a 
+                  href="byrjun.html" 
+                  className="text-sm text-blue-600 hover:underline font-light"
+                >
+                  Breyta
+                </a>
+              </div>
 
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-800 font-light">
-                  💡 {savedLanguage && translatedHint ? (
+                  💡 {translatedHint ? (
                     <><strong>Ábending:</strong> {translatedHint}</>
                   ) : (
                     <><strong>Ábending:</strong> Smelltu á undirstrikuð orð til að sjá þýðingu á þínu móðurmáli!</>
@@ -252,10 +232,27 @@
                 </div>
               </div>
             )}
+
+            {/* Navigation Bottom */}
+            <div id="lesson-nav-bottom"></div>
           </main>
         </div>
       );
     };
+
+    // Initialize lesson navigation BEFORE React renders
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(() => {
+        const nav = initLessonNavigation('innlogn');
+        const progressTop = document.getElementById('lesson-progress-top');
+        const navTop = document.getElementById('lesson-nav-top');
+        const navBottom = document.getElementById('lesson-nav-bottom');
+        
+        if (progressTop) progressTop.innerHTML = nav.progressHtml;
+        if (navTop) navTop.innerHTML = nav.navHtml;
+        if (navBottom) navBottom.innerHTML = nav.navHtml;
+      }, 100);
+    });
 
     ReactDOM.createRoot(document.getElementById('root')).render(<Innlogn />);
   </script>
