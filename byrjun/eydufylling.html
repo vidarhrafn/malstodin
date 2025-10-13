@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>📝 Eyðufylling – Málstöðin</title>
+  <script src="lesson-config.js"></script>
+  <script src="lesson-navigation.js"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -57,6 +59,18 @@
       const [answers, setAnswers] = useState(['', '', '', '', '']);
       const [results, setResults] = useState(null);
       const [loading, setLoading] = useState(false);
+      const [lessonInfo, setLessonInfo] = useState(null);
+      const [savedLanguage, setSavedLanguage] = useState('English');
+
+      React.useEffect(() => {
+        // Get lesson info
+        const info = getLessonInfo('eydufylling');
+        setLessonInfo(info);
+        
+        // Get saved language
+        const saved = localStorage.getItem('userLanguage') || 'English';
+        setSavedLanguage(saved);
+      }, []);
 
       // Textinn með eyðum
       const text = "Ég _____ Anna. Ég _____ frá Svíþjóð. Ég _____ í Reykjavík. Ég _____ íslensku og ensku. Ég _____ 25 ára.";
@@ -174,6 +188,21 @@ MIKILVÆGT: Svarið þitt má BARA vera JSON. Ekkert annað. Ekki texti fyrir fr
           </header>
 
           <main className="max-w-4xl mx-auto px-6 mt-8">
+            {/* Language Info */}
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 font-light">
+                  🌍 Móðurmál: <strong>{savedLanguage}</strong>
+                </p>
+                <a 
+                  href="byrjun.html" 
+                  className="text-sm text-blue-600 hover:underline font-light"
+                >
+                  Breyta
+                </a>
+              </div>
+            </div>
+
             {stage === 'intro' && (
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <div className="text-center mb-8">
@@ -291,6 +320,89 @@ MIKILVÆGT: Svarið þitt má BARA vera JSON. Ekkert annað. Ekki texti fyrir fr
                   >
                     Prófa aftur
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Navigation Buttons */}
+            {lessonInfo && (
+              <div className="flex justify-between gap-4 mt-8 mb-6">
+                {lessonInfo.prev ? (
+                  <a 
+                    href={lessonInfo.prev.url}
+                    className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all text-center font-light"
+                  >
+                    ← {lessonInfo.prev.name}
+                  </a>
+                ) : (
+                  <a 
+                    href="byrjun.html"
+                    className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all text-center font-light"
+                  >
+                    ← Til baka
+                  </a>
+                )}
+                
+                {lessonInfo.next ? (
+                  <a 
+                    href={lessonInfo.next.url}
+                    className="flex-1 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-all text-center font-light"
+                  >
+                    {lessonInfo.next.name} →
+                  </a>
+                ) : (
+                  <a 
+                    href="byrjun.html"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all text-center font-light"
+                  >
+                    🎉 Klárað!
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Progress Bar */}
+            {lessonInfo && (
+              <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm text-gray-600 font-light">
+                    Skref {lessonInfo.index + 1} af {lessonInfo.total}
+                  </span>
+                  <span className="text-lg text-blue-600 font-medium">
+                    {Math.round(((lessonInfo.index + 1) / lessonInfo.total) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                    style={{ width: `${((lessonInfo.index + 1) / lessonInfo.total) * 100}%` }}
+                  ></div>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  {LESSON_CONFIG.lessons.map((lesson, i) => (
+                    <div 
+                      key={lesson.id}
+                      className={`flex-1 h-3 rounded-full transition-all ${
+                        i < lessonInfo.index ? 'bg-green-500' :
+                        i === lessonInfo.index ? 'bg-blue-500' :
+                        'bg-gray-200'
+                      }`}
+                    ></div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                  {LESSON_CONFIG.lessons.map((lesson, i) => (
+                    <React.Fragment key={lesson.id}>
+                      <span className={`${
+                        i < lessonInfo.index ? 'text-green-600 font-medium' :
+                        i === lessonInfo.index ? 'text-blue-600 font-semibold' :
+                        'text-gray-400'
+                      }`}>
+                        {lesson.icon} {lesson.name}
+                      </span>
+                      {i < LESSON_CONFIG.lessons.length - 1 && <span className="text-gray-300">→</span>}
+                    </React.Fragment>
+                  ))}
                 </div>
               </div>
             )}
