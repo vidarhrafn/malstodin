@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>📊 Sjálfspróf – Málstöðin</title>
+  <script src="lesson-config.js"></script>
+  <script src="lesson-navigation.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+    .answer-option.disabled {
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    // Pre-defined translations for TOP 5 languages
+    const SUPPORTED_LANGUAGES = {
+      'English': {
+        questionTemplates: {
+          'meaning': 'What does "{word}" mean?',
+          'fillBlank': 'Fill in the blank',
+          'listening': 'What did you hear?',
+          'reading': 'Read the text and answer',
+          'translate': 'Translate to {language}'
+        },
+        vocabulary: {
+          'heita': { correct: 'to be called', wrong: ['to live', 'to work', 'to speak'] },
+          'búa': { correct: 'to live', wrong: ['to work', 'to speak', 'to eat'] },
+          'vinna': { correct: 'to work', wrong: ['to win', 'to live', 'to speak'] },
+          'elska': { correct: 'to love', wrong: ['to hate', 'to like', 'to eat'] },
+          'tala': { correct: 'to speak', wrong: ['to work', 'to listen', 'to write'] }
+        },
+        readingOptions: {
+          q1: ['Iceland', 'Sweden', 'Denmark', 'Norway'],
+          q2: ['office', 'preschool', 'school', 'hospital'],
+          q3: ['works', 'sleeps', 'goes into nature', 'watches TV']
+        }
+      },
+      'Spanish': {
+        questionTemplates: {
+          'meaning': '¿Qué significa "{word}"?',
+          'fillBlank': 'Completa el espacio',
+          'listening': '¿Qué escuchaste?',
+          'reading': 'Lee el texto y responde',
+          'translate': 'Traduce a {language}'
+        },
+        vocabulary: {
+          'heita': { correct: 'llamarse', wrong: ['vivir', 'trabajar', 'hablar'] },
+          'búa': { correct: 'vivir', wrong: ['trabajar', 'hablar', 'comer'] },
+          'vinna': { correct: 'trabajar', wrong: ['ganar', 'vivir', 'hablar'] },
+          'elska': { correct: 'amar', wrong: ['odiar', 'gustar', 'comer'] },
+          'tala': { correct: 'hablar', wrong: ['trabajar', 'escuchar', 'escribir'] }
+        },
+        readingOptions: {
+          q1: ['Islandia', 'Suecia', 'Dinamarca', 'Noruega'],
+          q2: ['oficina', 'guardería', 'escuela', 'hospital'],
+          q3: ['trabaja', 'duerme', 'va a la naturaleza', 've la televisión']
+        }
+      },
+      'Vietnamese': {
+        questionTemplates: {
+          'meaning': '"{word}" có nghĩa là gì?',
+          'fillBlank': 'Điền vào chỗ trống',
+          'listening': 'Bạn nghe được gì?',
+          'reading': 'Đọc đoạn văn và trả lời',
+          'translate': 'Dịch sang {language}'
+        },
+        vocabulary: {
+          'heita': { correct: 'tên là', wrong: ['sống', 'làm việc', 'nói'] },
+          'búa': { correct: 'sống', wrong: ['làm việc', 'nói', 'ăn'] },
+          'vinna': { correct: 'làm việc', wrong: ['thắng', 'sống', 'nói'] },
+          'elska': { correct: 'yêu', wrong: ['ghét', 'thích', 'ăn'] },
+          'tala': { correct: 'nói', wrong: ['làm việc', 'nghe', 'viết'] }
+        },
+        readingOptions: {
+          q1: ['Iceland', 'Thụy Điển', 'Đan Mạch', 'Na Uy'],
+          q2: ['văn phòng', 'mẫu giáo', 'trường học', 'bệnh viện'],
+          q3: ['làm việc', 'ngủ', 'đi vào thiên nhiên', 'xem TV']
+        }
+      },
+      'Ukrainian': {
+        questionTemplates: {
+          'meaning': 'Що означає "{word}"?',
+          'fillBlank': 'Заповніть пропуск',
+          'listening': 'Що ти почув?',
+          'reading': 'Прочитай текст і дай відповідь',
+          'translate': 'Перекладіть на {language}'
+        },
+        vocabulary: {
+          'heita': { correct: 'звати', wrong: ['жити', 'працювати', 'говорити'] },
+          'búa': { correct: 'жити', wrong: ['працювати', 'говорити', 'їсти'] },
+          'vinna': { correct: 'працювати', wrong: ['перемагати', 'жити', 'говорити'] },
+          'elska': { correct: 'любити', wrong: ['ненавидіти', 'подобатися', 'їсти'] },
+          'tala': { correct: 'говорити', wrong: ['працювати', 'слухати', 'писати'] }
+        },
+        readingOptions: {
+          q1: ['Ісландія', 'Швеція', 'Данія', 'Норвегія'],
+          q2: ['офіс', 'дитсадок', 'школа', 'лікарня'],
+          q3: ['працює', 'спить', 'виходить на природу', 'дивиться телевізор']
+        }
+      },
+      'Arabic': {
+        questionTemplates: {
+          'meaning': 'ما معنى "{word}"؟',
+          'fillBlank': 'املأ الفراغ',
+          'listening': 'ماذا سمعت؟',
+          'reading': 'اقرأ النص وأجب',
+          'translate': 'ترجم إلى {language}'
+        },
+        vocabulary: {
+          'heita': { correct: 'يُدعى', wrong: ['يعيش', 'يعمل', 'يتكلم'] },
+          'búa': { correct: 'يعيش', wrong: ['يعمل', 'يتكلم', 'يأكل'] },
+          'vinna': { correct: 'يعمل', wrong: ['يفوز', 'يعيش', 'يتكلم'] },
+          'elska': { correct: 'يحب', wrong: ['يكره', 'يعجب', 'يأكل'] },
+          'tala': { correct: 'يتكلم', wrong: ['يعمل', 'يسمع', 'يكتب'] }
+        },
+        readingOptions: {
+          q1: ['آيسلندا', 'السويد', 'الدنمارك', 'النرويج'],
+          q2: ['مكتب', 'روضة أطفال', 'مدرسة', 'مستشفى'],
+          q3: ['يعمل', 'ينام', 'يذهب إلى الطبيعة', 'يشاهد التلفزيون']
+        }
+      }
+    };
+
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    async function getTranslatedVocabQuestion(word, userLanguage) {
+      if (SUPPORTED_LANGUAGES[userLanguage]) {
+        const data = SUPPORTED_LANGUAGES[userLanguage];
+        const question = data.questionTemplates.meaning.replace('{word}', word);
+        const vocab = data.vocabulary[word];
+        
+        const allOptions = shuffle([vocab.correct, ...vocab.wrong]);
+        const correctIndex = allOptions.indexOf(vocab.correct);
+        
+        return {
+          question: question,
+          options: allOptions,
+          correct: correctIndex
+        };
+      }
+      
+      // Fallback to OpenAI
+      const englishMeaning = SUPPORTED_LANGUAGES['English'].vocabulary[word].correct;
+      const sys = `
+You are a translation expert.
+
+TASK: Translate this Icelandic vocabulary test question to ${userLanguage}.
+
+ICELANDIC WORD: "${word}"
+CORRECT MEANING IN ENGLISH: "${englishMeaning}"
+
+CREATE:
+1. Question in ${userLanguage} asking "What does '${word}' mean?"
+2. 4 answer options in ${userLanguage} (1 correct + 3 plausible wrong answers)
+3. Wrong answers should be similar verbs (good distractors)
+
+RETURN JSON ONLY (NO MARKDOWN):
+{
+  "question": "translated question",
+  "options": ["option1", "option2", "option3", "option4"],
+  "correct": 0
+}
+
+Randomize the position of the correct answer!
+`;
+
+      const response = await callOpenAI({
+        model: 'gpt-4o',
+        temperature: 0.3,
+        max_tokens: 300,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: 'Translate question' }
+        ]
+      });
+
+      let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').replace(/^[^{]*/g, '').replace(/[^}]*$/g, '').trim();
+      return JSON.parse(cleaned);
+    }
+
+    async function getTranslatedTemplate(templateKey, userLanguage, vars = {}) {
+      if (SUPPORTED_LANGUAGES[userLanguage]) {
+        let template = SUPPORTED_LANGUAGES[userLanguage].questionTemplates[templateKey];
+        Object.keys(vars).forEach(key => {
+          template = template.replace(`{${key}}`, vars[key]);
+        });
+        return template;
+      }
+      
+      // Fallback to OpenAI
+      const englishTemplate = SUPPORTED_LANGUAGES['English'].questionTemplates[templateKey];
+      const sys = `Translate this test instruction from English to ${userLanguage}: "${englishTemplate}"
+Only return the translated text, nothing else.`;
+
+      const response = await callOpenAI({
+        model: 'gpt-4o',
+        temperature: 0.2,
+        max_tokens: 100,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: 'Translate' }
+        ]
+      });
+
+      return response.trim().replace(/^["']|["']$/g, '');
+    }
+
+    async function getTranslatedReadingOptions(questionKey, userLanguage) {
+      if (SUPPORTED_LANGUAGES[userLanguage]) {
+        return SUPPORTED_LANGUAGES[userLanguage].readingOptions[questionKey];
+      }
+      
+      // Fallback to OpenAI
+      const englishOptions = SUPPORTED_LANGUAGES['English'].readingOptions[questionKey];
+      const sys = `Translate these answer options from English to ${userLanguage}: ${JSON.stringify(englishOptions)}
+Return ONLY a JSON array with the translations in the SAME ORDER: ["option1", "option2", "option3", "option4"]`;
+
+      const response = await callOpenAI({
+        model: 'gpt-4o',
+        temperature: 0.2,
+        max_tokens: 150,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: 'Translate' }
+        ]
+      });
+
+      let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      return JSON.parse(cleaned);
+    }
+
+    const Sjalfsprof = () => {
+      const [view, setView] = useState('intro');
+      const [currentQuestion, setCurrentQuestion] = useState(0);
+      const [answers, setAnswers] = useState({});
+      const [showReview, setShowReview] = useState(false);
+      const [questions, setQuestions] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [userLanguage, setUserLanguage] = useState('English');
+      const [lessonInfo, setLessonInfo] = useState(null);
+
+      useEffect(() => {
+        const info = getLessonInfo('sjalfsprof');
+        setLessonInfo(info);
+        
+        const saved = localStorage.getItem('userLanguage') || 'English';
+        setUserLanguage(saved);
+      }, []);
+
+      const startQuiz = async () => {
+        setLoading(true);
+        setView('loading');
+        
+        try {
+          const quizQuestions = await generateQuestions(userLanguage);
+          setQuestions(quizQuestions);
+          setView('quiz');
+          setCurrentQuestion(0);
+          setAnswers({});
+        } catch (e) {
+          console.error('Error generating quiz:', e);
+          alert('Villa við að búa til próf. Reyndu aftur.');
+          setView('intro');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const generateQuestions = async (lang) => {
+        const qs = [];
+
+        // 1. Vocabulary questions (5)
+        const vocabWords = ['heita', 'búa', 'vinna', 'elska', 'tala'];
+        for (const word of vocabWords) {
+          const q = await getTranslatedVocabQuestion(word, lang);
+          qs.push({
+            type: 'vocab',
+            ...q
+          });
+        }
+
+        // 2. Grammar fill-in-the-blank (3)
+        const fillBlankLabel = await getTranslatedTemplate('fillBlank', lang);
+        qs.push({
+          type: 'grammar',
+          question: fillBlankLabel,
+          sentence: 'Ég _____ Anna.',
+          options: ['heiti', 'heitir', 'heita', 'heitum'],
+          correct: 0
+        });
+        qs.push({
+          type: 'grammar',
+          question: fillBlankLabel,
+          sentence: 'Ég _____ frá Úkraínu.',
+          options: ['eru', 'ert', 'er', 'erum'],
+          correct: 2
+        });
+        qs.push({
+          type: 'grammar',
+          question: fillBlankLabel,
+          sentence: 'Ég _____ í Reykjavík.',
+          options: ['býr', 'bý', 'búa', 'búum'],
+          correct: 1
+        });
+
+        // 3. Listening (3) - Using TTS
+        const listeningLabel = await getTranslatedTemplate('listening', lang);
+        qs.push({
+          type: 'listening',
+          question: listeningLabel,
+          audio: 'Ég tala íslensku og ensku',
+          options: ['Ég tala spænsku og ensku', 'Ég tala íslensku og þýsku', 'Ég tala íslensku og ensku', 'Ég tala ensku og rússnesku'],
+          correct: 2
+        });
+        qs.push({
+          type: 'listening',
+          question: listeningLabel,
+          audio: 'Á morgnana drekk ég kaffi',
+          options: ['Te', 'Kaffi', 'Vatn', 'Mjólk'],
+          correct: 1,
+          subQuestion: 'Hvað drekkur persónan á morgnana?'
+        });
+        qs.push({
+          type: 'listening',
+          question: listeningLabel,
+          audio: 'Eftir vinnu fer ég í líkamsrækt',
+          options: ['Fer heim', 'Fer í bíó', 'Fer í líkamsrækt', 'Fer að sofa'],
+          correct: 2,
+          subQuestion: 'Hvað gerir persónan eftir vinnu?'
+        });
+
+        // 4. Reading comprehension (3)
+        const readingLabel = await getTranslatedTemplate('reading', lang);
+        const readingOpts1 = await getTranslatedReadingOptions('q1', lang);
+        const readingOpts2 = await getTranslatedReadingOptions('q2', lang);
+        const readingOpts3 = await getTranslatedReadingOptions('q3', lang);
+
+        qs.push({
+          type: 'reading',
+          question: readingLabel,
+          text: 'Ég heiti Jón. Ég er frá Danmörku. Ég bý í Reykjavík núna.',
+          subQuestion: 'Hvaðan er Jón?',
+          options: readingOpts1,
+          correct: 2
+        });
+        qs.push({
+          type: 'reading',
+          question: readingLabel,
+          text: 'Anna vinnur á leikskóla. Hún elskar starfið sitt.',
+          subQuestion: 'Hvar vinnur Anna?',
+          options: readingOpts2,
+          correct: 1
+        });
+        qs.push({
+          type: 'reading',
+          question: readingLabel,
+          text: 'Um helgar fer ég út í náttúruna. Ég elska að taka myndir.',
+          subQuestion: 'Hvað gerir persónan um helgar?',
+          options: readingOpts3,
+          correct: 2
+        });
+
+        // 5. Translation (2)
+        const translateLabel = await getTranslatedTemplate('translate', lang, { language: lang });
+        qs.push({
+          type: 'translation',
+          question: translateLabel,
+          icelandic: 'Ég bý í Reykjavík',
+          userAnswer: ''
+        });
+        qs.push({
+          type: 'translation',
+          question: translateLabel,
+          icelandic: 'Ég tala íslensku',
+          userAnswer: ''
+        });
+
+        return qs;
+      };
+
+      const handleAnswer = (answer) => {
+        setAnswers({ ...answers, [currentQuestion]: answer });
+      };
+
+      const nextQuestion = () => {
+        if (currentQuestion < questions.length - 1) {
+          setCurrentQuestion(currentQuestion + 1);
+        } else {
+          finishQuiz();
+        }
+      };
+
+      const prevQuestion = () => {
+        if (currentQuestion > 0) {
+          setCurrentQuestion(currentQuestion - 1);
+        }
+      };
+
+      const finishQuiz = async () => {
+        setLoading(true);
+        
+        // Evaluate translation questions with OpenAI
+        const finalAnswers = { ...answers };
+        
+        for (let i = 0; i < questions.length; i++) {
+          if (questions[i].type === 'translation' && answers[i]) {
+            try {
+              const result = await evaluateTranslation(questions[i].icelandic, answers[i], userLanguage);
+              finalAnswers[i] = { text: answers[i], correct: result.correct };
+            } catch (e) {
+              console.error('Translation evaluation error:', e);
+              finalAnswers[i] = { text: answers[i], correct: false };
+            }
+          }
+        }
+        
+        setAnswers(finalAnswers);
+        setLoading(false);
+        setShowReview(true);
+        setView('results');
+      };
+
+      const evaluateTranslation = async (icelandic, translation, lang) => {
+        const sys = `
+You are evaluating an Icelandic to ${lang} translation by a beginner student.
+
+ICELANDIC: "${icelandic}"
+STUDENT TRANSLATION: "${translation}"
+
+Accept translations that:
+- Have the correct meaning (even if wording varies)
+- Have minor grammar errors in ${lang} (we're testing Icelandic comprehension!)
+- Omit minor words like articles if the meaning is clear
+
+Reject if:
+- Major parts are missing
+- Meaning is wrong
+- Student clearly didn't understand
+
+RETURN JSON ONLY:
+{
+  "correct": boolean
+}
+`;
+
+        const response = await callOpenAI({
+          model: 'gpt-4o',
+          temperature: 0.2,
+          max_tokens: 100,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: 'Evaluate' }
+          ]
+        });
+
+        let cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').replace(/^[^{]*/g, '').replace(/[^}]*$/g, '').trim();
+        return JSON.parse(cleaned);
+      };
+
+      const calculateScore = () => {
+        let correct = 0;
+        questions.forEach((q, i) => {
+          if (q.type === 'translation') {
+            if (answers[i]?.correct) correct++;
+          } else {
+            if (answers[i] === q.correct) correct++;
+          }
+        });
+        return Math.round((correct / questions.length) * 100);
+      };
+
+      const getBreakdown = () => {
+        const breakdown = {
+          vocab: { correct: 0, total: 0 },
+          grammar: { correct: 0, total: 0 },
+          listening: { correct: 0, total: 0 },
+          reading: { correct: 0, total: 0 },
+          translation: { correct: 0, total: 0 }
+        };
+
+        questions.forEach((q, i) => {
+          breakdown[q.type].total++;
+          if (q.type === 'translation') {
+            if (answers[i]?.correct) breakdown[q.type].correct++;
+          } else {
+            if (answers[i] === q.correct) breakdown[q.type].correct++;
+          }
+        });
+
+        return breakdown;
+      };
+
+      const resetQuiz = () => {
+        setView('intro');
+        setCurrentQuestion(0);
+        setAnswers({});
+        setShowReview(false);
+        setQuestions([]);
+      };
+
+      const playAudio = (text) => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'is-IS';
+        utterance.rate = 0.8;
+        speechSynthesis.speak(utterance);
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Sjálfspróf</h1>
+              <p className="text-gray-500 text-sm font-light">Prófaðu hvað þú hefur lært · A1</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {view === 'intro' && (
+              <IntroView onStart={startQuiz} userLanguage={userLanguage} />
+            )}
+
+            {view === 'loading' && (
+              <LoadingView />
+            )}
+
+            {view === 'quiz' && questions.length > 0 && (
+              <QuizView
+                question={questions[currentQuestion]}
+                questionNumber={currentQuestion + 1}
+                totalQuestions={questions.length}
+                answer={answers[currentQuestion]}
+                onAnswer={handleAnswer}
+                onNext={nextQuestion}
+                onPrev={prevQuestion}
+                canGoNext={answers[currentQuestion] !== undefined}
+                canGoPrev={currentQuestion > 0}
+                playAudio={playAudio}
+              />
+            )}
+
+            {view === 'results' && (
+              <ResultsView
+                score={calculateScore()}
+                breakdown={getBreakdown()}
+                questions={questions}
+                answers={answers}
+                onReset={resetQuiz}
+                onReview={() => setShowReview(!showReview)}
+                showReview={showReview}
+                userLanguage={userLanguage}
+              />
+            )}
+
+            {view === 'intro' && lessonInfo && (
+              <>
+                <div className="flex justify-between gap-4 mt-8 mb-6">
+                  {lessonInfo.prev ? (
+                    <a 
+                      href={lessonInfo.prev.url}
+                      className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all text-center font-light"
+                    >
+                      ← {lessonInfo.prev.name}
+                    </a>
+                  ) : (
+                    <a 
+                      href="byrjun.html"
+                      className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all text-center font-light"
+                    >
+                      ← Til baka
+                    </a>
+                  )}
+                  
+                  {lessonInfo.next ? (
+                    <a 
+                      href={lessonInfo.next.url}
+                      className="flex-1 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-all text-center font-light"
+                    >
+                      {lessonInfo.next.name} →
+                    </a>
+                  ) : (
+                    <a 
+                      href="byrjun.html"
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all text-center font-light"
+                    >
+                      🎉 Klárað!
+                    </a>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-sm text-gray-600 font-light">
+                      Skref {lessonInfo.index + 1} af {lessonInfo.total}
+                    </span>
+                    <span className="text-lg text-blue-600 font-medium">
+                      {Math.round(((lessonInfo.index + 1) / lessonInfo.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
+                    <div 
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                      style={{ width: `${((lessonInfo.index + 1) / lessonInfo.total) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex gap-2 mb-3">
+                    {LESSON_CONFIG.lessons.map((lesson, i) => (
+                      <div 
+                        key={lesson.id}
+                        className={`flex-1 h-3 rounded-full transition-all ${
+                          i < lessonInfo.index ? 'bg-green-500' :
+                          i === lessonInfo.index ? 'bg-blue-500' :
+                          'bg-gray-200'
+                        }`}
+                      ></div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    {LESSON_CONFIG.lessons.map((lesson, i) => (
+                      <React.Fragment key={lesson.id}>
+                        <span className={`${
+                          i < lessonInfo.index ? 'text-green-600 font-medium' :
+                          i === lessonInfo.index ? 'text-blue-600 font-semibold' :
+                          'text-gray-400'
+                        }`}>
+                          {lesson.icon} {lesson.name}
+                        </span>
+                        {i < LESSON_CONFIG.lessons.length - 1 && <span className="text-gray-300">→</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    const IntroView = ({ onStart, userLanguage }) => (
+      <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="text-center mb-8">
+          <div className="text-6xl mb-4">📊</div>
+          <h2 className="text-2xl font-light text-gray-800 mb-4">Sjálfspróf</h2>
+          <p className="text-gray-600 font-light mb-6">
+            Prófaðu hvað þú hefur lært í Byrjun!
+          </p>
+          
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 max-w-md mx-auto">
+            <div className="text-left space-y-3">
+              <p className="text-sm text-gray-700 font-light">
+                <strong>📝 15 spurningar</strong>
+              </p>
+              <p className="text-sm text-gray-700 font-light">
+                <strong>🎯 5 tegundir:</strong> Orðaforði, Málfræði, Hlustun, Lesskilningur, Þýðing
+              </p>
+              <p className="text-sm text-gray-700 font-light">
+                <strong>✅ 70% til að standast</strong>
+              </p>
+              <p className="text-sm text-gray-700 font-light">
+                <strong>🌍 Móðurmál:</strong> {userLanguage}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onStart}
+            className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+          >
+            Byrja próf
+          </button>
+        </div>
+      </div>
+    );
+
+    const LoadingView = () => (
+      <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-2xl font-light text-gray-800 mb-4">Býr til próf...</h2>
+          <p className="text-gray-600 font-light">Augnablik...</p>
+        </div>
+      </div>
+    );
+
+    const QuizView = ({ question, questionNumber, totalQuestions, answer, onAnswer, onNext, onPrev, canGoNext, canGoPrev, playAudio }) => {
+      const progress = (questionNumber / totalQuestions) * 100;
+
+      return (
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-sm text-gray-600 font-light">
+                Spurning {questionNumber} af {totalQuestions}
+              </span>
+              <span className="text-sm text-gray-600 font-light">
+                {Math.round(progress)}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {question.type === 'vocab' && (
+            <VocabQuestion question={question} answer={answer} onAnswer={onAnswer} />
+          )}
+
+          {question.type === 'grammar' && (
+            <GrammarQuestion question={question} answer={answer} onAnswer={onAnswer} />
+          )}
+
+          {question.type === 'listening' && (
+            <ListeningQuestion question={question} answer={answer} onAnswer={onAnswer} playAudio={playAudio} />
+          )}
+
+          {question.type === 'reading' && (
+            <ReadingQuestion question={question} answer={answer} onAnswer={onAnswer} />
+          )}
+
+          {question.type === 'translation' && (
+            <TranslationQuestion question={question} answer={answer} onAnswer={onAnswer} />
+          )}
+
+          <div className="flex justify-between mt-8">
+            <button
+              onClick={onPrev}
+              disabled={!canGoPrev}
+              className="px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-light"
+            >
+              ← Fyrri
+            </button>
+            <button
+              onClick={onNext}
+              disabled={!canGoNext}
+              className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-light"
+            >
+              {questionNumber === totalQuestions ? 'Ljúka' : 'Næsta'} →
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const VocabQuestion = ({ question, answer, onAnswer }) => (
+      <div>
+        <h3 className="text-xl font-normal text-gray-800 mb-6">{question.question}</h3>
+        <div className="space-y-3">
+          {question.options.map((option, i) => (
+            <div
+              key={i}
+              onClick={() => onAnswer(i)}
+              className={`answer-option p-4 rounded-lg ${answer === i ? 'selected' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  answer === i ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {answer === i && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-light">{option}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const GrammarQuestion = ({ question, answer, onAnswer }) => (
+      <div>
+        <h3 className="text-xl font-normal text-gray-800 mb-6">{question.question}</h3>
+        <div className="bg-gray-50 p-4 rounded-lg mb-6">
+          <p className="text-lg text-gray-800 font-light">{question.sentence}</p>
+        </div>
+        <div className="space-y-3">
+          {question.options.map((option, i) => (
+            <div
+              key={i}
+              onClick={() => onAnswer(i)}
+              className={`answer-option p-4 rounded-lg ${answer === i ? 'selected' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  answer === i ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {answer === i && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-light">{option}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const ListeningQuestion = ({ question, answer, onAnswer, playAudio }) => (
+      <div>
+        <h3 className="text-xl font-normal text-gray-800 mb-6">{question.question}</h3>
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 text-center">
+          <button
+            onClick={() => playAudio(question.audio)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-light"
+          >
+            🔊 Spila hljóð
+          </button>
+          <p className="text-sm text-gray-600 mt-3 font-light">
+            Þú getur hlustað eins oft og þú vilt
+          </p>
+        </div>
+        {question.subQuestion && (
+          <p className="text-lg text-gray-700 mb-4 font-light">{question.subQuestion}</p>
+        )}
+        <div className="space-y-3">
+          {question.options.map((option, i) => (
+            <div
+              key={i}
+              onClick={() => onAnswer(i)}
+              className={`answer-option p-4 rounded-lg ${answer === i ? 'selected' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  answer === i ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {answer === i && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-light">{option}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const ReadingQuestion = ({ question, answer, onAnswer }) => (
+      <div>
+        <h3 className="text-xl font-normal text-gray-800 mb-6">{question.question}</h3>
+        <div className="bg-gray-50 p-6 rounded-lg mb-6">
+          <p className="text-lg text-gray-800 font-light leading-relaxed">{question.text}</p>
+        </div>
+        <p className="text-lg text-gray-700 mb-4 font-light">{question.subQuestion}</p>
+        <div className="space-y-3">
+          {question.options.map((option, i) => (
+            <div
+              key={i}
+              onClick={() => onAnswer(i)}
+              className={`answer-option p-4 rounded-lg ${answer === i ? 'selected' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  answer === i ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {answer === i && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                </div>
+                <span className="font-light">{option}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const TranslationQuestion = ({ question, answer, onAnswer }) => (
+      <div>
+        <h3 className="text-xl font-normal text-gray-800 mb-6">{question.question}</h3>
+        <div className="bg-gray-50 p-4 rounded-lg mb-6">
+          <p className="text-lg text-gray-800 font-light">{question.icelandic}</p>
+        </div>
+        <textarea
+          value={answer || ''}
+          onChange={(e) => onAnswer(e.target.value)}
+          className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-lg"
+          rows="3"
+          placeholder="Skrifaðu þýðinguna hér..."
+        />
+      </div>
+    );
+
+    const ResultsView = ({ score, breakdown, questions, answers, onReset, onReview, showReview, userLanguage }) => {
+      const passed = score >= 70;
+
+      return (
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-4">{passed ? '🎉' : '💪'}</div>
+            <h2 className="text-2xl font-light text-gray-800 mb-4">
+              {passed ? 'Til hamingju!' : 'Góð tilraun!'}
+            </h2>
+            <div className="text-5xl font-light text-gray-800 mb-6">
+              {score}%
+            </div>
+            <div className={`inline-block px-6 py-3 rounded-lg ${
+              passed ? 'bg-green-50 border-2 border-green-200 text-green-700' : 'bg-red-50 border-2 border-red-200 text-red-700'
+            }`}>
+              <p className="font-normal">
+                {passed ? '✅ Þú hefur staðist!' : '❌ Þú þarft að endurtaka'}
+              </p>
+            </div>
+          </div>
+
+          <div className="max-w-md mx-auto mb-8">
+            <h3 className="font-normal text-gray-800 mb-4">Sundurliðun:</h3>
+            <div className="space-y-2">
+              <BreakdownItem label="Orðaforði" correct={breakdown.vocab.correct} total={breakdown.vocab.total} />
+              <BreakdownItem label="Málfræði" correct={breakdown.grammar.correct} total={breakdown.grammar.total} />
+              <BreakdownItem label="Hlustun" correct={breakdown.listening.correct} total={breakdown.listening.total} />
+              <BreakdownItem label="Lesskilningur" correct={breakdown.reading.correct} total={breakdown.reading.total} />
+              <BreakdownItem label="Þýðing" correct={breakdown.translation.correct} total={breakdown.translation.total} />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 max-w-md mx-auto mb-6">
+            <button
+              onClick={onReview}
+              className="px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 transition-all font-light"
+            >
+              {showReview ? 'Fela svör' : 'Skoða svör'}
+            </button>
+            <button
+              onClick={onReset}
+              className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-all font-light"
+            >
+              Prófa aftur
+            </button>
+            {passed ? (
+              <a
+                href="byrjun.html"
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all text-center font-light"
+              >
+                🎉 Áfram í næsta unit
+              </a>
+            ) : (
+              <a
+                href="innlogn.html"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-center font-light"
+              >
+                Fara til baka í Innlögn
+              </a>
+            )}
+          </div>
+
+          {showReview && (
+            <ReviewSection questions={questions} answers={answers} />
+          )}
+        </div>
+      );
+    };
+
+    const BreakdownItem = ({ label, correct, total }) => {
+      const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+      const isPerfect = correct === total;
+
+      return (
+        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <span className="font-light text-gray-700">{label}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-light text-gray-600">{correct}/{total}</span>
+            <span className={`text-sm font-medium ${isPerfect ? 'text-green-600' : 'text-gray-600'}`}>
+              {percentage}% {isPerfect && '✅'}
+            </span>
+          </div>
+        </div>
+      );
+    };
+
+    const ReviewSection = ({ questions, answers }) => (
+      <div className="border-t-2 border-gray-200 pt-8 mt-8">
+        <h3 className="text-xl font-normal text-gray-800 mb-6">Yfirlit yfir svör:</h3>
+        <div className="space-y-6">
+          {questions.map((q, i) => {
+            const userAnswer = answers[i];
+            let isCorrect = false;
+            
+            if (q.type === 'translation') {
+              isCorrect = userAnswer?.correct || false;
+            } else {
+              isCorrect = userAnswer === q.correct;
+            }
+
+            return (
+              <div key={i} className={`p-4 rounded-lg border-2 ${
+                isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+              }`}>
+                <div className="flex items-start gap-3 mb-3">
+                  <span className="text-2xl">{isCorrect ? '✅' : '❌'}</span>
+                  <div className="flex-1">
+                    <p className="font-normal text-gray-800 mb-2">
+                      {i + 1}. {q.question}
+                    </p>
+                    {q.type === 'translation' ? (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1"><strong>Íslenska:</strong> {q.icelandic}</p>
+                        <p className="text-sm text-gray-600"><strong>Þín þýðing:</strong> {userAnswer?.text || '(ekkert svar)'}</p>
+                      </div>
+                    ) : (
+                      <div>
+                        {q.sentence && <p className="text-sm text-gray-600 mb-2">{q.sentence}</p>}
+                        {q.text && <p className="text-sm text-gray-600 mb-2 italic">{q.text}</p>}
+                        {q.subQuestion && <p className="text-sm text-gray-600 mb-2">{q.subQuestion}</p>}
+                        <p className="text-sm text-gray-700">
+                          <strong>Þitt svar:</strong> {q.options[userAnswer]} {isCorrect && '✓'}
+                        </p>
+                        {!isCorrect && (
+                          <p className="text-sm text-green-700 mt-1">
+                            <strong>Rétt svar:</strong> {q.options[q.correct]}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Sjalfsprof />);
+  </script>
+</body>
+</html>
