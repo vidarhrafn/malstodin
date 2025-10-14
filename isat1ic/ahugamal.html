@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎨 Áhugamál – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+    .answer-option.disabled {
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const READING_TEXT = `Fólk hefur ólík áhugamál. Sumir eru hrifnir af íþróttum, aðrir lesa bækur eða hlusta á tónlist. Áhugamál eru mikilvæg því þau gefa gleði og orku. Þau geta hjálpað fólki að slaka á eftir erfiðan dag og læra nýja hluti. Sum áhugamál eru róleg, eins og lestur, en önnur eru meira spennandi, eins og fótbolti eða sund.
+
+**Sund**
+Sund er vinsæl íþrótt á Íslandi. Fólk syndir í sundlaugum eða í sjónum. Sund er gott fyrir heilsuna því það er auðvelt að hreyfa sig í vatni. Margir fara í sund tvisvar eða þrisvar í viku. Eftir sund fer fólk oft í heita potta og slakar á. Á veturna er notalegt að fara í heitt vatn þegar það er kalt úti. Sund getur verið keppnisíþrótt, en margir synda bara í rólegheitum til að njóta vatnsins.
+
+**Fótbolti**
+Fótbolti er vinsælasta íþróttin í heiminum. Tvö lið spila saman og reyna að skora mörk. Leikmenn hlaupa hratt og sparka boltanum. Mörg börn og fullorðnir spila fótbolta. Þetta er skemmtileg og spennandi íþrótt. Fótbolti kennir fólki að vinna saman og hafa gaman af hreyfingu. Margir horfa á fótbolta í sjónvarpinu og styðja sitt lið.
+
+**Tónlist**
+Tónlist er fallegt áhugamál. Fólk spilar á hljóðfæri eins og gítar, píanó eða fiðlu. Aðrir syngja eða hlusta á tónlist. Tónlist getur verið róleg eða hröð, glaðleg eða sorgleg. Margir fara á tónleika eða dansa við tónlist. Sumir semja eigin lög og skrifa texta. Margir hlusta á tónlist þegar þeir vinna eða læra.
+
+**Lesa bækur**
+Að lesa bækur er gott áhugamál. Þegar fólk les, lærir það ný orð og setningar. Sumar bækur eru spennandi, aðrar eru fyndnar eða sorglegar. Margir lesa á kvöldin áður en þeir fara að sofa. Bækur opna dyr að öðrum heimum. Barnabækur eru einfaldar og skemmtilegar, en sumir vilja lesa langar sögur eða fræðibækur. Bækur geta frætt fólk um sögu, vísindi og menningu.
+
+Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir elska að vera virkir og æfa sig, en aðrir njóta þess að slaka á og lesa eða hlusta á tónlist. Hvað er þitt áhugamál?`;
+
+    const MULTIPLE_CHOICE = [
+      {
+        question: 'Hverjar eru tvær ástæður fyrir því að áhugamál eru mikilvæg?',
+        options: [
+          'Áhugamál gefa gleði og orku, og þau geta hjálpað fólki að slaka á eftir annasaman dag.',
+          'Áhugamál hjálpa fólki að læra nýja hluti og þau geta hjálpað fólki að fá vinnu.',
+          'Áhugamál hjálpa fólki að vera í formi og þau geta hjálpað fólki að vinna betur.',
+          'Áhugamál hjálpa fólki að vera með öðrum og þau geta hjálpað fólki að vera í sambandi við fjölskyldu og vini.'
+        ],
+        correct: 0
+      },
+      {
+        question: 'Hvernig getur sund hjálpað fólki að slaka á eftir erfiðan dag?',
+        options: [
+          'Sund hjálpar fólki að vera í formi og það getur hjálpað fólki að vera með öðrum.',
+          'Sund hjálpar fólki að læra nýja hluti og það getur hjálpað fólki að vera í sambandi við fjölskyldu og vini.',
+          'Sund hjálpar fólki að slaka á í heitum pottum eftir æfingu og það getur hjálpað fólki að vera í formi.',
+          'Sund hjálpar fólki að vera í sambandi við náttúruna og það getur hjálpað fólki að vera í formi.'
+        ],
+        correct: 2
+      },
+      {
+        question: 'Hvernig getur tónlist hjálpað fólki að vera í sambandi við fjölskyldu og vini?',
+        options: [
+          'Fólk getur spilað á hljóðfæri saman eða farið á tónleika saman.',
+          'Fólk getur hlustað á tónlist saman eða sungið saman.',
+          'Fólk getur dansað saman eða samið lög saman.',
+          'Allar ofangreindar ástæður.'
+        ],
+        correct: 3
+      }
+    ];
+
+    const OPEN_QUESTIONS = [
+      'Í textanum er talað um hvernig áhugamál geta hjálpað fólki að slaka á eftir erfiðan dag. Hvernig hjálpa þín áhugamál þér að slaka á og hvernig finnst þér þau gera þig betri manneskju?',
+      'Textinn fjallar um ýmis áhugamál, bæði róleg og spennandi. Hver eru þín uppáhalds áhugamál og hvernig hafa þau áhrif á þig?',
+      'Í textanum er sagt að áhugamál geti hjálpað fólki að læra nýja hluti. Hvernig hafa þín áhugamál hjálpað þér að læra og vaxa sem manneskja?'
+    ];
+
+    const Ahugamal = () => {
+      const [stage, setStage] = useState('reading');
+      const [mcAnswers, setMcAnswers] = useState([]);
+      const [showMcFeedback, setShowMcFeedback] = useState(false);
+      const [openAnswers, setOpenAnswers] = useState(['', '', '']);
+      const [aiFeedback, setAiFeedback] = useState([null, null, null]);
+      const [loadingFeedback, setLoadingFeedback] = useState([false, false, false]);
+
+      const handleMcAnswer = (questionIndex, optionIndex) => {
+        if (showMcFeedback) return;
+        const newAnswers = [...mcAnswers];
+        newAnswers[questionIndex] = optionIndex;
+        setMcAnswers(newAnswers);
+      };
+
+      const checkMcAnswers = () => {
+        if (mcAnswers.length < MULTIPLE_CHOICE.length) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setShowMcFeedback(true);
+      };
+
+      const continueTo OpenQuestions = () => {
+        setStage('open');
+      };
+
+      const handleOpenAnswerChange = (index, value) => {
+        const newAnswers = [...openAnswers];
+        newAnswers[index] = value;
+        setOpenAnswers(newAnswers);
+      };
+
+      const getAiFeedback = async (questionIndex) => {
+        const question = OPEN_QUESTIONS[questionIndex];
+        const answer = openAnswers[questionIndex];
+
+        if (!answer.trim() || answer.trim().length < 10) {
+          alert('Vinsamlegast skrifaðu lengra svar (að minnsta kosti nokkrar setningar)');
+          return;
+        }
+
+        const newLoading = [...loadingFeedback];
+        newLoading[questionIndex] = true;
+        setLoadingFeedback(newLoading);
+
+        try {
+          const sys = `
+Þú ert vingjarnlegur íslenskukennari sem er að ræða við A1-A2 nemanda um áhugamál.
+
+SPURNINGIN:
+"${question}"
+
+SVAR NEMANDANS:
+"${answer}"
+
+VERKEFNI:
+1. Lestu svarið og skilja hvað nemandinn er að segja
+2. Gefðu hvetjandi, jákvæða endurgjöf á íslensku
+3. Kommentaðu á efninu - hvað er áhugavert í svarinu?
+4. Spyrðu einfalda follow-up spurningu sem hvetur nemandann til að hugsa meira
+
+REGLUR:
+- Vertu ALLTAF jákvæður og hvetjandi
+- Ekki gefa einkunn eða segja "rétt/rangt"
+- Haltu því stuttu og náttúrulegu (2-4 setningar)
+- Notaðu einfalda íslensku (A1-A2 stig)
+- Follow-up spurningin á að vera auðveld
+- Notaðu bara íslensku
+
+DÆMI um góð svör:
+"Áhugavert! Þú talar um að sund hjálpi þér að slaka á. Það er frábært! Ferðu oft í sund?"
+"Gaman að heyra um áhugamál þín! Þú segir að þú elskar að lesa. Hvaða bók lastu síðast?"
+
+SKILAÐU BARA TEXTANN, ekkert JSON eða önnur formatting.
+`.trim();
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.7,
+            max_tokens: 200,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Gefðu endurgjöf' }
+            ]
+          });
+
+          const newFeedback = [...aiFeedback];
+          newFeedback[questionIndex] = response.trim();
+          setAiFeedback(newFeedback);
+        } catch (e) {
+          console.error('AI feedback error:', e);
+          alert('Villa við að fá endurgjöf. Reyndu aftur.');
+        } finally {
+          const newLoading = [...loadingFeedback];
+          newLoading[questionIndex] = false;
+          setLoadingFeedback(newLoading);
+        }
+      };
+
+      const allQuestionsAnswered = openAnswers.every(a => a.trim().length >= 10);
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Áhugamál</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur og umræða · A1-A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'reading' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm p-8">
+                  <div className="text-center mb-8">
+                    <div className="text-6xl mb-4">🎨</div>
+                    <h2 className="text-2xl font-light text-gray-800 mb-4">Lestu textann</h2>
+                  </div>
+
+                  <div className="prose max-w-none mb-8">
+                    {READING_TEXT.split('\n\n').map((para, i) => {
+                      if (para.startsWith('**')) {
+                        const title = para.replace(/\*\*/g, '');
+                        return (
+                          <h3 key={i} className="text-xl font-normal text-gray-800 mt-6 mb-3">
+                            {title}
+                          </h3>
+                        );
+                      }
+                      return (
+                        <p key={i} className="text-gray-700 leading-relaxed mb-4 font-light">
+                          {para}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-8">
+                  <h2 className="text-2xl font-light text-gray-800 mb-6">Krossaspurningar</h2>
+
+                  <div className="space-y-8">
+                    {MULTIPLE_CHOICE.map((q, qIndex) => (
+                      <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-6">
+                        <p className="font-normal text-gray-800 mb-4 text-lg">
+                          {qIndex + 1}. {q.question}
+                        </p>
+                        <div className="space-y-3">
+                          {q.options.map((option, oIndex) => {
+                            const isSelected = mcAnswers[qIndex] === oIndex;
+                            const isCorrect = oIndex === q.correct;
+                            const showAsCorrect = showMcFeedback && isCorrect;
+                            const showAsIncorrect = showMcFeedback && isSelected && !isCorrect;
+
+                            return (
+                              <div
+                                key={oIndex}
+                                onClick={() => handleMcAnswer(qIndex, oIndex)}
+                                className={`answer-option p-4 rounded-lg ${
+                                  isSelected && !showMcFeedback ? 'selected' : ''
+                                } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                                  showMcFeedback ? 'disabled' : ''
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                                    isSelected && !showMcFeedback ? 'border-blue-500 bg-blue-500' : 
+                                    showAsCorrect ? 'border-green-500 bg-green-500' :
+                                    showAsIncorrect ? 'border-red-500 bg-red-500' :
+                                    'border-gray-300'
+                                  }`}>
+                                    {(isSelected || showAsCorrect) && (
+                                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                                    )}
+                                  </div>
+                                  <span className="font-light flex-1">{option}</span>
+                                  {showAsCorrect && <span className="text-green-600 text-xl">✓</span>}
+                                  {showAsIncorrect && <span className="text-red-600 text-xl">✗</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!showMcFeedback ? (
+                    <div className="text-center mt-8">
+                      <button
+                        onClick={checkMcAnswers}
+                        className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                      >
+                        Athuga svör
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-8">
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                        <div className="flex items-start gap-3">
+                          <span className="text-3xl">
+                            {mcAnswers.every((a, i) => a === MULTIPLE_CHOICE[i].correct) ? '🎉' : '💪'}
+                          </span>
+                          <div>
+                            <h3 className="font-normal text-gray-800 mb-2">
+                              {mcAnswers.every((a, i) => a === MULTIPLE_CHOICE[i].correct) 
+                                ? 'Frábært! Öll svörin eru rétt!' 
+                                : 'Góð tilraun! Skoðaðu svörin og reyndu aftur ef þú vilt.'}
+                            </h3>
+                            <p className="text-sm text-gray-600 font-light">
+                              Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <button
+                          onClick={continueToOpenQuestions}
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
+                        >
+                          Halda áfram í umræðuspurningar →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {stage === 'open' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">💬</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Umræðuspurningar</h2>
+                  <p className="text-gray-600 font-light">
+                    Svaraðu spurningunum og fáðu endurgjöf frá gervigreind!
+                  </p>
+                </div>
+
+                <div className="space-y-8">
+                  {OPEN_QUESTIONS.map((question, index) => (
+                    <div key={index} className="border-2 border-gray-100 rounded-lg p-6">
+                      <p className="font-normal text-gray-800 mb-4 text-lg">
+                        {index + 1}. {question}
+                      </p>
+                      <textarea
+                        value={openAnswers[index]}
+                        onChange={(e) => handleOpenAnswerChange(index, e.target.value)}
+                        disabled={aiFeedback[index] !== null}
+                        className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base mb-4 disabled:bg-gray-50"
+                        rows="4"
+                        placeholder="Skrifaðu svarið þitt hér..."
+                      />
+
+                      {!aiFeedback[index] ? (
+                        <button
+                          onClick={() => getAiFeedback(index)}
+                          disabled={loadingFeedback[index] || openAnswers[index].trim().length < 10}
+                          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                        >
+                          {loadingFeedback[index] ? 'Bíð...' : 'Fá endurgjöf'}
+                        </button>
+                      ) : (
+                        <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">✨</span>
+                            <div className="flex-1">
+                              <p className="text-gray-800 font-light leading-relaxed">
+                                {aiFeedback[index]}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {allQuestionsAnswered && aiFeedback.every(f => f !== null) && (
+                  <div className="text-center mt-8">
+                    <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-6 mb-6">
+                      <div className="text-5xl mb-3">🎉</div>
+                      <h3 className="text-2xl font-light mb-2">Vel gert!</h3>
+                      <p className="font-light">
+                        Þú hefur klárað alla æfinguna um áhugamál!
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => window.history.back()}
+                      className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                    >
+                      ← Til baka
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Ahugamal />);
+  </script>
+</body>
+</html>
