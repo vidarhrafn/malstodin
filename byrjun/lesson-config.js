@@ -1,7 +1,5 @@
-// Lesson Configuration
-// This is the SINGLE source of truth for all lessons in Byrjun
-// To add a new lesson: just add an object to the lessons array
-// All pages will automatically update!
+// Lesson Configuration for Byrjun Unit
+// This file defines all lessons in the unit and their order
 
 const LESSON_CONFIG = {
   lessons: [
@@ -10,7 +8,7 @@ const LESSON_CONFIG = {
       name: 'Innlögn', 
       icon: '📖',
       url: 'innlogn.html',
-      description: 'Lestu textann og fáðu þýðingar'
+      description: 'Lestu textann og læra orðaforða'
     },
     { 
       id: 'eydufylling', 
@@ -22,23 +20,35 @@ const LESSON_CONFIG = {
     { 
       id: 'para_myndir', 
       name: 'Paraðu orð og mynd', 
-      icon: '🧩',
-      url: 'para_myndir',
-      description: 'Para orð við myndir'
+      icon: '🎯',
+      url: 'para_myndir.html',
+      description: 'Dragðu orðin að myndunum'
     },
     { 
-      id: 'kaffihusid', 
-      name: 'Kaffihúsið', 
-      icon: '☕',
-      url: 'kaffihusid.html',
-      description: 'Panta á kaffihúsi'
+      id: 'hlustun', 
+      name: 'Hlustun', 
+      icon: '🎧',
+      url: 'hlustun.html',
+      description: 'Hlustunaræfingar'
     },
     { 
-      id: 'spjallleikrit', 
-      name: 'Spjallleikrit: Kynning', 
+      id: 'spjall', 
+      name: 'Spjall: Kaffihús', 
       icon: '💬',
-      url: 'spjallleikrit.html',
-      description: 'Kynntu þig'
+      url: 'spjall.html',
+      description: 'Æfðu samtal við AI'
+    },
+    { 
+      id: 'sjalfsprof', 
+      name: 'Sjálfspróf', 
+      icon: '📊',
+      url: 'sjalfsprof.html',
+      description: 'Prófaðu hvað þú hefur lært'
     }
   ]
 };
+
+// Make config available globally
+if (typeof window !== 'undefined') {
+  window.LESSON_CONFIG = LESSON_CONFIG;
+}
