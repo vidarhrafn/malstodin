@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎧 Hlustunaræfing – Málstöðin</title>
+  <script src="lesson-config.js"></script>
+  <script src="lesson-navigation.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .clip-item {
+      transition: all 0.2s;
+    }
+    .clip-item:hover {
+      transform: translateX(4px);
+    }
+    .clip-completed { background: #e8f5e9; border-color: #4caf50; }
+    .clip-current { background: #e3f2fd; border-color: #2196f3; }
+    .clip-locked { opacity: 0.5; cursor: not-allowed; }
+    
+    video {
+      width: 100%;
+      max-width: 600px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    // Clip data
+    const CLIPS = [
+      {
+        id: 1,
+        title: 'Kynning',
+        type: 'translation',
+        videoUrl: '/videos/hlustun-1.mp4',
+        text: 'Halló! Ég heiti Anna. Ég er frá Úkraínu.',
+        icon: '👋',
+        difficulty: 'easy'
+      },
+      {
+        id: 2,
+        title: 'Búseta',
+        type: 'translation',
+        videoUrl: '/videos/hlustun-2.mp4',
+        text: 'Ég bý í Reykjavík. Ég tala íslensku og ensku.',
+        icon: '🏠',
+        difficulty: 'easy'
+      },
+      {
+        id: 3,
+        title: 'Vinna',
+        type: 'translation',
+        videoUrl: '/videos/hlustun-3.mp4',
+        text: 'Ég vinn á leikskóla. Ég elska starfið mitt.',
+        icon: '👨‍🏫',
+        difficulty: 'easy'
+      },
+      {
+        id: 4,
+        title: 'Morgunrútína',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-4.mp4',
+        text: 'Á morgnana drekk ég kaffi. Ég borða líka brauð. Síðan fer ég í vinnuna klukkan átta.',
+        icon: '☕',
+        difficulty: 'medium',
+        questions: [
+          {
+            question: 'Hvað drekkur Anna á morgnana?',
+            options: ['Te', 'Kaffi', 'Vatn', 'Mjólk'],
+            correct: 1
+          },
+          {
+            question: 'Hvenær fer Anna í vinnuna?',
+            options: ['Klukkan sjö', 'Klukkan átta', 'Klukkan níu', 'Klukkan tíu'],
+            correct: 1
+          }
+        ]
+      },
+      {
+        id: 5,
+        title: 'Eftir vinnu',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-5.mp4',
+        text: 'Eftir vinnu fer ég í líkamsrækt. Stundum fer ég á kaffihús með vinum.',
+        icon: '💪',
+        difficulty: 'medium',
+        questions: [
+          {
+            question: 'Hvað gerir Anna eftir vinnu?',
+            options: ['Fer heim', 'Fer í bíó', 'Fer í líkamsrækt', 'Les bók'],
+            correct: 2
+          },
+          {
+            question: 'Með hverjum fer Anna á kaffihús?',
+            options: ['Fjölskyldu', 'Vinum', 'Kennurum', 'Ein'],
+            correct: 1
+          }
+        ]
+      },
+      {
+        id: 6,
+        title: 'Helgaráætlanir',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-6.mp4',
+        text: 'Um helgar vil ég fara út í náttúruna. Ég elska að taka myndir af fjöllum og dýrum. Íslensk náttúra er mjög falleg.',
+        icon: '🏔️',
+        difficulty: 'medium',
+        questions: [
+          {
+            question: 'Hvað vill Anna gera um helgar?',
+            options: ['Vinna', 'Fara út í náttúruna', 'Sofa', 'Horfa á sjónvarp'],
+            correct: 1
+          },
+          {
+            question: 'Hvað tekur Anna myndir af?',
+            options: ['Fólki', 'Mat', 'Fjöllum og dýrum', 'Húsum'],
+            correct: 2
+          },
+          {
+            question: 'Hvað finnst Önnu um íslensku náttúruna?',
+            options: ['Leiðinleg', 'Erfið', 'Falleg', 'Dýr'],
+            correct: 2
+          }
+        ]
+      },
+      {
+        id: 7,
+        title: 'Í bókasafninu',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-7.mp4',
+        text: 'Hæ! Ég er í bókasafninu. Ég vil lesa bók um sögu Íslands. Lest þú mikið? Ég les alla daga heima.',
+        icon: '📚',
+        difficulty: 'medium',
+        questions: [
+          {
+            question: 'Hvar er Anna?',
+            options: ['Heima', 'Í bókasafninu', 'Í skólanum', 'Í bíó'],
+            correct: 1
+          },
+          {
+            question: 'Um hvað vill Anna lesa?',
+            options: ['Náttúru', 'Mat', 'Sögu Íslands', 'Tónlist'],
+            correct: 2
+          },
+          {
+            question: 'Hversu oft les Anna?',
+            options: ['Stundum', 'Aldrei', 'Um helgar', 'Alla daga'],
+            correct: 3
+          }
+        ]
+      },
+      {
+        id: 8,
+        title: 'Áhugamál',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-8.mp4',
+        text: 'Ég er að læra íslensku núna. Íslenska er erfið en skemmtileg. Ég skil mikið en tala ekki mikið ennþá. Ég æfi með vinum mínum.',
+        icon: '📖',
+        difficulty: 'hard',
+        questions: [
+          {
+            question: 'Hvað er Anna að læra?',
+            options: ['Ensku', 'Spænsku', 'Íslensku', 'Þýsku'],
+            correct: 2
+          },
+          {
+            question: 'Hvað finnst Önnu um íslensku?',
+            options: ['Auðveld', 'Erfið en skemmtileg', 'Leiðinleg', 'Of erfið'],
+            correct: 1
+          },
+          {
+            question: 'Með hverjum æfir Anna íslensku?',
+            options: ['Kennara', 'Fjölskyldu', 'Vinum', 'Ein'],
+            correct: 2
+          }
+        ]
+      },
+      {
+        id: 9,
+        title: 'Dagur Önnu',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-9.mp4',
+        text: 'Góðan daginn! Í dag er föstudagur. Ég vakna klukkan sjö. Fyrst drekk ég kaffi og horfi á fréttir. Síðan fer ég í vinnuna á leikskólann. Við lesum bækur og leikum með börnunum. Eftir vinnu fer ég í sund. Svo fer ég heim og elda mat.',
+        icon: '📅',
+        difficulty: 'hard',
+        questions: [
+          {
+            question: 'Hvaða dagur er í dag?',
+            options: ['Mánudagur', 'Miðvikudagur', 'Föstudagur', 'Laugardagur'],
+            correct: 2
+          },
+          {
+            question: 'Hvað gerir Anna fyrst á morgnana?',
+            options: ['Fer í vinnuna', 'Drekkur kaffi', 'Fer í sund', 'Eldar mat'],
+            correct: 1
+          },
+          {
+            question: 'Hvað gerir Anna með börnunum?',
+            options: ['Les bækur og leikur', 'Hleypur', 'Horfir á sjónvarp', 'Sefur'],
+            correct: 0
+          },
+          {
+            question: 'Hvað gerir Anna eftir vinnu?',
+            options: ['Fer í bíó', 'Fer heim strax', 'Fer í sund', 'Fer að sofa'],
+            correct: 2
+          }
+        ]
+      },
+      {
+        id: 10,
+        title: 'Helgin',
+        type: 'multiple_choice',
+        videoUrl: '/videos/hlustun-10.mp4',
+        text: 'Um helgar er gaman. Á laugardögum sef ég lengi. Síðan fer ég í bæinn og versla. Ég kaupi mat og stundum bækur. Á sunnudögum fer ég oft í göngutúr með vinum. Við förum í Heiðmörk eða að Tjörninni. Eftir göngutúrinn förum við á kaffihús. Þar drekkum við kaffi og spjöllum. Helgar eru frábærar!',
+        icon: '🎉',
+        difficulty: 'hard',
+        questions: [
+          {
+            question: 'Hvað gerir Anna á laugardögum?',
+            options: ['Fer í vinnuna', 'Sefur lengi', 'Fer í kirkju', 'Fer í bíó'],
+            correct: 1
+          },
+          {
+            question: 'Hvað kaupir Anna í bænum?',
+            options: ['Föt', 'Tölvu', 'Mat og stundum bækur', 'Bíl'],
+            correct: 2
+          },
+          {
+            question: 'Hvað gerir Anna á sunnudögum?',
+            options: ['Vinnur', 'Sefur alla daginn', 'Fer í göngutúr', 'Les heima'],
+            correct: 2
+          },
+          {
+            question: 'Hvert fara Anna og vinir hennar?',
+            options: ['Í Heiðmörk eða að Tjörninni', 'Í bíó', 'Í sundlaug', 'Heim til Önnu'],
+            correct: 0
+          },
+          {
+            question: 'Hvað gera þau á kaffihúsinu?',
+            options: ['Vinna', 'Lesa', 'Drekka kaffi og spjalla', 'Sofa'],
+            correct: 2
+          }
+        ]
+      }
+    ];
+
+    const Hlustun = () => {
+      const [view, setView] = useState('list');
+      const [currentClipId, setCurrentClipId] = useState(1);
+      const [completedClips, setCompletedClips] = useState([]);
+      const [clipResults, setClipResults] = useState({});
+      const [lessonInfo, setLessonInfo] = useState(null);
+      const [savedLanguage, setSavedLanguage] = useState('English');
+
+      useEffect(() => {
+        const info = getLessonInfo('hlustun');
+        setLessonInfo(info);
+        
+        const saved = localStorage.getItem('userLanguage') || 'English';
+        setSavedLanguage(saved);
+
+        const saved_completed = localStorage.getItem('hlustun_completed');
+        if (saved_completed) {
+          setCompletedClips(JSON.parse(saved_completed));
+        }
+
+        const saved_results = localStorage.getItem('hlustun_results');
+        if (saved_results) {
+          setClipResults(JSON.parse(saved_results));
+        }
+      }, []);
+
+      const startClip = (clipId) => {
+        setCurrentClipId(clipId);
+        setView('clip');
+      };
+
+      const completeClip = (clipId, result) => {
+        const newCompleted = [...new Set([...completedClips, clipId])];
+        setCompletedClips(newCompleted);
+        localStorage.setItem('hlustun_completed', JSON.stringify(newCompleted));
+
+        const newResults = { ...clipResults, [clipId]: result };
+        setClipResults(newResults);
+        localStorage.setItem('hlustun_results', JSON.stringify(newResults));
+
+        if (clipId < CLIPS.length) {
+          setCurrentClipId(clipId + 1);
+        } else {
+          setView('list');
+        }
+      };
+
+      const backToList = () => {
+        setView('list');
+      };
+
+      const resetProgress = () => {
+        if (confirm('Ertu viss um að þú viljir núllstilla framvinduna?')) {
+          setCompletedClips([]);
+          setClipResults({});
+          localStorage.removeItem('hlustun_completed');
+          localStorage.removeItem('hlustun_results');
+          setView('list');
+        }
+      };
+
+      const currentClip = CLIPS.find(c => c.id === currentClipId);
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Hlustunaræfing</h1>
+              <p className="text-gray-500 text-sm font-light">Hlusta og æfa · A1</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 font-light">
+                  🌍 Móðurmál: <strong>{savedLanguage}</strong>
+                </p>
+                <a 
+                  href="byrjun.html" 
+                  className="text-sm text-blue-600 hover:underline font-light"
+                >
+                  Breyta
+                </a>
+              </div>
+            </div>
+
+            {view === 'list' ? (
+              <ClipList 
+                clips={CLIPS}
+                completedClips={completedClips}
+                clipResults={clipResults}
+                onStartClip={startClip}
+                onReset={resetProgress}
+              />
+            ) : (
+              <ClipExercise
+                clip={currentClip}
+                onComplete={completeClip}
+                onBack={backToList}
+                savedLanguage={savedLanguage}
+              />
+            )}
+
+            {view === 'list' && lessonInfo && (
+              <>
+                <div className="flex justify-between gap-4 mt-8 mb-6">
+                  {lessonInfo.prev ? (
+                    <a 
+                      href={lessonInfo.prev.url}
+                      className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all text-center font-light"
+                    >
+                      ← {lessonInfo.prev.name}
+                    </a>
+                  ) : (
+                    <a 
+                      href="byrjun.html"
+                      className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all text-center font-light"
+                    >
+                      ← Til baka
+                    </a>
+                  )}
+                  
+                  {lessonInfo.next ? (
+                    <a 
+                      href={lessonInfo.next.url}
+                      className="flex-1 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-all text-center font-light"
+                    >
+                      {lessonInfo.next.name} →
+                    </a>
+                  ) : (
+                    <a 
+                      href="byrjun.html"
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all text-center font-light"
+                    >
+                      🎉 Klárað!
+                    </a>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-sm text-gray-600 font-light">
+                      Skref {lessonInfo.index + 1} af {lessonInfo.total}
+                    </span>
+                    <span className="text-lg text-blue-600 font-medium">
+                      {Math.round(((lessonInfo.index + 1) / lessonInfo.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
+                    <div 
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                      style={{ width: `${((lessonInfo.index + 1) / lessonInfo.total) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex gap-2 mb-3">
+                    {LESSON_CONFIG.lessons.map((lesson, i) => (
+                      <div 
+                        key={lesson.id}
+                        className={`flex-1 h-3 rounded-full transition-all ${
+                          i < lessonInfo.index ? 'bg-green-500' :
+                          i === lessonInfo.index ? 'bg-blue-500' :
+                          'bg-gray-200'
+                        }`}
+                      ></div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    {LESSON_CONFIG.lessons.map((lesson, i) => (
+                      <React.Fragment key={lesson.id}>
+                        <span className={`${
+                          i < lessonInfo.index ? 'text-green-600 font-medium' :
+                          i === lessonInfo.index ? 'text-blue-600 font-semibold' :
+                          'text-gray-400'
+                        }`}>
+                          {lesson.icon} {lesson.name}
+                        </span>
+                        {i < LESSON_CONFIG.lessons.length - 1 && <span className="text-gray-300">→</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    const ClipList = ({ clips, completedClips, clipResults, onStartClip, onReset }) => {
+      const totalCompleted = completedClips.length;
+      const percentage = Math.round((totalCompleted / clips.length) * 100);
+
+      return (
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-4">🎧</div>
+            <h2 className="text-2xl font-light text-gray-800 mb-4">Veldu klippu</h2>
+            <p className="text-gray-600 font-light mb-6">
+              Þú hefur klárað {totalCompleted} af {clips.length} klippum ({percentage}%)
+            </p>
+            
+            <div className="w-full max-w-md mx-auto h-3 bg-gray-200 rounded-full overflow-hidden mb-8">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                style={{ width: `${percentage}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="space-y-3 mb-8">
+            {clips.map((clip, index) => {
+              const isCompleted = completedClips.includes(clip.id);
+              const isCurrent = !isCompleted && (index === 0 || completedClips.includes(clips[index - 1].id));
+              const isLocked = !isCurrent && !isCompleted;
+              const result = clipResults[clip.id];
+
+              return (
+                <div
+                  key={clip.id}
+                  onClick={() => !isLocked && onStartClip(clip.id)}
+                  className={`clip-item p-4 rounded-lg border-2 cursor-pointer ${
+                    isCompleted ? 'clip-completed' :
+                    isCurrent ? 'clip-current' :
+                    'clip-locked'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="text-3xl">{clip.icon}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-normal text-gray-800">
+                          {clip.id}. {clip.title}
+                        </h3>
+                        {isCompleted && <span className="text-green-600">✅</span>}
+                        {isCurrent && <span className="text-blue-600">🔵</span>}
+                        {isLocked && <span className="text-gray-400">🔒</span>}
+                      </div>
+                      <p className="text-sm text-gray-500 font-light">
+                        {clip.type === 'translation' ? 'Þýðing' : 'Spurningar'} · 
+                        {clip.difficulty === 'easy' ? ' Auðvelt' : clip.difficulty === 'medium' ? ' Miðlungs' : ' Erfitt'}
+                      </p>
+                      {result && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          Niðurstaða: {result.score !== undefined ? `${result.score}%` : result.correct ? '✅ Rétt' : '❌ Rangt'}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      {!isLocked && (
+                        <span className="text-blue-600 font-light">→</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {totalCompleted > 0 && (
+            <div className="text-center">
+              <button
+                onClick={onReset}
+                className="text-sm text-gray-500 hover:text-gray-700 underline font-light"
+              >
+                Núllstilla framvindu
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const ClipExercise = ({ clip, onComplete, onBack, savedLanguage }) => {
+      const [userAnswer, setUserAnswer] = useState('');
+      const [selectedAnswers, setSelectedAnswers] = useState([]);
+      const [showFeedback, setShowFeedback] = useState(false);
+      const [isCorrect, setIsCorrect] = useState(false);
+      const [loading, setLoading] = useState(false);
+      const [feedbackData, setFeedbackData] = useState(null);
+
+      const handleSubmit = async () => {
+        setLoading(true);
+
+        if (clip.type === 'translation') {
+          try {
+            const sys = `
+Þú ert íslenskukennari sem metur þýðingar nemenda.
+
+UPPRUNALEGI TEXTINN (íslenska):
+"${clip.text}"
+
+NEMANDI ÞÝDDI Á ${savedLanguage}:
+"${userAnswer}"
+
+VERKEFNI:
+Meta hvort þýðingin er rétt. Samþykkja:
+- Nákvæmar þýðingar
+- Þýðingar með réttri merkingu (jafnvel ef orðalag er öðruvísi)
+- Minniháttar málfræðivillur í móðurmáli (við erum að meta íslensku skilning!)
+- Þýðingar sem sleppa "Halló/Hæ" í byrjun (ekki nauðsynlegt)
+
+HAFNA:
+- Ef stór hluti vantar
+- Ef merkingin er röng
+- Ef augljóst að nemandi skildi ekki textann
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": boolean,
+  "feedback_is": "Stuttleg endurgjöf á íslensku",
+  "feedback_native": "Stuttleg endurgjöf á ${savedLanguage}",
+  "correct_translation": "Góð þýðing á ${savedLanguage} (ef rangt, annars null)"
+}
+
+DÆMI um góðar þýðingar á ensku:
+- "Hello! My name is Anna. I am from Ukraine."
+- "Hi! I'm Anna. I'm from Ukraine."
+- "My name is Anna and I am from Ukraine."
+
+Vertu hvetjandi og jákvæður!
+`.trim();
+
+            const response = await callOpenAI({
+              model: 'gpt-4o',
+              temperature: 0.3,
+              max_tokens: 300,
+              messages: [
+                { role: 'system', content: sys },
+                { role: 'user', content: 'Meta þýðingu' }
+              ]
+            });
+
+            let cleanResponse = response
+              .replace(/```json\n?/g, '')
+              .replace(/```\n?/g, '')
+              .replace(/^[^{]*/g, '')
+              .replace(/[^}]*$/g, '')
+              .trim();
+
+            const data = JSON.parse(cleanResponse);
+            setFeedbackData(data);
+            setIsCorrect(data.correct);
+            setShowFeedback(true);
+
+            if (data.correct) {
+              setTimeout(() => {
+                onComplete(clip.id, { correct: true, translation: userAnswer });
+              }, 2500);
+            }
+          } catch (e) {
+            console.error('Translation evaluation error:', e);
+            alert('Villa við að meta þýðingu. Reyndu aftur.');
+          } finally {
+            setLoading(false);
+          }
+        } else {
+          const allCorrect = clip.questions.every((q, i) => selectedAnswers[i] === q.correct);
+          const correctCount = clip.questions.filter((q, i) => selectedAnswers[i] === q.correct).length;
+          const score = Math.round((correctCount / clip.questions.length) * 100);
+          
+          setIsCorrect(allCorrect);
+          setShowFeedback(true);
+          setLoading(false);
+          
+          setTimeout(() => {
+            onComplete(clip.id, { score, answers: selectedAnswers });
+          }, 3000);
+        }
+      };
+
+      const handleOptionSelect = (questionIndex, optionIndex) => {
+        if (showFeedback) return;
+        const newAnswers = [...selectedAnswers];
+        newAnswers[questionIndex] = optionIndex;
+        setSelectedAnswers(newAnswers);
+      };
+
+      const canSubmit = clip.type === 'translation'
+        ? userAnswer.trim().length > 5
+        : selectedAnswers.length === clip.questions?.length;
+
+      return (
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <div className="mb-6">
+            <button
+              onClick={onBack}
+              className="text-sm text-gray-500 hover:text-gray-700 font-light mb-4"
+            >
+              ← Til baka í lista
+            </button>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-4xl">{clip.icon}</span>
+              <h2 className="text-2xl font-light text-gray-800">
+                {clip.id}. {clip.title}
+              </h2>
+            </div>
+            <p className="text-gray-500 text-sm font-light">
+              {clip.type === 'translation' ? 'Hlusta og þýða á þitt móðurmál' : 'Hlusta og svara spurningum'}
+            </p>
+          </div>
+
+          <div className="text-center mb-8">
+            <video controls className="mx-auto">
+              <source src={clip.videoUrl} type="video/mp4" />
+              Vafrinn þinn styður ekki video.
+            </video>
+            <p className="text-sm text-gray-500 mt-4 font-light">
+              💡 Þú getur hlustað á klippuna eins oft og þú vilt
+            </p>
+          </div>
+
+          {clip.type === 'translation' ? (
+            <div className="mb-8">
+              <label className="block text-gray-700 font-normal mb-3">
+                🌍 Þýðing á {savedLanguage}:
+              </label>
+              <textarea
+                value={userAnswer}
+                onChange={(e) => setUserAnswer(e.target.value)}
+                disabled={showFeedback || loading}
+                className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-lg"
+                rows="3"
+                placeholder={`Þýddu á ${savedLanguage}...`}
+              />
+              <p className="text-xs text-gray-500 mt-2 font-light">
+                💡 Skrifaðu hvað þú heyrðir á þínu móðurmáli
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6 mb-8">
+              {clip.questions?.map((question, qIndex) => (
+                <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-4">
+                  <p className="font-normal text-gray-800 mb-4">
+                    {qIndex + 1}. {question.question}
+                  </p>
+                  <div className="space-y-2">
+                    {question.options.map((option, oIndex) => {
+                      const isSelected = selectedAnswers[qIndex] === oIndex;
+                      const isCorrectAnswer = oIndex === question.correct;
+                      const showAsCorrect = showFeedback && isCorrectAnswer;
+                      const showAsIncorrect = showFeedback && isSelected && !isCorrectAnswer;
+
+                      return (
+                        <div
+                          key={oIndex}
+                          onClick={() => handleOptionSelect(qIndex, oIndex)}
+                          className={`answer-option p-3 rounded-lg cursor-pointer ${
+                            isSelected && !showFeedback ? 'selected' : ''
+                          } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                            showFeedback ? 'disabled' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                              isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                            }`}>
+                              {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                            </div>
+                            <span className="font-light">{option}</span>
+                            {showAsCorrect && <span className="ml-auto text-green-600">✅</span>}
+                            {showAsIncorrect && <span className="ml-auto text-red-600">❌</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showFeedback && (
+            <div className={`p-6 rounded-lg mb-6 ${
+              isCorrect ? 'bg-green-50 border-2 border-green-200' : 'bg-red-50 border-2 border-red-200'
+            }`}>
+              <div className="flex items-start gap-3">
+                <span className="text-3xl">{isCorrect ? '🎉' : '💪'}</span>
+                <div className="flex-1">
+                  <h3 className="font-normal text-gray-800 mb-2">
+                    {isCorrect ? 'Frábært!' : 'Góð tilraun!'}
+                  </h3>
+                  
+                  {clip.type === 'translation' && feedbackData && (
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2 font-light">
+                        <strong>Íslenska:</strong> {feedbackData.feedback_is}
+                      </p>
+                      <p className="text-sm text-gray-700 mb-3 font-light">
+                        <strong>{savedLanguage}:</strong> {feedbackData.feedback_native}
+                      </p>
+                      {!isCorrect && feedbackData.correct_translation && (
+                        <div className="bg-white p-3 rounded mt-3">
+                          <p className="text-xs text-gray-500 mb-1">Góð þýðing:</p>
+                          <p className="font-normal text-gray-800">{feedbackData.correct_translation}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <p className="text-sm text-gray-600 font-light mt-3">
+                    {isCorrect 
+                      ? 'Þú heldur sjálfkrafa áfram eftir 2-3 sekúndur...'
+                      : 'Prófaðu aftur eða farðu áfram í næstu klippu.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!showFeedback && (
+            <div className="text-center">
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit || loading}
+                className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg"
+              >
+                {loading ? 'Athuga...' : 'Athuga svar'}
+              </button>
+            </div>
+          )}
+
+          {showFeedback && !isCorrect && (
+            <div className="text-center mt-4">
+              <button
+                onClick={() => onComplete(clip.id, { correct: false })}
+                className="text-blue-600 hover:underline font-light"
+              >
+                Halda áfram í næstu klippu →
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Hlustun />);
+  </script>
+</body>
+</html>
