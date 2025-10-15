@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🪂 Fallhlífin opnaðist ekki – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+    .answer-option.disabled {
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const READING_TEXT = `Victoria Cilliers er bresk kona sem stundar fallhlífastökk. Hún var vanur stökkvari og hafði gert þetta oft áður. Einn dag í apríl 2015 fór hún í fallhlífastökk. Hún stökk úr flugvél í um 1.200 metra hæð. En eitthvað var að. Fallhlífin opnaðist ekki. Hún reyndi að nota varafallhlífina – en hún opnaðist heldur ekki. Victoria féll hratt til jarðar og slasaðist mikið. Hún braut mjaðmir, rifbein og fætur. Hún slapp lifandi – sem er ótrúlegt, en þurfti að vera lengi á sjúkrahúsi.
+
+Lögreglan fór að rannsaka málið. Hvers vegna opnuðust ekki fallhlífarnar? Bráðum kom í ljós að einhver hafði skemmt þær viljandi. Sá grunaði var eiginmaður Victoriu. Hann hét Emile Cilliers. Hann var hermaður og vann í breska hernum. Hann skuldaði mikla peninga og átti í ástarsambandi við aðra konu.
+
+Lögreglan fann líka út að hann hafði reynt að drepa Victoriu áður – hann reyndi að búa til gasleka í eldhúsinu þeirra nokkrum dögum fyrir slysið. Árið 2018 var Emile dæmdur sekur fyrir tvær morðtilraunir. Hann fékk lífstíðarfangelsi og sleppur ekki fyrr en eftir 18 ár. Victoria lifði af og sagði síðar í viðtali að hún væri heppin að vera á lífi.`;
+
+    const TRUE_FALSE = [
+      { statement: 'Victoria hafði aldrei áður farið í fallhlífastökk.', correct: false },
+      { statement: 'Báðar fallhlífarnar hennar biluðu.', correct: true },
+      { statement: 'Eiginmaður Victoriu vann í hernum.', correct: true },
+      { statement: 'Victoria slapp lifandi en slasaðist.', correct: true },
+      { statement: 'Emile fékk 5 ára fangelsi.', correct: false }
+    ];
+
+    const SHORT_OPEN_QUESTIONS = [
+      'Hvernig slasaðist Victoria þegar hún féll?',
+      'Af hverju grunaði lögreglan eiginmanninn?'
+    ];
+
+    const VOCABULARY_WORDS = [
+      'fallhlíf',
+      'varafallhlíf',
+      'gasleki',
+      'morðtilraun',
+      'lífstíðarfangelsi'
+    ];
+
+    const VictoriaCilliers = () => {
+      const [stage, setStage] = useState('reading');
+      const [tfAnswers, setTfAnswers] = useState([]);
+      const [showTfFeedback, setShowTfFeedback] = useState(false);
+      
+      const [shortAnswers, setShortAnswers] = useState(['', '']);
+      const [shortFeedback, setShortFeedback] = useState([null, null]);
+      const [shortLoading, setShortLoading] = useState([false, false]);
+      
+      const [vocabAnswers, setVocabAnswers] = useState(['', '', '', '', '']);
+      const [vocabFeedback, setVocabFeedback] = useState([null, null, null, null, null]);
+      const [vocabLoading, setVocabLoading] = useState([false, false, false, false, false]);
+
+      const handleTfAnswer = (questionIndex, answer) => {
+        if (showTfFeedback) return;
+        const newAnswers = [...tfAnswers];
+        newAnswers[questionIndex] = answer;
+        setTfAnswers(newAnswers);
+      };
+
+      const checkTfAnswers = () => {
+        if (tfAnswers.length < TRUE_FALSE.length) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setShowTfFeedback(true);
+      };
+
+      const continueToShortQuestions = () => {
+        setStage('short');
+      };
+
+      const continueToVocabulary = () => {
+        setStage('vocabulary');
+      };
+
+      const handleShortAnswerChange = (index, value) => {
+        const newAnswers = [...shortAnswers];
+        newAnswers[index] = value;
+        setShortAnswers(newAnswers);
+      };
+
+      const getShortFeedback = async (questionIndex) => {
+        const question = SHORT_OPEN_QUESTIONS[questionIndex];
+        const answer = shortAnswers[questionIndex];
+
+        if (!answer.trim() || answer.trim().length < 3) {
+          alert('Vinsamlegast skrifaðu svar (að minnsta kosti nokkur orð)');
+          return;
+        }
+
+        const newLoading = [...shortLoading];
+        newLoading[questionIndex] = true;
+        setShortLoading(newLoading);
+
+        try {
+          const sys = `Þú ert vingjarnlegur íslenskukennari sem er að fara yfir stutt svör nemanda (A1-A2 stig).
+
+TEXTINN SEM NEMANDINN LAS:
+"${READING_TEXT}"
+
+SPURNINGIN:
+"${question}"
+
+SVAR NEMANDANS:
+"${answer}"
+
+VERKEFNI:
+Gefðu hvetjandi endurgjöf (2-3 setningar á íslensku):
+1. Byrjaðu með jákvæðu (t.d. "Gott!", "Frábært!")
+2. Ef svarið er rétt eða nálægt því - hrósaðu og staðfestu
+3. Ef svarið er rangt eða ónákvæmt - leiðréttu á mjúkan hátt og útskýrðu rétta svarið út frá textanum
+
+DÆMI:
+Ef svar er rétt: "Frábært! Þú hefur alveg rétt fyrir þér - í textanum segir að Victoria hafi brotið mjaðmir, rifbein og fætur!"
+Ef svar er rangt: "Góð tilraun! En í textanum segir að lögreglan hafi grunaði eiginmanninn vegna þess að hann skuldaði mikla peninga og átti í ástarsambandi við aðra konu."
+
+REGLUR:
+- Alltaf jákvæður og hvetjandi tónn
+- Einföld íslenska (A1-A2)
+- Vísa alltaf í textann
+- 2-3 setningar
+
+SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.5,
+            max_tokens: 150,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Gefðu endurgjöf' }
+            ]
+          });
+
+          const newFeedback = [...shortFeedback];
+          newFeedback[questionIndex] = response.trim();
+          setShortFeedback(newFeedback);
+        } catch (e) {
+          console.error('Short feedback error:', e);
+          alert('Villa við að fá endurgjöf. Reyndu aftur.');
+        } finally {
+          const newLoading = [...shortLoading];
+          newLoading[questionIndex] = false;
+          setShortLoading(newLoading);
+        }
+      };
+
+      const handleVocabAnswerChange = (index, value) => {
+        const newAnswers = [...vocabAnswers];
+        newAnswers[index] = value;
+        setVocabAnswers(newAnswers);
+      };
+
+      const getVocabFeedback = async (wordIndex) => {
+        const word = VOCABULARY_WORDS[wordIndex];
+        const answer = vocabAnswers[wordIndex];
+
+        if (!answer.trim() || answer.trim().length < 3) {
+          alert('Vinsamlegast skrifaðu skýringu (að minnsta kosti nokkur orð)');
+          return;
+        }
+
+        const newLoading = [...vocabLoading];
+        newLoading[wordIndex] = true;
+        setVocabLoading(newLoading);
+
+        try {
+          const sys = `Þú ert vingjarnlegur íslenskukennari sem er að fara yfir orðaforðaverkefni nemanda (A1-A2 stig).
+
+TEXTINN SEM NEMANDINN LAS:
+"${READING_TEXT}"
+
+ORÐIÐ SEM NEMANDINN Á AÐ ÚTSKÝRA:
+"${word}"
+
+SKÝRING NEMANDANS:
+"${answer}"
+
+VERKEFNI:
+Gefðu hvetjandi endurgjöf (2-3 setningar á íslensku):
+1. Byrjaðu með jákvæðu (t.d. "Gott!", "Frábært!")
+2. Ef skýringin er rétt eða nálægt því - hrósaðu og staðfestu
+3. Ef skýringin er ónóg eða röng - bættu við eða leiðréttu á mjúkan hátt
+
+DÆMI:
+Ef svar er gott: "Frábært! Já, fallhlíf er það sem maður notar til að lenda mjúkt þegar maður stökkva úr flugvél!"
+Ef svar þarf að bæta: "Góð tilraun! Varafallhlíf er auka fallhlíf sem maður notar ef fyrsta fallhlífin virkar ekki. Það er öryggisbúnaður!"
+
+REGLUR:
+- Alltaf jákvæður og hvetjandi tónn
+- Einföld íslenska (A1-A2)
+- Hjálpaðu nemandanum að skilja orðið betur
+- 2-3 setningar
+
+SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.5,
+            max_tokens: 150,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Gefðu endurgjöf' }
+            ]
+          });
+
+          const newFeedback = [...vocabFeedback];
+          newFeedback[wordIndex] = response.trim();
+          setVocabFeedback(newFeedback);
+        } catch (e) {
+          console.error('Vocab feedback error:', e);
+          alert('Villa við að fá endurgjöf. Reyndu aftur.');
+        } finally {
+          const newLoading = [...vocabLoading];
+          newLoading[wordIndex] = false;
+          setVocabLoading(newLoading);
+        }
+      };
+
+      const allShortQuestionsAnswered = shortFeedback.every(f => f !== null);
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Fallhlífin opnaðist ekki</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur og orðaforði · A1-A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'reading' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm p-8">
+                  <div className="text-center mb-8">
+                    <div className="text-6xl mb-4">🪂</div>
+                    <h2 className="text-2xl font-light text-gray-800 mb-4">Lestu textann</h2>
+                  </div>
+
+                  <div className="prose max-w-none mb-8">
+                    {READING_TEXT.split('\n\n').map((para, i) => (
+                      <p key={i} className="text-gray-700 leading-relaxed mb-4 font-light">
+                        {para}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm p-8">
+                  <h2 className="text-2xl font-light text-gray-800 mb-6">Rétt eða rangt?</h2>
+
+                  <div className="space-y-6">
+                    {TRUE_FALSE.map((q, qIndex) => (
+                      <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-6">
+                        <p className="font-normal text-gray-800 mb-4 text-lg">
+                          {qIndex + 1}. {q.statement}
+                        </p>
+                        <div className="flex gap-4">
+                          {[true, false].map((answer) => {
+                            const isSelected = tfAnswers[qIndex] === answer;
+                            const isCorrect = answer === q.correct;
+                            const showAsCorrect = showTfFeedback && isCorrect;
+                            const showAsIncorrect = showTfFeedback && isSelected && !isCorrect;
+
+                            return (
+                              <div
+                                key={answer ? 'true' : 'false'}
+                                onClick={() => handleTfAnswer(qIndex, answer)}
+                                className={`answer-option flex-1 p-4 rounded-lg ${
+                                  isSelected && !showTfFeedback ? 'selected' : ''
+                                } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                                  showTfFeedback ? 'disabled' : ''
+                                }`}
+                              >
+                                <div className="flex items-center justify-center gap-3">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                    isSelected && !showTfFeedback ? 'border-blue-500 bg-blue-500' : 
+                                    showAsCorrect ? 'border-green-500 bg-green-500' :
+                                    showAsIncorrect ? 'border-red-500 bg-red-500' :
+                                    'border-gray-300'
+                                  }`}>
+                                    {(isSelected || showAsCorrect) && (
+                                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                                    )}
+                                  </div>
+                                  <span className="font-light">{answer ? 'Rétt' : 'Rangt'}</span>
+                                  {showAsCorrect && <span className="text-green-600 text-xl">✓</span>}
+                                  {showAsIncorrect && <span className="text-red-600 text-xl">✗</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!showTfFeedback ? (
+                    <div className="text-center mt-8">
+                      <button
+                        onClick={checkTfAnswers}
+                        className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                      >
+                        Athuga svör
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-8">
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                        <div className="flex items-start gap-3">
+                          <span className="text-3xl">
+                            {tfAnswers.every((a, i) => a === TRUE_FALSE[i].correct) ? '🎉' : '💪'}
+                          </span>
+                          <div>
+                            <h3 className="font-normal text-gray-800 mb-2">
+                              {tfAnswers.every((a, i) => a === TRUE_FALSE[i].correct) 
+                                ? 'Frábært! Öll svörin eru rétt!' 
+                                : 'Góð tilraun! Skoðaðu svörin og reyndu aftur ef þú vilt.'}
+                            </h3>
+                            <p className="text-sm text-gray-600 font-light">
+                              Þú fékkst {tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length} af {TRUE_FALSE.length} rétt.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <button
+                          onClick={continueToShortQuestions}
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
+                        >
+                          Halda áfram →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {stage === 'short' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">📝</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Stuttar spurningar</h2>
+                  <p className="text-gray-600 font-light">
+                    Svaraðu spurningunum út frá textanum
+                  </p>
+                </div>
+
+                <div className="space-y-8">
+                  {SHORT_OPEN_QUESTIONS.map((question, index) => (
+                    <div key={index} className="border-2 border-gray-100 rounded-lg p-6">
+                      <p className="font-normal text-gray-800 mb-4 text-lg">
+                        {index + 1}. {question}
+                      </p>
+                      <textarea
+                        value={shortAnswers[index]}
+                        onChange={(e) => handleShortAnswerChange(index, e.target.value)}
+                        disabled={shortFeedback[index] !== null}
+                        className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base mb-4 disabled:bg-gray-50"
+                        rows="3"
+                        placeholder="Skrifaðu svarið þitt hér..."
+                      />
+
+                      {!shortFeedback[index] ? (
+                        <button
+                          onClick={() => getShortFeedback(index)}
+                          disabled={shortLoading[index] || shortAnswers[index].trim().length < 3}
+                          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                        >
+                          {shortLoading[index] ? 'Bíð...' : 'Fá endurgjöf'}
+                        </button>
+                      ) : (
+                        <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">✨</span>
+                            <div className="flex-1">
+                              <p className="text-gray-800 font-light leading-relaxed">
+                                {shortFeedback[index]}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {allShortQuestionsAnswered && (
+                  <div className="text-center mt-8">
+                    <button
+                      onClick={continueToVocabulary}
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
+                    >
+                      Halda áfram í orðaforða →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {stage === 'vocabulary' && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">📚</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Orðaforði</h2>
+                  <p className="text-gray-600 font-light">
+                    Hvað þýða þessi orð? Skrifaðu skýringu á íslensku eða þínu tungumáli.
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  {VOCABULARY_WORDS.map((word, index) => (
+                    <div key={index} className="border-2 border-gray-100 rounded-lg p-6">
+                      <p className="font-normal text-gray-800 mb-4 text-lg">
+                        {index + 1}. {word}
+                      </p>
+                      <textarea
+                        value={vocabAnswers[index]}
+                        onChange={(e) => handleVocabAnswerChange(index, e.target.value)}
+                        disabled={vocabFeedback[index] !== null}
+                        className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base mb-4 disabled:bg-gray-50"
+                        rows="2"
+                        placeholder="Skrifaðu skýringuna hér..."
+                      />
+
+                      {!vocabFeedback[index] ? (
+                        <button
+                          onClick={() => getVocabFeedback(index)}
+                          disabled={vocabLoading[index] || vocabAnswers[index].trim().length < 3}
+                          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                        >
+                          {vocabLoading[index] ? 'Bíð...' : 'Fá endurgjöf'}
+                        </button>
+                      ) : (
+                        <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">✨</span>
+                            <div className="flex-1">
+                              <p className="text-gray-800 font-light leading-relaxed">
+                                {vocabFeedback[index]}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-center mt-8">
+                  <button
+                    onClick={() => window.history.back()}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                  >
+                    ← Til baka
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<VictoriaCilliers />);
+  </script>
+</body>
+</html>
