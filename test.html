@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nemenda Spjallbotti</title>
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Stillingar til að tryggja að síðan fylli út allt skjáinn */
+        body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+        #root { flex-grow: 1; display: flex; flex-direction: column; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // 1. Fall til að kalla á Netlify Function (eins og í upplýsingunum þínum)
+    async function callOpenAI(payload) {
+        try {
+            // Kallar á Netlify Function sem er stillt sem /functions/openai
+            const response = await fetch('/.netlify/functions/openai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+
+            // Ef villa er í kallinu (t.d. API key vantar)
+            if (!response.ok || data.error) {
+                console.error("Villa frá netlify function:", data.error);
+                throw new Error(data.error || `HTTP ${response.status}`);
+            }
+
+            // Hreinsun og JSON parsun (eins og í upplýsingunum þínum)
+            let cleanResult = data.content.trim();
+            if (cleanResult.startsWith("```json")) {
+                cleanResult = cleanResult.replace(/```json\n?/g, "").replace(/```/g, "").trim();
+            }
+            
+            // Reiknum með að OpenAI skili { "grammar": "...", "response": "..." }
+            const parsed = JSON.parse(cleanResult);
+            return parsed;
+
+        } catch (error) {
+            console.error("Villa við spjall:", error);
+            // Skilum villusvar til að birta
+            return { response: "Villa kom upp við að tengjast botninum. Reyndu aftur síðar.", grammar: null };
+        }
+    }
+
+    // 2. Fall til að tala upp texta með Web Speech API
+    function speakText(text) {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Reynum að finna íslenska rödd ef mögulegt er
+            const voices = window.speechSynthesis.getVoices();
+            const icelandicVoice = voices.find(voice => voice.lang === 'is-IS');
+            
+            if (icelandicVoice) {
+                utterance.voice = icelandicVoice;
+            } else {
+                // Notum sjálfgefna rödd ef íslensk er ekki til
+                utterance.lang = 'is-IS'; 
+            }
+            
+            window.speechSynthesis.speak(utterance);
+        } else {
+            console.warn("Talgervill vafrans er ekki studdur.");
+        }
+    }
+
+    // 3. Spjallviðmótið (React Component)
+    const ChatApp = () => {
+        const [messages, setMessages] = useState([
+            { sender: 'bot', text: 'Halló! Ég er íslensku aðstoðarmaðurinn þinn. Spyrðu mig um hvað sem er.', spoken: false }
+        ]);
+        const [input, setInput] = useState('');
+        const [loading, setLoading] = useState(false);
+        const chatContainerRef = useRef(null);
+
+        // Scrollar niður í botn við hverja nýja færslu
+        useEffect(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            }
+        }, [messages]);
+
+        // Keyrir talgervilinn þegar ný skilaboð frá botni berast
+        useEffect(() => {
+            // Finnum nýjasta skilaboðið sem ekki hefur verið talað upp
+            const lastBotMessage = messages[messages.length - 1];
+            
+            if (lastBotMessage && lastBotMessage.sender === 'bot' && !lastBotMessage.spoken) {
+                // Merkjum skilaboðin sem töluð (kemur í veg fyrir endurtekningar)
+                setMessages(prev => prev.map((msg, index) => 
+                    index === prev.length - 1 ? { ...msg, spoken: true } : msg
+                ));
+                
+                // Talum aðalsvarið (response)
+                speakText(lastBotMessage.text);
+            }
+        }, [messages]);
+
+
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            if (!input.trim() || loading) return;
+
+            const userMessage = input.trim();
+            setInput('');
+            setLoading(true);
+
+            // Bætum skilaboðum notanda við
+            setMessages(prev => [...prev, { sender: 'user', text: userMessage }]);
+
+            try {
+                // Kallið á OpenAI
+                const result = await callOpenAI({ prompt: userMessage });
+                
+                // Bætum svari frá botni við
+                const botResponse = { 
+                    sender: 'bot', 
+                    text: result.response,
+                    grammar: result.grammar, // Geymum málfarsendurgjöf til sýnis
+                    spoken: false // Skilaboðin hafa ekki verið töluð upp ennþá
+                };
+
+                setMessages(prev => [...prev, botResponse]);
+
+            } catch (error) {
+                // Hér er tekið á villum ef kallið á OpenAI mistekst
+                setMessages(prev => [...prev, { 
+                    sender: 'bot', 
+                    text: "Eitthvað fór úrskeiðis.",
+                    grammar: null,
+                    spoken: false
+                }]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        // 4. Útlitið (Tailwind CSS)
+        return (
+            <div className="flex flex-col h-full max-w-2xl mx-auto bg-gray-50 shadow-xl border border-gray-200">
+                <header className="p-4 bg-blue-600 text-white shadow-md">
+                    <h1 className="text-xl font-bold">Íslensku Aðstoðarmaðurinn (A1-A2)</h1>
+                </header>
+
+                <div ref={chatContainerRef} className="flex-grow p-4 overflow-y-auto space-y-4">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-xl shadow-md ${
+                                msg.sender === 'user' 
+                                ? 'bg-blue-100 text-gray-800' 
+                                : 'bg-white text-gray-700 border border-gray-200'
+                            }`}>
+                                <p className="font-medium">{msg.text}</p>
+                                
+                                {/* Sýnum málfarsendurgjöf ef hún er til staðar */}
+                                {msg.grammar && msg.grammar !== "null" && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-red-600">
+                                        **Endurgjöf:** {msg.grammar}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {loading && (
+                         <div className="flex justify-start">
+                             <div className="max-w-xs p-3 rounded-xl bg-white text-gray-500 border border-gray-200">
+                                 ... hugsa
+                             </div>
+                         </div>
+                    )}
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-gray-200 flex sticky bottom-0">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Skrifaðu spurningu eða setningu..."
+                        className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={loading}
+                    />
+                    <button
+                        type="submit"
+                        className={`p-3 text-white font-bold rounded-r-lg transition duration-150 ${
+                            loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                        disabled={loading}
+                    >
+                        {loading ? 'Bíða...' : 'Senda'}
+                    </button>
+                </form>
+            </div>
+        );
+    };
+
+    // Renderar forritið
+    ReactDOM.render(<ChatApp />, document.getElementById('root'));
+
+</script>
+</body>
+</html>
