@@ -23,7 +23,7 @@ exports.handler = async (event) => {
         }
 
         // Rachel rödd - þetta virkar ALLTAF
-        const VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+        const VOICE_ID = 'xVvh7KgfbHX1WS6JTNXX';
         
         const elevenLabsResponse = await fetch(
             `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
