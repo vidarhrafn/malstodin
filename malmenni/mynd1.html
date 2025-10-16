@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Málstöðin – Mynd + spjallæfing (skólastofa)</title>
+  <!-- React + Babel + Tailwind (CDN) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Japandi-ish look */
+    :root {
+      --bg-grad-start: #f8f7f4;
+      --bg-grad-end: #e8e6e1;
+      --ink: #2d2d2d;
+      --muted: #6b7280;
+      --ok: #4caf50; --ok-100: #e8f5e9;
+      --sel: #2196f3; --sel-100: #e3f2fd;
+      --err: #f44336; --err-100: #ffebee;
+    }
+    body { background: linear-gradient(to bottom, var(--bg-grad-start) 0%, var(--bg-grad-end) 100%); }
+    .card { background: #fff; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .bubble-user { background: #eef6ff; }
+    .bubble-bot { background: #e6f3ea; }
+    .bubble-grammar { background: #e8f0fe; }
+  </style>
+</head>
+<body class="min-h-screen text-[15px] text-[color:var(--ink)]">
+  <div id="app" class="mx-auto max-w-5xl px-6 py-8"></div>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    /**
+     * OpenAI integration
+     * Expects a Netlify function at '/.netlify/functions/openai' that returns
+     * { content: string } where content is a JSON string we can parse.
+     */
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    // Helper: robust JSON fence cleanup (```json ... ```)
+    function parseJSONSafe(raw) {
+      let clean = (raw || '').trim();
+      if (clean.startsWith('```')) {
+        clean = clean.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      }
+      try { return JSON.parse(clean); } catch(e) { return { grammar: null, response: clean }; }
+    }
+
+    /** System prompt for one-question-at-a-time classroom talk **/
+    const SYSTEM_PROMPT = `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1–A2 nemanda um mynd.
+REGLUR:
+- Spyrðu AÐEINS eina spurningu í einu, stutt og skýrt (1 setning).
+- Byrjaðu alltaf á hlýlegu hrósi eða staðfestingu (1 stutt lína).
+- Eftir svarið frá nemanda: gefðu MJÚKA, STUTTA málfarsendurgjöf aðeins ef grófar villur.
+- Ekki kenna greinarmerki eða smávillur. Ekki gefa einkunnir.
+- Haltu orðaforða á A1–A2 stigi og vísaðu í það sem sést á myndinni (börn, kennari, borð, litir, skæri, o.s.frv.).
+SVARAÐU AÐEINS MEÐ JSON:
+{
+  "grammar": "Málfarsendurgjöf BARA ef grófar villur. Ef ekkert athugavert: null.",
+  "response": "stutt, hlý lína + ein spurning."
+}`;
+
+    // Seed image description for grounding
+    const IMAGE_CONTEXT = `Mynd af líflegri skólastofu: nokkur börn sitja við borð og klippa, teikna og líma. Eitt barn málar á striga. Kennari stendur til hliðar. Á töflunni sjást tölustafir. Gluggi, vaskur, lím, skæri og litir sjást.`;
+
+    function App() {
+      const [messages, setMessages] = useState([]); // {role: 'user'|'bot'|'grammar', text}
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const scrollerRef = useRef(null);
+
+      // Auto scroll to bottom
+      useEffect(() => {
+        if (scrollerRef.current) {
+          scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+        }
+      }, [messages, loading]);
+
+      // Kick off with a friendly opener
+      useEffect(() => {
+        setMessages([
+          { role: 'bot', text: 'Hæ! Skoðum myndina saman. Hvað heldur þú að þau séu að læra?' }
+        ]);
+      }, []);
+
+      async function send() {
+        if (!input.trim() || loading) return;
+        const userText = input.trim();
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', text: userText }]);
+        setLoading(true);
+        try {
+          const history = messages
+            .filter(m => m.role !== 'grammar')
+            .map(m => `${m.role === 'user' ? 'Nemandi' : 'Kennari'}: ${m.text}`)
+            .join('\n');
+
+          const userPrompt = `MYNDALÝSING:\n${IMAGE_CONTEXT}\n\nSAMTAL HINGAÐ TIL:\n${history}\n\nSÍÐASTA SVAR NEMANDA:\n${userText}\n\nGerðu nú næstu *einu* spurningu (stutta) og gefðu aðeins málfarsendurgjöf ef gróf villa er í svari nemanda.`;
+
+          const content = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.7,
+            max_tokens: 300,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt }
+            ]
+          });
+
+          const parsed = parseJSONSafe(content);
+
+          if (parsed.grammar && parsed.grammar !== 'null') {
+            setMessages(prev => [...prev, { role: 'grammar', text: parsed.grammar }]);
+          }
+          setMessages(prev => [...prev, { role: 'bot', text: parsed.response || 'Frábært! Hvað sérðu meira á myndinni?' }]);
+        } catch (e) {
+          setMessages(prev => [...prev, { role: 'bot', text: 'Úbbs! Það kom upp villa. Reyndu aftur.' }]);
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function onKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }
+
+      return (
+        <main className="space-y-6">
+          <header className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-normal tracking-tight">Málstöðin – Mynd + spjallæfing</h1>
+              <p className="text-[color:var(--muted)]">Stig: A1–A2 · Þú færð eina spurningu í einu og mjúka málfarsendurgjöf ef þarf.</p>
+            </div>
+            <span className="text-2xl" title="Æfing um skólastofu">🏫</span>
+          </header>
+
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Image card */}
+            <div className="card rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="font-normal">Mynd</h2>
+                <span className="text-[13px] text-[color:var(--muted)]">Lýstu því sem þú sérð</span>
+              </div>
+              <div className="p-4">
+                <!-- REPLACE src WITH YOUR HOSTED IMAGE PATH -->
+                <img src="classroom.jpg" alt="Skólastofa með börnum að vinna list og handverk" className="w-full rounded-xl border border-gray-200" />
+                <p className="mt-3 text-[color:var(--muted)] text-sm">Vísbendingar: tölur á töflu, borð með skærum og lími, barn að mála á striga, kennari til hliðar.</p>
+              </div>
+            </div>
+
+            {/* Chat card */}
+            <div className="card rounded-2xl flex flex-col max-h-[70vh]">
+              <div className="p-4 border-b border-gray-200 flex items-center gap-2">
+                <h2 className="font-normal">Samtal</h2>
+                <span className="text-[12px] text-[color:var(--muted)]">Eina spurningu í einu ✨</span>
+              </div>
+
+              <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.map((m, i) => (
+                  <div key={i} className={
+                    m.role === 'user' ? 'ml-auto max-w-[85%] bubble-user rounded-2xl px-3 py-2 shadow-sm' :
+                    m.role === 'grammar' ? 'mx-auto max-w-[85%] bubble-grammar rounded-2xl px-3 py-2 shadow-sm text-sm' :
+                    'mr-auto max-w-[85%] bubble-bot rounded-2xl px-3 py-2 shadow-sm'
+                  }>
+                    <div className="text-[13px] text-[color:var(--muted)] mb-1">
+                      {m.role === 'user' ? 'Þú' : m.role === 'grammar' ? '📚 Málfar' : 'Mími'}
+                    </div>
+                    <div className="leading-relaxed whitespace-pre-wrap">{m.text}</div>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="mr-auto max-w-[60%] bubble-bot rounded-2xl px-3 py-2 shadow-sm text-[14px]">...
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 p-3">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    className="flex-1 resize-none h-12 rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--sel)]"
+                    placeholder="Skrifaðu svarið þitt hér og ýttu á Enter..."
+                    value={input}
+                    onChange={(e)=>setInput(e.target.value)}
+                    onKeyDown={onKey}
+                  />
+                  <button onClick={send} disabled={loading || !input.trim()}
+                    className="rounded-xl px-4 py-2 bg-[color:var(--sel)] text-white disabled:opacity-50 hover:opacity-90 transition">
+                    {loading ? 'Sendi…' : 'Senda'}
+                  </button>
+                </div>
+                <p className="text-[12px] text-[color:var(--muted)] mt-2">Vísbending: Þú getur svarað t.d. „Ég held að þau læri stærðfræði af því að tölur eru á töflunni.“</p>
+              </div>
+            </div>
+          </section>
+
+          <footer className="pt-4 text-[13px] text-[color:var(--muted)]">
+            <p>Gervigreind: gpt-4o · hitastig 0.7 · max 300 tokens. Málfarsendurgjöf er væg og birtist í blárri bobblu.</p>
+          </footer>
+        </main>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+  </script>
+</body>
+</html>
