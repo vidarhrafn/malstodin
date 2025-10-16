@@ -1,217 +1,274 @@
 <!DOCTYPE html>
 <html lang="is">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nemenda Spjallbotti</title>
-
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>💬 Íslensku Aðstoðarmaðurinn (A1-A2)</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
-        /* Stillingar til að tryggja að síðan fylli út allt skjáinn */
-        body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
-        #root { flex-grow: 1; display: flex; flex-direction: column; }
+        /* Grunnútlit úr Málmenni/Drekinn forritinu þínu */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+            min-height: 100vh;
+        }
     </style>
 </head>
 <body>
+    <div id="root"></div>
 
-<div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-<script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+        // ---------------- Icons ----------------
+        const SendIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        );
 
-    // 1. Fall til að kalla á Netlify Function (eins og í upplýsingunum þínum)
-    async function callOpenAI(payload) {
-        try {
-            // Kallar á Netlify Function sem er stillt sem /functions/openai
-            const response = await fetch('/.netlify/functions/openai', {
+        const SpeakerIcon = ({ onClick }) => (
+            <svg 
+                onClick={onClick}
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className="w-4 h-4 cursor-pointer text-blue-500 hover:text-blue-700"
+            >
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        );
+
+        // -------------- Helpers ---------------
+
+        // 1. Fall til að kalla á Netlify Function
+        async function callOpenAI(payload) {
+            const r = await fetch('/.netlify/functions/openai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                // Við sendum aðeins prompt-ið, þar sem functionin býr til messages arrayið
+                body: JSON.stringify({ prompt: payload.prompt }), 
             });
-
-            const data = await response.json();
-
-            // Ef villa er í kallinu (t.d. API key vantar)
-            if (!response.ok || data.error) {
-                console.error("Villa frá netlify function:", data.error);
-                throw new Error(data.error || `HTTP ${response.status}`);
-            }
-
-            // Hreinsun og JSON parsun (eins og í upplýsingunum þínum)
+            const data = await r.json();
+            if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+            
+            // Hreinsun og JSON parsun á svarinu
             let cleanResult = data.content.trim();
             if (cleanResult.startsWith("```json")) {
                 cleanResult = cleanResult.replace(/```json\n?/g, "").replace(/```/g, "").trim();
             }
             
             // Reiknum með að OpenAI skili { "grammar": "...", "response": "..." }
-            const parsed = JSON.parse(cleanResult);
-            return parsed;
-
-        } catch (error) {
-            console.error("Villa við spjall:", error);
-            // Skilum villusvar til að birta
-            return { response: "Villa kom upp við að tengjast botninum. Reyndu aftur síðar.", grammar: null };
+            return JSON.parse(cleanResult);
         }
-    }
 
-    // 2. Fall til að tala upp texta með Web Speech API
-    function speakText(text) {
-        if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Reynum að finna íslenska rödd ef mögulegt er
-            const voices = window.speechSynthesis.getVoices();
-            const icelandicVoice = voices.find(voice => voice.lang === 'is-IS');
-            
-            if (icelandicVoice) {
-                utterance.voice = icelandicVoice;
+        // 2. Fall til að tala upp texta með Web Speech API
+        function speakText(text, lang = 'is-IS') {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                // Reynum að finna íslenska rödd (ef til)
+                const voices = window.speechSynthesis.getVoices();
+                const icelandicVoice = voices.find(voice => voice.lang === lang);
+                
+                if (icelandicVoice) {
+                    utterance.voice = icelandicVoice;
+                } else {
+                    utterance.lang = lang; 
+                }
+                
+                window.speechSynthesis.speak(utterance);
             } else {
-                // Notum sjálfgefna rödd ef íslensk er ekki til
-                utterance.lang = 'is-IS'; 
+                console.warn("Talgervill vafrans er ekki studdur.");
             }
-            
-            window.speechSynthesis.speak(utterance);
-        } else {
-            console.warn("Talgervill vafrans er ekki studdur.");
         }
-    }
 
-    // 3. Spjallviðmótið (React Component)
-    const ChatApp = () => {
-        const [messages, setMessages] = useState([
-            { sender: 'bot', text: 'Halló! Ég er íslensku aðstoðarmaðurinn þinn. Spyrðu mig um hvað sem er.', spoken: false }
-        ]);
-        const [input, setInput] = useState('');
-        const [loading, setLoading] = useState(false);
-        const chatContainerRef = useRef(null);
-
-        // Scrollar niður í botn við hverja nýja færslu
-        useEffect(() => {
-            if (chatContainerRef.current) {
-                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-            }
-        }, [messages]);
-
-        // Keyrir talgervilinn þegar ný skilaboð frá botni berast
-        useEffect(() => {
-            // Finnum nýjasta skilaboðið sem ekki hefur verið talað upp
-            const lastBotMessage = messages[messages.length - 1];
+        // 3. Spjallviðmótið (React Component)
+        const IslenskuAdstodarmaðurinn = () => {
+            const initialMessage = { 
+                role: 'assistant', 
+                content: 'Hæ! Ég er íslensku aðstoðarmaðurinn þinn á A1-A2 stigi. Við skulum æfa okkur saman. 😊',
+                grammar: null,
+                spoken: false
+            };
             
-            if (lastBotMessage && lastBotMessage.sender === 'bot' && !lastBotMessage.spoken) {
-                // Merkjum skilaboðin sem töluð (kemur í veg fyrir endurtekningar)
-                setMessages(prev => prev.map((msg, index) => 
-                    index === prev.length - 1 ? { ...msg, spoken: true } : msg
-                ));
+            const [messages, setMessages] = useState([initialMessage]);
+            const [input, setInput] = useState('');
+            const [loading, setLoading] = useState(false);
+            const messagesEndRef = useRef(null);
+            const inputRef = useRef(null);
+
+            // Scrollar niður og fókuserar á inntaksreit
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                if (!loading && inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, [messages, loading]);
+
+            // Talgerfillinn keyrir sjálfkrafa þegar nýtt assistent svar kemur
+            useEffect(() => {
+                const lastMessage = messages[messages.length - 1];
                 
-                // Talum aðalsvarið (response)
-                speakText(lastBotMessage.text);
-            }
-        }, [messages]);
+                if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.spoken) {
+                    // Merkjum skilaboðin sem töluð (kemur í veg fyrir endurtekningar)
+                    setMessages(prev => prev.map((msg, index) => 
+                        index === prev.length - 1 ? { ...msg, spoken: true } : msg
+                    ));
+                    
+                    // Talum aðalsvarið (response)
+                    speakText(lastMessage.content);
+                }
+            }, [messages]);
 
 
-        const handleSubmit = async (e) => {
-            e.preventDefault();
-            if (!input.trim() || loading) return;
+            const sendMessage = async () => {
+                const trimmed = input.trim();
+                if (!trimmed || loading) return;
 
-            const userMessage = input.trim();
-            setInput('');
-            setLoading(true);
-
-            // Bætum skilaboðum notanda við
-            setMessages(prev => [...prev, { sender: 'user', text: userMessage }]);
-
-            try {
-                // Kallið á OpenAI
-                const result = await callOpenAI({ prompt: userMessage });
+                const userMessage = { role: 'user', content: trimmed };
                 
-                // Bætum svari frá botni við
-                const botResponse = { 
-                    sender: 'bot', 
-                    text: result.response,
-                    grammar: result.grammar, // Geymum málfarsendurgjöf til sýnis
-                    spoken: false // Skilaboðin hafa ekki verið töluð upp ennþá
-                };
+                setInput('');
+                setLoading(true);
 
-                setMessages(prev => [...prev, botResponse]);
+                // Bætum skilaboðum notanda við
+                setMessages(prev => [...prev, userMessage]);
 
-            } catch (error) {
-                // Hér er tekið á villum ef kallið á OpenAI mistekst
-                setMessages(prev => [...prev, { 
-                    sender: 'bot', 
-                    text: "Eitthvað fór úrskeiðis.",
-                    grammar: null,
-                    spoken: false
-                }]);
-            } finally {
-                setLoading(false);
-            }
-        };
+                try {
+                    // Kallið á Netlify Function (sem skilar JSON { grammar, response })
+                    const result = await callOpenAI({ prompt: trimmed });
+                    
+                    // Bætum svari frá botni við
+                    const botResponse = { 
+                        role: 'assistant', 
+                        content: result.response,
+                        grammar: result.grammar && result.grammar !== "null" ? result.grammar : null, 
+                        spoken: false 
+                    };
 
-        // 4. Útlitið (Tailwind CSS)
-        return (
-            <div className="flex flex-col h-full max-w-2xl mx-auto bg-gray-50 shadow-xl border border-gray-200">
-                <header className="p-4 bg-blue-600 text-white shadow-md">
-                    <h1 className="text-xl font-bold">Íslensku Aðstoðarmaðurinn (A1-A2)</h1>
-                </header>
+                    setMessages(prev => [...prev, botResponse]);
 
-                <div ref={chatContainerRef} className="flex-grow p-4 overflow-y-auto space-y-4">
-                    {messages.map((msg, index) => (
-                        <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-xl shadow-md ${
-                                msg.sender === 'user' 
-                                ? 'bg-blue-100 text-gray-800' 
-                                : 'bg-white text-gray-700 border border-gray-200'
-                            }`}>
-                                <p className="font-medium">{msg.text}</p>
-                                
-                                {/* Sýnum málfarsendurgjöf ef hún er til staðar */}
-                                {msg.grammar && msg.grammar !== "null" && (
-                                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-red-600">
-                                        **Endurgjöf:** {msg.grammar}
+                } catch (e) {
+                    console.error('Bot error:', e);
+                    setMessages(prev => [
+                        ...prev,
+                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis. Prófum aftur á eftir.', grammar: null, spoken: false }
+                    ]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // 4. Útlitið (Tailwind CSS)
+            return (
+                <div className="min-h-screen pb-12">
+                    {/* Header með Málstöðin útliti */}
+                    <header className="bg-white shadow-sm border-b border-gray-200">
+                        <div className="max-w-4xl mx-auto px-6 py-8">
+                            <button 
+                                onClick={() => window.history.back()} 
+                                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+                            >
+                                ← Til baka
+                            </button>
+                            <h1 className="text-3xl font-light text-gray-800 mb-2">Íslensku Aðstoðarmaðurinn</h1>
+                            <p className="text-gray-500 text-sm font-light">Samtals- og Málfarsæfing · A1-A2</p>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto px-6 mt-8">
+                        <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col h-[70vh] min-h-[500px]">
+                            {/* Spjallsvæði */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                {messages.map((msg, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`flex ${
+                                            msg.role === 'user' ? 'justify-end' : 'justify-start'
+                                        }`}
+                                    >
+                                        <div
+                                            className={`max-w-lg px-4 py-3 rounded-xl font-light ${
+                                                msg.role === 'user'
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'bg-gray-100 text-gray-800'
+                                            } shadow-sm relative`}
+                                        >
+                                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                                            
+                                            {/* Talhnappur fyrir botninn */}
+                                            {msg.role === 'assistant' && (
+                                                <div className="mt-1 flex justify-end">
+                                                     <SpeakerIcon onClick={() => speakText(msg.content)} />
+                                                </div>
+                                            )}
+
+                                            {/* Málfarsendurgjöf */}
+                                            {msg.grammar && (
+                                                <div className="mt-2 pt-2 border-t border-gray-300 text-sm italic text-red-700 bg-red-50 p-2 rounded-lg -mx-2 -mb-2">
+                                                    <span className="font-normal text-red-800">📚 Málfar: </span>
+                                                    {msg.grammar}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {loading && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-xl">
+                                            <div className="flex space-x-2">
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
+                                <div ref={messagesEndRef} />
                             </div>
-                        </div>
-                    ))}
-                    {loading && (
-                         <div className="flex justify-start">
-                             <div className="max-w-xs p-3 rounded-xl bg-white text-gray-500 border border-gray-200">
-                                 ... hugsa
-                             </div>
-                         </div>
-                    )}
+
+                            {/* Inntaksreitur */}
+                            <div className="border-t p-4 bg-white">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        ref={inputRef}
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                                        placeholder="Skrifaðu spurningu eða setningu..."
+                                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+                                        disabled={loading}
+                                    />
+                                    <button
+                                        onClick={sendMessage}
+                                        disabled={loading || !input.trim()}
+                                        className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-normal flex items-center justify-center"
+                                        aria-label="Senda skilaboð"
+                                        title="Senda"
+                                    >
+                                        <SendIcon />
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </main>
                 </div>
+            );
+        };
 
-                <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-gray-200 flex sticky bottom-0">
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Skrifaðu spurningu eða setningu..."
-                        className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={loading}
-                    />
-                    <button
-                        type="submit"
-                        className={`p-3 text-white font-bold rounded-r-lg transition duration-150 ${
-                            loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
-                        disabled={loading}
-                    >
-                        {loading ? 'Bíða...' : 'Senda'}
-                    </button>
-                </form>
-            </div>
-        );
-    };
-
-    // Renderar forritið
-    ReactDOM.render(<ChatApp />, document.getElementById('root'));
-
-</script>
+        // Renderar nýja forritið
+        ReactDOM.createRoot(document.getElementById('root')).render(<IslenskuAdstodarmaðurinn />);
+    </script>
 </body>
 </html>
