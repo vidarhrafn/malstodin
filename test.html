@@ -71,7 +71,7 @@
 
         // 2. NÝTT FALL: Kalla á ElevenLabs (speak.js) og spila hljóðið
         async function playAudio(text, setCurrentlySpeaking) {
-            setCurrentlySpeaking(true); // Byrja að spila
+            setCurrentlySpeaking(true); // Byrja að spila (kveikja á hleðslumerki/animation)
 
             try {
                 const r = await fetch('/.netlify/functions/speak', {
@@ -83,9 +83,10 @@
                 const data = await r.json();
                 
                 if (!r.ok || data.error || !data.audio_base64) {
+                    // Villa í ElevenLabs kallinu eða gögn vantar.
                     console.error("Villa í hljóðkalli:", data.error || 'Engin hljóðgögn skiluð.');
-                    alert('Hljóðvilla: Tenging við ElevenLabs mistókst.');
-                    return; 
+                    alert('Hljóðvilla: Tenging við ElevenLabs mistókst eða API lykill rangur.');
+                    return; // Stöðvum hér - Enginn fallback
                 }
 
                 // Base64 strengurinn er breytt í hljóð-URL (MP3)
@@ -97,16 +98,19 @@
                 
                 // Spilum hljóðið
                 audio.play().catch(e => {
-                    console.error("Villa við spilun hljóðs:", e);
-                    // Þetta gerist oft ef notandi hefur ekki haft samskipti við síðuna (autoplay vörn)
-                    alert('Hljóðspilun mistókst. Reyndu að smella á talhnappinn handvirkt.');
+                    console.error("Villa við spilun hljóðs (líklega autoplay vörn):", e);
+                    alert('Hljóðspilun mistókst. Vinsamlegast smelltu á talhnappinn handvirkt til að heimila spilun.');
                     setCurrentlySpeaking(false);
                 });
                 
             } catch (e) {
-                console.error("ElevenLabs/Netlify call failed:", e);
-                alert('Tenging við hljóðþjónustu mistókst.');
+                // Alvarleg villa í Netlify kallinu
+                console.error("Tenging við hljóðþjónustu mistókst.", e);
+                alert('Tenging við hljóðþjónustu mistókst (Netlify/ElevenLabs villa).');
                 setCurrentlySpeaking(false);
+            } finally {
+                // Ef villa kemur upp og forritið nær ekki að setja setCurrentlySpeaking(false) annars staðar
+                // setCurrentlySpeaking(false) er líka inni í onended
             }
         }
 
@@ -149,7 +153,7 @@
                 }
             }, [messages, loading]);
 
-            // NÝTT: Kveikir á sjálfvirkri hljóðspilun (ElevenLabs)
+            // Kveikir á sjálfvirkri hljóðspilun (ElevenLabs)
             useEffect(() => {
                 const lastMessageIndex = messages.length - 1;
                 const lastMessage = messages[lastMessageIndex];
@@ -161,20 +165,19 @@
                     ));
                     
                     // Kveikjum á ElevenLabs spilun
-                    // Við notum playAudio beint, og sendum index til að stjórna speakingIndex state
                     setSpeakingIndex(lastMessageIndex);
                     playAudio(lastMessage.content, (isSpeaking) => {
                         if (!isSpeaking) setSpeakingIndex(null);
                     });
                 }
-            }, [messages, loading]); // Hleypur af stað þegar skilaboðum fjölgar
+            }, [messages, loading]);
 
             // Fall til að spila hljóð handvirkt
             const handleManualSpeak = (text, index) => {
+                // Ef notandi ýtir aftur á hnappinn
                 if (speakingIndex === index) {
-                    setSpeakingIndex(null); // Ef notandi ýtir aftur, stöðvum við
-                    window.speechSynthesis.cancel(); // Stöðvum allan annan talgervil (Web Speech API)
-                    // Hér gætum við stöðvað ElevenLabs hljóðið ef við ættum aðgang að Audio hlutnum
+                    setSpeakingIndex(null); 
+                    // Við gætum þurft að bæta við lógík til að stöðva hljóðið hér
                 } else {
                     setSpeakingIndex(index);
                     playAudio(text, (isSpeaking) => {
@@ -293,7 +296,7 @@
                                         >
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
                                             
-                                            {/* Talhnappur fyrir botninn (Nú kveikir hann á ElevenLabs) */}
+                                            {/* Talhnappur fyrir botninn (ElevenLabs) */}
                                             {msg.role === 'assistant' && (
                                                 <div className="mt-1 flex justify-end">
                                                      <SpeakerIcon 
