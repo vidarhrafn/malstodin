@@ -9,7 +9,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Grunnútlit úr Málmenni/Drekinn forritinu þínu */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
@@ -23,7 +22,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // ---------------- Icons ----------------
         const SendIcon = () => (
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -50,9 +48,6 @@
             </svg>
         );
 
-        // -------------- Helpers ---------------
-
-        // 1. Fall til að kalla á Netlify Function (OpenAI)
         async function callOpenAI(messages, max_tokens = 220, model = 'gpt-4o-mini', temperature = 0.3) {
             const r = await fetch('/.netlify/functions/openai', {
                 method: 'POST',
@@ -69,9 +64,8 @@
             return data.content; 
         }
 
-        // 2. NÝTT FALL: Kalla á ElevenLabs (speak.js) og spila hljóðið
-        async function playAudio(text, setCurrentlySpeaking) {
-            setCurrentlySpeaking(true); // Byrja að spila (kveikja á hleðslumerki/animation)
+        async function playAudio(text, setSpeakingCallback) {
+            setSpeakingCallback(true);
 
             try {
                 const r = await fetch('/.netlify/functions/speak', {
@@ -83,53 +77,47 @@
                 const data = await r.json();
                 
                 if (!r.ok || data.error || !data.audio_base64) {
-                    // Villa í ElevenLabs kallinu eða gögn vantar.
                     console.error("Villa í hljóðkalli:", data.error || 'Engin hljóðgögn skiluð.');
+                    console.error("Response status:", r.status);
+                    console.error("Response data:", data);
                     alert('Hljóðvilla: Tenging við ElevenLabs mistókst eða API lykill rangur.');
-                    return; // Stöðvum hér - Enginn fallback
+                    setSpeakingCallback(false);
+                    return;
                 }
 
-                // Base64 strengurinn er breytt í hljóð-URL (MP3)
                 const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
                 const audio = new Audio(audioUrl);
                 
-                // Stillum atburð sem gerist þegar hljóðið klárast
-                audio.onended = () => setCurrentlySpeaking(false);
+                audio.onended = () => setSpeakingCallback(false);
                 
-                // Spilum hljóðið
                 audio.play().catch(e => {
-                    console.error("Villa við spilun hljóðs (líklega autoplay vörn):", e);
+                    console.error("Villa við spilun hljóðs:", e);
                     alert('Hljóðspilun mistókst. Vinsamlegast smelltu á talhnappinn handvirkt til að heimila spilun.');
-                    setCurrentlySpeaking(false);
+                    setSpeakingCallback(false);
                 });
                 
             } catch (e) {
-                // Alvarleg villa í Netlify kallinu
-                console.error("Tenging við hljóðþjónustu mistókst.", e);
+                console.error("Tenging við hljóðþjónustu mistókst:", e);
                 alert('Tenging við hljóðþjónustu mistókst (Netlify/ElevenLabs villa).');
-                setCurrentlySpeaking(false);
-            } finally {
-                // Ef villa kemur upp og forritið nær ekki að setja setCurrentlySpeaking(false) annars staðar
-                // setCurrentlySpeaking(false) er líka inni í onended
+                setSpeakingCallback(false);
             }
         }
 
-        // 3. Spjallviðmótið (React Component)
         const IslenskuAdstodarmaðurinn = () => {
             const initialMessage = { 
                 role: 'assistant', 
                 content: 'Hæ! Ég er íslensku aðstoðarmaðurinn þinn. Við skulum æfa okkur saman. 😊',
-                feedback: null
+                feedback: null,
+                spoken: false
             };
             
             const [messages, setMessages] = useState([initialMessage]);
             const [input, setInput] = useState('');
             const [loading, setLoading] = useState(false);
-            const [speakingIndex, setSpeakingIndex] = useState(null); // Vísar á skilaboð sem eru spiluð núna
+            const [speakingIndex, setSpeakingIndex] = useState(null);
             const messagesEndRef = useRef(null);
             const inputRef = useRef(null);
             
-            // Kerfisleiðbeiningar óbreyttar
             const ASSISTANT_SYSTEM_PROMPT = `
                 Þú ert vinalegur íslenskukennari á A1-A2 stigi. Þú átt að svara öllum spurningum nemandans á íslensku. 
                 Svaraðu alltaf stutt (2-4 setningar) og notaðu hvetjandi og einfalda íslensku. 
@@ -144,8 +132,6 @@
                 - Gefðu aðeins endurgjöfarlínuna, ekkert annað.
             `.trim();
 
-
-            // Scrollar niður og fókuserar á inntaksreit
             useEffect(() => {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
                 if (!loading && inputRef.current) {
@@ -153,18 +139,15 @@
                 }
             }, [messages, loading]);
 
-            // Kveikir á sjálfvirkri hljóðspilun (ElevenLabs)
             useEffect(() => {
                 const lastMessageIndex = messages.length - 1;
                 const lastMessage = messages[lastMessageIndex];
                 
                 if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.spoken && !loading) {
-                    // Merkjum skilaboðin sem töluð 
                     setMessages(prev => prev.map((msg, index) => 
                         index === lastMessageIndex ? { ...msg, spoken: true } : msg
                     ));
                     
-                    // Kveikjum á ElevenLabs spilun
                     setSpeakingIndex(lastMessageIndex);
                     playAudio(lastMessage.content, (isSpeaking) => {
                         if (!isSpeaking) setSpeakingIndex(null);
@@ -172,12 +155,9 @@
                 }
             }, [messages, loading]);
 
-            // Fall til að spila hljóð handvirkt
             const handleManualSpeak = (text, index) => {
-                // Ef notandi ýtir aftur á hnappinn
                 if (speakingIndex === index) {
-                    setSpeakingIndex(null); 
-                    // Við gætum þurft að bæta við lógík til að stöðva hljóðið hér
+                    setSpeakingIndex(null);
                 } else {
                     setSpeakingIndex(index);
                     playAudio(text, (isSpeaking) => {
@@ -185,7 +165,6 @@
                     });
                 }
             };
-
 
             const sendMessage = async () => {
                 const trimmed = input.trim();
@@ -195,11 +174,8 @@
                 
                 setInput('');
                 setLoading(true);
-
-                // Bætum skilaboðum notanda við strax
                 setMessages(prev => [...prev, userMessage]);
 
-                // ------------------ 1. MÁLFARSENDURGJÖF ------------------
                 try {
                     const feedbackMessages = [
                         { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
@@ -218,7 +194,6 @@
                     console.error('Feedback error:', e);
                 }
 
-                // ------------------ 2. AÐALSVAR ------------------
                 try {
                     const conversationHistory = messages
                         .filter(m => m.role === 'assistant' || m.role === 'user')
@@ -239,7 +214,7 @@
                             role: 'assistant', 
                             content: assistantReply.trim(),
                             feedback: null,
-                            spoken: false // Svar hefur ekki verið talað
+                            spoken: false
                         }]);
                     }
                 } catch (e) {
@@ -253,10 +228,8 @@
                 }
             };
 
-            // 4. Útlitið (Tailwind CSS)
             return (
                 <div className="min-h-screen pb-12">
-                    {/* Header */}
                     <header className="bg-white shadow-sm border-b border-gray-200">
                         <div className="max-w-4xl mx-auto px-6 py-8">
                             <button 
@@ -272,7 +245,6 @@
 
                     <main className="max-w-4xl mx-auto px-6 mt-8">
                         <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col h-[70vh] min-h-[500px]">
-                            {/* Spjallsvæði */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-4">
                                 {messages.map((msg, idx) => (
                                     <div
@@ -294,9 +266,11 @@
                                                     : 'bg-gray-100 text-gray-800'
                                             } shadow-sm relative`}
                                         >
+                                            {msg.role === 'feedback' && (
+                                                <span className="font-normal text-red-800">📚 Málfar: </span>
+                                            )}
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
                                             
-                                            {/* Talhnappur fyrir botninn (ElevenLabs) */}
                                             {msg.role === 'assistant' && (
                                                 <div className="mt-1 flex justify-end">
                                                      <SpeakerIcon 
@@ -304,10 +278,6 @@
                                                          isSpeaking={speakingIndex === idx}
                                                      />
                                                 </div>
-                                            )}
-
-                                            {msg.role === 'feedback' && (
-                                                 <span className="font-normal text-red-800">📚 Málfar: </span>
                                             )}
                                         </div>
                                     </div>
@@ -327,7 +297,6 @@
                                 <div ref={messagesEndRef} />
                             </div>
 
-                            {/* Inntaksreitur */}
                             <div className="border-t p-4 bg-white">
                                 <div className="flex gap-2">
                                     <input
@@ -357,7 +326,6 @@
             );
         };
 
-        // Renderar nýja forritið
         ReactDOM.createRoot(document.getElementById('root')).render(<IslenskuAdstodarmaðurinn />);
     </script>
 </body>
