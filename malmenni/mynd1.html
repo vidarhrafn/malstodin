@@ -103,7 +103,195 @@ SANNREYNDINGARSTAÐREYNDIR (nota í svörum):
 - Helstu hlutir: skæri, lím (flaska og límstift), reglustika, litir, bók, pappír, trönur, penslar, málningardósir, sjónvarp, vaskur, sápa, pappírsþurrkur.
 `;
 
-    function App() {\n      const [messages, setMessages] = useState([]); // {role: 'user'|'bot'|'grammar', text}\n      const [input, setInput] = useState('');\n      const [loading, setLoading] = useState(false);\n      const scrollerRef = useRef(null);\n\n      // QUIZ state\n      const [quizQ, setQuizQ] = useState(null); // {question, options:[{text, correct}], explanation}\n      const [quizAnswered, setQuizAnswered] = useState(false);\n      const [quizScore, setQuizScore] = useState({correct:0, total:0});\n\n      // helpers\n      const pick = (arr) => arr[Math.floor(Math.random()*arr.length)];\n      const shuffle = (arr) => arr.map(v=>({v, r:Math.random()})).sort((a,b)=>a.r-b.r).map(({v})=>v);\n\n      const questionBank = [\n        {\n          question: 'Hversu mörg börn eru á myndinni?',\n          options: [\n            { text: '7', correct: false },\n            { text: '8', correct: false },\n            { text: '9', correct: true },\n            { text: '10', correct: false },\n          ],\n          explanation: 'Það eru 9 börn: 4 við borðið, 4 aftast og 1 að mála.'\n        },\n        {\n          question: 'Hversu mörg börn sitja við stóra borðið?',\n          options: [\n            { text: '2', correct: false },\n            { text: '3', correct: false },\n            { text: '4', correct: true },\n            { text: '5', correct: false },\n          ],\n          explanation: 'Fjögur börn sitja við borðið.'\n        },\n        {\n          question: 'Hvað sérðu á töflunni?',\n          options: [\n            { text: 'Tölurnar 1–5 og stafróf', correct: true },\n            { text: 'Dýr og tré', correct: false },\n            { text: 'Ekkert', correct: false },\n            { text: 'Jöfnur í algebru', correct: false },\n          ],\n          explanation: 'Á töflunni sjást tölurnar 1–5 og stafrófsrönd.'\n        },\n        {\n          question: 'Er bandaríski fáninn á myndinni?',\n          options: [\n            { text: 'Já', correct: true },\n            { text: 'Nei', correct: false },\n          ],\n          explanation: 'Já, hann hangir við töfluna hægra megin.'\n        },\n        {\n          question: 'Hvað er barnið á trönunum að gera?',\n          options: [\n            { text: 'Málar blátt dýr og tré', correct: true },\n            { text: 'Les bók', correct: false },\n            { text: 'Spilar á gítar', correct: false },\n            { text: 'Reiknar dæmi', correct: false },\n          ],\n          explanation: 'Barnið málar blátt dýr (líkt hesti), sól og tré.'\n        },\n        {\n          question: 'Hvað stendur kennarinn?',\n          options: [\n            { text: 'Hægra megin nálægt töflunni og dyrunum', correct: true },\n            { text: 'Við gluggana vinstra megin', correct: false },\n            { text: 'Við vaskinn', correct: false },\n            { text: 'Utan við stofuna', correct: false },\n          ],\n          explanation: 'Kennarinn stendur hægra megin með græna möppu.'\n        },\n        {\n          question: 'Hvaða verkfæri og efni eru á borðinu?',\n          options: [\n            { text: 'Skæri, lím, reglustika, litir og pappír', correct: true },\n            { text: 'Hamar og naglar', correct: false },\n            { text: 'Skyr og rjómi', correct: false },\n            { text: 'Hárblásari og greiða', correct: false },\n          ],\n          explanation: 'Á borðinu eru skæri, lím (flaska + límstift), reglustika, litir og pappír.'\n        },\n        {\n          question: 'Eru fjögur börn að standa aftast og spjalla?',\n          options: [\n            { text: 'Já', correct: true },\n            { text: 'Nei', correct: false },\n          ],\n          explanation: 'Já, fjögur börn standa aftast í hóp.'\n        },\n        {\n          question: 'Er sjónvarp/lofttæki hangandi á veggnum?',\n          options: [\n            { text: 'Já', correct: true },\n            { text: 'Nei', correct: false },\n          ],\n          explanation: 'Já, hangandi skjár/tæki er á veggnum.'\n        },\n        {\n          question: 'Er vaskur með sápu vinstra megin?',\n          options: [\n            { text: 'Já', correct: true },\n            { text: 'Nei', correct: false },\n          ],\n          explanation: 'Já, vaskur og sápa eru undir gluggunum.'\n        },\n      ];\n\n      function askRandomQuestion(){\n        const q = { ...pick(questionBank) };\n        q.options = shuffle(q.options);\n        setQuizQ(q);\n        setQuizAnswered(false);\n      }\n\n      function answerOption(idx){\n        if (!quizQ || quizAnswered) return;\n        const correct = quizQ.options[idx].correct;\n        setQuizAnswered(true);\n        setQuizScore(s=>({correct: s.correct + (correct?1:0), total: s.total + 1}));\n      }\n\n      // Auto scroll to bottom\n      useEffect(() => {\n        if (scrollerRef.current) {\n          scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;\n        }\n      }, [messages, loading]);\n\n      // Kick off with a friendly opener\n      useEffect(() => {\n        setMessages([\n          { role: 'bot', text: 'Hæ! Skoðum myndina saman. Hvað heldur þú að þau séu að læra?' }\n        ]);\n      }, []);\n\n      async function send() {\n        if (!input.trim() || loading) return;\n        const userText = input.trim();\n        setInput('');\n        setMessages(prev => [...prev, { role: 'user', text: userText }]);\n        setLoading(true);\n        try {\n          const history = messages\n            .filter(m => m.role !== 'grammar')\n            .map(m => `${m.role === 'user' ? 'Nemandi' : 'Kennari'}: ${m.text}`)\n            .join('\n');\n\n          const userPrompt = `MYNDALÝSING:\n${IMAGE_CONTEXT}\n\nSAMTAL HINGAÐ TIL:\n${history}\n\nSÍÐASTA SVAR NEMANDA:\n${userText}\n\nGerðu nú næstu *einu* spurningu (stutta) og gefðu aðeins málfarsendurgjöf ef gróf villa er í svari nemanda.`;\n\n          const content = await callOpenAI({\n            model: 'gpt-4o',\n            temperature: 0.7,\n            max_tokens: 300,\n            messages: [\n              { role: 'system', content: SYSTEM_PROMPT },\n              { role: 'user', content: userPrompt }\n            ]\n          });\n\n          const parsed = parseJSONSafe(content);\n\n          if (parsed.grammar && parsed.grammar !== 'null') {\n            setMessages(prev => [...prev, { role: 'grammar', text: parsed.grammar }]);\n          }\n          setMessages(prev => [...prev, { role: 'bot', text: parsed.response || 'Frábært! Hvað sérðu meira á myndinni?' }]);\n        } catch (e) {\n          setMessages(prev => [...prev, { role: 'bot', text: 'Úbbs! Það kom upp villa. Reyndu aftur.' }]);\n          console.error(e);\n        } finally {\n          setLoading(false);\n        }\n      }\n\n      function onKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }\n\n      return (
+    function App() {
+      const [messages, setMessages] = useState([]); // {role: 'user'|'bot'|'grammar', text}
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const scrollerRef = useRef(null);
+
+      // QUIZ state
+      const [quizQ, setQuizQ] = useState(null); // {question, options:[{text, correct}], explanation}
+      const [quizAnswered, setQuizAnswered] = useState(false);
+      const [quizScore, setQuizScore] = useState({correct:0, total:0});
+
+      // helpers
+      const pick = (arr) => arr[Math.floor(Math.random()*arr.length)];
+      const shuffle = (arr) => arr.map(v=>({v, r:Math.random()})).sort((a,b)=>a.r-b.r).map(({v})=>v);
+
+      const questionBank = [
+        {
+          question: 'Hversu mörg börn eru á myndinni?',
+          options: [
+            { text: '7', correct: false },
+            { text: '8', correct: false },
+            { text: '9', correct: true },
+            { text: '10', correct: false },
+          ],
+          explanation: 'Það eru 9 börn: 4 við borðið, 4 aftast og 1 að mála.'
+        },
+        {
+          question: 'Hversu mörg börn sitja við stóra borðið?',
+          options: [
+            { text: '2', correct: false },
+            { text: '3', correct: false },
+            { text: '4', correct: true },
+            { text: '5', correct: false },
+          ],
+          explanation: 'Fjögur börn sitja við borðið.'
+        },
+        {
+          question: 'Hvað sérðu á töflunni?',
+          options: [
+            { text: 'Tölurnar 1–5 og stafróf', correct: true },
+            { text: 'Dýr og tré', correct: false },
+            { text: 'Ekkert', correct: false },
+            { text: 'Jöfnur í algebru', correct: false },
+          ],
+          explanation: 'Á töflunni sjást tölurnar 1–5 og stafrófsrönd.'
+        },
+        {
+          question: 'Er bandaríski fáninn á myndinni?',
+          options: [
+            { text: 'Já', correct: true },
+            { text: 'Nei', correct: false },
+          ],
+          explanation: 'Já, hann hangir við töfluna hægra megin.'
+        },
+        {
+          question: 'Hvað er barnið á trönunum að gera?',
+          options: [
+            { text: 'Málar blátt dýr og tré', correct: true },
+            { text: 'Les bók', correct: false },
+            { text: 'Spilar á gítar', correct: false },
+            { text: 'Reiknar dæmi', correct: false },
+          ],
+          explanation: 'Barnið málar blátt dýr (líkt hesti), sól og tré.'
+        },
+        {
+          question: 'Hvar stendur kennarinn?',
+          options: [
+            { text: 'Hægra megin nálægt töflunni og dyrunum', correct: true },
+            { text: 'Við gluggana vinstra megin', correct: false },
+            { text: 'Við vaskinn', correct: false },
+            { text: 'Utan við stofuna', correct: false },
+          ],
+          explanation: 'Kennarinn stendur hægra megin með græna möppu.'
+        },
+        {
+          question: 'Hvaða verkfæri og efni eru á borðinu?',
+          options: [
+            { text: 'Skæri, lím, reglustika, litir og pappír', correct: true },
+            { text: 'Hamar og naglar', correct: false },
+            { text: 'Skyr og rjómi', correct: false },
+            { text: 'Hárblásari og greiða', correct: false },
+          ],
+          explanation: 'Á borðinu eru skæri, lím (flaska + límstift), reglustika, litir og pappír.'
+        },
+        {
+          question: 'Eru fjögur börn að standa aftast og spjalla?',
+          options: [
+            { text: 'Já', correct: true },
+            { text: 'Nei', correct: false },
+          ],
+          explanation: 'Já, fjögur börn standa aftast í hóp.'
+        },
+        {
+          question: 'Er sjónvarp/lofttæki hangandi á veggnum?',
+          options: [
+            { text: 'Já', correct: true },
+            { text: 'Nei', correct: false },
+          ],
+          explanation: 'Já, hangandi skjár/tæki er á veggnum.'
+        },
+        {
+          question: 'Er vaskur með sápu vinstra megin?',
+          options: [
+            { text: 'Já', correct: true },
+            { text: 'Nei', correct: false },
+          ],
+          explanation: 'Já, vaskur og sápa eru undir gluggunum.'
+        },
+      ];
+
+      function askRandomQuestion(){
+        const q = { ...pick(questionBank) };
+        q.options = shuffle(q.options);
+        setQuizQ(q);
+        setQuizAnswered(false);
+      }
+
+      function answerOption(idx){
+        if (!quizQ || quizAnswered) return;
+        const correct = quizQ.options[idx].correct;
+        setQuizAnswered(true);
+        setQuizScore(s=>({correct: s.correct + (correct?1:0), total: s.total + 1}));
+      }
+
+      // Auto scroll to bottom
+      useEffect(() => {
+        if (scrollerRef.current) {
+          scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
+        }
+      }, [messages, loading]);
+
+      // Kick off with a friendly opener
+      useEffect(() => {
+        setMessages([
+          { role: 'bot', text: 'Hæ! Skoðum myndina saman. Hvað heldur þú að þau séu að læra?' }
+        ]);
+      }, []);
+
+      async function send() {
+        if (!input.trim() || loading) return;
+        const userText = input.trim();
+        setInput('');
+        setMessages(prev => [...prev, { role: 'user', text: userText }]);
+        setLoading(true);
+        try {
+          const history = messages
+            .filter(m => m.role !== 'grammar')
+            .map(m => `${m.role === 'user' ? 'Nemandi' : 'Kennari'}: ${m.text}`)
+            .join('
+');
+
+          const userPrompt = `MYNDALÝSING:
+${IMAGE_CONTEXT}
+
+SAMTAL HINGAÐ TIL:
+${history}
+
+SÍÐASTA SVAR NEMANDA:
+${userText}
+
+Gerðu nú næstu *einu* spurningu (stutta) og gefðu aðeins málfarsendurgjöf ef gróf villa er í svari nemanda.`;
+
+          const content = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.7,
+            max_tokens: 300,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt }
+            ]
+          });
+
+          const parsed = parseJSONSafe(content);
+
+          if (parsed.grammar && parsed.grammar !== 'null') {
+            setMessages(prev => [...prev, { role: 'grammar', text: parsed.grammar }]);
+          }
+          setMessages(prev => [...prev, { role: 'bot', text: parsed.response || 'Frábært! Hvað sérðu meira á myndinni?' }]);
+        } catch (e) {
+          setMessages(prev => [...prev, { role: 'bot', text: 'Úbbs! Það kom upp villa. Reyndu aftur.' }]);
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function onKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }
+
+      return (
         <main className="space-y-6">
           <header className="flex items-center justify-between">
             <div>
@@ -170,7 +358,43 @@ SANNREYNDINGARSTAÐREYNDIR (nota í svörum):
                 <p className="text-[12px] text-[color:var(--muted)] mt-2">Vísbending: Þú getur svarað t.d. „Ég held að þau læri stærðfræði af því að tölur eru á töflunni.“</p>
               </div>
             </div>
-                      {/* Quiz card */}\n            <div className=\"card rounded-2xl p-4 md:col-span-2\">\n              <div className=\"flex items-center justify-between border-b border-gray-200 pb-3 mb-3\">\n                <h2 className=\"font-normal\">Quiz – Staðreyndir um myndina</h2>\n                <div className=\"text-sm text-[color:var(--muted)]\">Stig: {quizScore.correct}/{quizScore.total}</div>\n              </div>\n              <div className=\"space-y-3\">\n                {!quizQ && (\n                  <button onClick={askRandomQuestion} className=\"rounded-xl px-4 py-2 bg-[color:var(--sel)] text-white hover:opacity-90 transition\">Spyrja um myndina</button>\n                )}\n                {quizQ && (\n                  <div className=\"space-y-3\">\n                    <p className=\"text-[15px]\"><strong>Spurning:</strong> {quizQ.question}</p>\n                    <div className=\"grid sm:grid-cols-2 gap-2\">\n                      {quizQ.options.map((op,idx)=>{\n                        const base = 'rounded-xl px-3 py-2 border transition text-left';\n                        const idle = 'border-gray-200 hover:bg-[color:var(--sel-100)]';\n                        const good = 'border-[color:var(--ok)] bg-[color:var(--ok-100)]';\n                        const bad  = 'border-[color:var(--err)] bg-[color:var(--err-100)]';\n                        const cls = !quizAnswered ? `${base} ${idle}` : `${base} ${op.correct?good:bad}`;\n                        return (\n                          <button key={idx} onClick={()=>answerOption(idx)} disabled={quizAnswered} className={cls}>\n                            {op.text}\n                          </button>\n                        );})}\n                    </div>\n                    {quizAnswered && (\n                      <div className=\"text-sm text-[color:var(--muted)]\">{quizQ.explanation}</div>\n                    )}\n                    <div className=\"pt-1\">\n                      <button onClick={()=>{ setQuizQ(null); }} className=\"rounded-xl px-4 py-2 border border-gray-300 hover:bg-gray-50\">Næsta spurning</button>\n                    </div>\n                  </div>\n                )}\n              </div>\n            </div>\n          </section>
+                      {/* Quiz card */}
+            <div className=\"card rounded-2xl p-4 md:col-span-2\">
+              <div className=\"flex items-center justify-between border-b border-gray-200 pb-3 mb-3\">
+                <h2 className=\"font-normal\">Quiz – Staðreyndir um myndina</h2>
+                <div className=\"text-sm text-[color:var(--muted)]\">Stig: {quizScore.correct}/{quizScore.total}</div>
+              </div>
+              <div className=\"space-y-3\">
+                {!quizQ && (
+                  <button onClick={askRandomQuestion} className=\"rounded-xl px-4 py-2 bg-[color:var(--sel)] text-white hover:opacity-90 transition\">Spyrja um myndina</button>
+                )}
+                {quizQ && (
+                  <div className=\"space-y-3\">
+                    <p className=\"text-[15px]\"><strong>Spurning:</strong> {quizQ.question}</p>
+                    <div className=\"grid sm:grid-cols-2 gap-2\">
+                      {quizQ.options.map((op,idx)=>{
+                        const base = 'rounded-xl px-3 py-2 border transition text-left';
+                        const idle = 'border-gray-200 hover:bg-[color:var(--sel-100)]';
+                        const good = 'border-[color:var(--ok)] bg-[color:var(--ok-100)]';
+                        const bad  = 'border-[color:var(--err)] bg-[color:var(--err-100)]';
+                        const cls = !quizAnswered ? `${base} ${idle}` : `${base} ${op.correct?good:bad}`;
+                        return (
+                          <button key={idx} onClick={()=>answerOption(idx)} disabled={quizAnswered} className={cls}>
+                            {op.text}
+                          </button>
+                        );})}
+                    </div>
+                    {quizAnswered && (
+                      <div className=\"text-sm text-[color:var(--muted)]\">{quizQ.explanation}</div>
+                    )}
+                    <div className=\"pt-1\">
+                      <button onClick={()=>{ setQuizQ(null); }} className=\"rounded-xl px-4 py-2 border border-gray-300 hover:bg-gray-50\">Næsta spurning</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
 
           <footer className="pt-4 text-[13px] text-[color:var(--muted)]">
             <p>Gervigreind: gpt-4o · hitastig 0.7 · max 300 tokens. Málfarsendurgjöf er væg og birtist í blárri bobblu.</p>
