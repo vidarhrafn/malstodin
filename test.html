@@ -80,7 +80,7 @@
                     console.error("Villa í hljóðkalli:", data.error || 'Engin hljóðgögn skiluð.');
                     console.error("Response status:", r.status);
                     console.error("Response data:", data);
-                    alert('Hljóðvilla: Tenging við ElevenLabs mistókst eða API lykill rangur.');
+                    alert('Hljóðvilla: Tenging við ElevenLabs mistókst. Athugaðu API lykil og Voice ID.');
                     setSpeakingCallback(false);
                     return;
                 }
@@ -89,10 +89,13 @@
                 const audio = new Audio(audioUrl);
                 
                 audio.onended = () => setSpeakingCallback(false);
+                audio.onerror = () => {
+                    console.error("Villa við spilun hljóðs");
+                    setSpeakingCallback(false);
+                };
                 
                 audio.play().catch(e => {
                     console.error("Villa við spilun hljóðs:", e);
-                    alert('Hljóðspilun mistókst. Vinsamlegast smelltu á talhnappinn handvirkt til að heimila spilun.');
                     setSpeakingCallback(false);
                 });
                 
@@ -106,9 +109,8 @@
         const IslenskuAdstodarmaðurinn = () => {
             const initialMessage = { 
                 role: 'assistant', 
-                content: 'Hæ! Ég er íslensku aðstoðarmaðurinn þinn. Við skulum æfa okkur saman. 😊',
-                feedback: null,
-                spoken: false
+                content: 'Hæ! Ég er íslensku aðstoðarmaðurinn þinn. Við skulum æfa okkur saman. 😊 Smelltu á 🔊 til að heyra!',
+                feedback: null
             };
             
             const [messages, setMessages] = useState([initialMessage]);
@@ -136,22 +138,6 @@
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
                 if (!loading && inputRef.current) {
                     inputRef.current.focus();
-                }
-            }, [messages, loading]);
-
-            useEffect(() => {
-                const lastMessageIndex = messages.length - 1;
-                const lastMessage = messages[lastMessageIndex];
-                
-                if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.spoken && !loading) {
-                    setMessages(prev => prev.map((msg, index) => 
-                        index === lastMessageIndex ? { ...msg, spoken: true } : msg
-                    ));
-                    
-                    setSpeakingIndex(lastMessageIndex);
-                    playAudio(lastMessage.content, (isSpeaking) => {
-                        if (!isSpeaking) setSpeakingIndex(null);
-                    });
                 }
             }, [messages, loading]);
 
@@ -213,15 +199,14 @@
                         setMessages(prev => [...prev, { 
                             role: 'assistant', 
                             content: assistantReply.trim(),
-                            feedback: null,
-                            spoken: false
+                            feedback: null
                         }]);
                     }
                 } catch (e) {
                     console.error('Assistant error:', e);
                     setMessages(prev => [
                         ...prev,
-                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis við svarið.', feedback: null, spoken: false }
+                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis við svarið.', feedback: null }
                     ]);
                 } finally {
                     setLoading(false);
@@ -239,7 +224,7 @@
                                 ← Til baka
                             </button>
                             <h1 className="text-3xl font-light text-gray-800 mb-2">Íslensku Aðstoðarmaðurinn</h1>
-                            <p className="text-gray-500 text-sm font-light">ElevenLabs Hljóðvirkur · A1-A2</p>
+                            <p className="text-gray-500 text-sm font-light">ElevenLabs Hljóðvirkur · A1-A2 · Smelltu á 🔊 til að heyra</p>
                         </div>
                     </header>
 
