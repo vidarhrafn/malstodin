@@ -1,4 +1,3 @@
-// netlify/functions/speak.js
 const fetch = require('node-fetch');
 
 exports.handler = async (event) => {
@@ -23,7 +22,8 @@ exports.handler = async (event) => {
             };
         }
 
-        const VOICE_ID = '21m00Tcm4wEa7nSWMbFq';
+        // Rachel rödd - þetta virkar ALLTAF
+        const VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
         
         const elevenLabsResponse = await fetch(
             `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
@@ -62,7 +62,10 @@ exports.handler = async (event) => {
 
         return {
             statusCode: 200,
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
             body: JSON.stringify({ audio_base64: audioBase64 })
         };
 
