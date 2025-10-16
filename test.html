@@ -41,39 +41,41 @@
                 strokeWidth="2" 
                 strokeLinecap="round" 
                 strokeLinejoin="round" 
-                className="w-4 h-4 cursor-pointer text-blue-500 hover:text-blue-700"
+                className="w-4 h-4 cursor-pointer text-blue-500 hover:text-blue-700 ml-2"
             >
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 5 0 1 0 7.07"></path>
             </svg>
         );
 
         // -------------- Helpers ---------------
 
-        // 1. Fall til að kalla á Netlify Function
-        async function callOpenAI(payload) {
+        // 1. Fall til að kalla á Netlify Function (Nú sendum við ALLT messages arrayið)
+        async function callOpenAI(messages, max_tokens = 220, model = 'gpt-4o-mini', temperature = 0.3) {
             const r = await fetch('/.netlify/functions/openai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Við sendum aðeins prompt-ið, þar sem functionin býr til messages arrayið
-                body: JSON.stringify({ prompt: payload.prompt }), 
+                body: JSON.stringify({
+                    messages: messages, // Sendum skilaboðaröð
+                    max_tokens: max_tokens,
+                    model: model,
+                    temperature: temperature,
+                    // ATH: response_format er EKKI sent þar sem upprunalega NF leyfði það ekki
+                }),
             });
             const data = await r.json();
             if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
             
-            // Hreinsun og JSON parsun á svarinu
-            let cleanResult = data.content.trim();
-            if (cleanResult.startsWith("```json")) {
-                cleanResult = cleanResult.replace(/```json\n?/g, "").replace(/```/g, "").trim();
-            }
-            
-            // Reiknum með að OpenAI skili { "grammar": "...", "response": "..." }
-            return JSON.parse(cleanResult);
+            // NF skilar { content: 'svar frá AI' }
+            return data.content; 
         }
 
-        // 2. Fall til að tala upp texta með Web Speech API
+        // 2. Fall til að tala upp texta með Web Speech API (óbreytt)
         function speakText(text, lang = 'is-IS') {
             if ('speechSynthesis' in window) {
+                // Stöðvum fyrri talgerfil ef hann er enn að tala
+                window.speechSynthesis.cancel(); 
+
                 const utterance = new SpeechSynthesisUtterance(text);
                 
                 // Reynum að finna íslenska rödd (ef til)
@@ -97,7 +99,7 @@
             const initialMessage = { 
                 role: 'assistant', 
                 content: 'Hæ! Ég er íslensku aðstoðarmaðurinn þinn á A1-A2 stigi. Við skulum æfa okkur saman. 😊',
-                grammar: null,
+                feedback: null,
                 spoken: false
             };
             
@@ -106,6 +108,26 @@
             const [loading, setLoading] = useState(false);
             const messagesEndRef = useRef(null);
             const inputRef = useRef(null);
+            
+            // Kerfisleiðbeining fyrir aðalsvarið
+            const ASSISTANT_SYSTEM_PROMPT = `
+                Þú ert vinalegur íslenskukennari á A1-A2 stigi. Þú átt að svara öllum spurningum nemandans á íslensku. 
+                Svaraðu alltaf stutt (2-4 setningar) og notaðu hvetjandi og einfalda íslensku. 
+                Þetta er samtal, svo svaraðu náttúrulega. 
+                Notaðu nýjasta skilaboð nemandans (í user role) til að ákvarða svar þitt.
+            `.trim();
+
+            // Kerfisleiðbeining fyrir málfarsendurgjöf (eins og í Drekann kóðanum þínum)
+            const FEEDBACK_SYSTEM_PROMPT = `
+                Þú ert íslenskukennari sem gefur örstutta, hlýja og hvetjandi endurgjöf á íslensku (A2–B1).
+                REGLUR:
+                - 1–2 stuttar setningar, aldrei lengra.
+                - Leiðréttu aðeins þegar þú ert >80% viss.
+                - Forðastu of formlegt/bóklegt mál.
+                - Ekki nota ensku. Ekki útskýra nema nauðsynlegt sé fyrir skilning.
+                Gefðu aðeins endurgjöfarlínuna, ekkert annað.
+            `.trim();
+
 
             // Scrollar niður og fókuserar á inntaksreit
             useEffect(() => {
@@ -125,7 +147,7 @@
                         index === prev.length - 1 ? { ...msg, spoken: true } : msg
                     ));
                     
-                    // Talum aðalsvarið (response)
+                    // Talum aðalsvarið (content)
                     speakText(lastMessage.content);
                 }
             }, [messages]);
@@ -140,28 +162,66 @@
                 setInput('');
                 setLoading(true);
 
-                // Bætum skilaboðum notanda við
+                // Bætum skilaboðum notanda við strax
                 setMessages(prev => [...prev, userMessage]);
 
+                // ------------------ 1. MÁLFARSENDURGJÖF (Eins og Drekinn lógík) ------------------
                 try {
-                    // Kallið á Netlify Function (sem skilar JSON { grammar, response })
-                    const result = await callOpenAI({ prompt: trimmed });
-                    
-                    // Bætum svari frá botni við
-                    const botResponse = { 
-                        role: 'assistant', 
-                        content: result.response,
-                        grammar: result.grammar && result.grammar !== "null" ? result.grammar : null, 
-                        spoken: false 
-                    };
+                    const feedbackMessages = [
+                        { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
+                        { role: 'user', content: `Skilaboð nemanda: "${trimmed}".` }
+                    ];
 
-                    setMessages(prev => [...prev, botResponse]);
+                    const feedbackText = await callOpenAI(
+                        feedbackMessages, 
+                        60,           // Lágmarks tokens fyrir stutt svar
+                        'gpt-4o-mini', 
+                        0.2
+                    );
 
+                    // Bætum málfarsendurgjöf við sem sérstök skilaboð (eins og Drekinn gerði)
+                    if (feedbackText && typeof feedbackText === 'string') {
+                        setMessages(prev => [...prev, { role: 'feedback', content: feedbackText }]);
+                        await new Promise(res => setTimeout(res, 500)); // Lítil biðtími
+                    }
                 } catch (e) {
-                    console.error('Bot error:', e);
+                    console.error('Feedback error:', e);
+                }
+
+                // ------------------ 2. AÐALSVAR (Eins og Drekinn lógík) ------------------
+                try {
+                    // Við búum til samtalssögu fyrir aðalsvarið
+                    const conversationHistory = messages
+                        .filter(m => m.role === 'assistant' || m.role === 'user')
+                        .map(m => ({ role: m.role, content: m.content }));
+                    
+                    const assistantMessages = [
+                        { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
+                        ...conversationHistory,
+                        userMessage, // Síðustu skilaboð notandans
+                    ];
+                    
+                    const assistantReply = await callOpenAI(
+                        assistantMessages,
+                        220,
+                        'gpt-4o-mini',
+                        0.3
+                    );
+
+                    // Bætum svari frá botni við
+                    if (assistantReply) {
+                        setMessages(prev => [...prev, { 
+                            role: 'assistant', 
+                            content: assistantReply.trim(),
+                            feedback: null, // Feedback er nú þegar sent
+                            spoken: false
+                        }]);
+                    }
+                } catch (e) {
+                    console.error('Assistant error:', e);
                     setMessages(prev => [
                         ...prev,
-                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis. Prófum aftur á eftir.', grammar: null, spoken: false }
+                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis við svarið. Prófum aftur á eftir.', feedback: null, spoken: false }
                     ]);
                 } finally {
                     setLoading(false);
@@ -171,7 +231,7 @@
             // 4. Útlitið (Tailwind CSS)
             return (
                 <div className="min-h-screen pb-12">
-                    {/* Header með Málstöðin útliti */}
+                    {/* Header */}
                     <header className="bg-white shadow-sm border-b border-gray-200">
                         <div className="max-w-4xl mx-auto px-6 py-8">
                             <button 
@@ -193,13 +253,19 @@
                                     <div
                                         key={idx}
                                         className={`flex ${
-                                            msg.role === 'user' ? 'justify-end' : 'justify-start'
+                                            msg.role === 'user'
+                                                ? 'justify-end'
+                                                : msg.role === 'feedback'
+                                                ? 'justify-center'
+                                                : 'justify-start'
                                         }`}
                                     >
                                         <div
-                                            className={`max-w-lg px-4 py-3 rounded-xl font-light ${
+                                            className={`max-w-lg px-4 py-2 rounded-xl font-light ${
                                                 msg.role === 'user'
                                                     ? 'bg-blue-600 text-white'
+                                                    : msg.role === 'feedback'
+                                                    ? 'bg-red-50 text-red-700 border border-red-200 text-sm italic'
                                                     : 'bg-gray-100 text-gray-800'
                                             } shadow-sm relative`}
                                         >
@@ -212,12 +278,8 @@
                                                 </div>
                                             )}
 
-                                            {/* Málfarsendurgjöf */}
-                                            {msg.grammar && (
-                                                <div className="mt-2 pt-2 border-t border-gray-300 text-sm italic text-red-700 bg-red-50 p-2 rounded-lg -mx-2 -mb-2">
-                                                    <span className="font-normal text-red-800">📚 Málfar: </span>
-                                                    {msg.grammar}
-                                                </div>
+                                            {msg.role === 'feedback' && (
+                                                 <span className="font-normal text-red-800">📚 Málfar: </span>
                                             )}
                                         </div>
                                     </div>
