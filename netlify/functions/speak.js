@@ -5,10 +5,18 @@ exports.handler = async (event) => {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    if (!process.env.ELEVENLABS_API_KEY) {
+    // Athuga að Azure API lykill og region séu til staðar
+    if (!process.env.AZURE_SPEECH_KEY) {
         return { 
             statusCode: 500, 
-            body: JSON.stringify({ error: "ElevenLabs API lykill vantar í environment variables." }) 
+            body: JSON.stringify({ error: "AZURE_SPEECH_KEY vantar í environment variables." }) 
+        };
+    }
+
+    if (!process.env.AZURE_SPEECH_REGION) {
+        return { 
+            statusCode: 500, 
+            body: JSON.stringify({ error: "AZURE_SPEECH_REGION vantar í environment variables." }) 
         };
     }
 
@@ -22,51 +30,47 @@ exports.handler = async (event) => {
             };
         }
 
-        // Þín Voice ID (Jessica eða önnur rödd)
-        const VOICE_ID = 'cgSgspJ2msm6clMCkdW9';
-        
-        const elevenLabsResponse = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+        const AZURE_KEY = process.env.AZURE_SPEECH_KEY;
+        const AZURE_REGION = process.env.AZURE_SPEECH_REGION; // "northeurope"
+
+        // SSML (Speech Synthesis Markup Language) með íslenskri Guðrúnu rödd
+        const ssml = `
+            <speak version='1.0' xml:lang='is-IS'>
+                <voice xml:lang='is-IS' name='is-IS-GudrunNeural'>
+                    ${text_to_speak}
+                </voice>
+            </speak>
+        `;
+
+        // Kalla á Azure TTS API
+        const azureResponse = await fetch(
+            `https://${AZURE_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`,
             {
                 method: 'POST',
                 headers: {
-                    'Accept': 'audio/mpeg',
-                    'Content-Type': 'application/json',
-                    'xi-api-key': process.env.ELEVENLABS_API_KEY
+                    'Ocp-Apim-Subscription-Key': AZURE_KEY,
+                    'Content-Type': 'application/ssml+xml',
+                    'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+                    'User-Agent': 'Malstodin'
                 },
-                body: JSON.stringify({
-                    text: text_to_speak,
-                    
-                    // GAMLA LÍKANIÐ - styður language_code
-                    model_id: "eleven_multilingual_v2",
-                    
-                    // ÍSLENSKA LANGUAGE HINT
-                    language_code: "is",
-                    
-                    // Hágæða stillingar
-                    voice_settings: {
-                        stability: 0.75,
-                        similarity_boost: 0.85,
-                        style: 0.0,
-                        use_speaker_boost: true
-                    }
-                })
+                body: ssml
             }
         );
 
-        if (!elevenLabsResponse.ok) {
-            const errorBody = await elevenLabsResponse.text();
-            console.error("ElevenLabs API villa:", errorBody);
+        if (!azureResponse.ok) {
+            const errorBody = await azureResponse.text();
+            console.error("Azure TTS API villa:", errorBody);
             return {
-                statusCode: elevenLabsResponse.status,
+                statusCode: azureResponse.status,
                 body: JSON.stringify({ 
-                    error: `ElevenLabs API villa: ${elevenLabsResponse.status}`,
+                    error: `Azure TTS API villa: ${azureResponse.status}`,
                     details: errorBody 
                 })
             };
         }
 
-        const audioBuffer = await elevenLabsResponse.buffer();
+        // Fáum hljóðgögnin sem buffer
+        const audioBuffer = await azureResponse.buffer();
         const audioBase64 = audioBuffer.toString('base64');
 
         return {
@@ -80,7 +84,7 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
-        console.error("Villa í speak function:", error);
+        console.error("Villa í Azure TTS function:", error);
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message })
