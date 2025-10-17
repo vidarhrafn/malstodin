@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>💬 Myndaspjall - Krakkarnir í Reykjavík</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+            min-height: 100vh;
+        }
+        .recording {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .image-container {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const SendIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        );
+
+        const MicIcon = ({ isRecording }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill={isRecording ? "currentColor" : "none"}
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={`w-5 h-5 ${isRecording ? 'recording text-red-500' : ''}`}
+            >
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+        );
+
+        const SpeakerIcon = ({ onClick, isSpeaking }) => (
+            <svg 
+                onClick={onClick}
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={`w-5 h-5 cursor-pointer transition-colors ${
+                    isSpeaking ? 'text-red-500 animate-pulse' : 'text-green-600 hover:text-green-800'
+                }`}
+            >
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        );
+
+        async function callOpenAI(messages, max_tokens = 400, model = 'gpt-4o-mini', temperature = 0.3) {
+            const r = await fetch('/.netlify/functions/openai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: messages,
+                    max_tokens: max_tokens,
+                    model: model,
+                    temperature: temperature,
+                }),
+            });
+            const data = await r.json();
+            if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+            return data.content; 
+        }
+
+        async function playAudio(text, setSpeakingCallback) {
+            setSpeakingCallback(true);
+
+            try {
+                const r = await fetch('/.netlify/functions/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text_to_speak: text }),
+                });
+
+                const data = await r.json();
+                
+                if (!r.ok || data.error || !data.audio_base64) {
+                    console.error("Villa í hljóðkalli:", data.error);
+                    setSpeakingCallback(false);
+                    return;
+                }
+
+                const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+                const audio = new Audio(audioUrl);
+                
+                audio.onended = () => setSpeakingCallback(false);
+                audio.onerror = () => setSpeakingCallback(false);
+                
+                audio.play().catch(e => {
+                    console.error("Villa við spilun:", e);
+                    setSpeakingCallback(false);
+                });
+                
+            } catch (e) {
+                console.error("Tenging mistókst:", e);
+                setSpeakingCallback(false);
+            }
+        }
+
+        const Myndaspjall = () => {
+            const initialMessage = { 
+                role: 'assistant', 
+                content: 'Hæ! Sjáðu þessa mynd af þremur ungmennum í Reykjavík. Segðu mér frá þessum krökkum! Hvað heitir strákurinn til vinstri? 😊'
+            };
+            
+            const [messages, setMessages] = useState([initialMessage]);
+            const [input, setInput] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [speakingIndex, setSpeakingIndex] = useState(null);
+            const [isRecording, setIsRecording] = useState(false);
+            const [recognition, setRecognition] = useState(null);
+            const [finished, setFinished] = useState(false);
+            const messagesEndRef = useRef(null);
+            const inputRef = useRef(null);
+            
+            const ASSISTANT_SYSTEM_PROMPT = `
+Þú ert íslenskukennari á A1-A2 stigi.
+
+Nemandinn skoðar mynd af þremur ungmennum í Reykjavík:
+
+TIL VINSTRI: Strákur í gallajakka og hvítum bol. Hann er rauðhærður með stutt hár, slétt og ljósa húð.
+
+Í MIÐJU: Brún stelpa í gulri hettupeysu. Hún er með sítt, dökkt hár með fléttur. Hún er með eyrnalokka.
+
+TIL HÆGRI: Stelpa með asískt útlit. Hún er með dökkt, slétt, sítt hár. Hún er í ljósri, síðerma peysu.
+
+MIKILVÆGT - Rétt beyging:
+- NEFNIFALL: "hvítur bolur" → ÞOLFALL: "í hvítum bol"
+- NEFNIFALL: "gallajakki" → ÞOLFALL: "í gallajakka"  
+- NEFNIFALL: "gul peysa" → ÞOLFALL: "í gulri peysu"
+
+Þín vinna:
+1. Spyrja frjálsra spurninga um alla þrjá
+2. Tryggja að nemandi tali um ALLA þrjá (strák til vinstri, stelpa í miðju, stelpa til hægri)
+3. Spyrja um: nafn, aldur, hvaðan kemur, hvar býr, uppáhaldsmatur
+4. Vera náttúrulegur, hlýr og hvetjandi
+5. NOTA ALLTAF RÉTTA BEYGINGU
+
+Ef nemandi hefur ekki talað um alla, spurðu: "Frábært! En hvað um [einhvern sem vantar]?"
+
+Svaraðu ALLTAF stuttlega (2-4 setningar).
+            `.trim();
+
+            const FEEDBACK_SYSTEM_PROMPT = `
+Þú ert íslenskukennari sem gefur örstutta endurgjöf á íslensku (A2–B1).
+REGLUR:
+- 1–2 stuttar setningar
+- Leiðréttu aðeins þegar þú ert >80% viss
+- Gefðu aðeins endurgjöfarlínuna, ekkert annað
+            `.trim();
+
+            const SUMMARY_SYSTEM_PROMPT = `
+Þú ert íslenskukennari. Búðu til samantekt á öllu sem nemandinn sagði um þrjá ungmenna í myndinni.
+
+Format:
+🎯 SAMANTEKT:
+
+TIL VINSTRI (strákurinn í gallajakka):
+- Nafn: [nafn]
+- Aldur: [aldur]
+- Uppruni: [hvaðan]
+- Búseta: [hvar býr]
+- Uppáhaldsmatur: [matur]
+
+Í MIÐJU (stelpan í gulri peysu):
+- Nafn: [nafn]
+- Aldur: [aldur]
+- Uppruni: [hvaðan]
+- Búseta: [hvar býr]
+- Uppáhaldsmatur: [matur]
+
+TIL HÆGRI (stelpan í ljósri peysu):
+- Nafn: [nafn]
+- Aldur: [aldur]
+- Uppruni: [hvaðan]
+- Búseta: [hvar býr]
+- Uppáhaldsmatur: [matur]
+
+Vel gert! 🎉
+
+Ef nemandi sagði ekki eitthvað, skrifaðu [ekki nefnt].
+            `.trim();
+
+            useEffect(() => {
+                // Setup Web Speech API
+                if ('webkitSpeechRecognition' in window) {
+                    const recog = new webkitSpeechRecognition();
+                    recog.lang = 'is-IS';
+                    recog.continuous = true;
+                    recog.interimResults = true;
+
+                    recog.onresult = (event) => {
+                        const transcript = Array.from(event.results)
+                            .map(result => result[0].transcript)
+                            .join('');
+                        setInput(transcript);
+                    };
+
+                    recog.onerror = (event) => {
+                        console.error('Speech recognition error:', event.error);
+                        setIsRecording(false);
+                    };
+
+                    recog.onend = () => {
+                        setIsRecording(false);
+                    };
+
+                    setRecognition(recog);
+                }
+            }, []);
+
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                if (!loading && inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, [messages, loading]);
+
+            const toggleRecording = () => {
+                if (!recognition) {
+                    alert('Þinn vafri styður ekki talupptökur. Vinsamlegast notaðu Chrome, Edge eða Safari.');
+                    return;
+                }
+
+                if (isRecording) {
+                    recognition.stop();
+                    setIsRecording(false);
+                } else {
+                    recognition.start();
+                    setIsRecording(true);
+                }
+            };
+
+            const handleManualSpeak = (text, index) => {
+                if (speakingIndex === index) {
+                    setSpeakingIndex(null);
+                } else {
+                    setSpeakingIndex(index);
+                    playAudio(text, (isSpeaking) => {
+                        if (!isSpeaking) setSpeakingIndex(null);
+                    });
+                }
+            };
+
+            const sendMessage = async () => {
+                const trimmed = input.trim();
+                if (!trimmed || loading || finished) return;
+
+                const userMessage = { role: 'user', content: trimmed };
+                
+                setInput('');
+                setLoading(true);
+                setMessages(prev => [...prev, userMessage]);
+
+                // Feedback
+                try {
+                    const feedbackMessages = [
+                        { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
+                        { role: 'user', content: `Skilaboð nemanda: "${trimmed}".` }
+                    ];
+
+                    const feedbackText = await callOpenAI(feedbackMessages, 60, 'gpt-4o-mini', 0.2);
+
+                    if (feedbackText && typeof feedbackText === 'string') {
+                        setMessages(prev => [...prev, { role: 'feedback', content: feedbackText }]);
+                        await new Promise(res => setTimeout(res, 500));
+                    }
+                } catch (e) {
+                    console.error('Feedback error:', e);
+                }
+
+                // AI Response
+                try {
+                    const conversationHistory = messages
+                        .filter(m => m.role === 'assistant' || m.role === 'user')
+                        .map(m => ({ role: m.role, content: m.content }));
+                    
+                    const assistantMessages = [
+                        { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
+                        ...conversationHistory,
+                        userMessage,
+                    ];
+                    
+                    const assistantReply = await callOpenAI(assistantMessages, 400, 'gpt-4o-mini', 0.3);
+
+                    if (assistantReply) {
+                        setMessages(prev => [...prev, { 
+                            role: 'assistant', 
+                            content: assistantReply.trim()
+                        }]);
+                    }
+                } catch (e) {
+                    console.error('Assistant error:', e);
+                    setMessages(prev => [
+                        ...prev,
+                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis.' }
+                    ]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const finishConversation = async () => {
+                if (loading || finished) return;
+
+                setLoading(true);
+                setFinished(true);
+
+                try {
+                    const conversationHistory = messages
+                        .filter(m => m.role === 'user')
+                        .map(m => m.content)
+                        .join('\n\n');
+
+                    const summaryMessages = [
+                        { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+                        { role: 'user', content: `Hér er allt sem nemandinn sagði:\n\n${conversationHistory}` }
+                    ];
+
+                    const summary = await callOpenAI(summaryMessages, 600, 'gpt-4o-mini', 0.2);
+
+                    if (summary) {
+                        setMessages(prev => [...prev, { 
+                            role: 'summary', 
+                            content: summary.trim()
+                        }]);
+                    }
+                } catch (e) {
+                    console.error('Summary error:', e);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen pb-12">
+                    <header className="bg-white shadow-sm border-b border-gray-200">
+                        <div className="max-w-4xl mx-auto px-6 py-8">
+                            <button 
+                                onClick={() => window.history.back()} 
+                                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+                            >
+                                ← Til baka
+                            </button>
+                            <h1 className="text-3xl font-light text-gray-800 mb-2">Myndaspjall</h1>
+                            <p className="text-gray-500 text-sm font-light">Krakkarnir í Reykjavík · A1-A2</p>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto px-6 mt-8">
+                        {/* Mynd - sticky */}
+                        <div className="image-container rounded-lg overflow-hidden shadow-lg mb-6">
+                            <img 
+                                src="media/1krakkar.jpg" 
+                                alt="Þrjú ungmenni í Reykjavík" 
+                                className="w-full h-auto"
+                            />
+                        </div>
+
+                        {/* Chat */}
+                        <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{height: '50vh', minHeight: '400px'}}>
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                {messages.map((msg, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`flex ${
+                                            msg.role === 'user'
+                                                ? 'justify-end'
+                                                : msg.role === 'feedback'
+                                                ? 'justify-center'
+                                                : msg.role === 'summary'
+                                                ? 'justify-center'
+                                                : 'justify-start'
+                                        }`}
+                                    >
+                                        <div
+                                            className={`max-w-lg px-4 py-2 rounded-xl font-light ${
+                                                msg.role === 'user'
+                                                    ? 'bg-blue-600 text-white'
+                                                    : msg.role === 'feedback'
+                                                    ? 'bg-red-50 text-red-700 border border-red-200 text-sm italic'
+                                                    : msg.role === 'summary'
+                                                    ? 'bg-green-50 text-green-900 border-2 border-green-300 text-sm w-full max-w-2xl'
+                                                    : 'bg-gray-100 text-gray-800'
+                                            } shadow-sm relative`}
+                                        >
+                                            {msg.role === 'feedback' && (
+                                                <span className="font-normal text-red-800">📚 Málfar: </span>
+                                            )}
+                                            
+                                            {msg.role !== 'assistant' && (
+                                                <p className="whitespace-pre-wrap">{msg.content}</p>
+                                            )}
+                                            
+                                            {msg.role === 'assistant' && (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-gray-600 text-sm">🎧 Hlustaðu:</span>
+                                                    <SpeakerIcon 
+                                                        onClick={() => handleManualSpeak(msg.content, idx)} 
+                                                        isSpeaking={speakingIndex === idx}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {loading && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-xl">
+                                            <div className="flex space-x-2">
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Input area */}
+                            {!finished && (
+                                <div className="border-t p-4 bg-white">
+                                    <div className="flex gap-2 mb-2">
+                                        <button
+                                            onClick={toggleRecording}
+                                            className={`px-4 py-3 rounded-lg font-normal flex items-center gap-2 transition-colors ${
+                                                isRecording 
+                                                    ? 'bg-red-600 text-white' 
+                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                            disabled={loading}
+                                        >
+                                            <MicIcon isRecording={isRecording} />
+                                            <span>{isRecording ? 'Að hlusta...' : 'Haltu til að tala'}</span>
+                                        </button>
+                                        
+                                        <button
+                                            onClick={finishConversation}
+                                            className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-normal transition-colors"
+                                            disabled={loading}
+                                        >
+                                            ✅ Klára samtal
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            ref={inputRef}
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                                            placeholder="Skrifa eða laga tal..."
+                                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+                                            disabled={loading}
+                                        />
+                                        <button
+                                            onClick={sendMessage}
+                                            disabled={loading || !input.trim()}
+                                            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-normal flex items-center justify-center"
+                                        >
+                                            <SendIcon />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+                    </main>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<Myndaspjall />);
+    </script>
+</body>
+</html>
