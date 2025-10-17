@@ -22,7 +22,6 @@ exports.handler = async (event) => {
             };
         }
 
-        // Rachel rödd - þetta virkar ALLTAF
         const VOICE_ID = 'cgSgspJ2msm6clMCkdW9';
         
         const elevenLabsResponse = await fetch(
@@ -33,17 +32,17 @@ exports.handler = async (event) => {
                     'Accept': 'audio/mpeg',
                     'Content-Type': 'application/json',
                     'xi-api-key': process.env.ELEVENLABS_API_KEY
+                },
                 body: JSON.stringify({
-    text: text_to_speak,
-    model_id: "eleven_turbo_v2_5",
-    voice_settings: {
-        stability: 0.75,
-        similarity_boost: 0.85,
-        style: 0.0,
-        use_speaker_boost: true
-    },
-    language_code: "is"  // 👈 HÉR ER LANGUAGE HINT!
-})
+                    text: text_to_speak,
+                    model_id: "eleven_turbo_v2_5",
+                    voice_settings: {
+                        stability: 0.75,
+                        similarity_boost: 0.85,
+                        style: 0.0,
+                        use_speaker_boost: true
+                    },
+                    language_code: "is"
                 })
             }
         );
