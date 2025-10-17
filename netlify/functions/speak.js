@@ -41,8 +41,8 @@ exports.handler = async (event) => {
                         similarity_boost: 0.85,
                         style: 0.0,
                         use_speaker_boost: true
-                    },
-                    language_code: "is"
+                    }
+                    // language_code fjarlægt - ekki stutt af turbo líkaninu
                 })
             }
         );
