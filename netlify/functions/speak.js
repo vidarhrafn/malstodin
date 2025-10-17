@@ -22,6 +22,7 @@ exports.handler = async (event) => {
             };
         }
 
+        // Þín Voice ID (Jessica eða önnur rödd)
         const VOICE_ID = 'cgSgspJ2msm6clMCkdW9';
         
         const elevenLabsResponse = await fetch(
@@ -35,14 +36,20 @@ exports.handler = async (event) => {
                 },
                 body: JSON.stringify({
                     text: text_to_speak,
-                    model_id: "eleven_turbo_v2_5",
+                    
+                    // GAMLA LÍKANIÐ - styður language_code
+                    model_id: "eleven_multilingual_v2",
+                    
+                    // ÍSLENSKA LANGUAGE HINT
+                    language_code: "is",
+                    
+                    // Hágæða stillingar
                     voice_settings: {
                         stability: 0.75,
                         similarity_boost: 0.85,
                         style: 0.0,
                         use_speaker_boost: true
                     }
-                    // language_code fjarlægt - ekki stutt af turbo líkaninu
                 })
             }
         );
@@ -66,7 +73,8 @@ exports.handler = async (event) => {
             statusCode: 200,
             headers: { 
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type"
             },
             body: JSON.stringify({ audio_base64: audioBase64 })
         };
