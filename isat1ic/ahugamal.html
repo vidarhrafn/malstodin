@@ -8,6 +8,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/isat1ic/auth.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -282,6 +283,15 @@ DÆMI á grammar:
           ];
           setConversations(updatedConversations);
           
+          // Vista framvindu í Supabase þegar nemandi sendir fyrsta svarið
+          if (updatedConversations[questionIndex].length === 2) { // User message + AI response
+            saveProgress('ahugamal', false, 33); // 33% fyrir fyrstu spurningu
+          } else if (updatedConversations[questionIndex].length === 4) { // Annað svar
+            saveProgress('ahugamal', false, 66); // 66% fyrir aðra spurningu
+          } else if (updatedConversations[questionIndex].length >= 6) { // Þriðja svar
+            saveProgress('ahugamal', true, 100); // 100% kláruð!
+          }
+          
           scrollToBottom(questionIndex);
 
         } catch (e) {
@@ -540,6 +550,32 @@ DÆMI á grammar:
     };
 
     ReactDOM.createRoot(document.getElementById('root')).render(<Ahugamal />);
+
+    // Vista framvindu í Supabase
+    async function saveProgress(exerciseId, completed, score) {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      try {
+        const response = await fetch('/.netlify/functions/supabase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'saveProgress',
+            user_id: user.id,
+            exercise_id: exerciseId,
+            completed: completed,
+            score: score
+          })
+        });
+        
+        if (response.ok) {
+          console.log('✅ Framvinda vistuð:', exerciseId, '- Stig:', score);
+        }
+      } catch (error) {
+        console.error('❌ Villa við að vista framvindu:', error);
+      }
+    }
   </script>
 </body>
 </html>
