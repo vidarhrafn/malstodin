@@ -86,3 +86,48 @@
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      // Disable button
+      loginButton.disabled = true;
+      loginButton.textContent = 'Augnablik...';
+      errorMessage.classList.add('hidden');
+
+      try {
+        const response = await fetch('/.netlify/functions/supabase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'login',
+            username: username,
+            password: password
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Vista notandaupplýsingar í localStorage
+          localStorage.setItem('isat1ic_user', JSON.stringify(data.user));
+          
+          // Redirect til ÍSAT1ÍC forsíðu
+          window.location.href = '/isat1ic/';
+        } else {
+          // Villa
+          errorMessage.textContent = data.error || 'Rangt notendanafn eða lykilorð';
+          errorMessage.classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        errorMessage.textContent = 'Villa við innskráningu. Reyndu aftur.';
+        errorMessage.classList.remove('hidden');
+      } finally {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Skrá inn';
+      }
+    });
+  </script>
+</body>
+</html>
