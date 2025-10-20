@@ -14,13 +14,8 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
-    .recording {
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
+    .recording { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
   </style>
 </head>
 <body>
@@ -30,8 +25,7 @@
 
     async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
       const r = await fetch('/.netlify/functions/openai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages, max_tokens, model, temperature })
       });
       const data = await r.json();
@@ -43,135 +37,99 @@
       setSpeakingCallback(true);
       try {
         const r = await fetch('/.netlify/functions/speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text_to_speak: text })
         });
         const data = await r.json();
         if (!r.ok || data.error || !data.audio_base64) {
-          console.error('Villa í hljóðkalli:', data.error);
-          setSpeakingCallback(false);
-          return;
+          console.error('Villa í hljóðkalli:', data?.error);
+          setSpeakingCallback(false); return;
         }
-        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-        const audio = new Audio(audioUrl);
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
         audio.onended = () => setSpeakingCallback(false);
         audio.onerror = () => setSpeakingCallback(false);
-        audio.play().catch(() => setSpeakingCallback(false));
+        await audio.play().catch(() => setSpeakingCallback(false));
       } catch (e) {
-        console.error('Tenging mistókst:', e);
-        setSpeakingCallback(false);
+        console.error('Tenging mistókst:', e); setSpeakingCallback(false);
       }
     }
 
     const SpjallEldhus = () => {
-      const [messages, setMessages] = useState([]);
+      const [messages, setMessages] = useState([]); // we keep history, en birtum ekki AI-spurningar
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
       const [isRecording, setIsRecording] = useState(false);
       const [recognition, setRecognition] = useState(null);
       const [speaking, setSpeaking] = useState(false);
       const [finished, setFinished] = useState(false);
+      const [started, setStarted] = useState(false); // 🔈 notum þetta til að rjúfa autoplay-lás
       const messagesEndRef = useRef(null);
 
-      const ASSISTANT_SYSTEM_PROMPT = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér mynd af strák og stúlku í eldhúsi.
-Stúlkan í gulri peysu er að steikja fisk á pönnu. Strákurinn í hvítum bol er að hnoða deig. Andrúmsloftið er heimilislegt og hlýlegt.
+      const FIRST_Q = 'Hæ! Sjáðu myndina. Hvað heldur þú að þau séu að gera?';
 
-Þú spyrð NEMANDANN aðeins með HREINUM TEXTA sem verður breytt í hljóð (engin textabirting í spjalli). Spurningarnar eiga að vera stuttar, skýrar og náttúrulegar.
-Dæmi um spurningar:
-- Hæ! Sjáðu myndina. Hvað heldur þú að þau séu að gera?
-- Hvað heldur þú að hún sé að steikja?
-- Hvernig eldar hún fiskinn?
-- Hvað er strákurinn með í höndunum?
-- Hvað er strákurinn að gera?
-- Hvernig líður þeim?
-- Hvað sérðu á borðinu?
-- Hvar eru þau?
-
-Eftir svar nemanda: hrósaðu stuttlega og spyrðu næstu spurningu sem tengist svari hans. Aldrei sýna texta, aðeins skila spurningunni sem á að lesa upp.`;
+      const ASSISTANT_SYSTEM_PROMPT = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér mynd af strák og stúlku í eldhúsi.\nStúlkan í gulri peysu er að steikja fisk á pönnu. Strákurinn í hvítum bol er að hnoða deig. Andrúmsloftið er heimilislegt og hlýlegt.\n\nÞú skilar ALLTAF aðeins EINI stuttri spurningu á íslensku (texta sem verður lesinn upp sem hljóð). Engin kurteisiskynning eða útskýringar – bara spurningin.\nEftir hvert svar: hrósaðu mjög stutt (1 lína), og spyrðu svo NÆSTU stuttu spurningu sem tengist svarinu.\nSækja má í þessar hugmyndir:\n- Hvað heldur þú að hún sé að steikja?\n- Hvernig eldar hún fiskinn?\n- Hvað er strákurinn með í höndunum?\n- Hvað er strákurinn að gera?\n- Hvernig líður þeim?\n- Hvað sérðu á borðinu?\n- Hvar eru þau?`;
 
       const SUMMARY_PROMPT = `Búðu til stutta samantekt á íslensku um hvað nemandinn sagði um myndina. Skrifaðu aðeins texta, ekki spurningar.`;
 
       useEffect(() => {
         if ('webkitSpeechRecognition' in window) {
           const recog = new webkitSpeechRecognition();
-          recog.lang = 'is-IS';
-          recog.continuous = true;
-          recog.interimResults = true;
-          recog.onresult = (event) => {
-            const transcript = Array.from(event.results)
-              .map(r => r[0].transcript)
-              .join('');
+          recog.lang = 'is-IS'; recog.continuous = true; recog.interimResults = true;
+          recog.onresult = (e) => {
+            const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
             setInput(transcript);
           };
           recog.onend = () => setIsRecording(false);
           recog.onerror = () => setIsRecording(false);
           setRecognition(recog);
         }
-        // Spila fyrstu spurningu þegar síðan opnast
-        const firstQuestion = 'Hæ! Sjáðu myndina. Hvað heldur þú að þau séu að gera?';
-        playAudio(firstQuestion, setSpeaking);
       }, []);
+
+      useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages, loading]);
+
+      const startConversation = async () => {
+        // Fyrsta spurning spiluð eftir notendasmell – tryggir að autoplay policy blokki ekki
+        setStarted(true);
+        setMessages(prev => [...prev, { role: 'assistant', content: FIRST_Q }]);
+        await playAudio(FIRST_Q, setSpeaking);
+      };
 
       const toggleRecording = () => {
         if (!recognition) {
           alert('Vafrinn þinn styður ekki talgreiningu. Notaðu Chrome eða Edge.');
           return;
         }
-        if (isRecording) {
-          recognition.stop();
-          setIsRecording(false);
-        } else {
-          recognition.start();
-          setIsRecording(true);
-        }
+        if (isRecording) { recognition.stop(); setIsRecording(false); }
+        else { recognition.start(); setIsRecording(true); }
       };
 
       const sendMessage = async () => {
         if (!input.trim() || loading) return;
         const userMessage = input.trim();
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-        setInput('');
-        setLoading(true);
+        setInput(''); setLoading(true);
         try {
-          const chatHistory = messages
-            .filter(m => m.role !== 'summary')
-            .map(m => ({ role: m.role, content: m.content }));
-
-          const aiMessages = [
-            { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
-            ...chatHistory,
-            { role: 'user', content: userMessage }
-          ];
-
+          const chatHistory = messages.map(m => ({ role: m.role, content: m.content }));
+          const aiMessages = [ { role: 'system', content: ASSISTANT_SYSTEM_PROMPT }, ...chatHistory, { role: 'user', content: userMessage } ];
           const nextQuestion = await callOpenAI(aiMessages, 150, 'gpt-4o-mini', 0.3);
           if (nextQuestion) {
-            playAudio(nextQuestion, setSpeaking);
             setMessages(prev => [...prev, { role: 'assistant', content: nextQuestion }]);
+            await playAudio(nextQuestion, setSpeaking);
           }
-        } catch (e) {
-          console.error('Villa í samtali:', e);
-        } finally {
-          setLoading(false);
-        }
+        } catch (e) { console.error('Villa í samtali:', e); }
+        finally { setLoading(false); }
       };
 
       const finishConversation = async () => {
-        setFinished(true);
-        setLoading(true);
+        setFinished(true); setLoading(true);
         try {
           const allUserText = messages.filter(m => m.role === 'user').map(m => m.content).join('\n');
-          const summaryMessages = [
-            { role: 'system', content: SUMMARY_PROMPT },
-            { role: 'user', content: allUserText }
-          ];
-          const summary = await callOpenAI(summaryMessages, 400, 'gpt-4o-mini', 0.3);
+          const summary = await callOpenAI([ { role: 'system', content: SUMMARY_PROMPT }, { role: 'user', content: allUserText } ], 400, 'gpt-4o-mini', 0.3);
           setMessages(prev => [...prev, { role: 'summary', content: summary }]);
-        } catch (e) {
-          console.error('Villa í samantekt:', e);
-        } finally {
-          setLoading(false);
-        }
+        } catch (e) { console.error('Villa í samantekt:', e); }
+        finally { setLoading(false); }
       };
 
       return (
@@ -189,29 +147,33 @@ Eftir svar nemanda: hrósaðu stuttlega og spyrðu næstu spurningu sem tengist 
               <img src="media/eldhus_spjall.png" alt="Ungmenni elda í eldhúsi" className="w-full h-auto" />
             </div>
 
+            {!started && (
+              <div className="flex justify-center mb-6">
+                <button onClick={startConversation} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md">▶ Hefja spjall</button>
+              </div>
+            )}
+
             <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight:'400px'}}>
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role==='user'?'justify-end':'justify-start'}`}>
-                    <div className={`max-w-lg px-4 py-2 rounded-xl font-light ${msg.role==='user'?'bg-blue-600 text-white':'bg-gray-100 text-gray-800'}`}>
-                      {msg.role==='summary'?<div className='bg-green-50 text-green-900 border border-green-300 p-3 rounded-lg'>{msg.content}</div>:msg.content}
+                  <div key={i} className={`flex ${msg.role==='user'?'justify-end': msg.role==='summary' ? 'justify-center' : 'justify-start'}`}>
+                    <div className={`max-w-lg px-4 py-2 rounded-xl font-light ${msg.role==='user'?'bg-blue-600 text-white': msg.role==='summary' ? 'bg-green-50 text-green-900 border border-green-300' : 'bg-gray-100 text-gray-800'}`}>
+                      {msg.role==='assistant' ? <span className="text-xs text-gray-500 italic">(AI spurði nýja spurningu með hljóði)</span> : msg.content}
                     </div>
                   </div>
                 ))}
-                {loading && <p className="text-gray-400 italic">AI hugsar...</p>}
+                {loading && <p className="text-gray-400 italic">AI hugsar…</p>}
                 <div ref={messagesEndRef} />
               </div>
 
               {!finished && (
                 <div className="border-t p-4 bg-white">
                   <div className="flex gap-2 mb-2">
-                    <button onClick={toggleRecording} className={`px-4 py-3 rounded-lg font-normal flex items-center gap-2 transition-colors ${isRecording?'bg-red-600 text-white':'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                      🎤 {isRecording ? 'Hætta upptöku' : 'Tala'}
-                    </button>
+                    <button onClick={toggleRecording} className={`px-4 py-3 rounded-lg font-normal flex items-center gap-2 transition-colors ${isRecording?'bg-red-600 text-white':'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>🎤 {isRecording ? 'Hætta upptöku' : 'Tala'}</button>
                     <button onClick={finishConversation} className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-normal transition-colors">✅ Klára samtal</button>
                   </div>
                   <div className="flex gap-2">
-                    <input type="text" value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=>e.key==='Enter'&&sendMessage()} placeholder="Skrifaðu svar..." className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light" />
+                    <input type="text" value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=>e.key==='Enter'&&sendMessage()} placeholder="Skrifaðu svar…" className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light" />
                     <button onClick={sendMessage} disabled={!input.trim()} className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-normal">Senda</button>
                   </div>
                 </div>
