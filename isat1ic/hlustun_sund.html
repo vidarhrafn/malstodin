@@ -150,19 +150,6 @@
         }
       }, [playbackRate]);
 
-      useEffect(() => {
-        // Check if all sections are completed
-        const tfDone = tfChecked;
-        const mcDone = mcChecked;
-        const shortDone = shortFeedback.every(f => f !== null);
-        const matchingDone = matchingChecked;
-
-        if (tfDone && mcDone && shortDone && matchingDone && !allCompleted) {
-          setAllCompleted(true);
-          saveAllProgress();
-        }
-      }, [tfChecked, mcChecked, shortFeedback, matchingChecked]);
-
       const togglePlay = () => {
         if (audioRef.current) {
           if (isPlaying) {
@@ -299,6 +286,14 @@ Vertu hvetjandi og jákvæður!`;
           return;
         }
         setMatchingChecked(true);
+        
+        // Check if all sections are now complete
+        if (tfChecked && mcChecked && shortFeedback.every(f => f !== null)) {
+          // All sections complete - save progress
+          setTimeout(() => {
+            saveAllProgressNow();
+          }, 500);
+        }
       };
 
       const isMatchingCorrect = (index) => {
@@ -328,6 +323,33 @@ Vertu hvetjandi og jákvæður!`;
           short_score: shortScore,
           matching_score: matchingScore
         });
+      };
+
+      const saveAllProgressNow = () => {
+        // Calculate scores
+        const tfScore = Math.round((tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length / TRUE_FALSE.length) * 100);
+        const mcScore = Math.round((mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length / MULTIPLE_CHOICE.length) * 100);
+        const shortScore = Math.round((shortFeedback.filter(f => f && f.correct).length / SHORT_QUESTIONS.length) * 100);
+        const matchingScore = Math.round((matchingAnswers.filter((_, i) => isMatchingCorrect(i)).length / MATCHING.length) * 100);
+        
+        const quizScore = Math.round((tfScore + mcScore + shortScore + matchingScore) / 4);
+
+        console.log('📊 Einkunnir:', {
+          'Rétt/Rangt': tfScore + '%',
+          'Krossaspurningar': mcScore + '%',
+          'Stuttar spurningar': shortScore + '%',
+          'Paraðu saman': matchingScore + '%',
+          'Heildareinkunn': quizScore + '%'
+        });
+
+        saveProgress('hlustun_sund', true, quizScore, {
+          tf_score: tfScore,
+          mc_score: mcScore,
+          short_score: shortScore,
+          matching_score: matchingScore
+        });
+        
+        setAllCompleted(true);
       };
 
       const rightOptions = MATCHING.map(m => m.right).sort(() => Math.random() - 0.5);
