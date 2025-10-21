@@ -192,6 +192,14 @@ Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir 
         const userMessage = currentInputs[questionIndex].trim();
         if (!userMessage) return;
 
+        // Vista texta nemandans fyrir síðari greiningu
+        saveActivity('ahugamal', 'chat_response', {
+          question_index: questionIndex,
+          question: OPEN_QUESTIONS[questionIndex],
+          response: userMessage,
+          timestamp: new Date().toISOString()
+        });
+
         const newLoadingStates = [...loadingStates];
         newLoadingStates[questionIndex] = true;
         setLoadingStates(newLoadingStates);
@@ -573,6 +581,32 @@ Svartu á íslensku og vertu hlý og hvetjandi.`;
         }
       } catch (error) {
         console.error('❌ Villa við að vista framvindu:', error);
+      }
+    }
+
+    // Vista texta nemenda fyrir síðari greiningu
+    async function saveActivity(exerciseId, activityType, data) {
+      const user = getCurrentUser();
+      if (!user) return;
+
+      try {
+        const response = await fetch('/.netlify/functions/supabase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'saveActivity',
+            user_id: user.id,
+            exercise_id: exerciseId,
+            activity_type: activityType,
+            data: data
+          })
+        });
+        
+        if (response.ok) {
+          console.log('✅ Texti vistaður fyrir síðari greiningu');
+        }
+      } catch (error) {
+        console.error('❌ Villa við að vista texta:', error);
       }
     }
   </script>
