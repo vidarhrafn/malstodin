@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stjórnborð kennara - ÍSAT1ÍC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/isat1ic/auth.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div class="min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+      
+      <!-- Header -->
+      <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-3xl font-light text-gray-800 mb-2">📊 Stjórnborð kennara - ÍSAT1ÍC</h1>
+            <p class="text-gray-600 font-light">Framvinda nemenda í ÍSAT1ÍC</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-gray-600 font-light mb-2">Innskráður sem: <span id="currentUser" class="font-normal"></span></p>
+            <button onclick="logout()" class="text-sm text-blue-600 hover:text-blue-800">Útskrá</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading" class="bg-white rounded-lg shadow-sm p-12 text-center">
+        <p class="text-gray-600 font-light">Sæki gögn...</p>
+      </div>
+
+      <!-- Error -->
+      <div id="error" class="hidden bg-red-50 border-2 border-red-200 rounded-lg p-6 mb-6">
+        <p class="text-red-800 font-light" id="errorMessage"></p>
+      </div>
+
+      <!-- Students Table -->
+      <div id="studentsTable" class="hidden bg-white rounded-lg shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-200">
+          <h2 class="text-xl font-light text-gray-800">Nemendur og framvinda</h2>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                  Nemandi
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                  Æfing
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                  Stig
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                  Staða
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                  Dagsetning
+                </th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="bg-white divide-y divide-gray-200">
+              <!-- Data will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- No Data -->
+      <div id="noData" class="hidden bg-white rounded-lg shadow-sm p-12 text-center">
+        <p class="text-gray-600 font-light text-lg mb-2">📭 Engin gögn ennþá</p>
+        <p class="text-gray-500 font-light text-sm">Nemendur hafa ekki byrjað á æfingum ennþá.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Athuga að notandi sé kennari
+    const currentUser = getCurrentUser();
+    
+    if (!currentUser) {
+      window.location.href = '/isat1ic/login.html';
+    } else if (currentUser.role !== 'teacher') {
+      alert('Þú hefur ekki aðgang að þessari síðu. Aðeins kennarar geta séð stjórnborð.');
+      window.location.href = '/isat1ic/';
+    }
+
+    // Sýna notandanafn
+    document.getElementById('currentUser').textContent = currentUser.username;
+
+    // Sækja gögn
+    async function loadDashboardData() {
+      try {
+        // Sækja alla nemendur
+        const usersResponse = await fetch('/.netlify/functions/supabase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'getAllUsers'
+          })
+        });
+
+        // Sækja alla framvindu
+        const progressResponse = await fetch('/.netlify/functions/supabase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'getAllProgress'
+          })
+        });
+
+        if (!usersResponse.ok || !progressResponse.ok) {
+          throw new Error('Villa við að sækja gögn');
+        }
+
+        const usersData = await usersResponse.json();
+        const progressData = await progressResponse.json();
+
+        console.log('Users:', usersData);
+        console.log('Progress:', progressData);
+
+        displayData(usersData.users, progressData.progress);
+
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('error').classList.remove('hidden');
+        document.getElementById('errorMessage').textContent = 'Villa við að sækja gögn: ' + error.message;
+      }
+    }
+
+    function displayData(users, progressList) {
+      document.getElementById('loading').classList.add('hidden');
+
+      if (!progressList || progressList.length === 0) {
+        document.getElementById('noData').classList.remove('hidden');
+        return;
+      }
+
+      // Búa til map af notendum
+      const userMap = {};
+      users.forEach(user => {
+        userMap[user.id] = user.username;
+      });
+
+      // Raða eftir dagsetningu (nýjast fyrst)
+      progressList.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      // Fylla út töflu
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = '';
+
+      progressList.forEach(item => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50';
+        
+        const username = userMap[item.user_id] || 'Óþekktur nemandi';
+        const exerciseName = getExerciseName(item.exercise_id);
+        const date = new Date(item.created_at).toLocaleDateString('is-IS', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+        const statusBadge = item.completed 
+          ? '<span class="px-2 py-1 text-xs font-normal rounded-full bg-green-100 text-green-800">✓ Lokið</span>'
+          : '<span class="px-2 py-1 text-xs font-normal rounded-full bg-yellow-100 text-yellow-800">⏳ Í vinnslu</span>';
+
+        row.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-sm font-normal text-gray-900">${username}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-sm text-gray-600 font-light">${exerciseName}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-sm text-gray-900 font-normal">${item.score || '-'}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            ${statusBadge}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-light">
+            ${date}
+          </td>
+        `;
+
+        tableBody.appendChild(row);
+      });
+
+      document.getElementById('studentsTable').classList.remove('hidden');
+    }
+
+    function getExerciseName(exerciseId) {
+      const names = {
+        'ahugamal': 'Áhugamál',
+        'test': 'Prófun',
+        'mona_lisa': 'Mona Lisa',
+        'sund': 'Sund',
+        // Bættu við fleiri hér eftir þörfum
+      };
+      return names[exerciseId] || exerciseId;
+    }
+
+    // Load data on page load
+    loadDashboardData();
+  </script>
+</body>
+</html>
