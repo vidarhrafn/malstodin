@@ -1,21 +1,31 @@
 const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async (event) => {
-  // Leyfa bara POST requests
+  console.log('🔹 Supabase function called, action:', event.body);
+  
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  // Tengja við Supabase
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY
-  );
-
   try {
-    const { action, ...params } = JSON.parse(event.body);
+    // Athuga hvort environment variables eru til
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      console.error('❌ Missing Supabase environment variables');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Supabase configuration missing' })
+      };
+    }
 
-    // LOGIN - athuga notendanafn og lykilorð
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+
+    const { action, ...params } = JSON.parse(event.body);
+    console.log('🔹 Action:', action, 'Params:', params);
+
+    // LOGIN
     if (action === 'login') {
       const { username, password } = params;
       
@@ -26,15 +36,14 @@ exports.handler = async (event) => {
         .single();
 
       if (error || !data) {
+        console.log('❌ Login failed:', error);
         return {
           statusCode: 401,
           body: JSON.stringify({ error: 'Rangt notendanafn eða lykilorð' })
         };
       }
 
-      // Hér ættum við að athuga lykilorð (kemur síðar)
-      // Núna bara leyfa innskráningu ef notandi er til
-      
+      console.log('✅ Login successful:', username);
       return {
         statusCode: 200,
         body: JSON.stringify({
@@ -48,33 +57,43 @@ exports.handler = async (event) => {
       };
     }
 
-    // SAVE PROGRESS - vista framvindu
+    // SAVE PROGRESS
     if (action === 'saveProgress') {
       const { user_id, exercise_id, completed, score } = params;
       
-const { error } = await supabase
-  .from('progress')
-  .upsert(
-    {
-      user_id,
-      exercise_id,
-      completed,
-      score
-    },
-    {
-      onConflict: 'user_id,exercise_id'
-    }
-  );
+      console.log('🔹 Attempting to save progress:', { user_id, exercise_id, completed, score });
+      
+      const { data, error } = await supabase
+        .from('progress')
+        .upsert(
+          {
+            user_id,
+            exercise_id,
+            completed,
+            score
+          },
+          {
+            onConflict: 'user_id,exercise_id'
+          }
+        )
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ error: error.message })
+        };
+      }
 
+      console.log('✅ Progress saved successfully:', data);
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true })
+        body: JSON.stringify({ success: true, data })
       };
     }
 
-    // SAVE ACTIVITY - vista virkni
+    // SAVE ACTIVITY
     if (action === 'saveActivity') {
       const { user_id, exercise_id, activity_type, data, time_spent } = params;
       
@@ -88,7 +107,10 @@ const { error } = await supabase
           time_spent
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Activity save error:', error);
+        throw error;
+      }
 
       return {
         statusCode: 200,
@@ -96,7 +118,7 @@ const { error } = await supabase
       };
     }
 
-    // GET PROGRESS - sækja framvindu (fyrir kennara)
+    // GET PROGRESS
     if (action === 'getProgress') {
       const { user_id } = params;
       
@@ -113,15 +135,20 @@ const { error } = await supabase
       };
     }
 
+    console.error('❌ Unknown action:', action);
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Óþekkt aðgerð' })
+      body: JSON.stringify({ error: 'Óþekkt aðgerð: ' + action })
     };
 
   } catch (error) {
+    console.error('❌ Function error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ 
+        error: error.message,
+        stack: error.stack 
+      })
     };
   }
 };
