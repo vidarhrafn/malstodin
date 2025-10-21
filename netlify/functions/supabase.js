@@ -105,7 +105,7 @@ exports.handler = async (event) => {
           exercise_id,
           activity_type,
           data,
-          time_spent
+          time_spent: time_spent || null  // Allow null or use provided value
         });
 
       if (error) {
@@ -113,6 +113,7 @@ exports.handler = async (event) => {
         throw error;
       }
 
+      console.log('✅ Activity saved successfully');
       return {
         statusCode: 200,
         body: JSON.stringify({ success: true })
