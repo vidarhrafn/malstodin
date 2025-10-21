@@ -210,40 +210,35 @@ Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir 
         scrollToBottom(questionIndex);
 
         try {
-          const basePrompt = `Þú ert íslenskukennari sem aðstoðar nemendur við að æfa íslensku. Nemandinn svaraði spurningunni: "${OPEN_QUESTIONS[questionIndex]}"
+          const systemMessage = 'Þú ert íslenskukennari sem aðstoðar nemendur við að æfa íslensku. Greindu málfræðivillur ef þær eru til staðar og gefðu hvatningu og eftirfylgnisspurningu.';
+          
+          const userPrompt = `Nemandinn svaraði spurningunni: "${OPEN_QUESTIONS[questionIndex]}"
           
 Svar nemandans: "${userMessage}"
 
-MIKILVÆGT - Verkefnið þitt:
-1. **FYRST** - Greindu málfræðivillur í svarinu (ef einhverjar):
-   - Beygingarvillur í persónufornöfnum, sagnorðum, eða nafnorðum
-   - Villur í fallnotkun
-   - Setningagerð eða rithátt
-   
-2. **SÍÐAN** - Gefðu hvatningu og dýpri spurningu:
-   - Viðurkenning á góðu svari
-   - Ein nákvæm eftirfylgnisspurning sem hvetur nemandann til að ígrunda dýpra
+Verkefnið þitt:
+1. Ef það eru málfræðivillur (beygingarvillur, fallvillur, eða setningagerð), nefndu þær stuttlega og hvetjandi
+2. Gefðu síðan hvatningu og eina eftirfylgnisspurningu sem hvetur til dýpri umhugsunar
 
-FORM:
-- Byrjaðu ALLTAF á málfræðiendurgjöf ef það á við (stuttlega og hvetjandi)
-- Síðan gefðu hvatningu og eftirfylgnispurningu
-- Vertu hlý, hvetjandi og nákvæm
-- Svartu á íslensku`;
+Svartu á íslensku og vertu hlý og hvetjandi.`;
 
           const parsed = await callOpenAI({ 
-            prompt: basePrompt, 
-            systemMessage: 'Þú ert íslenskukennari.' 
+            messages: [
+              { role: 'system', content: systemMessage },
+              { role: 'user', content: userPrompt }
+            ]
           });
 
           // Athuga hvort það er málfræðiendurgjöf
-          const hasGrammarFeedback = parsed.toLowerCase().includes('málfar') || 
-                                      parsed.toLowerCase().includes('villa') ||
-                                      parsed.toLowerCase().includes('beyging') ||
-                                      parsed.toLowerCase().includes('fall');
+          const responseText = parsed.content || parsed;
+          const hasGrammarFeedback = responseText.toLowerCase().includes('málfar') || 
+                                      responseText.toLowerCase().includes('villa') ||
+                                      responseText.toLowerCase().includes('beyging') ||
+                                      responseText.toLowerCase().includes('fall');
 
           if (hasGrammarFeedback) {
             // Skipta í málfræðiendurgjöf og svar
-            const parts = parsed.split(/(?=Frábært|Gott|Vel|Þetta er)/);
+            const parts = responseText.split(/(?=Frábært|Gott|Vel|Þetta er)/);
             if (parts.length > 1) {
               updatedConversations[questionIndex].push({ 
                 role: 'grammar', 
@@ -254,10 +249,10 @@ FORM:
                 content: parts.slice(1).join('').trim() 
               });
             } else {
-              updatedConversations[questionIndex].push({ role: 'assistant', content: parsed.response });
+              updatedConversations[questionIndex].push({ role: 'assistant', content: responseText });
             }
           } else {
-            updatedConversations[questionIndex].push({ role: 'assistant', content: parsed.response });
+            updatedConversations[questionIndex].push({ role: 'assistant', content: responseText });
           }
 
           setConversations(updatedConversations);
