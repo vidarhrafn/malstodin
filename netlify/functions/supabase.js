@@ -52,14 +52,19 @@ exports.handler = async (event) => {
     if (action === 'saveProgress') {
       const { user_id, exercise_id, completed, score } = params;
       
-      const { error } = await supabase
-        .from('progress')
-        .upsert({
-          user_id,
-          exercise_id,
-          completed,
-          score
-        });
+const { error } = await supabase
+  .from('progress')
+  .upsert(
+    {
+      user_id,
+      exercise_id,
+      completed,
+      score
+    },
+    {
+      onConflict: 'user_id,exercise_id'
+    }
+  );
 
       if (error) throw error;
 
