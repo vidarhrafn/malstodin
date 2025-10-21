@@ -59,20 +59,29 @@ exports.handler = async (event) => {
 
     // SAVE PROGRESS
     if (action === 'saveProgress') {
-      const { user_id, exercise_id, completed, score, quiz_score } = params;
+      const { user_id, exercise_id, completed, score, quiz_score, tf_score, mc_score, short_score, matching_score } = params;
       
-      console.log('🔹 Attempting to save progress:', { user_id, exercise_id, completed, score, quiz_score });
+      console.log('🔹 Attempting to save progress:', { user_id, exercise_id, completed, score, quiz_score, tf_score, mc_score, short_score, matching_score });
+      
+      // Build the data object, only including fields that are defined
+      const progressData = {
+        user_id,
+        exercise_id,
+        completed,
+        score,
+        quiz_score
+      };
+      
+      // Add optional score fields if they exist
+      if (tf_score !== undefined) progressData.tf_score = tf_score;
+      if (mc_score !== undefined) progressData.mc_score = mc_score;
+      if (short_score !== undefined) progressData.short_score = short_score;
+      if (matching_score !== undefined) progressData.matching_score = matching_score;
       
       const { data, error } = await supabase
         .from('progress')
         .upsert(
-          {
-            user_id,
-            exercise_id,
-            completed,
-            score,
-            quiz_score
-          },
+          progressData,
           {
             onConflict: 'user_id,exercise_id'
           }
