@@ -118,7 +118,46 @@ exports.handler = async (event) => {
       };
     }
 
-    // GET PROGRESS
+    // GET ALL USERS - fyrir kennara dashboard
+    if (action === 'getAllUsers') {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, username, role')
+        .eq('role', 'student')
+        .order('username');
+
+      if (error) {
+        console.error('❌ Get users error:', error);
+        throw error;
+      }
+
+      console.log('✅ Retrieved users:', data.length);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ users: data })
+      };
+    }
+
+    // GET ALL PROGRESS - fyrir kennara dashboard
+    if (action === 'getAllProgress') {
+      const { data, error } = await supabase
+        .from('progress')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Get progress error:', error);
+        throw error;
+      }
+
+      console.log('✅ Retrieved progress records:', data.length);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ progress: data })
+      };
+    }
+
+    // GET PROGRESS - sækja framvindu fyrir einn nemanda
     if (action === 'getProgress') {
       const { user_id } = params;
       
