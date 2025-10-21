@@ -59,9 +59,9 @@ exports.handler = async (event) => {
 
     // SAVE PROGRESS
     if (action === 'saveProgress') {
-      const { user_id, exercise_id, completed, score } = params;
+      const { user_id, exercise_id, completed, score, quiz_score } = params;
       
-      console.log('🔹 Attempting to save progress:', { user_id, exercise_id, completed, score });
+      console.log('🔹 Attempting to save progress:', { user_id, exercise_id, completed, score, quiz_score });
       
       const { data, error } = await supabase
         .from('progress')
@@ -70,7 +70,8 @@ exports.handler = async (event) => {
             user_id,
             exercise_id,
             completed,
-            score
+            score,
+            quiz_score
           },
           {
             onConflict: 'user_id,exercise_id'
