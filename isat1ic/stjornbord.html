@@ -67,29 +67,8 @@
         </div>
         
         <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
-                  Nemandi
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
-                  Krossaspurningar
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
-                  Skriflegt
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
-                  Staða
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
-                  Dagsetning
-                </th>
-              </tr>
-            </thead>
-            <tbody id="tableBody" class="bg-white divide-y divide-gray-200">
-              <!-- Data will be inserted here -->
-            </tbody>
+          <table class="w-full" id="mainTable">
+            <!-- Table content will be inserted here -->
           </table>
         </div>
       </div>
@@ -119,13 +98,13 @@
 
     // Skilgreina allar æfingar í Áhugamál & Tómstundir kaflanum
     const exercises = [
-      { id: 'ahugamal', name: 'Áhugamál' },
-      { id: 'hlustun_sund', name: 'Hlustun – sund' },
-      { id: 'hlustun_ahugamal', name: 'Hlustun – áhugamál' },
-      { id: 'myndasspjall_ahugamal', name: 'Myndaspjall – Áhugamál' },
-      { id: 'likamsraekt', name: 'Líkamsrækt' },
-      { id: 'bjorgunarsveitir', name: 'Björgunarsveitir á Íslandi' },
-      { id: 'spjall_ahugamal', name: 'Spjall – Áhugamál' }
+      { id: 'ahugamal', name: 'Áhugamál', type: 'standard' },
+      { id: 'hlustun_sund', name: 'Hlustun – sund', type: 'detailed' },
+      { id: 'hlustun_ahugamal', name: 'Hlustun – áhugamál', type: 'standard' },
+      { id: 'myndasspjall_ahugamal', name: 'Myndaspjall – Áhugamál', type: 'standard' },
+      { id: 'likamsraekt', name: 'Líkamsrækt', type: 'standard' },
+      { id: 'bjorgunarsveitir', name: 'Björgunarsveitir á Íslandi', type: 'standard' },
+      { id: 'spjall_ahugamal', name: 'Spjall – Áhugamál', type: 'standard' }
     ];
 
     let allUsers = [];
@@ -241,9 +220,76 @@
       // Raða eftir dagsetningu (nýjast fyrst)
       exerciseProgress.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+      // Find exercise type
+      const exercise = exercises.find(ex => ex.id === exerciseId);
+      const exerciseType = exercise?.type || 'standard';
+
+      // Create table based on type
+      const mainTable = document.getElementById('mainTable');
+      
+      if (exerciseType === 'detailed') {
+        // Detailed view for hlustun_sund
+        mainTable.innerHTML = `
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Nemandi
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Rétt/Rangt
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Krossaspurningar
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Stuttar spurningar
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Paraðu saman
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Heildareinkunn
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Staða
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Dagsetning
+              </th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="bg-white divide-y divide-gray-200">
+          </tbody>
+        `;
+      } else {
+        // Standard view
+        mainTable.innerHTML = `
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Nemandi
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Krossaspurningar
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Skriflegt
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Staða
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                Dagsetning
+              </th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="bg-white divide-y divide-gray-200">
+          </tbody>
+        `;
+      }
+
       // Fylla út töflu
       const tableBody = document.getElementById('tableBody');
-      tableBody.innerHTML = '';
 
       exerciseProgress.forEach(item => {
         const row = document.createElement('tr');
@@ -262,31 +308,68 @@
           ? '<span class="px-2 py-1 text-xs font-normal rounded-full bg-green-100 text-green-800">✓ Lokið</span>'
           : '<span class="px-2 py-1 text-xs font-normal rounded-full bg-yellow-100 text-yellow-800">⏳ Í vinnslu</span>';
 
-        const quizScore = item.quiz_score !== null && item.quiz_score !== undefined 
-          ? `${item.quiz_score}%` 
-          : '-';
-        
-        const writingScore = item.score !== null && item.score !== undefined 
-          ? `${item.score}%` 
-          : '-';
+        if (exerciseType === 'detailed') {
+          // Detailed row for hlustun_sund
+          const tfScore = item.tf_score !== null && item.tf_score !== undefined ? `${item.tf_score}%` : '-';
+          const mcScore = item.mc_score !== null && item.mc_score !== undefined ? `${item.mc_score}%` : '-';
+          const shortScore = item.short_score !== null && item.short_score !== undefined ? `${item.short_score}%` : '-';
+          const matchingScore = item.matching_score !== null && item.matching_score !== undefined ? `${item.matching_score}%` : '-';
+          const quizScore = item.quiz_score !== null && item.quiz_score !== undefined ? `${item.quiz_score}%` : '-';
 
-        row.innerHTML = `
-          <td class="px-6 py-4 whitespace-nowrap">
-            <div class="text-sm font-normal text-gray-900">${username}</div>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap">
-            <div class="text-sm text-gray-900 font-normal">${quizScore}</div>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap">
-            <div class="text-sm text-gray-900 font-normal">${writingScore}</div>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap">
-            ${statusBadge}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-light">
-            ${date}
-          </td>
-        `;
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-normal text-gray-900">${username}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900 font-normal">${tfScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900 font-normal">${mcScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900 font-normal">${shortScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900 font-normal">${matchingScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-semibold text-gray-900">${quizScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              ${statusBadge}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-light">
+              ${date}
+            </td>
+          `;
+        } else {
+          // Standard row
+          const quizScore = item.quiz_score !== null && item.quiz_score !== undefined 
+            ? `${item.quiz_score}%` 
+            : '-';
+          
+          const writingScore = item.score !== null && item.score !== undefined 
+            ? `${item.score}%` 
+            : '-';
+
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-normal text-gray-900">${username}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900 font-normal">${quizScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900 font-normal">${writingScore}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              ${statusBadge}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-light">
+              ${date}
+            </td>
+          `;
+        }
 
         tableBody.appendChild(row);
       });
