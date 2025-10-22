@@ -14,18 +14,8 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
-    .sticky-player {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      background: white;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-    }
-    .answer-option {
-      border: 2px solid #e0e0e0;
-      transition: all 0.2s;
-      cursor: pointer;
-    }
+    .sticky-player { position: sticky; top: 0; z-index: 50; background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .answer-option { border: 2px solid #e0e0e0; transition: all 0.2s; cursor: pointer; }
     .answer-option:hover:not(.disabled) { border-color:#2196f3; background:#e3f2fd; }
     .answer-option.selected { border-color:#2196f3; background:#e3f2fd; }
     .answer-option.correct { border-color:#4caf50; background:#e8f5e9; }
@@ -39,7 +29,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect, useMemo } = React;
 
-    // --- OpenAI gateway (valkvætt) ---
+    // --- (valkvætt) OpenAI gateway ef þú ert með Netlify function ---
     async function callOpenAI(payload) {
       const r = await fetch('/.netlify/functions/openai', {
         method: 'POST',
@@ -56,53 +46,73 @@
       return JSON.parse(text.slice(s, e+1));
     }
 
-    // --- Lykilorð og grunnstillingar (LEIKHÚS) ---
-    const ORIGINAL_TEXT = "leikskrá";
+    // --- Lykilorð og grunnstillingar fyrir LEIKHÚS ---
+    const ORIGINAL_TEXT = "leikhús (hk)";
 
     const VOCAB = [
-      { w: "leikhús (hk)", hint: "hús þar sem leikarar sýna leikrit" },
-      { w: "miði (kk)", hint: "þú þarft miða til að komast inn" },
+      { w: "leikhús (hk)", hint: "hús þar sem leikarar sýna" },
+      { w: "leikrit (hk)", hint: "saga sem er sýnd á sviði" },
       { w: "leikari / leikkona", hint: "manneskja sem leikur hlutverk" },
-      { w: "barnasýning (kvk)", hint: "sýning sem hentar börnum og fjölskyldum" },
-      { w: "söngleikur (kk)", hint: "leikrit með tónlist og söng" },
-      { w: "aðalleikari (kk)", hint: "sá sem hefur stærsta hlutverkið" },
-      { w: "leikskrá (kvk)", hint: "bæklingur með upplýsingum um sýninguna" },
-      { w: "leikrit (hk)", hint: "saga sem er leikin á sviði" },
+      { w: "barnasýning (kvk)", hint: "sýning fyrir börn og fjölskyldur" },
+      { w: "söngleikur (kk)", hint: "leikrit með söng og tónlist" },
+      { w: "aðalleikari (kk)", hint: "hefur stærsta hlutverkið" },
+      { w: "leikskrá (kvk)", hint: "upplýsingar um sýningu og leikara" },
       { w: "Borgarleikhús (hk)", hint: "leikhús í Reykjavík" },
-      { w: "svið (hk)", hint: "staðurinn þar sem leikarar leika" },
-      { w: "afsláttur (kk)", hint: "þú borgar minna" },
+      { w: "svið (hk)", hint: "staðurinn þar sem er leikið" },
+      { w: "miði (kk)", hint: "leyfi til að fara inn" },
+      { w: "afsláttur (kk)", hint: "niðurfelling á verði" }
     ];
 
-    // --- Spurningar fyrir „Í leikhús“ ---
+    // --- Spurningar fyrir „Í leikhús“ (úr canvas-textanum) ---
     const MULTIPLE_CHOICE = [
-      { question: 'Í hvaða leikhús fóru þau?', options: ['Þjóðleikhúsið', 'Borgarleikhúsið', 'Gaflaraleikhúsið', 'Tjarnarbíó'], correct: 1 },
-      { question: 'Hvað heitir sýningin?', options: ['Litla ljónið', 'Litla ljóninu langar að syngja', 'Dýrin í hálsaskógi', 'Söngvasyrpa'], correct: 0 },
-      { question: 'Hvað keyptu þau þegar þau komu í leikhúsið?', options: ['Popcorn', 'Leikskrá', 'Súkkulaði', 'Leikföng'], correct: 1 },
-      { question: 'Hver útskýrði hvað „aðalleikari“ þýðir?', options: ['Sigurður', 'Anna', 'Bjarki', 'Lilja'], correct: 1 },
-      { question: 'Hvar sátu þau?', options: ['Á efri svölum', 'Á fremsta bekk', 'Á miðju svæði', 'Stúku B'], correct: 1 },
+      {
+        question: 'Í hvaða leikhús fór fjölskyldan?',
+        options: ['Þjóðleikhúsið', 'Borgarleikhúsið', 'Tjarnarbíó', 'Gaflaraleikhúsið'],
+        correct: 1
+      },
+      {
+        question: 'Hvað heitir sýningin?',
+        options: ['Litla ljónið', 'Ljónið og músin', 'Litla ljóninu langar að syngja', 'Ljónið syngur hátt'],
+        correct: 0
+      },
+      {
+        question: 'Hvað keyptu þau þegar þau komu í leikhúsið?',
+        options: ['Leikskrá', 'Popp og kók', 'Bækur', 'Blóm'],
+        correct: 0
+      },
+      {
+        question: 'Hvar sátu þau í salnum?',
+        options: ['Á fremsta bekk', 'Í miðjunni', 'Aftast', 'Á svölum'],
+        correct: 0
+      },
+      {
+        question: 'Hvað fannst Lilju um sýninguna?',
+        options: ['Henni fannst hún leiðinleg', 'Hún var mjög hrifin', 'Hún sofnaði', 'Henni fannst hún allt of hávær'],
+        correct: 1
+      }
     ];
 
     const OPEN_QUESTIONS = [
-      { question: 'Hver var mjög spennt/ur fyrir sýningunni og af hverju?', expectedContent: ['Lilja','söngleik','spennt'] },
-      { question: 'Hvernig fengu þau miða?', expectedContent: ['keyptu','á netinu','prentuðu'] },
-      { question: 'Hvað er „aðalleikari“ samkvæmt textanum?', expectedContent: ['stærsta','hlutverk'] },
-      { question: 'Hvað sögðu börnin eftir sýninguna?', expectedContent: ['frábært','viljum fara aftur','leikhús'] },
+      { question: 'Hver útskýrði hvað „aðalleikari“ þýðir?', expectedContent: ['Anna'] },
+      { question: 'Hvers vegna fengu þau afslátt?', expectedContent: ['Anna', 'vinnur', 'bókasafni'] },
+      { question: 'Hvað gerði Lilja þegar tónlistin byrjaði?', expectedContent: ['klappaði', 'taktinn', 'brosaði'] },
+      { question: 'Hvað er í leikskrá?', expectedContent: ['upplýsingar', 'hverjir leika', 'sýningunni'] }
     ];
 
     const TRUE_FALSE = [
       { statement: 'Fjölskyldan fór í Borgarleikhúsið.', correct: true },
       { statement: 'Lilja var ekki hrifin af sýningunni.', correct: false },
-      { statement: 'Þau fengu afslátt þegar þau keyptu miða.', correct: true },
-      { statement: 'Aðalleikari er sá sem leikur lítið hlutverk.', correct: false },
-      { statement: 'Þau sáu vel á sviðið þar sem þau sátu á fremsta bekk.', correct: true },
+      { statement: 'Fjölskyldan fékk afslátt.', correct: true },
+      { statement: 'Aðalleikari er sá sem hefur stærsta hlutverkið.', correct: true },
+      { statement: 'Þau sáu illa á sviðið vegna sæta sinna.', correct: false }
     ];
 
     const MATCHING = [
-      { left: 'Sigurður', right: 'Segir að þau fari kannski á annan söngleik' },
+      { left: 'Sigurður', right: 'Bíður eftir að byrja og brosir' },
       { left: 'Anna', right: 'Útskýrir hvað aðalleikari er' },
-      { left: 'Bjarki', right: 'Spyr hvað „aðalleikari“ þýðir' },
-      { left: 'Lilja', right: 'Klappar taktinn og brosir allan tímann' },
-      { left: 'Leikskrá', right: 'Segir hverjir leika í sýningunni' },
+      { left: 'Bjarki', right: 'Spyr: „Hvað er aðalleikari?“' },
+      { left: 'Lilja', right: 'Klappar taktinn og brosir' },
+      { left: 'Leikskrá', right: 'Segir hverjir leika í sýningunni' }
     ];
 
     const HlustunLeikhus = () => {
@@ -169,7 +179,7 @@
 NEMANDI ÞÝDDI Á ${translationLanguage}: "${translationAnswer}"
 
 VERKEFNI:
-Meta hvort þýðingin sé rétt (programme/playbill: "playbill" eða "program"). Skila stuttri, jákvæðri endurgjöf.
+Meta hvort þýðingin sé rétt (theatre). Skila stuttri, jákvæðri endurgjöf.
 
 SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
 {
@@ -199,55 +209,10 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         if (mcChecked) return;
         const newAnswers = [...mcAnswers]; newAnswers[qIndex] = optIndex; setMcAnswers(newAnswers);
       };
-      const checkMcAnswers = () => {
-        const allAnswered = MULTIPLE_CHOICE.every((_, i) => Number.isInteger(mcAnswers[i]));
-        if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
-        setMcChecked(true);
-      };
 
       // Opnar
       const handleOpenAnswer = (index, value) => {
         const newAnswers = [...openAnswers]; newAnswers[index] = value; setOpenAnswers(newAnswers);
-      };
-      const checkOpenAnswer = async (index) => {
-        if (openAnswers[index].trim().length < 3) { alert('Vinsamlegast skrifaðu svar!'); return; }
-        const newLoading = [...openLoading]; newLoading[index] = true; setOpenLoading(newLoading);
-        try {
-          const question = OPEN_QUESTIONS[index];
-          const userAnswer = openAnswers[index];
-          const sys = `Þú ert íslenskukennari sem metur svör nemenda við opnum spurningum.
-
-SPURNINGIN:
-"${question.question}"
-
-SVAR NEMANDA:
-"${userAnswer}"
-
-LYKILATRIÐI SEM EIGA AÐ KOMA FRAM:
-${question.expectedContent.join(', ')}
-
-VERKEFNI:
-Meta hvort svarið er rétt miðað við INNIHALD (hunsa smávægilegar villur). Skila stuttri hvetjandi endurgjöf.
-
-SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
-{
-  "correct": boolean,
-  "feedback": "Stutt og hvetjandi endurgjöf á íslensku"
-}`;
-          const response = await callOpenAI({
-            model: 'gpt-4o',
-            temperature: 0.3,
-            max_tokens: 200,
-            messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Meta svar' }]
-          });
-          const data = extractFirstJSON(response);
-          const newFeedback = [...openFeedback]; newFeedback[index] = data; setOpenFeedback(newFeedback);
-        } catch (e) {
-          console.error(e);
-          alert('Villa við að meta svar. Reyndu aftur.');
-        } finally {
-          const newLoading2 = [...openLoading]; newLoading2[index] = false; setOpenLoading(newLoading2);
-        }
       };
 
       // Rétt/Rangt
@@ -255,21 +220,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         if (tfChecked) return;
         const newAnswers = [...tfAnswers]; newAnswers[index] = answer; setTfAnswers(newAnswers);
       };
-      const checkTfAnswers = () => {
-        const allAnswered = TRUE_FALSE.every((_, i) => typeof tfAnswers[i] === 'boolean');
-        if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
-        setTfChecked(true);
-      };
 
-      // Para
-      const handleMatchingAnswer = (index, value) => {
-        const newAnswers = [...matchingAnswers]; newAnswers[index] = value; setMatchingAnswers(newAnswers);
-      };
-      const checkMatching = () => {
-        const allAnswered = matchingAnswers.every(v => !!v);
-        if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
-        setMatchingChecked(true);
-      };
       const isMatchingCorrect = (index) => matchingAnswers[index] === MATCHING[index].right;
 
       // --- UI ---
@@ -348,9 +299,9 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
             <section className="bg-white rounded-lg shadow-sm p-8">
               <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣ Þýðing</h2>
               <div className="border-2 border-gray-100 rounded-lg p-4">
-                <p className="font-normal text-gray-800 mb-4">Hvað þýðir <strong>„leikskrá“</strong> á þínu móðurmáli?</p>
+                <p className="font-normal text-gray-800 mb-4">Hvað þýðir <strong>„leikhús“</strong> á þínu móðurmáli?</p>
                 <input type="text" value={translationLanguage} onChange={(e) => setTranslationLanguage(e.target.value)}
-                  disabled={translationFeedback !== null} placeholder="Hvaða tungumál? (t.d. enska, pólksa, spænska...)"
+                  disabled={translationFeedback !== null} placeholder="Hvaða tungumál? (t.d. enska, pólska, spænska...)"
                   className="w-full p-3 mb-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"/>
                 <textarea value={translationAnswer} onChange={(e) => setTranslationAnswer(e.target.value)}
                   disabled={translationFeedback !== null} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
@@ -397,4 +348,279 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                         const isCorrect = oIndex === q.correct;
                         const showAsCorrect = mcChecked && isCorrect;
                         const showAsIncorrect = mcChecked && isSelected && !isCorrect;
-                        return
+                        return (
+                          <div
+                            key={oIndex}
+                            role="radio"
+                            aria-checked={isSelected}
+                            tabIndex={0}
+                            onKeyDown={(e)=> (e.key==='Enter'||e.key===' ') && !mcChecked && handleMcAnswer(qIndex, oIndex)}
+                            onClick={() => handleMcAnswer(qIndex, oIndex)}
+                            className={`answer-option p-3 rounded-lg ${isSelected && !mcChecked ? 'selected' : ''} ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${mcChecked ? 'disabled' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                isSelected && !mcChecked ? 'border-blue-500 bg-blue-500' :
+                                showAsCorrect ? 'border-green-500 bg-green-500' :
+                                showAsIncorrect ? 'border-red-500 bg-red-500' : 'border-gray-300'}`}>
+                                {(isSelected || showAsCorrect) && (<div className="w-1.5 h-1.5 bg-white rounded-full"></div>)}
+                              </div>
+                              <span className="font-light flex-1">{option}</span>
+                              {showAsCorrect && <span className="text-green-600">✓</span>}
+                              {showAsIncorrect && <span className="text-red-600">✗</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!mcChecked ? (
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={()=>{
+                      const allAnswered = MULTIPLE_CHOICE.every((_, i) => Number.isInteger(mcAnswers[i]));
+                      if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+                      setMcChecked(true);
+                    }}
+                    className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
+                    Athuga svör
+                  </button>
+                  <button onClick={()=>{ setMcAnswers([]); setMcChecked(false); }}
+                    className="px-6 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light">
+                    Endurstilla
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-light">
+                    ✓ Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt!
+                  </p>
+                  <button onClick={resetMC} className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                    Reyna aftur
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* 3. Opnar spurningar */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">3️⃣ Opnar spurningar</h2>
+              <p className="text-gray-600 font-light mb-6">Svaraðu spurningunum með þínum eigin orðum.</p>
+              <div className="space-y-6">
+                {OPEN_QUESTIONS.map((q, index) => (
+                  <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
+                    <p className="font-normal text-gray-800 mb-3">{index + 1}. {q.question}</p>
+                    <textarea value={openAnswers[index]} onChange={(e) => handleOpenAnswer(index, e.target.value)}
+                      disabled={openFeedback[index] !== null}
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                      rows="3" placeholder="Skrifaðu svarið þitt hér..."/>
+                    {!openFeedback[index] ? (
+                      <div className="flex gap-3 mt-3">
+                        <button onClick={async () => {
+                          if (openAnswers[index].trim().length < 3) { alert('Vinsamlegast skrifaðu svar!'); return; }
+                          const newLoading = [...openLoading]; newLoading[index] = true; setOpenLoading(newLoading);
+                          try {
+                            const question = OPEN_QUESTIONS[index];
+                            const userAnswer = openAnswers[index];
+                            const sys = `Þú ert íslenskukennari sem metur svör nemenda við opnum spurningum.
+
+SPURNINGIN:
+"${question.question}"
+
+SVAR NEMANDA:
+"${userAnswer}"
+
+LYKILATRIÐI SEM EIGA AÐ KOMA FRAM:
+${question.expectedContent.join(', ')}
+
+VERKEFNI:
+Meta hvort svarið er rétt miðað við INNIHALD (hunsa smávægilegar villur). Skila stuttri hvetjandi endurgjöf.
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": boolean,
+  "feedback": "Stutt og hvetjandi endurgjöf á íslensku"
+}`;
+                            const response = await callOpenAI({
+                              model: 'gpt-4o',
+                              temperature: 0.3,
+                              max_tokens: 200,
+                              messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Meta svar' }]
+                            });
+                            const data = extractFirstJSON(response);
+                            const newFeedback = [...openFeedback]; newFeedback[index] = data; setOpenFeedback(newFeedback);
+                          } catch (e) {
+                            console.error(e);
+                            alert('Villa við að meta svar. Reyndu aftur.');
+                          } finally {
+                            const newLoading2 = [...openLoading]; newLoading2[index] = false; setOpenLoading(newLoading2);
+                          }
+                        }} disabled={openLoading[index]}
+                          className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm">
+                          {openLoading[index] ? 'Athuga...' : 'Athuga svar'}
+                        </button>
+                        <button onClick={()=>{ const na=[...openAnswers]; na[index]=''; setOpenAnswers(na); }}
+                          className="px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                          Hreinsa
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={`mt-3 p-3 rounded-lg ${openFeedback[index].correct ? 'bg-green-50 border-2 border-green-200' : 'bg-yellow-50 border-2 border-yellow-200'}`}>
+                        <p className={`text-sm font-light ${openFeedback[index].correct ? 'text-green-800' : 'text-yellow-800'}`}>
+                          {openFeedback[index].correct ? '✓' : '💡'} {openFeedback[index].feedback}
+                        </p>
+                        <button onClick={()=>{ const nf=[...openFeedback]; nf[index]=null; setOpenFeedback(nf); const na=[...openAnswers]; na[index]=''; setOpenAnswers(na); }}
+                          className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                          Reyna aftur
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4">
+                <button onClick={resetOpen} className="px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                  Endurstilla allar opnar spurningar
+                </button>
+              </div>
+            </section>
+
+            {/* 4. Rétt eða rangt */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">4️⃣ Rétt eða rangt?</h2>
+              <div className="space-y-4">
+                {TRUE_FALSE.map((item, index) => (
+                  <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
+                    <p className="font-light text-gray-800 mb-3">{item.statement}</p>
+                    <div className="flex gap-4">
+                      {[true, false].map((answer) => {
+                        const isSelected = tfAnswers[index] === answer;
+                        const isCorrect = answer === item.correct;
+                        const showAsCorrect = tfChecked && isCorrect;
+                        const showAsIncorrect = tfChecked && isSelected && !isCorrect;
+                        return (
+                          <div
+                            key={answer ? 'true' : 'false'}
+                            onClick={() => handleTfAnswer(index, answer)}
+                            className={`answer-option flex-1 p-3 rounded-lg ${isSelected && !tfChecked ? 'selected' : ''} ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${tfChecked ? 'disabled' : ''}`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                isSelected && !tfChecked ? 'border-blue-500 bg-blue-500' :
+                                showAsCorrect ? 'border-green-500 bg-green-500' :
+                                showAsIncorrect ? 'border-red-500 bg-red-500' : 'border-gray-300'}`}>
+                                {(isSelected || showAsCorrect) && (<div className="w-1.5 h-1.5 bg-white rounded-full"></div>)}
+                              </div>
+                              <span className="font-light text-sm">{answer ? 'Rétt' : 'Rangt'}</span>
+                              {showAsCorrect && <span className="text-green-600">✓</span>}
+                              {showAsIncorrect && <span className="text-red-600">✗</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!tfChecked ? (
+                <div className="mt-6 flex gap-3">
+                  <button onClick={()=>{
+                      const allAnswered = TRUE_FALSE.every((_, i) => typeof tfAnswers[i] === 'boolean');
+                      if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+                      setTfChecked(true);
+                    }} className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
+                    Athuga svör
+                  </button>
+                  <button onClick={resetTF} className="px-6 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light">
+                    Endurstilla
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-light">✓ Þú fékkst {tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length} af {TRUE_FALSE.length} rétt!</p>
+                  <button onClick={resetTF} className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                    Reyna aftur
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* 5. Paraðu saman */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">5️⃣ Paraðu saman</h2>
+              <div className="space-y-4">
+                {MATCHING.map((item, index) => (
+                  <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1"><span className="font-normal text-gray-800">{item.left}</span></div>
+                      <div className="text-gray-400">→</div>
+                      <div className="flex-1">
+                        <select value={matchingAnswers[index]} onChange={(e) => handleMatchingAnswer(index, e.target.value)} disabled={matchingChecked}
+                          className={`w-full p-2 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light ${
+                            matchingChecked ? (matchingAnswers[index]===item.right ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50') : 'border-gray-300'}`}>
+                          <option value="">Veldu...</option>
+                          {rightOptions.map((opt, i) => (<option key={i} value={opt}>{opt}</option>))}
+                        </select>
+                      </div>
+                      {matchingChecked && (<div className="w-8">{matchingAnswers[index]===item.right ? <span className="text-green-600 text-xl">✓</span> : <span className="text-red-600 text-xl">✗</span>}</div>)}
+                    </div>
+                    {matchingChecked && matchingAnswers[index]!==item.right && (
+                      <p className="text-sm text-red-600 mt-2">✗ Rétt svar: {item.right}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {!matchingChecked ? (
+                <div className="mt-6 flex gap-3">
+                  <button onClick={()=>{
+                      const allAnswered = matchingAnswers.every(v => !!v);
+                      if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+                      setMatchingChecked(true);
+                    }} className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
+                    Athuga svör
+                  </button>
+                  <button onClick={resetMatching} className="px-6 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light">
+                    Endurstilla
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-light">✓ Þú fékkst {matchingAnswers.filter((v,i)=>v===MATCHING[i].right).length} af {MATCHING.length} rétt!</p>
+                  <button onClick={resetMatching} className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                    Reyna aftur
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* Lykilorð (orðaforðakassi) */}
+            <section className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-4">📘 Lykilorð úr hlustun</h2>
+              <p className="text-gray-700 font-light mb-4">Lestu yfir orðin og reyndu að finna þau aftur í hljóðinu.</p>
+              <div className="grid md:grid-cols-2 gap-3">
+                {VOCAB.map((it, i) => (
+                  <div key={i} className="rounded-lg border-2 border-yellow-200 bg-white/70 p-3">
+                    <div className="font-normal text-gray-900">{it.w}</div>
+                    <div className="text-sm text-gray-600 font-light">{it.hint}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Lok */}
+            <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
+              <p className="text-gray-600 font-light">Þú hefur klárað hlustunarverkefnið um leikhús. Hlustaðu endilega aftur til að æfa!</p>
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<HlustunLeikhus />);
+  </script>
+</body>
+</html>
