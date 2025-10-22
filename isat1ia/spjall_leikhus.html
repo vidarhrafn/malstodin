@@ -20,21 +20,14 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    async function callClaude(messages, max_tokens = 300) {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: max_tokens,
-          messages: messages
-        })
+    async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model, temperature })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-      return data.content[0].text;
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
     }
 
     async function playAudio(text, setSpeakingCallback) {
@@ -180,9 +173,10 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
         try {
           // Feedback
           try {
-            const feedback = await callClaude([
-              { role: 'user', content: `${FEEDBACK_SYSTEM}\n\nSetning nemanda: "${userMessage}"` }
-            ], 60);
+            const feedback = await callOpenAI([
+              { role: 'system', content: FEEDBACK_SYSTEM },
+              { role: 'user', content: userMessage }
+            ], 60, 'gpt-4o-mini', 0.2);
             if (feedback) setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
           } catch (e) { 
             console.warn('Feedback misheppnað:', e); 
@@ -218,17 +212,15 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
           } else {
             // Venjuleg spurning
             const systemPrompt = phase === 1 ? PHASE1_SYSTEM : PHASE2_SYSTEM;
-            const chatHistory = messages
-              .filter(m => m.role !== 'feedback')
-              .map(m => ({ role: m.role, content: m.content }));
+            const chatHistory = messages.map(m => ({ role: m.role === 'feedback' ? 'assistant' : m.role, content: m.content }));
             
             const aiMessages = [
-              { role: 'user', content: systemPrompt },
+              { role: 'system', content: systemPrompt },
               ...chatHistory,
               { role: 'user', content: userMessage }
             ];
             
-            const nextQuestion = await callClaude(aiMessages, 160);
+            const nextQuestion = await callOpenAI(aiMessages, 160, 'gpt-4o-mini', 0.3);
             if (nextQuestion) {
               setMessages(prev => [...prev, { role: 'assistant', content: nextQuestion }]);
               await playAudio(nextQuestion, (speaking) => {
@@ -244,8 +236,8 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
       };
 
       const currentImageSrc = currentImage === 1 
-        ? 'media/spjall_ahorfendur.png' 
-        : 'media/spjall_leikarar.png';
+        ? 'media/leikhus_ahorfendur.png' 
+        : 'media/leikrit.png';
       
       const currentImageAlt = currentImage === 1
         ? 'Áhorfendur í leikhúsi'
