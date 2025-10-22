@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💬 Myndaspjall - Leikhús</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%); min-height: 100vh;}
+    .recording { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .image-transition { transition: opacity 0.5s ease-in-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    async function callClaude(messages, max_tokens = 300) {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: max_tokens,
+          messages: messages
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data.content[0].text;
+    }
+
+    async function playAudio(text, setSpeakingCallback) {
+      setSpeakingCallback(true);
+      try {
+        const r = await fetch('/.netlify/functions/speak', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text_to_speak: text })
+        });
+        const data = await r.json();
+        if (!r.ok || data.error || !data.audio_base64) { 
+          console.error('Villa í hljóðkalli:', data?.error); 
+          setSpeakingCallback(false); 
+          return; 
+        }
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audio.onended = () => setSpeakingCallback(false);
+        audio.onerror = () => setSpeakingCallback(false);
+        await audio.play().catch(() => setSpeakingCallback(false));
+      } catch (e) { 
+        console.error('Tenging mistókst:', e); 
+        setSpeakingCallback(false); 
+      }
+    }
+
+    const ListenPill = ({ onClick, speaking }) => (
+      <button onClick={onClick} className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl text-sm border ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+        <span className="opacity-70">🎧</span>
+        <span className="font-light">Hlustaðu:</span>
+        <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+      </button>
+    );
+
+    const SpjallLeikhus = () => {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [isRecording, setIsRecording] = useState(false);
+      const [recognition, setRecognition] = useState(null);
+      const [speakingIndex, setSpeakingIndex] = useState(null);
+      const [finished, setFinished] = useState(false);
+      const [currentImage, setCurrentImage] = useState(1); // 1 eða 2
+      const [userResponseCount, setUserResponseCount] = useState(0);
+      const [phase, setPhase] = useState(1); // 1 = mynd 1, 2 = mynd 2
+      const messagesEndRef = useRef(null);
+
+      const FIRST_Q = 'Hæ! Sjáðu myndina. Hvað sérðu hér?';
+
+      const PHASE1_SYSTEM = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér mynd af fólki í leikhúsi sem situr í sætum og horfir á sýningu. Sumir hlæja, ein kona heldur á bók (leikskrá).
+
+MIKILVÆGT: Þú ert í FYRSTA HLUTA samræðunnar (um áhorfendur).
+
+Notaðu þessi orð úr textanum: áhorfendur, leikhús, sal, sæti, leikskrá, hlæja, horfa.
+
+SKILAÐU aðeins EINNI stuttri spurningu á íslensku.
+Eftir svar: hrósaðu mjög stutt (t.d. "Frábært!" eða "Rétt!") og spurðu NÝJA spurningu.
+
+Hugmyndabanki: Hvað eru þau að gera? · Hvar eru þau? · Hvernig líður þeim? · Hvað heldur þú að þau séu að horfa á? · Sérðu bók? Hvað heldur þú að það sé? · Hversu margir eru í salnum?`;
+
+      const PHASE2_SYSTEM = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér nú mynd af þremur leikurum á sviði í leikhúsi. Þau eru í fallegum búningum - strákur í grænum jakka til vinstri, tvær stelpur í kjólum (ein í bláum, önnur í brúnum).
+
+MIKILVÆGT: Þú ert í ÖÐRUM HLUTA samræðunnar (um leikara á sviði).
+
+Notaðu þessi orð: svið, leikarar, búningur, kjóll, jakki, leikrit, sýning.
+
+SKILAÐU aðeins EINNI stuttri spurningu á íslensku.
+Eftir svar: hrósaðu mjög stutt og spurðu NÝJA spurningu um liti, föt, eða hvað þau eru að gera.
+
+Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráksins til vinstri? · Hvað heita föt eins og stelpurnar eru í? · Í hvaða lit er kjóll miðjustelpunnar? · Hvað eru þau að gera?`;
+
+      const FEEDBACK_SYSTEM = `Þú ert íslenskukennari sem gefur ÖRSTUTTA endurgjöf á A2–B1.
+- 1 lína, kurteis og hvetjandi.
+- Leiðréttu aðeins ef þú ert >80% viss.
+- Dæmi: "Gott! Setningin er rétt." eða "Flott – en segðu: 'í grænum jakka'."`;
+
+      useEffect(() => {
+        if ('webkitSpeechRecognition' in window) {
+          const recog = new webkitSpeechRecognition();
+          recog.lang = 'is-IS'; 
+          recog.continuous = true; 
+          recog.interimResults = true;
+          recog.onresult = (e) => {
+            const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+            setInput(transcript);
+          };
+          recog.onend = () => setIsRecording(false);
+          recog.onerror = () => setIsRecording(false);
+          setRecognition(recog);
+        }
+      }, []);
+
+      useEffect(() => { 
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
+      }, [messages, loading]);
+
+      const playAssistantAt = async (idx) => {
+        const msg = messages[idx];
+        if (!msg || msg.role !== 'assistant') return;
+        setSpeakingIndex(idx);
+        await playAudio(msg.content, (speaking) => {
+          if (!speaking) setSpeakingIndex(null);
+        });
+      };
+
+      const handleListenClick = async () => {
+        let idx = messages.findIndex(m => m.role === 'assistant');
+        if (idx === -1) {
+          setMessages(prev => [...prev, { role: 'assistant', content: FIRST_Q }]);
+          await playAudio(FIRST_Q, (speaking) => {
+            if (!speaking) setSpeakingIndex(null);
+          });
+          return;
+        }
+        const lastIdx = messages.map((m,i)=>({m,i})).filter(o=>o.m.role==='assistant').slice(-1)[0]?.i;
+        if (lastIdx != null) await playAssistantAt(lastIdx);
+      };
+
+      const toggleRecording = () => {
+        if (!recognition) { 
+          alert('Vafrinn þinn styður ekki talgreiningu. Notaðu Chrome eða Edge.'); 
+          return; 
+        }
+        if (isRecording) { 
+          recognition.stop(); 
+          setIsRecording(false); 
+        } else { 
+          recognition.start(); 
+          setIsRecording(true); 
+        }
+      };
+
+      const sendMessage = async () => {
+        if (!input.trim() || loading) return;
+        const userMessage = input.trim();
+        setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+        setInput(''); 
+        setLoading(true);
+
+        // Auka teljara fyrir notendaskil
+        const newCount = userResponseCount + 1;
+        setUserResponseCount(newCount);
+
+        try {
+          // Feedback
+          try {
+            const feedback = await callClaude([
+              { role: 'user', content: `${FEEDBACK_SYSTEM}\n\nSetning nemanda: "${userMessage}"` }
+            ], 60);
+            if (feedback) setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
+          } catch (e) { 
+            console.warn('Feedback misheppnað:', e); 
+          }
+
+          // Athuga hvort skipta eigi um mynd
+          if (phase === 1 && newCount >= 4) {
+            // Skipta yfir í mynd 2
+            const transition = "Frábært! Þú hefur talað vel um áhorfendurna. Nú skaltu sjá aðra mynd...";
+            setMessages(prev => [...prev, { role: 'assistant', content: transition }]);
+            await playAudio(transition, (speaking) => {
+              if (!speaking) setSpeakingIndex(null);
+            });
+            
+            setCurrentImage(2);
+            setPhase(2);
+            setUserResponseCount(0);
+            
+            // Fyrsta spurning um mynd 2
+            const firstQ2 = "Hvað sérðu á þessari mynd?";
+            setMessages(prev => [...prev, { role: 'assistant', content: firstQ2 }]);
+            await playAudio(firstQ2, (speaking) => {
+              if (!speaking) setSpeakingIndex(null);
+            });
+          } else if (phase === 2 && newCount >= 4) {
+            // Klára samtalið
+            const goodbye = "Þakka þér fyrir frábært spjall! Þú gerðir mjög vel! 🎭";
+            setMessages(prev => [...prev, { role: 'assistant', content: goodbye }]);
+            await playAudio(goodbye, (speaking) => {
+              if (!speaking) setSpeakingIndex(null);
+            });
+            setFinished(true);
+          } else {
+            // Venjuleg spurning
+            const systemPrompt = phase === 1 ? PHASE1_SYSTEM : PHASE2_SYSTEM;
+            const chatHistory = messages
+              .filter(m => m.role !== 'feedback')
+              .map(m => ({ role: m.role, content: m.content }));
+            
+            const aiMessages = [
+              { role: 'user', content: systemPrompt },
+              ...chatHistory,
+              { role: 'user', content: userMessage }
+            ];
+            
+            const nextQuestion = await callClaude(aiMessages, 160);
+            if (nextQuestion) {
+              setMessages(prev => [...prev, { role: 'assistant', content: nextQuestion }]);
+              await playAudio(nextQuestion, (speaking) => {
+                if (!speaking) setSpeakingIndex(null);
+              });
+            }
+          }
+        } catch (e) { 
+          console.error('Villa í samtali:', e); 
+        } finally { 
+          setLoading(false); 
+        }
+      };
+
+      const currentImageSrc = currentImage === 1 
+        ? 'media/leikhus_ahorfendur.png' 
+        : 'media/leikrit.png';
+      
+      const currentImageAlt = currentImage === 1
+        ? 'Áhorfendur í leikhúsi'
+        : 'Leikarar á sviði';
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Myndaspjall – Leikhús</h1>
+              <p className="text-gray-500 text-sm font-light">A1–A2 · Læra með rödd og mynd</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            <div className="rounded-lg overflow-hidden shadow-lg mb-6 mx-auto image-transition" style={{maxWidth:'600px'}}>
+              <img 
+                src={currentImageSrc} 
+                alt={currentImageAlt} 
+                className="w-full h-auto" 
+                key={currentImage}
+              />
+            </div>
+
+            <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight:'400px'}}>
+              <div className="flex items-center gap-2 px-6 py-3 border-b bg-gray-50">
+                <ListenPill onClick={handleListenClick} speaking={speakingIndex!==null} />
+                <span className="text-xs text-gray-400 ml-auto">
+                  {phase === 1 ? '📍 Mynd 1 af 2' : '📍 Mynd 2 af 2'}
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {messages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role==='user'?'justify-end': 'justify-start'}`}>
+                    <div className={`max-w-lg px-4 py-2 rounded-xl font-light ${
+                      msg.role==='user'
+                        ?'bg-blue-600 text-white'
+                        : msg.role==='feedback' 
+                        ? 'bg-red-50 text-red-700 border border-red-200 text-sm italic' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {msg.role==='assistant' && (
+                        <div className="mb-2">
+                          <button 
+                            onClick={() => playAssistantAt(i)} 
+                            className={`text-xs px-2 py-1 rounded-md border ${
+                              speakingIndex===i
+                                ?'border-green-300 bg-green-50 text-green-700'
+                                :'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            🔊 Spila aftur
+                          </button>
+                        </div>
+                      )}
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {loading && <p className="text-gray-400 italic">AI hugsar…</p>}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {!finished && (
+                <div className="border-t p-4 bg-white">
+                  <div className="flex gap-2 mb-2">
+                    <button 
+                      onClick={toggleRecording} 
+                      className={`px-4 py-3 rounded-lg font-normal flex items-center gap-2 transition-colors ${
+                        isRecording
+                          ?'bg-red-600 text-white'
+                          :'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      🎤 {isRecording ? 'Hætta upptöku' : 'Haltu til að tala'}
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={input} 
+                      onChange={(e)=>setInput(e.target.value)} 
+                      onKeyDown={(e)=>e.key==='Enter'&&sendMessage()} 
+                      placeholder="Skrifa eða laga tal…" 
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light" 
+                    />
+                    <button 
+                      onClick={sendMessage} 
+                      disabled={!input.trim()} 
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-normal"
+                    >
+                      Senda
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallLeikhus />);
+  </script>
+</body>
+</html>
