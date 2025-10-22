@@ -94,8 +94,8 @@
 
     const OPEN_QUESTIONS = [
       { question: 'Hver útskýrði hvað „aðalleikari“ þýðir?', expectedContent: ['Anna'] },
-      { question: 'Hvers vegna fengu þau afslátt?', expectedContent: ['Anna', 'vinnur', 'bókasafni'] },
-      { question: 'Hvað gerði Lilja þegar tónlistin byrjaði?', expectedContent: ['klappaði', 'taktinn', 'brosaði'] },
+      { question: 'Hvers vegna fengu þau afslátt?', expectedContent: ['Anna', 'vinnur', 'bókasafninu'] },
+      { question: 'Hvað gerði Lilja þegar tónlistin byrjaði?', expectedContent: ['klappaði', 'taktinn', 'brosti'] },
       { question: 'Hvað er í leikskrá?', expectedContent: ['upplýsingar', 'hverjir leika', 'sýningunni'] }
     ];
 
@@ -107,11 +107,11 @@
       { statement: 'Þau sáu illa á sviðið vegna sæta sinna.', correct: false }
     ];
 
+    // ✅ Tók Sigurð út – hélt Anna, Bjarki, Lilja og Leikskrá
     const MATCHING = [
-      { left: 'Sigurður', right: 'Bíður eftir að byrja og brosir' },
       { left: 'Anna', right: 'Útskýrir hvað aðalleikari er' },
       { left: 'Bjarki', right: 'Spyr: „Hvað er aðalleikari?“' },
-      { left: 'Lilja', right: 'Klappar taktinn og brosir' },
+      { left: 'Lilja', right: 'Klappar taktinn og brosti' },
       { left: 'Leikskrá', right: 'Segir hverjir leika í sýningunni' }
     ];
 
@@ -146,6 +146,10 @@
         () => MATCHING.map(m => m.right).sort(() => Math.random() - 0.5),
         []
       );
+
+      // Málfræði – brosa (AI)
+      const [brosaLoading, setBrosaLoading] = useState(false);
+      const [brosaResult, setBrosaResult] = useState(null);
 
       // Endurstilla föll
       const resetMC = () => { setMcAnswers([]); setMcChecked(false); };
@@ -237,17 +241,18 @@ LYKILATRIÐI SEM EIGA AÐ KOMA FRAM:
 ${question.expectedContent.join(', ')}
 
 VERKEFNI:
-Meta hvort svarið er rétt miðað við INNIHALD (hunsa smávægilegar villur). Skila stuttri hvetjandi endurgjöf.
+1) Meta hvort svarið er rétt miðað við INNIHALD (hunsa smávægilegar villur).
+2) Ef svarið inniheldur sögnina "brosa" í þátíð sem "brosaði", leiðrétta í "brosti".
 
 SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
 {
   "correct": boolean,
-  "feedback": "Stutt og hvetjandi endurgjöf á íslensku"
+  "feedback": "Stutt og hvetjandi endurgjöf á íslensku (nefndu ef 'brosaði' var leiðrétt í 'brosti')"
 }`;
           const response = await callOpenAI({
             model: 'gpt-4o',
             temperature: 0.3,
-            max_tokens: 200,
+            max_tokens: 220,
             messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Meta svar' }]
           });
           const data = extractFirstJSON(response);
@@ -284,6 +289,32 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         setMatchingChecked(true);
       };
       const isMatchingCorrect = (index) => matchingAnswers[index] === MATCHING[index].right;
+
+      // Málfræði – biðja AI að beygja „brosa“ rétt
+      const askBrosa = async () => {
+        setBrosaLoading(true); setBrosaResult(null);
+        try {
+          const sys = `Þú ert íslenskur málfræðikennari.
+VERKEFNI: Beygðu sagnorðið "brosa" í þátíð, 3. persónu eintölu (hún/han/það __).
+Rétt form er "brosti".
+SKILAÐU NÁKVÆMLEGA JSON (EKKERT ANNAÐ):
+{"form":"brosti"}`;
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0,
+            max_tokens: 20,
+            messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Beygja' }]
+          });
+          const data = extractFirstJSON(response);
+          const form = (data.form || '').trim().toLowerCase();
+          setBrosaResult(form === 'brosti' ? 'brosti' : `✗ ${form}  →  ✓ brosti`);
+        } catch (e) {
+          console.error(e);
+          setBrosaResult('Villa kom upp. Reyndu aftur.');
+        } finally {
+          setBrosaLoading(false);
+        }
+      };
 
       // --- UI ---
       return (
@@ -367,7 +398,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                   className="w-full p-3 mb-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"/>
                 <textarea value={translationAnswer} onChange={(e) => setTranslationAnswer(e.target.value)}
                   disabled={translationFeedback !== null} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
-                  rows="3" placeholder="Skrifaðu þýðinguna hér..."/>
+                  rows="3" placeholder="Skrifaðu þýðinguna hér..."></textarea>
                 {!translationFeedback ? (
                   <div className="flex gap-3 mt-3">
                     <button onClick={checkTranslation} disabled={translationLoading}
@@ -472,7 +503,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                     <textarea value={openAnswers[index]} onChange={(e) => handleOpenAnswer(index, e.target.value)}
                       disabled={openFeedback[index] !== null}
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
-                      rows="3" placeholder="Skrifaðu svarið þitt hér..."/>
+                      rows="3" placeholder="Skrifaðu svarið þitt hér..."></textarea>
                     {!openFeedback[index] ? (
                       <div className="flex gap-3 mt-3">
                         <button onClick={() => checkOpenAnswer(index)} disabled={openLoading[index]}
@@ -503,6 +534,24 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                   Endurstilla allar opnar spurningar
                 </button>
               </div>
+            </section>
+
+            {/* 3.5 Málfræði – beygja „brosa“ */}
+            <section className="bg-purple-50 border-2 border-purple-200 rounded-lg p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-3">3️⃣½ Málfræði – Beygðu „brosa“ (þt., 3.p.et.)</h2>
+              <p className="text-gray-700 font-light">Biddu gervigreind um að beygja sagnorðið rétt.</p>
+              <div className="mt-3 flex gap-3 items-center">
+                <button onClick={askBrosa} disabled={brosaLoading}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 disabled:bg-gray-300 transition-colors font-light text-sm">
+                  {brosaLoading ? 'Bý til svar...' : 'Beygðu „brosa“'}
+                </button>
+                {brosaResult && (
+                  <span className={`text-sm font-normal ${brosaResult.startsWith('✗') ? 'text-red-700' : 'text-green-700'}`}>
+                    {brosaResult}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-2 font-light">Rétt form: <strong>brosti</strong>.</p>
             </section>
 
             {/* 4. Rétt eða rangt */}
