@@ -20,6 +20,42 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    const SpeakerIcon = ({ isSpeaking }) => (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className={`w-5 h-5 transition-colors ${
+          isSpeaking ? 'text-red-500 animate-pulse' : 'text-green-600'
+        }`}
+      >
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+    );
+
+    const MicIcon = ({ isRecording }) => (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 24 24" 
+        fill={isRecording ? "currentColor" : "none"}
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className={`w-5 h-5 ${isRecording ? 'recording text-red-500' : ''}`}
+      >
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+    );
+
     async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
       const r = await fetch('/.netlify/functions/openai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -53,16 +89,13 @@
       }
     }
 
-    const ListenPill = ({ onClick, speaking }) => (
-      <button onClick={onClick} className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl text-sm border ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-        <span className="opacity-70">🎧</span>
-        <span className="font-light">Hlustaðu:</span>
-        <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
-      </button>
-    );
-
     const SpjallLeikhus = () => {
-      const [messages, setMessages] = useState([]);
+      const initialMessage = { 
+        role: 'assistant', 
+        content: 'Hæ! Sjáðu myndina. Hvað sérðu hér?'
+      };
+      
+      const [messages, setMessages] = useState([initialMessage]);
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
       const [isRecording, setIsRecording] = useState(false);
@@ -72,6 +105,7 @@
       const [currentImage, setCurrentImage] = useState(1); // 1 eða 2
       const [userResponseCount, setUserResponseCount] = useState(0);
       const [phase, setPhase] = useState(1); // 1 = mynd 1, 2 = mynd 2
+      const [hasPlayedInitial, setHasPlayedInitial] = useState(false);
       const messagesEndRef = useRef(null);
 
       const FIRST_Q = 'Hæ! Sjáðu myndina. Hvað sérðu hér?';
@@ -119,6 +153,15 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
         }
       }, []);
 
+      useEffect(() => {
+        if (!hasPlayedInitial && messages.length > 0) {
+          setHasPlayedInitial(true);
+          playAudio(initialMessage.content, (speaking) => {
+            if (!speaking) setSpeakingIndex(null);
+          });
+        }
+      }, []);
+
       useEffect(() => { 
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
       }, [messages, loading]);
@@ -130,19 +173,6 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
         await playAudio(msg.content, (speaking) => {
           if (!speaking) setSpeakingIndex(null);
         });
-      };
-
-      const handleListenClick = async () => {
-        let idx = messages.findIndex(m => m.role === 'assistant');
-        if (idx === -1) {
-          setMessages(prev => [...prev, { role: 'assistant', content: FIRST_Q }]);
-          await playAudio(FIRST_Q, (speaking) => {
-            if (!speaking) setSpeakingIndex(null);
-          });
-          return;
-        }
-        const lastIdx = messages.map((m,i)=>({m,i})).filter(o=>o.m.role==='assistant').slice(-1)[0]?.i;
-        if (lastIdx != null) await playAssistantAt(lastIdx);
       };
 
       const toggleRecording = () => {
@@ -265,8 +295,7 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
 
             <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight:'400px'}}>
               <div className="flex items-center gap-2 px-6 py-3 border-b bg-gray-50">
-                <ListenPill onClick={handleListenClick} speaking={speakingIndex!==null} />
-                <span className="text-xs text-gray-400 ml-auto">
+                <span className="text-xs text-gray-400">
                   {phase === 1 ? '📍 Mynd 1 af 2' : '📍 Mynd 2 af 2'}
                 </span>
               </div>
@@ -280,22 +309,24 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
                         : msg.role==='feedback' 
                         ? 'bg-red-50 text-red-700 border border-red-200 text-sm italic' 
                         : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {msg.role==='assistant' && (
-                        <div className="mb-2">
-                          <button 
-                            onClick={() => playAssistantAt(i)} 
-                            className={`text-xs px-2 py-1 rounded-md border ${
-                              speakingIndex===i
-                                ?'border-green-300 bg-green-50 text-green-700'
-                                :'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                            }`}
-                          >
-                            🔊 Spila aftur
-                          </button>
+                    } shadow-sm relative`}>
+                      {msg.role === 'feedback' && (
+                        <span className="font-normal text-red-800">📚 Málfar: </span>
+                      )}
+                      
+                      {msg.role !== 'assistant' && (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      )}
+                      
+                      {msg.role === 'assistant' && (
+                        <div 
+                          onClick={() => playAssistantAt(i)}
+                          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <span className="text-gray-600 text-sm">🎧 Hlustaðu:</span>
+                          <SpeakerIcon isSpeaking={speakingIndex === i} />
                         </div>
                       )}
-                      {msg.content}
                     </div>
                   </div>
                 ))}
@@ -310,11 +341,13 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
                       onClick={toggleRecording} 
                       className={`px-4 py-3 rounded-lg font-normal flex items-center gap-2 transition-colors ${
                         isRecording
-                          ?'bg-red-600 text-white'
+                          ?'bg-red-600 text-white hover:bg-red-700'
                           :'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
+                      disabled={loading}
                     >
-                      🎤 {isRecording ? 'Hætta upptöku' : 'Haltu til að tala'}
+                      <MicIcon isRecording={isRecording} />
+                      <span>{isRecording ? '⏹️ Hætta upptöku' : '🎤 Haltu til að tala'}</span>
                     </button>
                   </div>
                   <div className="flex gap-2">
