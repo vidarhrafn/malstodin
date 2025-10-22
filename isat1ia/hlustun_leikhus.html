@@ -63,7 +63,7 @@
       { w: "afsláttur (kk)", hint: "niðurfelling á verði" }
     ];
 
-    // --- Spurningar fyrir „Í leikhús“ (úr canvas-textanum) ---
+    // --- Spurningar byggðar á canvas-textanum ---
     const MULTIPLE_CHOICE = [
       {
         question: 'Í hvaða leikhús fór fjölskyldan?',
@@ -209,10 +209,55 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         if (mcChecked) return;
         const newAnswers = [...mcAnswers]; newAnswers[qIndex] = optIndex; setMcAnswers(newAnswers);
       };
+      const checkMcAnswers = () => {
+        const allAnswered = MULTIPLE_CHOICE.every((_, i) => Number.isInteger(mcAnswers[i]));
+        if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+        setMcChecked(true);
+      };
 
       // Opnar
       const handleOpenAnswer = (index, value) => {
         const newAnswers = [...openAnswers]; newAnswers[index] = value; setOpenAnswers(newAnswers);
+      };
+      const checkOpenAnswer = async (index) => {
+        if (openAnswers[index].trim().length < 3) { alert('Vinsamlegast skrifaðu svar!'); return; }
+        const newLoading = [...openLoading]; newLoading[index] = true; setOpenLoading(newLoading);
+        try {
+          const question = OPEN_QUESTIONS[index];
+          const userAnswer = openAnswers[index];
+          const sys = `Þú ert íslenskukennari sem metur svör nemenda við opnum spurningum.
+
+SPURNINGIN:
+"${question.question}"
+
+SVAR NEMANDA:
+"${userAnswer}"
+
+LYKILATRIÐI SEM EIGA AÐ KOMA FRAM:
+${question.expectedContent.join(', ')}
+
+VERKEFNI:
+Meta hvort svarið er rétt miðað við INNIHALD (hunsa smávægilegar villur). Skila stuttri hvetjandi endurgjöf.
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": boolean,
+  "feedback": "Stutt og hvetjandi endurgjöf á íslensku"
+}`;
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 200,
+            messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Meta svar' }]
+          });
+          const data = extractFirstJSON(response);
+          const newFeedback = [...openFeedback]; newFeedback[index] = data; setOpenFeedback(newFeedback);
+        } catch (e) {
+          console.error(e);
+          alert('Villa við að meta svar. Reyndu aftur.');
+        } finally {
+          const newLoading2 = [...openLoading]; newLoading2[index] = false; setOpenLoading(newLoading2);
+        }
       };
 
       // Rétt/Rangt
@@ -220,7 +265,24 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         if (tfChecked) return;
         const newAnswers = [...tfAnswers]; newAnswers[index] = answer; setTfAnswers(newAnswers);
       };
+      const checkTfAnswers = () => {
+        const allAnswered = TRUE_FALSE.every((_, i) => typeof tfAnswers[i] === 'boolean');
+        if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+        setTfChecked(true);
+      };
 
+      // Para
+      const handleMatchingAnswer = (index, value) => {
+        if (matchingChecked) return;
+        const newAnswers = [...matchingAnswers];
+        newAnswers[index] = value;
+        setMatchingAnswers(newAnswers);
+      };
+      const checkMatching = () => {
+        const allAnswered = matchingAnswers.every(v => !!v);
+        if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+        setMatchingChecked(true);
+      };
       const isMatchingCorrect = (index) => matchingAnswers[index] === MATCHING[index].right;
 
       // --- UI ---
@@ -378,16 +440,11 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               </div>
               {!mcChecked ? (
                 <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={()=>{
-                      const allAnswered = MULTIPLE_CHOICE.every((_, i) => Number.isInteger(mcAnswers[i]));
-                      if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
-                      setMcChecked(true);
-                    }}
+                  <button onClick={checkMcAnswers}
                     className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
                     Athuga svör
                   </button>
-                  <button onClick={()=>{ setMcAnswers([]); setMcChecked(false); }}
+                  <button onClick={resetMC}
                     className="px-6 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light">
                     Endurstilla
                   </button>
@@ -418,46 +475,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                       rows="3" placeholder="Skrifaðu svarið þitt hér..."/>
                     {!openFeedback[index] ? (
                       <div className="flex gap-3 mt-3">
-                        <button onClick={async () => {
-                          if (openAnswers[index].trim().length < 3) { alert('Vinsamlegast skrifaðu svar!'); return; }
-                          const newLoading = [...openLoading]; newLoading[index] = true; setOpenLoading(newLoading);
-                          try {
-                            const question = OPEN_QUESTIONS[index];
-                            const userAnswer = openAnswers[index];
-                            const sys = `Þú ert íslenskukennari sem metur svör nemenda við opnum spurningum.
-
-SPURNINGIN:
-"${question.question}"
-
-SVAR NEMANDA:
-"${userAnswer}"
-
-LYKILATRIÐI SEM EIGA AÐ KOMA FRAM:
-${question.expectedContent.join(', ')}
-
-VERKEFNI:
-Meta hvort svarið er rétt miðað við INNIHALD (hunsa smávægilegar villur). Skila stuttri hvetjandi endurgjöf.
-
-SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
-{
-  "correct": boolean,
-  "feedback": "Stutt og hvetjandi endurgjöf á íslensku"
-}`;
-                            const response = await callOpenAI({
-                              model: 'gpt-4o',
-                              temperature: 0.3,
-                              max_tokens: 200,
-                              messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Meta svar' }]
-                            });
-                            const data = extractFirstJSON(response);
-                            const newFeedback = [...openFeedback]; newFeedback[index] = data; setOpenFeedback(newFeedback);
-                          } catch (e) {
-                            console.error(e);
-                            alert('Villa við að meta svar. Reyndu aftur.');
-                          } finally {
-                            const newLoading2 = [...openLoading]; newLoading2[index] = false; setOpenLoading(newLoading2);
-                          }
-                        }} disabled={openLoading[index]}
+                        <button onClick={() => checkOpenAnswer(index)} disabled={openLoading[index]}
                           className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm">
                           {openLoading[index] ? 'Athuga...' : 'Athuga svar'}
                         </button>
@@ -526,11 +544,8 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               </div>
               {!tfChecked ? (
                 <div className="mt-6 flex gap-3">
-                  <button onClick={()=>{
-                      const allAnswered = TRUE_FALSE.every((_, i) => typeof tfAnswers[i] === 'boolean');
-                      if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
-                      setTfChecked(true);
-                    }} className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
+                  <button onClick={checkTfAnswers}
+                    className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
                     Athuga svör
                   </button>
                   <button onClick={resetTF} className="px-6 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light">
@@ -574,11 +589,8 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               </div>
               {!matchingChecked ? (
                 <div className="mt-6 flex gap-3">
-                  <button onClick={()=>{
-                      const allAnswered = matchingAnswers.every(v => !!v);
-                      if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
-                      setMatchingChecked(true);
-                    }} className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
+                  <button onClick={checkMatching}
+                    className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">
                     Athuga svör
                   </button>
                   <button onClick={resetMatching} className="px-6 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light">
