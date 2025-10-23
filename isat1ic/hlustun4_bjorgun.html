@@ -83,7 +83,7 @@ Við hjálpuðum þeim að koma í bílinn okkar og keyrðum niður í bæ. Þei
   const SHORT_QUESTIONS = [
     { question: 'Hvað tók björgunarsveitin með sér í útkallið?',
       expectedContent: ['talstöð','talstöðvar','kort','ljós','hlý föt','búnaður','skófla','skóflur','moka'] },
-    { question: 'Hvað þýðir að vera „heill á húfi“?',
+    { question: 'Hvað þýðir að vera „heill á húfi"?',
       expectedContent: ['óslasaður','ekki meiddur','allur heill','heil á húfi','heill á húfi'] },
     { question: 'Hvernig leið sögumanni eftir útkallið?',
       expectedContent: ['gott','þakklátir','líður vel','gagn','hjálpa öðrum'] }
@@ -102,7 +102,7 @@ Við hjálpuðum þeim að koma í bílinn okkar og keyrðum niður í bæ. Þei
     { w: 'að vera tilbúinn', d: 'að hafa æft og vera með allt klárt' }
   ];
 
-  /* ---------- EIN SKILGREINING AF HVERJUM ÍHLUT ---------- */
+  /* ---------- ÍHLUTIR ---------- */
   const TfCard = ({ item, index, value, onSelect, checked }) => {
     return (
       <div className="border-2 border-gray-100 rounded-lg p-4">
@@ -159,14 +159,14 @@ Við hjálpuðum þeim að koma í bílinn okkar og keyrðum niður í bæ. Þei
                    checked ? 'disabled' : ''
                  }`}>
               <div className="flex items-center gap-3">
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                   isSelected && !checked ? 'border-blue-500 bg-blue-500' :
                   showAsCorrect ? 'border-green-500 bg-green-500' :
                   showAsIncorrect ? 'border-red-500 bg-red-500' : 'border-gray-300'
                 }`}>
                   {(isSelected || showAsCorrect) && (<div className="w-1.5 h-1.5 bg-white rounded-full"></div>)}
                 </div>
-                <span className="font-light flex-1">{opt}</span>
+                <span className="font-light text-sm flex-1">{opt}</span>
                 {showAsCorrect && <span className="text-green-600">✓</span>}
                 {showAsIncorrect && <span className="text-red-600">✗</span>}
               </div>
@@ -179,64 +179,82 @@ Við hjálpuðum þeim að koma í bílinn okkar og keyrðum niður í bæ. Þei
 
   const ShortCard = ({ q, index, value, onChange, onCheck, loading, feedback }) => (
     <div className="border-2 border-gray-100 rounded-lg p-4">
-      <p className="font-normal text-gray-800 mb-3">{index + 1}. {q.question}</p>
+      <p className="font-normal text-gray-800 mb-3">{q.question}</p>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        disabled={!!feedback}
-        className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+        disabled={feedback !== null}
+        className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-sm disabled:bg-gray-50 disabled:text-gray-600"
         rows="3"
-        placeholder="Skrifaðu svarið þitt hér..."
-      ></textarea>
+        placeholder="Skrifaðu svar hér..."
+      />
       {!feedback ? (
-        <button onClick={onCheck} disabled={loading}
-          className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm">
-          {loading ? 'Athuga...' : 'Athuga svar'}
+        <button
+          onClick={onCheck}
+          disabled={loading || !value.trim()}
+          className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors font-light disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+        >
+          {loading ? 'Bíð...' : 'Athuga svar'}
         </button>
       ) : (
-        <div className={`mt-3 p-3 rounded-lg ${
-          feedback.correct ? 'bg-green-50 border-2 border-green-200' : 'bg-yellow-50 border-2 border-yellow-200'
+        <div className={`mt-3 border-2 rounded-lg p-3 ${
+          feedback.correct ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'
         }`}>
           <p className={`text-sm font-light ${
             feedback.correct ? 'text-green-800' : 'text-yellow-800'
           }`}>
-            {feedback.correct ? '✓' : '💡'} {feedback.feedback}
+            {feedback.correct ? '✓' : '!'} {feedback.feedback}
           </p>
         </div>
       )}
     </div>
   );
 
-  /* --------------------------- APP --------------------------- */
+  /* ---------- AÐAL APP ---------- */
   const App = () => {
-    const [playbackRate, setPlaybackRate] = useState(1);
-    const [isPlaying, setIsPlaying] = useState(false);
     const audioRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playbackRate, setPlaybackRate] = useState(1);
 
-    const [tfAnswers, setTfAnswers] = useState([]);
+    const [tfAnswers, setTfAnswers] = useState(Array(TRUE_FALSE.length).fill(null));
     const [tfChecked, setTfChecked] = useState(false);
 
-    const [mcAnswers, setMcAnswers] = useState([]);
+    const [mcAnswers, setMcAnswers] = useState(Array(MULTIPLE_CHOICE.length).fill(null));
     const [mcChecked, setMcChecked] = useState(false);
 
     const [shortAnswers, setShortAnswers] = useState(Array(SHORT_QUESTIONS.length).fill(''));
-    const [shortFeedback, setShortFeedback] = useState(Array(SHORT_QUESTIONS.length).fill(null));
     const [shortLoading, setShortLoading] = useState(Array(SHORT_QUESTIONS.length).fill(false));
+    const [shortFeedback, setShortFeedback] = useState(Array(SHORT_QUESTIONS.length).fill(null));
 
-    useEffect(() => { if (audioRef.current) audioRef.current.playbackRate = playbackRate; }, [playbackRate]);
-    const togglePlay = () => { if (!audioRef.current) return; isPlaying ? audioRef.current.pause() : audioRef.current.play(); setIsPlaying(!isPlaying); };
+    useEffect(() => {
+      if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+    }, [playbackRate]);
 
-    // handlers
-    const handleTfAnswer = (i, v) => { if (tfChecked) return; const n=[...tfAnswers]; n[i]=v; setTfAnswers(n); };
-    const checkTfAnswers = () => { if (tfAnswers.length < TRUE_FALSE.length) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; } setTfChecked(true); };
+    const togglePlay = () => {
+      if (!audioRef.current) return;
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+    };
 
-    const handleMcAnswer = (qi, oi) => { if (mcChecked) return; const n=[...mcAnswers]; n[qi]=oi; setMcAnswers(n); };
-    const checkMcAnswers = () => { if (mcAnswers.length < MULTIPLE_CHOICE.length) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; } setMcChecked(true); };
+    const handleTfAnswer = (i, ans) => {
+      const A = [...tfAnswers]; A[i] = ans; setTfAnswers(A);
+    };
+    const checkTfAnswers = () => setTfChecked(true);
 
-    const handleShortAnswer = (i, v) => { const n=[...shortAnswers]; n[i]=v; setShortAnswers(n); };
+    const handleMcAnswer = (qi, oi) => {
+      const A = [...mcAnswers]; A[qi] = oi; setMcAnswers(A);
+    };
+    const checkMcAnswers = () => setMcChecked(true);
+
+    const handleShortAnswer = (i, v) => {
+      const A = [...shortAnswers]; A[i] = v; setShortAnswers(A);
+    };
+
     const checkShortAnswer = async (i) => {
-      if (shortAnswers[i].trim().length < 3) { alert('Vinsamlegast skrifaðu svar!'); return; }
-      const L=[...shortLoading]; L[i]=true; setShortLoading(L);
+      const L = [...shortLoading]; L[i] = true; setShortLoading(L);
       try {
         const q = SHORT_QUESTIONS[i]; const a = shortAnswers[i];
         const sys = `Þú ert íslenskukennari sem metur stutt svör nemenda út frá hlustunartexta.
@@ -247,13 +265,18 @@ LYKILATRIÐI: ${q.expectedContent.join(', ')}
 META INNIHALD, hunsa smávægilegar málvillur.
 SKILAÐU BARA JSON:
 {"correct": boolean, "feedback": "stutt hvetjandi endurgjöf á íslensku"}`;
-        const resp = await callOpenAI({ model:'gpt-4o', temperature:0.3, max_tokens:200, messages:[{role:'system', content:sys},{role:'user', content:'Meta svar'}]});
+        const resp = await callOpenAI({ 
+          model:'gpt-4o', 
+          temperature:0.3, 
+          max_tokens:200, 
+          messages:[{role:'system', content:sys},{role:'user', content:'Meta svar'}]
+        });
         const data = extractFirstJSON(resp);
-        const F=[...shortFeedback]; F[i]=data; setShortFeedback(F);
+        const F = [...shortFeedback]; F[i] = data; setShortFeedback(F);
       } catch(e) {
         console.error(e); alert('Villa við að meta svar. Reyndu aftur.');
       } finally {
-        const L2=[...shortLoading]; L2[i]=false; setShortLoading(L2);
+        const L2 = [...shortLoading]; L2[i] = false; setShortLoading(L2);
       }
     };
 
@@ -262,7 +285,7 @@ SKILAÐU BARA JSON:
         {/* Haus */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-4xl mx-auto px-6 py-8">
-            <button onClick={()=>window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+            <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
             <h1 className="text-3xl font-light text-gray-800 mb-2">Hlustun: Útkall í björgunarsveit</h1>
             <p className="text-gray-500 text-sm font-light">Hlustunarverkefni · A1–A2</p>
           </div>
@@ -273,22 +296,46 @@ SKILAÐU BARA JSON:
           <div className="max-w-4xl mx-auto px-6 py-4">
             <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border-2 border-blue-200">
               <div className="flex items-center gap-4">
-                <button onClick={togglePlay} className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0" aria-label={isPlaying ? 'Pása' : 'Spila'}>
+                <button 
+                  onClick={togglePlay} 
+                  className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0" 
+                  aria-label={isPlaying ? 'Pása' : 'Spila'}
+                >
                   {isPlaying ? (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="4" width="4" height="16" />
+                      <rect x="14" y="4" width="4" height="16" />
+                    </svg>
                   ) : (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></polygon></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
                   )}
                 </button>
 
                 <div className="flex-1">
                   <p className="text-sm font-normal text-gray-800 mb-1">🎧 Hlusta á textann</p>
-                  <audio ref={audioRef} src={AUDIO_SRC} preload="none" onEnded={()=>setIsPlaying(false)} onPlay={()=>setIsPlaying(true)} onPause={()=>setIsPlaying(false)}></audio>
+                  <audio 
+                    ref={audioRef} 
+                    src={AUDIO_SRC} 
+                    preload="none" 
+                    onEnded={() => setIsPlaying(false)} 
+                    onPlay={() => setIsPlaying(true)} 
+                    onPause={() => setIsPlaying(false)}
+                  ></audio>
                 </div>
 
                 <div className="flex gap-2">
-                  {[0.75,1,1.25].map(r=>(
-                    <button key={r} onClick={()=>setPlaybackRate(r)} className={`px-3 py-1 rounded-md text-sm font-light ${playbackRate===r?'bg-blue-500 text-white':'bg-white text-gray-700 hover:bg-gray-100'}`}>{r}×</button>
+                  {[0.75, 1, 1.25].map(r => (
+                    <button 
+                      key={r} 
+                      onClick={() => setPlaybackRate(r)} 
+                      className={`px-3 py-1 rounded-md text-sm font-light ${
+                        playbackRate === r ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {r}×
+                    </button>
                   ))}
                 </div>
               </div>
@@ -312,20 +359,29 @@ SKILAÐU BARA JSON:
           <section className="bg-white rounded-lg shadow-sm p-8">
             <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣ Rétt eða rangt?</h2>
             <div className="space-y-4">
-              {TRUE_FALSE.map((it,i)=>(
-                <TfCard key={i}
-                        item={it}
-                        index={i}
-                        value={tfAnswers[i]}
-                        onSelect={(ans)=>handleTfAnswer(i,ans)}
-                        checked={tfChecked} />
+              {TRUE_FALSE.map((it, i) => (
+                <TfCard 
+                  key={i}
+                  item={it}
+                  index={i}
+                  value={tfAnswers[i]}
+                  onSelect={(ans) => handleTfAnswer(i, ans)}
+                  checked={tfChecked} 
+                />
               ))}
             </div>
             {!tfChecked ? (
-              <button onClick={checkTfAnswers} className="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">Athuga svör</button>
+              <button 
+                onClick={checkTfAnswers} 
+                className="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light"
+              >
+                Athuga svör
+              </button>
             ) : (
               <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                <p className="text-green-800 font-light">✓ Þú fékkst {tfAnswers.filter((a, idx) => a === TRUE_FALSE[idx].correct).length} af {TRUE_FALSE.length} rétt!</p>
+                <p className="text-green-800 font-light">
+                  ✓ Þú fékkst {tfAnswers.filter((a, idx) => a === TRUE_FALSE[idx].correct).length} af {TRUE_FALSE.length} rétt!
+                </p>
               </div>
             )}
           </section>
@@ -334,20 +390,29 @@ SKILAÐU BARA JSON:
           <section className="bg-white rounded-lg shadow-sm p-8">
             <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Krossaspurningar</h2>
             <div className="space-y-6">
-              {MULTIPLE_CHOICE.map((q, qi)=>(
-                <McCard key={qi}
-                        q={q}
-                        index={qi}
-                        value={mcAnswers[qi]}
-                        onSelect={(oi)=>handleMcAnswer(qi, oi)}
-                        checked={mcChecked} />
+              {MULTIPLE_CHOICE.map((q, qi) => (
+                <McCard 
+                  key={qi}
+                  q={q}
+                  index={qi}
+                  value={mcAnswers[qi]}
+                  onSelect={(oi) => handleMcAnswer(qi, oi)}
+                  checked={mcChecked} 
+                />
               ))}
             </div>
             {!mcChecked ? (
-              <button onClick={checkMcAnswers} className="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light">Athuga svör</button>
+              <button 
+                onClick={checkMcAnswers} 
+                className="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light"
+              >
+                Athuga svör
+              </button>
             ) : (
               <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                <p className="text-green-800 font-light">✓ Þú fékkst {mcAnswers.filter((a, idx) => a === MULTIPLE_CHOICE[idx].correct).length} af {MULTIPLE_CHOICE.length} rétt!</p>
+                <p className="text-green-800 font-light">
+                  ✓ Þú fékkst {mcAnswers.filter((a, idx) => a === MULTIPLE_CHOICE[idx].correct).length} af {MULTIPLE_CHOICE.length} rétt!
+                </p>
               </div>
             )}
           </section>
@@ -357,15 +422,17 @@ SKILAÐU BARA JSON:
             <h2 className="text-2xl font-light text-gray-800 mb-6">3️⃣ Stuttar spurningar</h2>
             <p className="text-gray-600 font-light mb-6">Svaraðu spurningunum með þínum eigin orðum.</p>
             <div className="space-y-6">
-              {SHORT_QUESTIONS.map((q, i)=>(
-                <ShortCard key={i}
-                           q={q}
-                           index={i}
-                           value={shortAnswers[i]}
-                           onChange={(v)=>handleShortAnswer(i,v)}
-                           onCheck={()=>checkShortAnswer(i)}
-                           loading={shortLoading[i]}
-                           feedback={shortFeedback[i]} />
+              {SHORT_QUESTIONS.map((q, i) => (
+                <ShortCard 
+                  key={i}
+                  q={q}
+                  index={i}
+                  value={shortAnswers[i]}
+                  onChange={(v) => handleShortAnswer(i, v)}
+                  onCheck={() => checkShortAnswer(i)}
+                  loading={shortLoading[i]}
+                  feedback={shortFeedback[i]} 
+                />
               ))}
             </div>
           </section>
@@ -374,7 +441,7 @@ SKILAÐU BARA JSON:
           <section className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-8">
             <h2 className="text-2xl font-light text-gray-800 mb-4">📘 Lykilorð og orðasambönd</h2>
             <div className="grid md:grid-cols-2 gap-3">
-              {GLOSSARY.map((it, i)=>(
+              {GLOSSARY.map((it, i) => (
                 <div key={i} className="rounded-lg border-2 border-yellow-200 bg-white/70 p-3">
                   <div className="font-normal text-gray-900">{it.w}</div>
                   <div className="text-sm text-gray-600 font-light">{it.d}</div>
