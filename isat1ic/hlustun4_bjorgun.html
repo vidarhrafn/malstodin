@@ -186,7 +186,7 @@ Við hjálpuðum þeim að koma í bílinn okkar og keyrðum niður í bæ. Þei
         disabled={feedback !== null}
         className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-sm disabled:bg-gray-50 disabled:text-gray-600"
         rows="3"
-        placeholder="Skrifaðu svar hér..."
+        placeholder="Skrifaðu svar hér á íslensku eða þínu móðurmáli..."
       />
       {!feedback ? (
         <button
@@ -257,19 +257,37 @@ Við hjálpuðum þeim að koma í bílinn okkar og keyrðum niður í bæ. Þei
       const L = [...shortLoading]; L[i] = true; setShortLoading(L);
       try {
         const q = SHORT_QUESTIONS[i]; const a = shortAnswers[i];
-        const sys = `Þú ert íslenskukennari sem metur stutt svör nemenda út frá hlustunartexta.
-TEXTI (ekki svara honum aftur): ${SOURCE_TEXT}
-SPURNING: "${q.question}"
-SVAR NEMANDA: "${a}"
-LYKILATRIÐI: ${q.expectedContent.join(', ')}
-META INNIHALD, hunsa smávægilegar málvillur.
-SKILAÐU BARA JSON:
-{"correct": boolean, "feedback": "stutt hvetjandi endurgjöf á íslensku"}`;
+        const sys = `You are an Icelandic language teacher evaluating student responses to a listening comprehension exercise.
+
+LISTENING TEXT (in Icelandic): ${SOURCE_TEXT}
+
+QUESTION (in Icelandic): "${q.question}"
+
+STUDENT'S ANSWER: "${a}"
+
+KEY CONTENT POINTS (in Icelandic): ${q.expectedContent.join(', ')}
+
+INSTRUCTIONS:
+1. First, detect what language the student wrote their answer in
+2. Evaluate if their answer contains the correct content/meaning, regardless of the language used
+3. Ignore minor spelling or grammar mistakes - focus on whether they understood the listening text
+4. Provide feedback in THE SAME LANGUAGE the student used in their answer
+5. Keep the feedback encouraging and brief (1-2 sentences)
+
+Return ONLY valid JSON in this format:
+{"correct": boolean, "feedback": "brief encouraging feedback in the student's language"}
+
+Examples:
+- If student writes in English: respond in English
+- If student writes in Polish: respond in Polish  
+- If student writes in Spanish: respond in Spanish
+- If student writes in Icelandic: respond in Icelandic`;
+
         const resp = await callOpenAI({ 
           model:'gpt-4o', 
           temperature:0.3, 
-          max_tokens:200, 
-          messages:[{role:'system', content:sys},{role:'user', content:'Meta svar'}]
+          max_tokens:250, 
+          messages:[{role:'system', content:sys},{role:'user', content:'Evaluate this answer'}]
         });
         const data = extractFirstJSON(resp);
         const F = [...shortFeedback]; F[i] = data; setShortFeedback(F);
@@ -352,6 +370,7 @@ SKILAÐU BARA JSON:
               <li>• Þú getur hægt eða hraðað á hljóðinu</li>
               <li>• Svaraðu spurningunum hér að neðan</li>
               <li>• Þú mátt hlusta eins oft og þú vilt</li>
+              <li>• <strong>Þú mátt svara á þínu móðurmáli</strong> ef þú vilt (ensku, pólsku, spænsku, osfrv.)</li>
             </ul>
           </div>
 
@@ -420,7 +439,7 @@ SKILAÐU BARA JSON:
           {/* 3. Stuttar spurningar */}
           <section className="bg-white rounded-lg shadow-sm p-8">
             <h2 className="text-2xl font-light text-gray-800 mb-6">3️⃣ Stuttar spurningar</h2>
-            <p className="text-gray-600 font-light mb-6">Svaraðu spurningunum með þínum eigin orðum. Þú mátt svara á þínu móðurmáli</p>
+            <p className="text-gray-600 font-light mb-6">Svaraðu spurningunum með þínum eigin orðum. Þú mátt svara á íslensku eða þínu móðurmáli.</p>
             <div className="space-y-6">
               {SHORT_QUESTIONS.map((q, i) => (
                 <ShortCard 
