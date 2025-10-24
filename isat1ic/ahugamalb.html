@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎨 Áhugamál – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+    .answer-option.disabled {
+      cursor: default;
+    }
+    .chat-container {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-container::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+    
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      overflow-y: auto;
+    }
+    .modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      max-width: 800px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .modal-content::-webkit-scrollbar {
+      width: 8px;
+    }
+    .modal-content::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .modal-content::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+    
+    /* Sticky button */
+    .sticky-btn {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: white;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const READING_TEXT = `Fólk hefur ólík áhugamál. Sumir eru hrifnir af íþróttum, aðrir lesa bækur eða hlusta á tónlist. Áhugamál eru mikilvæg því þau gefa gleði og orku. Þau hjálpa líka fólki að slaka á eftir erfiðan dag og læra nýja hluti. Sum áhugamál eru róleg, eins og lestur, en önnur eru virkari, eins og fótbolti eða sund.
+
+**Sund**
+
+Sund er vinsæl íþrótt á Íslandi. Fólk syndir í sundlaugum eða sjónum. Sund er gott fyrir heilsuna því auðvelt er að hreyfa sig í vatni. Margir fara í sund tvisvar eða þrisvar í viku. Eftir sund fer fólk oft í heitan pott og slakar á. Á veturna er notalegt að fara í heitt vatn þegar kalt er úti. Sumir keppa í sundi, en margir synda bara rólega til að njóta vatnsins.
+
+**Fótbolti**
+
+Fótbolti er mjög vinsæl íþrótt í heiminum. Tvö lið spila og reyna að skora mörk. Leikmenn hlaupa og sparka boltanum. Mörg börn og fullorðnir spila fótbolta. Þetta er skemmtileg og spennandi íþrótt. Fótbolti kennir fólki að vinna saman og hafa gaman af hreyfingu. Margir horfa á fótbolta í sjónvarpinu og styðja sitt lið.
+
+**Tónlist**
+
+Tónlist er fallegt áhugamál. Fólk spilar á hljóðfæri eins og gítar eða píanó. Aðrir syngja eða hlusta á tónlist. Tónlist getur verið róleg eða hröð, glaðleg eða sorgleg. Margir fara á tónleika eða dansa við tónlist. Sumir semja eigin lög og skrifa texta. Margir hlusta á tónlist þegar þeir vinna eða læra.
+
+**Lesa bækur**
+
+Að lesa bækur er gott áhugamál. Þegar fólk les, lærir það ný orð og setningar. Sumar bækur eru spennandi, aðrar eru fyndnar eða sorglegar. Margir lesa á kvöldin áður en þeir fara að sofa. Bækur geta opnað dyr að öðrum heimum. Barnabækur eru einfaldar og skemmtilegar, en sumir lesa líka langar sögur eða fræðibækur.
+
+Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir elska að vera virkir og æfa sig, en aðrir njóta þess að slaka á og lesa eða hlusta á tónlist. Hvað er þitt áhugamál?`;
+
+    const VOCABULARY = [
+      { word: 'áhugamál', definition: 'eitthvað sem þér finnst gaman að gera í frítíma' },
+      { word: 'slaka á', definition: 'hvíla sig og vera róleg/ur' },
+      { word: 'heilsan', definition: 'líkamlegt ástand; hvernig líkaminn líður' },
+      { word: 'heitur pottur', definition: 'lítið bað með heitu vatni í sundlaug' },
+      { word: 'keppa', definition: 'taka þátt í leik eða mót' },
+      { word: 'lið', definition: 'hópur leikmanna í íþróttum' },
+      { word: 'hljóðfæri', definition: 't.d. gítar, píanó' },
+      { word: 'tónleikar', definition: 'lifandi tónlistarsýning' }
+    ];
+
+    const TRUE_FALSE = [
+      { statement: 'Áhugamál geta hjálpað fólki að slaka á.', correct: true },
+      { statement: 'Sund er bara fyrir fólk sem keppir.', correct: false },
+      { statement: 'Í fótbolta reyna tvö lið að skora mörk.', correct: true },
+      { statement: 'Fólk fer sjaldan í heitan pott eftir sund.', correct: false },
+      { statement: 'Tónlist getur verið róleg eða hröð.', correct: true },
+      { statement: 'Bækur geta kennt fólki ný orð.', correct: true }
+    ];
+
+    const MULTIPLE_CHOICE = [
+      {
+        question: 'Af hverju eru áhugamál mikilvæg?',
+        options: [
+          'Þau gefa gleði og orgu.',
+          'Þau hjálpa fólki að slaka á og læra nýtt.',
+          'Þau tryggja fólki vinnu.',
+          'Þau gera alla sterka í íþróttum.'
+        ],
+        correct: 1
+      },
+      {
+        question: 'Hvar syndir fólk samkvæmt textanum?',
+        options: [
+          'Í sundlaugum eða sjónum.',
+          'Bara í ám.',
+          'Aðeins í sjó.',
+          'Aðeins í sundlaugum utandyra.'
+        ],
+        correct: 0
+      },
+      {
+        question: 'Hvað gerir fólk oft eftir sund?',
+        options: [
+          'Fer í heitan pott og slakar á.',
+          'Fer í langan fjallgöngutúr.',
+          'Fer á skíði.',
+          'Fer strax að sofa.'
+        ],
+        correct: 0
+      },
+      {
+        question: 'Hvað reyna leikmenn að gera í fótbolta?',
+        options: [
+          'Spila á hljóðfæri.',
+          'Skora mörk.',
+          'Lesa bækur.',
+          'Syngja saman.'
+        ],
+        correct: 1
+      },
+      {
+        question: 'Hvað gera margir með tónlist?',
+        options: [
+          'Syngja, hlusta eða spila á hljóðfæri.',
+          'Keppa í sundi.',
+          'Teikna myndir.',
+          'Gera tilraunir í vísindum.'
+        ],
+        correct: 0
+      },
+      {
+        question: 'Hvað getur lestur hjálpað fólki að gera?',
+        options: [
+          'Læra ný orð og setningar.',
+          'Skora mörk.',
+          'Syngja hátt.',
+          'Hlaupa hraðar.'
+        ],
+        correct: 0
+      }
+    ];
+
+    const OPEN_QUESTIONS = [
+      'Hvað gerir þú til að slaka á eftir erfiðan dag?',
+      'Hvað finnst þér skemmtilegast: sund, fótbolti, tónlist eða bækur? Af hverju?',
+      'Hvaða áhugamál viltu prófa næst?'
+    ];
+
+    const Ahugamal = () => {
+      const [stage, setStage] = useState('trueFalse');
+      const [showText, setShowText] = useState(false);
+      const [showVocab, setShowVocab] = useState(false);
+      
+      // True/False state
+      const [tfAnswers, setTfAnswers] = useState(Array(TRUE_FALSE.length).fill(null));
+      const [tfSubmitted, setTfSubmitted] = useState(false);
+      
+      // Multiple choice state
+      const [mcAnswers, setMcAnswers] = useState(Array(MULTIPLE_CHOICE.length).fill(null));
+      const [mcSubmitted, setMcSubmitted] = useState(false);
+      
+      // Open questions state
+      const [conversations, setConversations] = useState(OPEN_QUESTIONS.map(() => []));
+      const [currentInputs, setCurrentInputs] = useState(OPEN_QUESTIONS.map(() => ''));
+      const [loadingStates, setLoadingStates] = useState(OPEN_QUESTIONS.map(() => false));
+
+      const chatRefs = useRef(OPEN_QUESTIONS.map(() => React.createRef()));
+
+      const handleTfAnswer = (index, answer) => {
+        if (tfSubmitted) return;
+        const newAnswers = [...tfAnswers];
+        newAnswers[index] = answer;
+        setTfAnswers(newAnswers);
+      };
+
+      const submitTf = () => {
+        if (tfAnswers.some(a => a === null)) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setTfSubmitted(true);
+      };
+
+      const continueToMc = () => {
+        setStage('multipleChoice');
+      };
+
+      const handleMcAnswer = (qIndex, optIndex) => {
+        if (mcSubmitted) return;
+        const newAnswers = [...mcAnswers];
+        newAnswers[qIndex] = optIndex;
+        setMcAnswers(newAnswers);
+      };
+
+      const submitMc = () => {
+        if (mcAnswers.some(a => a === null)) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setMcSubmitted(true);
+      };
+
+      const continueToOpen = () => {
+        setStage('open');
+      };
+
+      const handleInputChange = (questionIndex, value) => {
+        const newInputs = [...currentInputs];
+        newInputs[questionIndex] = value;
+        setCurrentInputs(newInputs);
+      };
+
+      const handleKeyPress = (e, questionIndex) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage(questionIndex);
+        }
+      };
+
+      const sendMessage = async (questionIndex) => {
+        const userText = currentInputs[questionIndex].trim();
+        if (!userText || loadingStates[questionIndex]) return;
+
+        const newConversations = [...conversations];
+        newConversations[questionIndex] = [
+          ...newConversations[questionIndex],
+          { role: 'user', content: userText }
+        ];
+        setConversations(newConversations);
+
+        const newInputs = [...currentInputs];
+        newInputs[questionIndex] = '';
+        setCurrentInputs(newInputs);
+
+        const newLoadingStates = [...loadingStates];
+        newLoadingStates[questionIndex] = true;
+        setLoadingStates(newLoadingStates);
+
+        try {
+          const isFirstMessage = newConversations[questionIndex].length === 1;
+
+          if (isFirstMessage) {
+            const grammarPrompt = `Þú ert málfarskennari sem greinir stutta íslensku texta. Skoðaðu þennan texta og gefðu EINUNGIS stuttar, hagnýtar ábendingar um málfar og orðaval. Ef textinn er sæmilega góður, segðu aðeins "Góður texti!" eða "Vel gert!". Ef það eru villur eða tækifæri til úrbóta, gefðu MJÖG stuttar ábendingar (1-2 setningar). Ekki lýsa textanum of mikið, einblína bara á það mikilvægasta.
+
+Texti: "${userText}"`;
+
+            const grammarFeedback = await callOpenAI({
+              messages: [{ role: 'user', content: grammarPrompt }],
+              temperature: 0.3
+            });
+
+            newConversations[questionIndex].push({
+              role: 'grammar',
+              content: grammarFeedback
+            });
+
+            setConversations([...newConversations]);
+
+            const contentPrompt = `Þú ert kennari í íslensku sem hjálpar nemendum að þróa skriflega færni sína. Nemandinn svaraði þessari spurningu:
+
+"${OPEN_QUESTIONS[questionIndex]}"
+
+Með þessu svari: "${userText}"
+
+Gefðu stutt, hvetjandi endurgjöf (2-3 setningar) og spyrðu síðan einnar eða tveggja eftirfylgispurninga til að hvetja til dýpri umræðu. Vertu vinalegur og hvetjandi.`;
+
+            const contentResponse = await callOpenAI({
+              messages: [{ role: 'user', content: contentPrompt }],
+              temperature: 0.7
+            });
+
+            newConversations[questionIndex].push({
+              role: 'assistant',
+              content: contentResponse
+            });
+          } else {
+            const history = newConversations[questionIndex]
+              .filter(m => m.role !== 'grammar')
+              .map(m => ({
+                role: m.role === 'user' ? 'user' : 'assistant',
+                content: m.content
+              }));
+
+            const continuePrompt = `Þú ert kennari í íslensku. Haltu áfram samtali við nemandann um upprunalegu spurninguna:
+
+"${OPEN_QUESTIONS[questionIndex]}"
+
+Vertu stutt og náttúrulegur í svörunum þínum (2-3 setningar). Spyrðu spurningar til að hvetja til umræðu.`;
+
+            const aiResponse = await callOpenAI({
+              messages: [
+                { role: 'system', content: continuePrompt },
+                ...history
+              ],
+              temperature: 0.7
+            });
+
+            newConversations[questionIndex].push({
+              role: 'assistant',
+              content: aiResponse
+            });
+          }
+
+          setConversations([...newConversations]);
+
+          setTimeout(() => {
+            if (chatRefs.current[questionIndex]?.current) {
+              chatRefs.current[questionIndex].current.scrollTop = 
+                chatRefs.current[questionIndex].current.scrollHeight;
+            }
+          }, 100);
+
+        } catch (error) {
+          console.error('Villa við að senda skilaboð:', error);
+          alert('Villa kom upp. Vinsamlegast reyndu aftur.');
+        } finally {
+          newLoadingStates[questionIndex] = false;
+          setLoadingStates([...newLoadingStates]);
+        }
+      };
+
+      const tfScore = tfSubmitted ? Math.round((tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length / TRUE_FALSE.length) * 100) : 0;
+      const mcScore = mcSubmitted ? Math.round((mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length / MULTIPLE_CHOICE.length) * 100) : 0;
+
+      return (
+        <div className="min-h-screen p-4 md:p-8">
+          {/* Text Modal */}
+          <div
+            className={`modal ${showText ? 'active' : ''}`}
+            onClick={(e) => {
+              if (e.target.classList.contains('modal')) {
+                setShowText(false);
+              }
+            }}
+          >
+            <div className="modal-content">
+              <div className="sticky-btn p-4 border-b border-gray-200">
+                <button
+                  onClick={() => setShowText(false)}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-light text-lg"
+                >
+                  ✕ Loka texta
+                </button>
+              </div>
+              <div className="p-8">
+                <h2 className="text-3xl font-light text-gray-800 mb-6 text-center">
+                  📖 Áhugamál
+                </h2>
+                <div 
+                  className="prose prose-lg max-w-none font-light text-gray-800 leading-relaxed"
+                  style={{ whiteSpace: 'pre-line' }}
+                >
+                  {READING_TEXT}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Vocabulary Modal */}
+          <div
+            className={`modal ${showVocab ? 'active' : ''}`}
+            onClick={(e) => {
+              if (e.target.classList.contains('modal')) {
+                setShowVocab(false);
+              }
+            }}
+          >
+            <div className="modal-content">
+              <div className="sticky-btn p-4 border-b border-gray-200">
+                <button
+                  onClick={() => setShowVocab(false)}
+                  className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-light text-lg"
+                >
+                  ✕ Loka orðakassa
+                </button>
+              </div>
+              <div className="p-8">
+                <h2 className="text-3xl font-light text-gray-800 mb-6 text-center">
+                  🧩 Orðakassi
+                </h2>
+                <div className="space-y-4">
+                  {VOCABULARY.map((item, index) => (
+                    <div key={index} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                      <p className="font-normal text-gray-800 text-lg mb-1">{item.word}</p>
+                      <p className="text-gray-600 font-light">{item.definition}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <header className="max-w-4xl mx-auto mb-8 text-center">
+            <h1 className="text-4xl md:text-5xl font-light text-gray-800 mb-4">
+              🎨 Áhugamál
+            </h1>
+            <p className="text-lg text-gray-600 font-light">
+              Lestu textann og svaraðu spurningunum
+            </p>
+          </header>
+
+          <main className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  onClick={() => setShowText(true)}
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-4 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all font-light text-xl flex items-center justify-center gap-3"
+                >
+                  <span className="text-2xl">📖</span>
+                  <span>Opna texta</span>
+                </button>
+                <button
+                  onClick={() => setShowVocab(true)}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-lg hover:from-green-600 hover:to-green-700 transition-all font-light text-xl flex items-center justify-center gap-3"
+                >
+                  <span className="text-2xl">🧩</span>
+                  <span>Orðakassi</span>
+                </button>
+              </div>
+              <p className="text-center text-sm text-gray-500 mt-3 font-light">
+                Lestu textann og orðakassann áður en þú svarar spurningunum
+              </p>
+            </div>
+
+            {stage === 'trueFalse' && (
+              <div>
+                <div className="bg-white rounded-lg shadow-sm p-8 mb-6">
+                  <div className="text-center mb-6">
+                    <div className="text-6xl mb-4">✅</div>
+                    <h2 className="text-2xl font-light text-gray-800 mb-2">Rétt eða rangt?</h2>
+                    <p className="text-gray-600 font-light">
+                      Eru þessar fullyrðingar réttar eða rangar?
+                    </p>
+                  </div>
+
+                  {TRUE_FALSE.map((item, index) => (
+                    <div key={index} className="mb-6 pb-6 border-b border-gray-200 last:border-b-0">
+                      <p className="font-normal text-gray-800 mb-4 text-lg">
+                        {index + 1}. {item.statement}
+                      </p>
+                      <div className="flex gap-4">
+                        <button
+                          onClick={() => handleTfAnswer(index, true)}
+                          disabled={tfSubmitted}
+                          className={`answer-option flex-1 p-3 rounded-lg ${
+                            tfAnswers[index] === true ? 'selected' : ''
+                          } ${tfSubmitted && item.correct === true ? 'correct' : ''} ${
+                            tfSubmitted && tfAnswers[index] === true && item.correct === false ? 'incorrect' : ''
+                          } ${tfSubmitted ? 'disabled' : ''}`}
+                        >
+                          <span className="font-light">Rétt</span>
+                        </button>
+                        <button
+                          onClick={() => handleTfAnswer(index, false)}
+                          disabled={tfSubmitted}
+                          className={`answer-option flex-1 p-3 rounded-lg ${
+                            tfAnswers[index] === false ? 'selected' : ''
+                          } ${tfSubmitted && item.correct === false ? 'correct' : ''} ${
+                            tfSubmitted && tfAnswers[index] === false && item.correct === true ? 'incorrect' : ''
+                          } ${tfSubmitted ? 'disabled' : ''}`}
+                        >
+                          <span className="font-light">Rangt</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {!tfSubmitted ? (
+                  <div className="text-center">
+                    <button
+                      onClick={submitTf}
+                      className="bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-3 rounded-md hover:from-green-600 hover:to-green-700 transition-all font-light text-lg"
+                    >
+                      Skila svörum
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-lg shadow-sm p-8">
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                      <div className="flex items-start gap-3">
+                        <span className="text-3xl">
+                          {tfScore === 100 ? '🎉' : tfScore >= 66 ? '👍' : '💪'}
+                        </span>
+                        <div>
+                          <h3 className="font-normal text-gray-800 mb-2">
+                            {tfScore === 100
+                              ? 'Frábært! Öll svörin eru rétt!' 
+                              : tfScore >= 66
+                              ? 'Vel gert! Flest svörin eru rétt!'
+                              : 'Góð tilraun! Skoðaðu svörin og reyndu aftur ef þú vilt.'}
+                          </h3>
+                          <p className="text-sm text-gray-600 font-light">
+                            Þú fékkst {tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length} af {TRUE_FALSE.length} rétt ({tfScore}%).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <button
+                        onClick={continueToMc}
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
+                      >
+                        Halda áfram í krossaspurningar →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {stage === 'multipleChoice' && (
+              <div>
+                <div className="bg-white rounded-lg shadow-sm p-8 mb-6">
+                  <div className="text-center mb-6">
+                    <div className="text-6xl mb-4">❓</div>
+                    <h2 className="text-2xl font-light text-gray-800 mb-2">Krossaspurningar</h2>
+                    <p className="text-gray-600 font-light">
+                      Veldu rétt svar við hverri spurningu
+                    </p>
+                  </div>
+
+                  {MULTIPLE_CHOICE.map((item, qIndex) => (
+                    <div key={qIndex} className="mb-8 pb-8 border-b border-gray-200 last:border-b-0">
+                      <p className="font-normal text-gray-800 mb-4 text-lg">
+                        {qIndex + 1}. {item.question}
+                      </p>
+                      <div className="space-y-3">
+                        {item.options.map((option, oIndex) => {
+                          const isSelected = mcAnswers[qIndex] === oIndex;
+                          const isCorrect = mcSubmitted && oIndex === item.correct;
+                          const isIncorrect = mcSubmitted && isSelected && oIndex !== item.correct;
+                          
+                          return (
+                            <div
+                              key={oIndex}
+                              onClick={() => handleMcAnswer(qIndex, oIndex)}
+                              className={`answer-option p-4 rounded-lg ${
+                                isCorrect ? 'correct' :
+                                isIncorrect ? 'incorrect' :
+                                isSelected ? 'selected' : ''
+                              } ${mcSubmitted ? 'disabled' : ''}`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 mt-1">
+                                  {mcSubmitted ? (
+                                    isCorrect ? (
+                                      <span className="text-green-600 text-xl">✓</span>
+                                    ) : isIncorrect ? (
+                                      <span className="text-red-600 text-xl">✗</span>
+                                    ) : (
+                                      <span className="w-5 h-5 rounded-full border-2 border-gray-300 inline-block"></span>
+                                    )
+                                  ) : (
+                                    <span className={`w-5 h-5 rounded-full border-2 inline-block ${
+                                      isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                                    }`}></span>
+                                  )}
+                                </div>
+                                <p className="font-light text-gray-700 flex-1">{option}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {!mcSubmitted ? (
+                  <div className="text-center">
+                    <button
+                      onClick={submitMc}
+                      className="bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-3 rounded-md hover:from-green-600 hover:to-green-700 transition-all font-light text-lg"
+                    >
+                      Skila svörum
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-lg shadow-sm p-8">
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                      <div className="flex items-start gap-3">
+                        <span className="text-3xl">
+                          {mcScore === 100 ? '🎉' : mcScore >= 66 ? '👍' : '💪'}
+                        </span>
+                        <div>
+                          <h3 className="font-normal text-gray-800 mb-2">
+                            {mcScore === 100
+                              ? 'Frábært! Öll svörin eru rétt!' 
+                              : mcScore >= 66
+                              ? 'Vel gert! Flest svörin eru rétt!'
+                              : 'Góð tilraun! Skoðaðu svörin og reyndu aftur ef þú vilt.'}
+                          </h3>
+                          <p className="text-sm text-gray-600 font-light">
+                            Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt ({mcScore}%).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <button
+                        onClick={continueToOpen}
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
+                      >
+                        Halda áfram í umræðuspurningar →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {stage === 'open' && (
+              <div className="space-y-6">
+                <div className="text-center mb-8 bg-white rounded-lg shadow-sm p-8">
+                  <div className="text-6xl mb-4">💬</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Umræðuspurningar</h2>
+                  <p className="text-gray-600 font-light">
+                    Svaraðu spurningunum og haltu samtali áfram!
+                  </p>
+                </div>
+
+                {OPEN_QUESTIONS.map((question, index) => (
+                  <div key={index} className="bg-white rounded-lg shadow-sm p-6">
+                    <p className="font-normal text-gray-800 mb-4 text-lg">
+                      {index + 1}. {question}
+                    </p>
+
+                    <div 
+                      ref={chatRefs.current[index]}
+                      className="chat-container mb-4 space-y-3"
+                    >
+                      {conversations[index].map((msg, msgIndex) => (
+                        <div key={msgIndex}>
+                          {msg.role === 'user' ? (
+                            <div className="flex justify-end">
+                              <div className="bg-blue-50 rounded-lg p-4 max-w-[80%]">
+                                <p className="text-gray-800 font-light">{msg.content}</p>
+                              </div>
+                            </div>
+                          ) : msg.role === 'grammar' ? (
+                            <div className="flex justify-center">
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-[85%]">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-lg">📚</span>
+                                  <p className="text-sm text-gray-700 font-light">
+                                    <span className="font-normal">Málfar:</span> {msg.content}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-start">
+                              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-[80%]">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-xl">✨</span>
+                                  <p className="text-gray-800 font-light">{msg.content}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {loadingStates[index] && (
+                        <div className="flex justify-start">
+                          <div className="bg-gray-100 rounded-lg p-4">
+                            <p className="text-gray-500 font-light">Bíð...</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <textarea
+                        value={currentInputs[index]}
+                        onChange={(e) => handleInputChange(index, e.target.value)}
+                        onKeyPress={(e) => handleKeyPress(e, index)}
+                        disabled={loadingStates[index]}
+                        className="flex-1 p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base disabled:bg-gray-50"
+                        rows="2"
+                        placeholder={conversations[index].length === 0 ? "Skrifaðu svarið þitt hér..." : "Haltu áfram að spjalla..."}
+                      />
+                      <button
+                        onClick={() => sendMessage(index)}
+                        disabled={loadingStates[index] || !currentInputs[index].trim()}
+                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light self-end"
+                      >
+                        {conversations[index].length === 0 ? 'Fá endurgjöf' : 'Senda'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="text-center mt-8">
+                  <button
+                    onClick={() => window.history.back()}
+                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
+                  >
+                    ← Til baka
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Ahugamal />);
+  </script>
+</body>
+</html>
