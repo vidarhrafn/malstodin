@@ -1,0 +1,476 @@
+
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎯 Málmenni: Áhugamál – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .chat-container {
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-container::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SendIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    );
+
+    const QUESTIONS = [
+      { id: 'what', text: 'Hvert er áhugamálið?' },
+      { id: 'needs', text: 'Hvað þarf maður til þess að stunda það?' },
+      { id: 'where', text: 'Er hægt að stunda það hvar sem er?' },
+      { id: 'frequency', text: 'Hversu oft í viku/mánuði/ári stundar þú þitt áhugamál?' },
+      { id: 'duration_how_long', text: 'Ertu búin/n að stunda þitt áhugamál lengi?' },
+      { id: 'duration_session', text: 'Hversu lengi í einu? Hálftíma/klukkutíma/annað?' },
+      { id: 'cost', text: 'Hvað kostar að stunda þetta áhugamál?' },
+      { id: 'fun_fact', text: 'Skemmtileg staðreynd um áhugamálið þitt' },
+      { id: 'other', text: 'Annað sem þér dettur í hug 😊' }
+    ];
+
+    const MalmenniAhugamal = () => {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [answeredQuestions, setAnsweredQuestions] = useState([]);
+      const [stage, setStage] = useState('chatting'); // 'chatting' or 'summary'
+      const [summaryData, setSummaryData] = useState(null);
+      const messagesEndRef = useRef(null);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: 'Hæ! 👋 Ég er hér til að hjálpa þér að æfa íslensku og undirbúa þig fyrir munnlegt próf um áhugamál. Skulum bara spjalla saman um áhugamálið þitt! Hvert er áhugamálið þitt?' 
+          }
+        ]);
+      }, []);
+
+      useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (stage === 'chatting' && inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, [messages, loading, stage]);
+
+      async function callOpenAI(payload) {
+        const r = await fetch('/.netlify/functions/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+        return data.content;
+      }
+
+      const sendMessage = async () => {
+        const trimmed = input.trim();
+        if (!trimmed || loading) return;
+
+        const userMessage = { role: 'user', content: trimmed };
+        setMessages(prev => [...prev, userMessage]);
+        setInput('');
+        setLoading(true);
+
+        // Málfarsendurgjöf
+        try {
+          const feedbackMessages = [
+            {
+              role: 'system',
+              content: `Þú ert íslenskukennari sem gefur örstutta, hlýja og hvetjandi endurgjöf á íslensku (A1–A2).
+REGLUR:
+- 1–2 stuttar setningar, aldrei lengra.
+- Leiðréttu aðeins þegar þú ert >80% viss.
+- Forðastu of formlegt/bóklegt mál.
+- Ekki nota ensku. Ekki útskýra nema nauðsynlegt sé fyrir skilning.`.trim()
+            },
+            {
+              role: 'user',
+              content: `Skilaboð nemanda: "${trimmed}". Gefðu aðeins endurgjöfarlínuna, ekkert annað.`
+            }
+          ];
+
+          const feedback = await callOpenAI({
+            model: 'gpt-4o-mini',
+            temperature: 0.2,
+            max_tokens: 60,
+            messages: feedbackMessages,
+          });
+
+          if (feedback && typeof feedback === 'string') {
+            setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
+            await new Promise(res => setTimeout(res, 500));
+          }
+        } catch (e) {
+          console.error('Feedback error:', e);
+        }
+
+        // Aðal-svar
+        try {
+          const questionsText = QUESTIONS.map((q, i) => `${i + 1}. ${q.text}`).join('\n');
+          const answeredText = answeredQuestions.map(id => {
+            const q = QUESTIONS.find(x => x.id === id);
+            return q ? q.text : '';
+          }).join(', ');
+
+          const sys = `Þú ert vingjarnlegur íslenskukennari sem spjallar við A1-A2 nemanda um áhugamál.
+
+VERKEFNI:
+Þú átt að fá nemandann til að svara öllum þessum 9 spurningum á náttúrulegan hátt:
+
+${questionsText}
+
+SPURNINGAR SEM HAFA VERIÐ SVARAÐAR:
+${answeredText || 'Engar ennþá'}
+
+REGLUR:
+1. Spjallaðu á náttúrulegan hátt - ekki bara lesa upp spurningar í röð
+2. Þegar nemandi svarar spurningu, þá staðfestu að þú hafir skilið og færðu samtalsþráðinn áfram
+3. Spurðu næstu spurningu á náttúrulegan hátt sem hluti af samtali
+4. Vertu hvetjandi og jákvæður
+5. Notaðu einfalda íslensku (A1-A2)
+6. ALDREI leiðrétta málfar - það er annað kerfi sem gerir það
+7. Haltu svörum stuttum (2-4 setningar)
+
+ÞEGAR NEMANDI SVARAR:
+- Greindu hvaða spurningu hann svaraði
+- Gefðu jákvæða staðfestingu
+- Færðu samtalsþráðinn áfram með næstu spurningu
+
+SKILAÐU JSON Á ÞESSU FORMI í síðustu línu:
+{"answered": ["question_id"], "all_done": false}
+
+Þegar allar 9 spurningar eru svaraðar, settu "all_done": true
+
+DÆMI á question_id:
+"what", "needs", "where", "frequency", "duration_how_long", "duration_session", "cost", "fun_fact", "other"
+
+MIKILVÆGT: Skilaðu alltaf JSON í síðustu línu, þó svarið þitt sé stutt.`.trim();
+
+          const conversationHistory = messages
+            .filter(m => m.role === 'assistant' || m.role === 'user')
+            .map(m => ({ role: m.role, content: m.content }));
+
+          const assistantReply = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.7,
+            max_tokens: 300,
+            messages: [
+              { role: 'system', content: sys },
+              ...conversationHistory,
+              userMessage,
+            ],
+          });
+
+          if (assistantReply) {
+            // Parse JSON from last line
+            const lines = assistantReply.trim().split('\n');
+            const lastLine = lines[lines.length - 1].trim();
+            let jsonData = null;
+            
+            try {
+              jsonData = JSON.parse(lastLine);
+            } catch {
+              // If parsing fails, just show the message
+            }
+
+            // Remove JSON line from display
+            const displayText = lines.slice(0, -1).join('\n').trim() || assistantReply;
+            
+            setMessages(prev => [...prev, { role: 'assistant', content: displayText }]);
+
+            // Update answered questions
+            if (jsonData && jsonData.answered && Array.isArray(jsonData.answered)) {
+              setAnsweredQuestions(prev => {
+                const newAnswered = [...new Set([...prev, ...jsonData.answered])];
+                return newAnswered;
+              });
+
+              // Check if all done
+              if (jsonData.all_done === true) {
+                // Generate summary
+                setTimeout(() => generateSummary(), 1000);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Assistant error:', e);
+          setMessages(prev => [
+            ...prev,
+            { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis. Prófum aftur!' }
+          ]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const generateSummary = async () => {
+        setLoading(true);
+        
+        try {
+          const conversationText = messages
+            .filter(m => m.role === 'user')
+            .map(m => m.content)
+            .join('\n\n');
+
+          const summaryPrompt = `Þú ert íslenskukennari. Nemandinn hefur spjallað um áhugamál sitt og svarað spurningum.
+
+SAMTAL NEMANDA:
+${conversationText}
+
+VERKEFNI:
+Búðu til samantekt í stikkorðum/punktaformi sem nemandinn getur notað til að undirbúa munnlegt próf.
+
+FORMIÐ:
+Búðu til JSON á þessu formi:
+{
+  "hobby": "Nafn áhugamáls",
+  "points": [
+    "Punktur 1: stuttur texti",
+    "Punktur 2: stuttur texti",
+    ...
+  ]
+}
+
+REGLUR:
+- 6-10 stuttir punktar
+- Einföld íslenska
+- Gott fyrir munnlegt próf
+- Notaðu upplýsingar úr samtalinu
+
+SKILAÐU BARA JSON, ekkert annað.`.trim();
+
+          const summaryReply = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.5,
+            max_tokens: 400,
+            messages: [
+              { role: 'user', content: summaryPrompt }
+            ],
+          });
+
+          let cleanResult = summaryReply.trim();
+          if (cleanResult.startsWith('```')) {
+            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          }
+
+          const parsed = JSON.parse(cleanResult);
+          setSummaryData(parsed);
+          setStage('summary');
+        } catch (e) {
+          console.error('Summary error:', e);
+          // Fallback summary
+          setSummaryData({
+            hobby: 'Áhugamálið þitt',
+            points: [
+              'Þú svaraðir öllum spurningum!',
+              'Þú ert tilbúin/n fyrir munnlegt próf',
+              'Blessaður!'
+            ]
+          });
+          setStage('summary');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const resetChat = () => {
+        setStage('chatting');
+        setMessages([
+          { 
+            role: 'assistant', 
+            content: 'Hæ aftur! 👋 Skulum spjalla um annað áhugamál. Hvert er næsta áhugamálið þitt?' 
+          }
+        ]);
+        setAnsweredQuestions([]);
+        setSummaryData(null);
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Málmenni: Áhugamál</h1>
+              <p className="text-gray-500 text-sm font-light">Samtalsæfing · A1-A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {stage === 'chatting' && (
+              <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                {/* Progress bar */}
+                <div className="bg-gray-50 border-b border-gray-200 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-light text-gray-600">Framvinda</span>
+                    <span className="text-sm font-normal text-gray-800">{answeredQuestions.length}/9</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${(answeredQuestions.length / 9) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Chat messages */}
+                <div className="chat-container p-6 space-y-4">
+                  {messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${
+                        msg.role === 'user'
+                          ? 'justify-end'
+                          : msg.role === 'feedback'
+                          ? 'justify-center'
+                          : 'justify-start'
+                      }`}
+                    >
+                      <div
+                        className={`max-w-lg px-4 py-2 rounded-lg font-light ${
+                          msg.role === 'user'
+                            ? 'bg-blue-500 text-white'
+                            : msg.role === 'feedback'
+                            ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {msg.role === 'feedback' && <span className="font-normal">📚 Málfar: </span>}
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+
+                  {loading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                        <div className="flex space-x-2">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="border-t border-gray-200 p-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                      placeholder="Skrifaðu svarið þitt hér..."
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                      disabled={loading}
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={loading || !input.trim()}
+                      className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                      aria-label="Senda skilaboð"
+                      title="Senda"
+                    >
+                      <SendIcon />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {stage === 'summary' && summaryData && (
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">🎉</div>
+                  <h2 className="text-3xl font-light text-gray-800 mb-2">Frábært!</h2>
+                  <p className="text-gray-600 font-light">Þú hefur svarað öllum spurningum</p>
+                </div>
+
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-8">
+                  <h3 className="text-xl font-normal text-gray-800 mb-4">📝 Samantekt fyrir munnlegt próf</h3>
+                  <div className="bg-white rounded-lg p-6">
+                    <h4 className="text-lg font-normal text-gray-800 mb-4">Áhugamál: {summaryData.hobby}</h4>
+                    <ul className="space-y-3">
+                      {summaryData.points.map((point, idx) => (
+                        <li key={idx} className="flex items-start gap-3">
+                          <span className="text-blue-500 font-normal">•</span>
+                          <span className="font-light text-gray-700">{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                  <h3 className="text-lg font-normal text-gray-800 mb-3">💡 Ábending</h3>
+                  <p className="text-gray-600 font-light leading-relaxed">
+                    Notaðu þessa samantekt til að æfa þig fyrir munnlegt próf. 
+                    Reyndu að segja frá áhugamálinu þínu í 2-3 mínútur með þínum eigin orðum!
+                  </p>
+                </div>
+
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={resetChat}
+                    className="bg-blue-500 text-white px-8 py-3 rounded-md hover:bg-blue-600 transition-colors font-light"
+                  >
+                    Æfa annað áhugamál
+                  </button>
+                  <button
+                    onClick={() => window.history.back()}
+                    className="bg-gray-200 text-gray-800 px-8 py-3 rounded-md hover:bg-gray-300 transition-colors font-light"
+                  >
+                    Til baka
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<MalmenniAhugamal />);
+  </script>
+</body>
+</html>
