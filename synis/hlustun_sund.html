@@ -206,37 +206,59 @@
         newLoading[index] = true;
         setShortLoading(newLoading);
 
+
         try {
-          const userAnswer = shortAnswers[index];
           const question = SHORT_QUESTIONS[index];
-          
-          const prompt = `Þú ert kennari í íslensku. Nemandi svaraði þessari spurningu:
+          const userAnswer = shortAnswers[index];
+
+          const sys = `Þú ert íslenskukennari sem metur svör nemenda við opnum spurningum.
+
+SPURNINGIN:
 "${question.question}"
 
-Svar nemandans: "${userAnswer}"
+SVAR NEMANDA:
+"${userAnswer}"
 
-Skoðaðu svarið og gefðu stuttar, hvetjandi athugasemdir. Ef svarið er rétt eða nálægt því rétta, segðu "Rétt!" eða "Vel gert!". Ef það vantar eitthvað mikilvægt, benti á það á vinsamlegan hátt.
+LYKILATRIÐI SEM EIGA AÐ KOMA FRAM:
+${question.expectedContent.join(', ')}
 
-Ætlaðar lykilorð/hugtök: ${question.expectedContent.join(', ')}
+VERKEFNI:
+Meta hvort svarið er rétt miðað við INNIHALD. Hunsa málfræðivillur og stafsetningarvillur. Einblína á hvort nemandinn skildi textann og gaf rétt innihald.
 
-Svaraðu á íslensku með 1-2 stuttum setningum.`;
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": boolean,
+  "feedback": "Stutt og hvetjandi endurgjöf á íslensku um innihaldið"
+}
 
-          const feedback = await callOpenAI({
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5
+Vertu hvetjandi og jákvæður!`;
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 200,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Meta svar' }
+            ]
           });
 
-          const isCorrect = question.expectedContent.some(keyword => 
-            userAnswer.toLowerCase().includes(keyword.toLowerCase())
-          );
+          let cleanResponse = response
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .replace(/^[^{]*/g, '')
+            .replace(/[^}]*$/g, '')
+            .trim();
 
+          const data = JSON.parse(cleanResponse);
+          
           const newFeedback = [...shortFeedback];
-          newFeedback[index] = { correct: isCorrect, feedback };
+          newFeedback[index] = data;
           setShortFeedback(newFeedback);
 
-        } catch (error) {
-          console.error('Villa:', error);
-          alert('Villa kom upp. Reyndu aftur.');
+        } catch (e) {
+          console.error('Error checking answer:', e);
+          alert('Villa við að meta svar. Reyndu aftur.');
         } finally {
           const newLoading = [...shortLoading];
           newLoading[index] = false;
@@ -245,14 +267,9 @@ Svaraðu á íslensku með 1-2 stuttum setningum.`;
       };
 
       const handleMatchingAnswer = (index, value) => {
-        if (matchingChecked) return;
         const newAnswers = [...matchingAnswers];
         newAnswers[index] = value;
         setMatchingAnswers(newAnswers);
-      };
-
-      const isMatchingCorrect = (index) => {
-        return matchingAnswers[index] === MATCHING[index].right;
       };
 
       const checkMatching = () => {
@@ -261,93 +278,203 @@ Svaraðu á íslensku með 1-2 stuttum setningum.`;
           return;
         }
         setMatchingChecked(true);
+        
+        // Check if all sections are now complete
+        if (tfChecked && mcChecked && shortFeedback.every(f => f !== null)) {
+          // All sections complete - save progress
+          setTimeout(() => {
+            saveAllProgressNow();
+          }, 500);
+        }
       };
 
-      useEffect(() => {
-        const allDone = tfChecked && mcChecked && 
-                       shortFeedback.every(f => f !== null) && 
-                       matchingChecked;
-        if (allDone && !allCompleted) {
-          setAllCompleted(true);
-        }
-      }, [tfChecked, mcChecked, shortFeedback, matchingChecked]);
+      const isMatchingCorrect = (index) => {
+        return matchingAnswers[index] === MATCHING[index].right;
+      };
 
-      const rightOptions = MATCHING.map(m => m.right);
+      const saveAllProgress = () => {
+        // Calculate scores
+        const tfScore = Math.round((tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length / TRUE_FALSE.length) * 100);
+        const mcScore = Math.round((mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length / MULTIPLE_CHOICE.length) * 100);
+        const shortScore = Math.round((shortFeedback.filter(f => f && f.correct).length / SHORT_QUESTIONS.length) * 100);
+        const matchingScore = Math.round((matchingAnswers.filter((_, i) => isMatchingCorrect(i)).length / MATCHING.length) * 100);
+        
+        const quizScore = Math.round((tfScore + mcScore + shortScore + matchingScore) / 4);
+
+        console.log('📊 Einkunnir:', {
+          'Rétt/Rangt': tfScore + '%',
+          'Krossaspurningar': mcScore + '%',
+          'Stuttar spurningar': shortScore + '%',
+          'Paraðu saman': matchingScore + '%',
+          'Heildareinkunn': quizScore + '%'
+        });
+
+      };
+
+      const saveAllProgressNow = () => {
+        // Calculate scores
+        const tfScore = Math.round((tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length / TRUE_FALSE.length) * 100);
+        const mcScore = Math.round((mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length / MULTIPLE_CHOICE.length) * 100);
+        const shortScore = Math.round((shortFeedback.filter(f => f && f.correct).length / SHORT_QUESTIONS.length) * 100);
+        const matchingScore = Math.round((matchingAnswers.filter((_, i) => isMatchingCorrect(i)).length / MATCHING.length) * 100);
+        
+        const quizScore = Math.round((tfScore + mcScore + shortScore + matchingScore) / 4);
+
+        console.log('📊 Einkunnir:', {
+          'Rétt/Rangt': tfScore + '%',
+          'Krossaspurningar': mcScore + '%',
+          'Stuttar spurningar': shortScore + '%',
+          'Paraðu saman': matchingScore + '%',
+          'Heildareinkunn': quizScore + '%'
+        });
+
+        
+        setAllCompleted(true);
+      };
+
+      const rightOptions = MATCHING.map(m => m.right).sort(() => Math.random() - 0.5);
 
       return (
-        <div className="min-h-screen">
-          {/* Audio Player */}
-          <div className="sticky-player p-6">
-            <div className="max-w-4xl mx-auto">
-              <h1 className="text-3xl font-light text-gray-800 mb-4 text-center">🎧 Hlustun: Sund</h1>
-              <div className="bg-gray-100 rounded-lg p-6">
-                <audio 
-                  ref={audioRef}
-                  src="media/sund.mp3"
-                  onEnded={() => setIsPlaying(false)}
-                  className="w-full mb-4"
-                  controls
-                />
-                <div className="flex items-center justify-between">
+        <div className="min-h-screen pb-12">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Hlustun: Sund</h1>
+              <p className="text-gray-500 text-sm font-light">Hlustunarverkefni · A1-A2</p>
+            </div>
+          </header>
+
+          {/* Sticky Audio Player */}
+          <div className="sticky-player">
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border-2 border-blue-200">
+                <div className="flex items-center gap-4">
                   <button
                     onClick={togglePlay}
-                    className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light"
+                    className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0"
+                    aria-label={isPlaying ? 'Pause' : 'Play'}
                   >
-                    {isPlaying ? '⏸ Pása' : '▶ Spila'}
+                    {isPlaying ? (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16" />
+                        <rect x="14" y="4" width="4" height="16" />
+                      </svg>
+                    ) : (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                    )}
                   </button>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 font-light">Hraði:</span>
-                    {[0.75, 1, 1.25, 1.5].map(rate => (
-                      <button
-                        key={rate}
-                        onClick={() => setPlaybackRate(rate)}
-                        className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${
-                          playbackRate === rate
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-white text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {rate}x
-                      </button>
-                    ))}
+
+                  <div className="flex-1">
+                    <p className="text-sm font-normal text-gray-800 mb-1">🎧 Hlusta á textann</p>
+                    <audio
+                      ref={audioRef}
+                      src="media/sund.mp3"
+                      onEnded={() => setIsPlaying(false)}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPlaybackRate(0.75)}
+                      className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${
+                        playbackRate === 0.75
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      0.75×
+                    </button>
+                    <button
+                      onClick={() => setPlaybackRate(1)}
+                      className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${
+                        playbackRate === 1
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      1×
+                    </button>
+                    <button
+                      onClick={() => setPlaybackRate(1.25)}
+                      className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${
+                        playbackRate === 1.25
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      1.25×
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <main className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 mt-8">
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-8">
             
+            {/* Instructions */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Leiðbeiningar</h2>
+              <ul className="space-y-2 text-gray-700 font-light">
+                <li>• Hlustaðu á textann 2-3 sinnum</li>
+                <li>• Þú getur hægt eða hraðað á hljóðinu</li>
+                <li>• Svaraðu spurningunum hér að neðan</li>
+                <li>• Þú getur hlustað eins oft og þú vilt!</li>
+              </ul>
+            </div>
+
             {/* 1. True/False */}
             <section className="bg-white rounded-lg shadow-sm p-8">
               <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣ Rétt eða rangt?</h2>
               <div className="space-y-4">
                 {TRUE_FALSE.map((item, index) => (
                   <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
-                    <p className="font-normal text-gray-800 mb-3">{item.statement}</p>
+                    <p className="font-light text-gray-800 mb-3">{item.statement}</p>
                     <div className="flex gap-4">
-                      <button
-                        onClick={() => handleTfAnswer(index, true)}
-                        disabled={tfChecked}
-                        className={`answer-option px-6 py-2 rounded-md font-light ${
-                          tfAnswers[index] === true ? 'selected' : ''
-                        } ${tfChecked && item.correct === true ? 'correct' : ''} ${
-                          tfChecked && tfAnswers[index] === true && item.correct === false ? 'incorrect' : ''
-                        } ${tfChecked ? 'disabled' : ''}`}
-                      >
-                        Rétt
-                      </button>
-                      <button
-                        onClick={() => handleTfAnswer(index, false)}
-                        disabled={tfChecked}
-                        className={`answer-option px-6 py-2 rounded-md font-light ${
-                          tfAnswers[index] === false ? 'selected' : ''
-                        } ${tfChecked && item.correct === false ? 'correct' : ''} ${
-                          tfChecked && tfAnswers[index] === false && item.correct === true ? 'incorrect' : ''
-                        } ${tfChecked ? 'disabled' : ''}`}
-                      >
-                        Rangt
-                      </button>
+                      {[true, false].map((answer) => {
+                        const isSelected = tfAnswers[index] === answer;
+                        const isCorrect = answer === item.correct;
+                        const showAsCorrect = tfChecked && isCorrect;
+                        const showAsIncorrect = tfChecked && isSelected && !isCorrect;
+
+                        return (
+                          <div
+                            key={answer ? 'true' : 'false'}
+                            onClick={() => handleTfAnswer(index, answer)}
+                            className={`answer-option flex-1 p-3 rounded-lg ${
+                              isSelected && !tfChecked ? 'selected' : ''
+                            } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                              tfChecked ? 'disabled' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                isSelected && !tfChecked ? 'border-blue-500 bg-blue-500' : 
+                                showAsCorrect ? 'border-green-500 bg-green-500' :
+                                showAsIncorrect ? 'border-red-500 bg-red-500' :
+                                'border-gray-300'
+                              }`}>
+                                {(isSelected || showAsCorrect) && (
+                                  <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                )}
+                              </div>
+                              <span className="font-light text-sm">{answer ? 'Rétt' : 'Rangt'}</span>
+                              {showAsCorrect && <span className="text-green-600">✓</span>}
+                              {showAsIncorrect && <span className="text-red-600">✗</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -370,30 +497,41 @@ Svaraðu á íslensku með 1-2 stuttum setningum.`;
 
             {/* 2. Multiple Choice */}
             <section className="bg-white rounded-lg shadow-sm p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Fjölvalsspurningar</h2>
+              <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Krossaspurningar</h2>
               <div className="space-y-6">
                 {MULTIPLE_CHOICE.map((q, qIndex) => (
                   <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-4">
-                    <p className="font-normal text-gray-800 mb-4">{qIndex + 1}. {q.question}</p>
+                    <p className="font-normal text-gray-800 mb-4">{q.question}</p>
                     <div className="space-y-2">
-                      {q.options.map((opt, oIndex) => {
+                      {q.options.map((option, oIndex) => {
                         const isSelected = mcAnswers[qIndex] === oIndex;
-                        const isCorrect = mcChecked && oIndex === q.correct;
-                        const showAsIncorrect = mcChecked && isSelected && oIndex !== q.correct;
-                        
+                        const isCorrect = oIndex === q.correct;
+                        const showAsCorrect = mcChecked && isCorrect;
+                        const showAsIncorrect = mcChecked && isSelected && !isCorrect;
+
                         return (
                           <div
                             key={oIndex}
                             onClick={() => handleMcAnswer(qIndex, oIndex)}
                             className={`answer-option p-3 rounded-lg ${
-                              isCorrect ? 'correct' :
-                              showAsIncorrect ? 'incorrect' :
-                              isSelected ? 'selected' : ''
-                            } ${mcChecked ? 'disabled' : ''}`}
+                              isSelected && !mcChecked ? 'selected' : ''
+                            } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                              mcChecked ? 'disabled' : ''
+                            }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-light text-gray-700">{opt}</span>
-                              {isCorrect && <span className="text-green-600">✓</span>}
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                isSelected && !mcChecked ? 'border-blue-500 bg-blue-500' : 
+                                showAsCorrect ? 'border-green-500 bg-green-500' :
+                                showAsIncorrect ? 'border-red-500 bg-red-500' :
+                                'border-gray-300'
+                              }`}>
+                                {(isSelected || showAsCorrect) && (
+                                  <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                )}
+                              </div>
+                              <span className="font-light flex-1">{option}</span>
+                              {showAsCorrect && <span className="text-green-600">✓</span>}
                               {showAsIncorrect && <span className="text-red-600">✗</span>}
                             </div>
                           </div>
@@ -534,7 +672,7 @@ Svaraðu á íslensku með 1-2 stuttum setningum.`;
                 <div className="text-6xl mb-4">🎉</div>
                 <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
                 <p className="text-gray-600 font-light">
-                  Þú hefur klárað hlustunarverkefnið!
+                  Þú hefur klárað hlustunarverkefnið. Einkunnir þínar hafa verið vistaðar!
                 </p>
               </div>
             )}
@@ -545,6 +683,7 @@ Svaraðu á íslensku með 1-2 stuttum setningum.`;
     };
 
     ReactDOM.createRoot(document.getElementById('root')).render(<HlustunSund />);
+
   </script>
 </body>
 </html>
