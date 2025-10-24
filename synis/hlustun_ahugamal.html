@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎧 Hlustun: Áhugamál – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .sticky-player {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: white;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+    .answer-option.disabled {
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const READING_TEXT = `Ég hef alltaf haft mörg áhugamál. Ég elska að synda og fer oft í sundlaugina eftir skóla eða vinnu. Eftir sund fer ég venjulega í heita pottinn og tala við vini. Það er notalegt að sitja í heitu vatni þegar kalt er úti. Ég spila líka stundum fótbolta með vinum mínum á kvöldin. Við hittumst á leikvelli nálægt húsinu mínu. Mér finnst skemmtilegt að hlaupa og reyna að skora mörk, þó við spilum bara til að hafa gaman. Ég horfi líka oft á fótbolta í sjónvarpinu um helgar og styð mitt lið. Á kvöldin, þegar ég vil slaka á, hlusta ég oft á tónlist eða les. Ég hef líka byrjað að hlusta á hljóðbækur. Það er mjög þægilegt – ég get hlustað á bók á meðan ég elda eða geng úti með hundinn. Ég hef nýlega hlustað á hljóðbók sem var bæði fyndin og sorgleg. Ég lærði mörg ný orð og naut þess að hlusta á góða rödd lesa söguna. Mér finnst áhugamál mjög mikilvæg. Þau gera lífið skemmtilegra og hjálpa mér að vera í góðu skapi. Ég reyni að gera eitthvað sem mér finnst gaman á hverjum degi.`;
+
+    const TRUE_FALSE = [
+      { statement: "Viðmælandinn fer oft í sund eftir skóla eða vinnu.", correct: true },
+      { statement: "Honum finnst kalt í heita pottinum.", correct: false },
+      { statement: "Hann spilar stundum fótbolta með vinum sínum.", correct: true },
+      { statement: "Hann vinnur sem fótboltaþjálfari.", correct: false },
+      { statement: "Hann hlustar stundum á hljóðbók þegar hann eldar.", correct: true },
+      { statement: "Hljóðbókin sem hann hlustaði á var bæði fyndin og sorgleg.", correct: true },
+      { statement: "Hann segir að áhugamál séu mikilvæg.", correct: true }
+    ];
+
+    const MULTIPLE_CHOICE = [
+      {
+        question: "Hvar hittir hann vini sína til að spila fótbolta?",
+        options: ["Í sundlauginni", "Á leikvelli nálægt húsinu", "Í íþróttasal"],
+        correct: 1
+      },
+      {
+        question: "Hvað gerir hann eftir sund?",
+        options: ["Fer strax heim", "Fer í heita pottinn", "Fer að synda aftur"],
+        correct: 1
+      },
+      {
+        question: "Hvað gerir hann stundum á kvöldin?",
+        options: ["Syngur og dansar", "Les eða hlustar á tónlist", "Fer í ræktina"],
+        correct: 1
+      },
+      {
+        question: "Hvað segir hann að áhugamál geri?",
+        options: ["Þau gera lífið skemmtilegra", "Þau eru tímaeyðsla", "Þau eru bara fyrir börn"],
+        correct: 0
+      }
+    ];
+
+    const OPEN_QUESTIONS = [
+      "Hvaða áhugamál hefur viðmælandinn?",
+      "Hvað gerir hann oft á kvöldin?",
+      "Hvað finnst honum gott við hljóðbækur?",
+      "Hvað finnst honum áhugamál gera fyrir fólk?"
+    ];
+
+    const HlustunAhugamal = () => {
+      const [playbackRate, setPlaybackRate] = useState(1);
+      const [isPlaying, setIsPlaying] = useState(false);
+      const audioRef = useRef(null);
+
+      // Exercise states
+      const [tfAnswers, setTfAnswers] = useState([]);
+      const [tfChecked, setTfChecked] = useState(false);
+
+      const [mcAnswers, setMcAnswers] = useState([]);
+      const [mcChecked, setMcChecked] = useState(false);
+
+      const [openAnswers, setOpenAnswers] = useState(Array(OPEN_QUESTIONS.length).fill(''));
+      const [openFeedback, setOpenFeedback] = useState(Array(OPEN_QUESTIONS.length).fill(null));
+      const [openLoading, setOpenLoading] = useState(Array(OPEN_QUESTIONS.length).fill(false));
+
+      const [allCompleted, setAllCompleted] = useState(false);
+
+      useEffect(() => {
+        if (audioRef.current) {
+          audioRef.current.playbackRate = playbackRate;
+        }
+      }, [playbackRate]);
+
+      const togglePlay = () => {
+        if (audioRef.current) {
+          if (isPlaying) {
+            audioRef.current.pause();
+          } else {
+            audioRef.current.play();
+          }
+          setIsPlaying(!isPlaying);
+        }
+      };
+
+      const handleTfAnswer = (index, answer) => {
+        if (tfChecked) return;
+        const newAnswers = [...tfAnswers];
+        newAnswers[index] = answer;
+        setTfAnswers(newAnswers);
+      };
+
+      const checkTfAnswers = () => {
+        if (tfAnswers.length < TRUE_FALSE.length) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setTfChecked(true);
+      };
+
+      const handleMcAnswer = (qIndex, optIndex) => {
+        if (mcChecked) return;
+        const newAnswers = [...mcAnswers];
+        newAnswers[qIndex] = optIndex;
+        setMcAnswers(newAnswers);
+      };
+
+      const checkMcAnswers = () => {
+        if (mcAnswers.length < MULTIPLE_CHOICE.length) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setMcChecked(true);
+      };
+
+      const handleOpenAnswer = (index, value) => {
+        const newAnswers = [...openAnswers];
+        newAnswers[index] = value;
+        setOpenAnswers(newAnswers);
+      };
+
+      const checkOpenAnswer = async (index) => {
+        if (openAnswers[index].trim().length < 3) {
+          alert('Vinsamlegast skrifaðu svar!');
+          return;
+        }
+
+        const newLoading = [...openLoading];
+        newLoading[index] = true;
+        setOpenLoading(newLoading);
+
+        try {
+          const userAnswer = openAnswers[index];
+          const question = OPEN_QUESTIONS[index];
+          
+          const prompt = `Þú ert kennari í íslensku. Nemandi svaraði þessari spurningu um hlustunartexta:
+"${question}"
+
+Svar nemandans: "${userAnswer}"
+
+Upprunalegur texti til viðmiðunar:
+"${READING_TEXT}"
+
+Gefðu stutta, hvetjandi endurgjöf á svarið (2-3 setningar). Vertu jákvæður og nefndu hvað nemandinn gerði vel. Ef eitthvað vantar eða er rangt, benti á það á vinsamlegan hátt.`;
+
+          const feedback = await callOpenAI({
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.6
+          });
+
+          const newFeedback = [...openFeedback];
+          newFeedback[index] = feedback;
+          setOpenFeedback(newFeedback);
+
+        } catch (error) {
+          console.error('Villa:', error);
+          alert('Villa kom upp. Reyndu aftur.');
+        } finally {
+          const newLoading = [...openLoading];
+          newLoading[index] = false;
+          setOpenLoading(newLoading);
+        }
+      };
+
+      useEffect(() => {
+        const allDone = tfChecked && mcChecked && openFeedback.every(f => f !== null);
+        if (allDone && !allCompleted) {
+          setAllCompleted(true);
+        }
+      }, [tfChecked, mcChecked, openFeedback]);
+
+      return (
+        <div className="min-h-screen">
+          {/* Audio Player */}
+          <div className="sticky-player p-6">
+            <div className="max-w-4xl mx-auto">
+              <h1 className="text-3xl font-light text-gray-800 mb-4 text-center">🎧 Hlustun: Áhugamál</h1>
+              <div className="bg-gray-100 rounded-lg p-6">
+                <audio 
+                  ref={audioRef}
+                  src="/audio/ahugamal-hlustun.mp3"
+                  onEnded={() => setIsPlaying(false)}
+                  className="w-full mb-4"
+                  controls
+                />
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={togglePlay}
+                    className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light"
+                  >
+                    {isPlaying ? '⏸ Pása' : '▶ Spila'}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 font-light">Hraði:</span>
+                    {[0.75, 1, 1.25, 1.5].map(rate => (
+                      <button
+                        key={rate}
+                        onClick={() => setPlaybackRate(rate)}
+                        className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${
+                          playbackRate === rate
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <main className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 mt-8">
+            
+            {/* 1. True/False */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣ Rétt eða rangt?</h2>
+              <div className="space-y-4">
+                {TRUE_FALSE.map((item, index) => (
+                  <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
+                    <p className="font-normal text-gray-800 mb-3">{item.statement}</p>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => handleTfAnswer(index, true)}
+                        disabled={tfChecked}
+                        className={`answer-option px-6 py-2 rounded-md font-light ${
+                          tfAnswers[index] === true ? 'selected' : ''
+                        } ${tfChecked && item.correct === true ? 'correct' : ''} ${
+                          tfChecked && tfAnswers[index] === true && item.correct === false ? 'incorrect' : ''
+                        } ${tfChecked ? 'disabled' : ''}`}
+                      >
+                        Rétt
+                      </button>
+                      <button
+                        onClick={() => handleTfAnswer(index, false)}
+                        disabled={tfChecked}
+                        className={`answer-option px-6 py-2 rounded-md font-light ${
+                          tfAnswers[index] === false ? 'selected' : ''
+                        } ${tfChecked && item.correct === false ? 'correct' : ''} ${
+                          tfChecked && tfAnswers[index] === false && item.correct === true ? 'incorrect' : ''
+                        } ${tfChecked ? 'disabled' : ''}`}
+                      >
+                        Rangt
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!tfChecked ? (
+                <button
+                  onClick={checkTfAnswers}
+                  className="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light"
+                >
+                  Athuga svör
+                </button>
+              ) : (
+                <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-light">
+                    ✓ Þú fékkst {tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length} af {TRUE_FALSE.length} rétt!
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {/* 2. Multiple Choice */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Krossaspurningar</h2>
+              <div className="space-y-6">
+                {MULTIPLE_CHOICE.map((q, qIndex) => (
+                  <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-4">
+                    <p className="font-normal text-gray-800 mb-4">{q.question}</p>
+                    <div className="space-y-2">
+                      {q.options.map((option, oIndex) => {
+                        const isSelected = mcAnswers[qIndex] === oIndex;
+                        const isCorrect = oIndex === q.correct;
+                        const showAsCorrect = mcChecked && isCorrect;
+                        const showAsIncorrect = mcChecked && isSelected && !isCorrect;
+
+                        return (
+                          <div
+                            key={oIndex}
+                            onClick={() => handleMcAnswer(qIndex, oIndex)}
+                            className={`answer-option p-3 rounded-lg ${
+                              isSelected && !mcChecked ? 'selected' : ''
+                            } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                              mcChecked ? 'disabled' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                isSelected && !mcChecked ? 'border-blue-500 bg-blue-500' : 
+                                showAsCorrect ? 'border-green-500 bg-green-500' :
+                                showAsIncorrect ? 'border-red-500 bg-red-500' :
+                                'border-gray-300'
+                              }`}>
+                                {(isSelected || showAsCorrect) && (
+                                  <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                )}
+                              </div>
+                              <span className="font-light flex-1">{option}</span>
+                              {showAsCorrect && <span className="text-green-600">✓</span>}
+                              {showAsIncorrect && <span className="text-red-600">✗</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!mcChecked ? (
+                <button
+                  onClick={checkMcAnswers}
+                  className="mt-6 bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition-colors font-light"
+                >
+                  Athuga svör
+                </button>
+              ) : (
+                <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <p className="text-green-800 font-light">
+                    ✓ Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt!
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {/* 3. Open Questions */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">3️⃣ Efnisspurningar</h2>
+              <p className="text-gray-600 font-light mb-6">Svaraðu spurningunum með þínum eigin orðum.</p>
+              <div className="space-y-6">
+                {OPEN_QUESTIONS.map((q, index) => (
+                  <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
+                    <p className="font-normal text-gray-800 mb-3">{index + 1}. {q}</p>
+                    <textarea
+                      value={openAnswers[index]}
+                      onChange={(e) => handleOpenAnswer(index, e.target.value)}
+                      disabled={openFeedback[index] !== null}
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                      rows="3"
+                      placeholder="Skrifaðu svarið þitt hér..."
+                    />
+                    
+                    {!openFeedback[index] && (
+                      <button
+                        onClick={() => checkOpenAnswer(index)}
+                        disabled={openLoading[index]}
+                        className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm"
+                      >
+                        {openLoading[index] ? 'Athuga...' : 'Fá endurgjöf'}
+                      </button>
+                    )}
+
+                    {openFeedback[index] && (
+                      <div className="mt-3 bg-green-50 border-2 border-green-200 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <span className="text-xl">✨</span>
+                          <p className="text-sm font-light text-green-800">
+                            {openFeedback[index]}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Completion */}
+            {allCompleted && (
+              <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
+                <div className="text-6xl mb-4">🎉</div>
+                <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
+                <p className="text-gray-600 font-light">
+                  Þú hefur klárað hlustunarverkefnið!
+                </p>
+              </div>
+            )}
+
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<HlustunAhugamal />);
+  </script>
+</body>
+</html>
