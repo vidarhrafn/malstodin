@@ -173,23 +173,17 @@
         if (isPlaying) audioRef.current.pause();
         else audioRef.current.play();
       };
-      useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        const onPlay = () => setIsPlaying(true);
-        const onPause = () => setIsPlaying(false);
-        audio.addEventListener('play', onPlay);
-        audio.addEventListener('pause', onPause);
-        return () => {
-          audio.removeEventListener('play', onPlay);
-          audio.removeEventListener('pause', onPause);
-        };
-      }, []);
-      const handleRateChange = (e) => {
-        const rate = parseFloat(e.target.value);
+      
+      const changePlaybackRate = (rate) => {
         setPlaybackRate(rate);
         if (audioRef.current) audioRef.current.playbackRate = rate;
       };
+      
+      useEffect(() => {
+        if (audioRef.current) {
+          audioRef.current.playbackRate = playbackRate;
+        }
+      }, [playbackRate]);
 
       // Þýðing
       const checkTranslation = async () => {
@@ -317,57 +311,71 @@ Svaraðu EINGÖNGU með JSON, ekkert annað.`
       const checkMatching = () => setMatchingChecked(true);
 
       return (
-        <div className="min-h-screen pb-20">
+        <div className="min-h-screen pb-12">
           {/* Haus */}
-          <div className="bg-white border-b border-gray-200">
-            <div className="max-w-4xl mx-auto px-4 py-6">
-              <a href="#" className="text-sm text-gray-600 hover:text-gray-900 font-light flex items-center gap-1 mb-3">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
                 ← Til baka
-              </a>
-              <h1 className="text-3xl font-light text-gray-900 mb-1">Hlustun: Veitingastaður</h1>
-              <p className="text-sm text-gray-500 font-light">Hlustunaræfing · A2</p>
+              </button>
+              <div className="flex items-center gap-6">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-light text-gray-800 mb-2">Hlustun 4: Veitingastaður</h1>
+                  <p className="text-gray-500 text-sm font-light">Hlustunarverkefni · A2</p>
+                </div>
+              </div>
             </div>
-          </div>
+          </header>
 
-          {/* Hljóðspilari */}
-          <div className="sticky-player p-4">
-            <div className="max-w-4xl mx-auto">
-              <audio ref={audioRef} src="hlustun4.mp3" preload="metadata" />
-              <div className="flex items-center gap-3 bg-blue-50 rounded-full px-4 py-3 border-2 border-blue-100">
-                <button onClick={togglePlay}
-                  className="bg-blue-500 text-white w-10 h-10 rounded-full hover:bg-blue-600 transition-colors flex items-center justify-center text-xl">
-                  {isPlaying ? '⏸' : '▶'}
-                </button>
-                <span className="text-gray-600 font-light text-sm flex-1">🎧 Hlusta á textann</span>
-                <button onClick={() => handleRateChange({target: {value: '0.75'}})}
-                  className={`px-3 py-1.5 text-sm rounded-md border-2 transition-colors font-light ${
-                    playbackRate === 0.75 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
-                  }`}>
-                  0.75×
-                </button>
-                <button onClick={() => handleRateChange({target: {value: '1.25'}})}
-                  className={`px-3 py-1.5 text-sm rounded-md border-2 transition-colors font-light ${
-                    playbackRate === 1.25 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-blue-200 hover:bg-blue-50'
-                  }`}>
-                  1.25×
-                </button>
+          {/* Sticky Audio Player */}
+          <div className="sticky-player">
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border-2 border-blue-200">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={togglePlay}
+                    className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0"
+                    aria-label={isPlaying ? 'Pása' : 'Spila'}
+                  >
+                    {isPlaying ? (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+                    ) : (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                    )}
+                  </button>
+
+                  <div className="flex-1">
+                    <p className="text-sm font-normal text-gray-800 mb-1">🎧 Hlusta á textann</p>
+                    <audio
+                      ref={audioRef}
+                      src="hlustun4.mp3"
+                      preload="none"
+                      onEnded={() => setIsPlaying(false)}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => changePlaybackRate(0.75)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 0.75 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>0.75×</button>
+                    <button onClick={() => changePlaybackRate(1)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 1 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>1×</button>
+                    <button onClick={() => changePlaybackRate(1.25)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 1.25 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>1.25×</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-            {/* Leiðbeiningar */}
-            <section className="bg-blue-50 border-2 border-blue-100 rounded-lg p-6">
-              <h2 className="text-lg font-normal text-gray-800 mb-3 flex items-center gap-2">
-                📌 Leiðbeiningar
-              </h2>
-              <ul className="space-y-2 text-gray-700 font-light text-sm">
-                <li>• Hlustaðu á textann 2-3 sinnum</li>
-                <li>• Þú getur hægt eða hraðað á hlustun í hljoðspilaranum</li>
-                <li>• Svaraðu spurningum um ber að nefna</li>
-                <li>• Þú getur hlustað eins oft og þú vilt!</li>
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-8">{/* Leiðbeiningar */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Leiðbeiningar</h2>
+              <ul className="space-y-2 text-gray-700 font-light">
+                <li>• Hlustaðu á textann 2–3 sinnum</li>
+                <li>• Þú getur hægt eða hraðað á hljóðinu</li>
+                <li>• Svaraðu spurningunum hér að neðan</li>
+                <li>• Þú mátt hlusta eins oft og þú vilt</li>
               </ul>
-            </section>
+            </div>
 
             {/* 1. Þýðing */}
             <section className="bg-white rounded-lg shadow-sm p-8">
