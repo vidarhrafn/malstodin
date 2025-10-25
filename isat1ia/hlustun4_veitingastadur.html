@@ -119,7 +119,6 @@
 
       // Þýðing
       const [translationAnswer, setTranslationAnswer] = useState('');
-      const [translationLanguage, setTranslationLanguage] = useState('');
       const [translationFeedback, setTranslationFeedback] = useState(null);
       const [translationLoading, setTranslationLoading] = useState(false);
 
@@ -139,15 +138,25 @@
       // Para
       const [matchingAnswers, setMatchingAnswers] = useState(Array(MATCHING.length).fill(''));
       const [matchingChecked, setMatchingChecked] = useState(false);
+      
+      // Stokka valmöguleikana með Fisher-Yates
+      const shuffleArray = (array) => {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      };
+      
       const rightOptions = useMemo(
-        () => MATCHING.map(m => m.right).sort(() => Math.random() - 0.5),
+        () => shuffleArray(MATCHING.map(m => m.right)),
         []
       );
 
       // Endurstilla föll
       const resetTranslation = () => {
         setTranslationAnswer('');
-        setTranslationLanguage('');
         setTranslationFeedback(null);
       };
       const resetMC = () => { setMcAnswers([]); setMcChecked(false); };
@@ -184,8 +193,8 @@
 
       // Þýðing
       const checkTranslation = async () => {
-        if (!translationAnswer.trim() || !translationLanguage.trim()) {
-          alert('Vinsamlegast fylltu út bæði svör.');
+        if (!translationAnswer.trim()) {
+          alert('Vinsamlegast skrifaðu þýðingu.');
           return;
         }
         setTranslationLoading(true);
@@ -197,20 +206,19 @@
               { role: 'system', content: 'You are a helpful Icelandic language tutor. Return only valid JSON.' },
               {
                 role: 'user',
-                content: `Nemandi á að þýða orðið "${ORIGINAL_TEXT}" yfir á sitt móðurmál.
-Hann sagði að móðurmálið sé: "${translationLanguage}"
-Hann gaf svarið: "${translationAnswer}"
+                content: `Nemandi á að þýða íslensku orðið "${ORIGINAL_TEXT}" yfir á sitt móðurmál.
+Nemandinn gaf þýðinguna: "${translationAnswer}"
 
-Ef mál og þýðing eru bæði röng (t.d. hann segir móðurmál sitt sé enska en svarið er á frönsku), svaraðu:
-{ "correct": false, "feedback": "Málið sem þú nefndir og þýðingin passa ekki saman." }
+Greindu fyrst hvaða tungumál þetta er (t.d. enska, spænska, pólska).
+Síðan athugaðu hvort þýðingin sé rétt.
 
-Annars, ef þýðingin er rétt (merkingarlega lík), svaraðu:
-{ "correct": true, "feedback": "Frábært! Þessi þýðing er rétt." }
+Ef þýðingin er rétt eða mjög lík í merkingu, svaraðu:
+{ "correct": true, "feedback": "Frábært! Þetta er rétt þýðing á [tungumálið]." }
 
-Ef þýðingin er röng eða ólík, svaraðu:
-{ "correct": false, "feedback": "Það er ekki alveg rétt. Reyndu aftur!" }
+Ef þýðingin er röng, svaraðu:
+{ "correct": false, "feedback": "Þetta er ekki alveg rétt. Orðið '${ORIGINAL_TEXT}' þýðir [stutt vísbending] á [tungumálið]." }
 
-Svaraðu EINGÖNGU með JSON á þessu sniði, ekkert annað.`
+Svaraðu EINGÖNGU með JSON, ekkert annað.`
               }
             ]
           });
@@ -258,13 +266,20 @@ Svaraðu EINGÖNGU með JSON á þessu sniði, ekkert annað.`
                 role: 'user',
                 content: `Spurning: "${question.question}"
 Svar nemanda: "${userAnswer}"
-Lykilorð: ${question.expectedContent.join(', ')}
+Lykilorð sem ætlast er til: ${question.expectedContent.join(', ')}
 
-Ef svarið inniheldur lykilorðin eða samsvarandi merkingu, svaraðu:
-{ "correct": true, "feedback": "Mjög gott! Þetta svar er rétt." }
+Athugaðu svarið:
+1. Ef svarið inniheldur ÖLL eða FLEST lykilorðin (eða samsvarandi merkingu), þá er það RÉTT.
+2. Ef svarið inniheldur HLUTA af lykilorðunum, þá er það NÆSTUM RÉTT - samþykkja það en benda á hvað vantar.
+3. Ef svarið er rangt eða missir af meginþáttunum, gefðu hjálplega ábendingu.
 
-Annars gefðu leiðbeinandi ábendingu án þess að gefa svarið alveg. Svaraðu:
-{ "correct": false, "feedback": "Reyndu að hugsa um [vísbendingu]..." }
+Ef RÉTT eða NÆSTUM RÉTT, svaraðu:
+{ "correct": true, "feedback": "Mjög gott! [ef eitthvað vantar: 'Þú gætir líka nefnt...']" }
+
+Ef það vantar mikilvæga hluta, svaraðu:
+{ "correct": false, "feedback": "Gott byrjað! En reyndu líka að hugsa um [vísbending án þess að gefa alveg svarið]." }
+
+Vertu VÆGUR í dómnum - ef nemandinn er á réttri leið, samþykkja það!
 
 Svaraðu EINGÖNGU með JSON, ekkert annað.`
               }
@@ -304,41 +319,32 @@ Svaraðu EINGÖNGU með JSON, ekkert annað.`
       return (
         <div className="min-h-screen pb-20">
           {/* Hljóðspilari */}
-          <div className="sticky-player p-6">
+          <div className="sticky-player p-4">
             <div className="max-w-4xl mx-auto">
-              <h1 className="text-3xl font-light text-gray-900 mb-4">🎧 Hlustun 4: Veitingastaður</h1>
-              <p className="text-gray-600 font-light mb-4">Sigurður prófar víetnamskan mat (A2)</p>
               <audio ref={audioRef} src="hlustun4.mp3" preload="metadata" />
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3 bg-blue-50 rounded-full px-4 py-3 border-2 border-blue-100">
                 <button onClick={togglePlay}
-                  className="bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 transition-colors font-light flex items-center gap-2">
-                  {isPlaying ? '⏸' : '▶'} {isPlaying ? 'Pása' : 'Spila'}
+                  className="bg-blue-500 text-white w-10 h-10 rounded-full hover:bg-blue-600 transition-colors flex items-center justify-center text-xl">
+                  {isPlaying ? '⏸' : '▶'}
                 </button>
-                <label className="flex items-center gap-2 font-light text-gray-700">
-                  Hraði:
-                  <select value={playbackRate} onChange={handleRateChange}
-                    className="border-2 border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    <option value="0.75">0.75×</option>
-                    <option value="1">1×</option>
-                    <option value="1.25">1.25×</option>
-                    <option value="1.5">1.5×</option>
-                  </select>
-                </label>
+                <span className="text-gray-600 font-light text-sm flex-1">🎧 Hlusta á textann</span>
+                <select value={playbackRate} onChange={handleRateChange}
+                  className="border-2 border-blue-200 bg-white rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-light">
+                  <option value="0.75">0.75×</option>
+                  <option value="1">1×</option>
+                  <option value="1.25">1.25×</option>
+                  <option value="1.5">1.5×</option>
+                </select>
               </div>
             </div>
           </div>
 
           <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-            {/* Hlustunartexti */}
-            <section className="bg-blue-50 border-2 border-blue-200 rounded-lg p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-4">📝 Hlustunartexti</h2>
-              <div className="space-y-3 text-gray-700 font-light leading-relaxed">
-                <p>Það er föstudagur og hádegishlé í vinnunni. Sigurður vinnur á tannlæknastofu í Kópavogi og ákveður að fara út að borða með vinnufélaga sínum, Ólafi. „Það er nýr staður hérna við götuna," segir Ólafur. „Þar er víetnamskur matur."</p>
-                <p>Sigurður hefur aldrei smakkað mat frá Víetnam áður, en hann vill prófa eitthvað nýtt. Þeir fara inn á litla, hlýlega veitingastaðinn. Það ilmar af kryddi, fersku brauði og grænmeti.</p>
-                <p>Þeir panta báðir bahn mí með kjúklingi. Þegar maturinn kemur, segir Sigurður: „Vá, þetta er bæði milt og svolítið sterkt á sama tíma. Þetta hefur sérstakt bragð." Ólafur hlær og segir: „Já, ekki alveg eins og hefðbundinn hádegismatur."</p>
-                <p>Um kvöldið segir Sigurður við Önnu: „Ég smakkaði í dag víetnamska samloku og hún var frábær." Anna brosir: „Þú verður að bjóða okkur næst – kannski lærum við að elda svona heima!"</p>
-              </div>
-            </section>
+            {/* Titill */}
+            <div className="text-center pt-4">
+              <h1 className="text-4xl font-light text-gray-900 mb-2">🎧 Hlustun 4: Veitingastaður</h1>
+              <p className="text-gray-600 font-light">Sigurður prófar víetnamskan mat (A2)</p>
+            </div>
 
             {/* 1. Þýðing */}
             <section className="bg-white rounded-lg shadow-sm p-8">
@@ -346,12 +352,6 @@ Svaraðu EINGÖNGU með JSON, ekkert annað.`
               <p className="text-gray-700 font-light mb-4">Hvað þýðir „<strong>{ORIGINAL_TEXT}</strong>" á þínu móðurmáli?</p>
               {!translationFeedback ? (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-light text-gray-600 mb-2">Móðurmál mitt er:</label>
-                    <input type="text" value={translationLanguage} onChange={(e) => setTranslationLanguage(e.target.value)}
-                      placeholder="t.d. pólska, enska, franska..."
-                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light" />
-                  </div>
                   <div>
                     <label className="block text-sm font-light text-gray-600 mb-2">Þýðing á „{ORIGINAL_TEXT}":</label>
                     <input type="text" value={translationAnswer} onChange={(e) => setTranslationAnswer(e.target.value)}
