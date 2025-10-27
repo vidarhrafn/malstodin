@@ -53,6 +53,54 @@
       background: #c1c1c1;
       border-radius: 10px;
     }
+    
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      overflow-y: auto;
+    }
+    .modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      max-width: 800px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .modal-content::-webkit-scrollbar {
+      width: 8px;
+    }
+    .modal-content::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .modal-content::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+    
+    /* Sticky text button */
+    .sticky-text-btn {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: white;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -163,7 +211,8 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
     ];
 
     const Hljóðfæri = () => {
-      const [stage, setStage] = useState('reading');
+      const [stage, setStage] = useState('multiplechoice');
+      const [showModal, setShowModal] = useState(false);
       const [mcAnswers, setMcAnswers] = useState([]);
       const [showMcFeedback, setShowMcFeedback] = useState(false);
       
@@ -280,9 +329,19 @@ Textinn var:
             <p className="text-gray-600 font-light text-lg">Málstöðin – Lesskilningur</p>
           </header>
 
-          <main className="max-w-4xl mx-auto">
-            {stage === 'reading' && (
-              <div className="bg-white rounded-lg shadow-sm p-8">
+          {/* Modal fyrir texta */}
+          <div className={`modal ${showModal ? 'active' : ''}`} onClick={() => setShowModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-light text-gray-800">📖 Textinn</h2>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="text-gray-500 hover:text-gray-700 text-3xl leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
                 <div className="prose prose-lg max-w-none">
                   <div className="text-gray-800 font-light leading-relaxed space-y-4 text-lg">
                     {READING_TEXT.split('\n').map((paragraph, idx) => (
@@ -290,16 +349,20 @@ Textinn var:
                     ))}
                   </div>
                 </div>
-                <div className="text-center mt-8">
-                  <button
-                    onClick={() => setStage('multiplechoice')}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
-                  >
-                    Halda áfram í spurningar →
-                  </button>
-                </div>
               </div>
-            )}
+            </div>
+          </div>
+
+          <main className="max-w-4xl mx-auto">
+            {/* Sticky hnappur til að skoða textann */}
+            <div className="sticky-text-btn mb-6 p-4 rounded-lg">
+              <button
+                onClick={() => setShowModal(true)}
+                className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-light text-lg"
+              >
+                📖 Skoða textann
+              </button>
+            </div>
 
             {stage === 'multiplechoice' && (
               <div className="bg-white rounded-lg shadow-sm p-8">
@@ -601,7 +664,7 @@ Textinn var:
 
                     <div className="text-center mt-8">
                       <button
-                        onClick={() => window.history.back()}
+                        onClick={() => window.location.href = '../index.html'}
                         className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
                       >
                         ← Til baka
