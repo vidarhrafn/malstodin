@@ -283,17 +283,23 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         setShortLoading(newLoading);
 
         try {
-          const systemPrompt = `Þú ert íslensku kennari. Nemandinn las texta um að spila á hljóðfæri og svarar nú stuttri spurningu. Gefðu stutt, hvetjandi endurgjöf (2-3 línur) á íslensku. Ef svarið er rétt eða svipað og rétt, hvettu nemandann og staðfestu svarið. Ef svarið er rangt eða ónákvæmt, útskýrðu rétta svarið á skemmtilegan hátt.
+          const feedback = await callOpenAI({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: `Þú ert íslensku kennari. Nemandinn las texta um að spila á hljóðfæri og svarar nú stuttri spurningu. Gefðu stutt, hvetjandi endurgjöf (2-3 línur) á íslensku. Ef svarið er rétt eða svipað og rétt, hvettu nemandann og staðfestu svarið. Ef svarið er rangt eða ónákvæmt, útskýrðu rétta svarið á skemmtilegan hátt.
 
 Spurningin var: "${question}"
 
 Textinn var:
-"${READING_TEXT}"`;
-
-          const feedback = await callOpenAI({
-            model: 'gpt-4o-mini',
-            systemPrompt,
-            userMessage: answer,
+"${READING_TEXT}"`
+              },
+              {
+                role: 'user',
+                content: answer
+              }
+            ],
             temperature: 0.7,
             max_tokens: 200
           });
@@ -465,9 +471,9 @@ Textinn var:
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <div className="text-center mb-8">
                   <div className="text-6xl mb-4">🟩</div>
-                  <h2 className="text-2xl font-light text-gray-800 mb-4">Rétt eða rangt</h2>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Satt eða ósatt</h2>
                   <p className="text-gray-600 font-light">
-                    Veldu hvort setningin er rétt (R) eða röng (ÓR)
+                    Veldu hvort setningin er sönn (S) eða ósönn (Ó)
                   </p>
                 </div>
 
@@ -497,7 +503,7 @@ Textinn var:
                                 : 'bg-gray-100 border-2 border-gray-300 hover:border-blue-400'
                             } disabled:cursor-default`}
                           >
-                            {showTfFeedback && isCorrect ? '✓ ' : ''}Rétt (R)
+                            {showTfFeedback && isCorrect ? '✓ ' : ''}Satt (S)
                           </button>
                           <button
                             onClick={() => handleTfAnswer(index, false)}
@@ -514,7 +520,7 @@ Textinn var:
                                 : 'bg-gray-100 border-2 border-gray-300 hover:border-blue-400'
                             } disabled:cursor-default`}
                           >
-                            {showTfFeedback && !isCorrect ? '✓ ' : ''}Rangt (ÓR)
+                            {showTfFeedback && !isCorrect ? '✓ ' : ''}Ósatt (Ó)
                           </button>
                         </div>
                       </div>
