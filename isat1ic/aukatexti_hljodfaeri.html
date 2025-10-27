@@ -120,6 +120,16 @@
       return data.content;
     }
 
+    // Shuffle function
+    function shuffleArray(array) {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    }
+
     const READING_TEXT = `Margt fólk hefur áhuga á tónlist og vill læra að spila á hljóðfæri eða syngja.
 Sumir spila á gítar, píanó eða fiðlu, en aðrir velja trommur eða flautu.
 Það tekur tíma að læra, en það er mjög gaman.
@@ -137,7 +147,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
 Það hjálpar mér að slaka á eftir langan dag og gleðja aðra.
 Það er yndislegt þegar maður getur spilað uppáhaldslagið sitt og sungið með.`;
 
-    const MULTIPLE_CHOICE = [
+    const MULTIPLE_CHOICE_ORIGINAL = [
       {
         question: 'Hvað þarf maður að gera til að verða betri í að spila á hljóðfæri?',
         options: [
@@ -215,6 +225,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       const [showModal, setShowModal] = useState(false);
       const [mcAnswers, setMcAnswers] = useState([]);
       const [showMcFeedback, setShowMcFeedback] = useState(false);
+      const [shuffledQuestions, setShuffledQuestions] = useState([]);
       
       const [tfAnswers, setTfAnswers] = useState([]);
       const [showTfFeedback, setShowTfFeedback] = useState(false);
@@ -224,6 +235,24 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       const [shortLoading, setShortLoading] = useState([false, false, false, false, false]);
       
       const [translations, setTranslations] = useState(['', '']);
+      const [translationFeedback, setTranslationFeedback] = useState([null, null]);
+      const [translationLoading, setTranslationLoading] = useState([false, false]);
+
+      // Shuffle questions when component mounts
+      useEffect(() => {
+        const shuffled = MULTIPLE_CHOICE_ORIGINAL.map(q => {
+          const correctAnswer = q.options[q.correct];
+          const shuffledOptions = shuffleArray(q.options);
+          const newCorrectIndex = shuffledOptions.indexOf(correctAnswer);
+          
+          return {
+            question: q.question,
+            options: shuffledOptions,
+            correct: newCorrectIndex
+          };
+        });
+        setShuffledQuestions(shuffled);
+      }, []);
 
       const handleMcAnswer = (questionIndex, optionIndex) => {
         if (showMcFeedback) return;
@@ -233,7 +262,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       };
 
       const checkMcAnswers = () => {
-        if (mcAnswers.length < MULTIPLE_CHOICE.length) {
+        if (mcAnswers.length < shuffledQuestions.length) {
           alert('Vinsamlegast svaraðu öllum spurningum!');
           return;
         }
@@ -323,9 +352,55 @@ Textinn var:
         setTranslations(newTranslations);
       };
 
+      const getTranslationFeedback = async (wordIndex) => {
+        const word = TRANSLATION_WORDS[wordIndex];
+        const translation = translations[wordIndex];
+
+        if (!translation.trim() || translation.trim().length < 1) {
+          alert('Vinsamlegast skrifaðu þýðingu!');
+          return;
+        }
+
+        const newLoading = [...translationLoading];
+        newLoading[wordIndex] = true;
+        setTranslationLoading(newLoading);
+
+        try {
+          const feedback = await callOpenAI({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: `Þú ert íslensku kennari. Nemandinn er að þýða íslensk orð á sitt móðurmál. Athugaðu hvort þýðingin er rétt eða góð nálgun. Gefðu stutt, hvetjandi endurgjöf (1-2 línur) á íslensku. Ef þýðingin er rétt eða góð, hvettu nemandann. Ef þýðingin er röng, gefðu rétta þýðingu á ensku og útskýrðu.
+
+Íslenska orðið er: "${word.icelandic}"
+Nemandinn þýddi: "${translation}"`
+              },
+              {
+                role: 'user',
+                content: 'Er þessi þýðing rétt?'
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 150
+          });
+
+          const newFeedback = [...translationFeedback];
+          newFeedback[wordIndex] = feedback;
+          setTranslationFeedback(newFeedback);
+        } catch (error) {
+          alert('Villa kom upp. Reyndu aftur.');
+          console.error(error);
+        } finally {
+          const newLoading = [...translationLoading];
+          newLoading[wordIndex] = false;
+          setTranslationLoading(newLoading);
+        }
+      };
+
       const allShortQuestionsAnswered = shortFeedback.every(f => f !== null);
 
-      const mcScore = mcAnswers.filter((ans, idx) => ans === MULTIPLE_CHOICE[idx].correct).length;
+      const mcScore = mcAnswers.filter((ans, idx) => ans === shuffledQuestions[idx]?.correct).length;
       const tfScore = tfAnswers.filter((ans, idx) => ans === TRUE_FALSE[idx].correct).length;
 
       return (
@@ -370,7 +445,7 @@ Textinn var:
               </button>
             </div>
 
-            {stage === 'multiplechoice' && (
+            {stage === 'multiplechoice' && shuffledQuestions.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <div className="text-center mb-8">
                   <div className="text-6xl mb-4">🟦</div>
@@ -381,7 +456,7 @@ Textinn var:
                 </div>
 
                 <div className="space-y-8">
-                  {MULTIPLE_CHOICE.map((q, qIndex) => (
+                  {shuffledQuestions.map((q, qIndex) => (
                     <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-6">
                       <p className="font-normal text-gray-800 mb-4 text-lg">
                         {qIndex + 1}. {q.question}
@@ -428,7 +503,7 @@ Textinn var:
                     <div className="text-center">
                       <button
                         onClick={checkMcAnswers}
-                        disabled={mcAnswers.length < MULTIPLE_CHOICE.length}
+                        disabled={mcAnswers.length < shuffledQuestions.length}
                         className="bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg"
                       >
                         Athuga svör
@@ -439,13 +514,13 @@ Textinn var:
                       <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
                         <div className="text-center">
                           <div className="text-4xl mb-2">
-                            {mcScore === MULTIPLE_CHOICE.length ? '🎉' : mcScore >= 2 ? '👍' : '💪'}
+                            {mcScore === shuffledQuestions.length ? '🎉' : mcScore >= 2 ? '👍' : '💪'}
                           </div>
                           <p className="text-xl font-normal text-gray-800 mb-2">
-                            Þú fékkst {mcScore} af {MULTIPLE_CHOICE.length} rétt!
+                            Þú fékkst {mcScore} af {shuffledQuestions.length} rétt!
                           </p>
                           <p className="text-gray-600 font-light">
-                            {mcScore === MULTIPLE_CHOICE.length 
+                            {mcScore === shuffledQuestions.length 
                               ? 'Frábær vinna! Þú skilur textann mjög vel.' 
                               : mcScore >= 2 
                               ? 'Vel gert! Þú ert að gera góða framfarir.'
@@ -633,39 +708,46 @@ Textinn var:
                       </p>
                     </div>
 
-                    <div className="max-w-2xl mx-auto">
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-2 border-gray-200">
-                          <thead>
-                            <tr className="bg-gray-50">
-                              <th className="border-2 border-gray-200 px-6 py-3 text-left font-normal text-gray-700">
-                                Orð á íslensku
-                              </th>
-                              <th className="border-2 border-gray-200 px-6 py-3 text-left font-normal text-gray-700">
-                                Þýðing á þínu tungumáli
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {TRANSLATION_WORDS.map((word, index) => (
-                              <tr key={index}>
-                                <td className="border-2 border-gray-200 px-6 py-4 font-light text-gray-800">
-                                  {word.icelandic}
-                                </td>
-                                <td className="border-2 border-gray-200 px-6 py-4">
-                                  <input
-                                    type="text"
-                                    value={translations[index]}
-                                    onChange={(e) => handleTranslationChange(index, e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none font-light"
-                                    placeholder="Skrifaðu þýðingu hér..."
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                    <div className="max-w-2xl mx-auto space-y-6">
+                      {TRANSLATION_WORDS.map((word, index) => (
+                        <div key={index} className="border-2 border-gray-100 rounded-lg p-6">
+                          <div className="mb-4">
+                            <p className="font-normal text-gray-800 text-lg mb-2">
+                              Þýddu orðið: <span className="font-semibold">{word.icelandic}</span>
+                            </p>
+                          </div>
+                          
+                          <input
+                            type="text"
+                            value={translations[index]}
+                            onChange={(e) => handleTranslationChange(index, e.target.value)}
+                            disabled={translationFeedback[index] !== null}
+                            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base mb-4 disabled:bg-gray-50"
+                            placeholder="Skrifaðu þýðingu hér..."
+                          />
+
+                          {!translationFeedback[index] ? (
+                            <button
+                              onClick={() => getTranslationFeedback(index)}
+                              disabled={translationLoading[index] || translations[index].trim().length < 1}
+                              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                            >
+                              {translationLoading[index] ? 'Bíð...' : 'Fá endurgjöf'}
+                            </button>
+                          ) : (
+                            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <span className="text-2xl">✨</span>
+                                <div className="flex-1">
+                                  <p className="text-gray-800 font-light leading-relaxed">
+                                    {translationFeedback[index]}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
 
                     <div className="text-center mt-8">
