@@ -22,6 +22,30 @@
       background-color: #3b82f6;
       color: white;
     }
+    .sortable-header {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      padding-right: 20px;
+    }
+    .sortable-header:hover {
+      background-color: #f3f4f6;
+    }
+    .sortable-header::after {
+      content: '⇅';
+      position: absolute;
+      right: 6px;
+      opacity: 0.3;
+      font-size: 12px;
+    }
+    .sortable-header.sorted-asc::after {
+      content: '↑';
+      opacity: 1;
+    }
+    .sortable-header.sorted-desc::after {
+      content: '↓';
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -96,6 +120,30 @@
     // Sýna notandanafn
     document.getElementById('currentUser').textContent = currentUser.username;
 
+    // SORTING FUNCTION
+    function sortTable(column) {
+      // Toggle direction ef sama dálkur
+      if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+      }
+      
+      // Uppfæra visual indicators
+      document.querySelectorAll('.sortable-header').forEach(header => {
+        header.classList.remove('sorted-asc', 'sorted-desc');
+      });
+      
+      const activeHeader = document.querySelector(`[data-sort="${column}"]`);
+      if (activeHeader) {
+        activeHeader.classList.add(`sorted-${currentSort.direction}`);
+      }
+      
+      // Re-render með sorting
+      displayDataForExercise(currentExercise);
+    }
+
     // Skilgreina allar æfingar í Áhugamál & Tómstundir kaflanum
     const exercises = [
       { id: 'ahugamal', name: 'Áhugamál', type: 'standard' },
@@ -111,6 +159,7 @@
     let allUsers = [];
     let allProgress = [];
     let currentExercise = 'ahugamal'; // Default til að byrja með
+    let currentSort = { column: null, direction: 'asc' }; // Sorting state
 
     // Búa til tabs
     function createTabs() {
@@ -244,8 +293,61 @@
         userMap[user.id] = user.username;
       });
 
-      // Raða eftir dagsetningu (nýjast fyrst)
-      exerciseProgress.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      // Búa til map fyrir display names
+      const displayNameMap = {};
+      allUsers.forEach(user => {
+        const username = user.username;
+        displayNameMap[user.id] = usernameToFullName[username] || username;
+      });
+
+      // DYNAMIC SORTING basað á currentSort
+      if (currentSort.column) {
+        exerciseProgress.sort((a, b) => {
+          let aVal, bVal;
+          
+          switch(currentSort.column) {
+            case 'name':
+              aVal = displayNameMap[a.user_id] || '';
+              bVal = displayNameMap[b.user_id] || '';
+              break;
+            case 'score':
+              aVal = a.score || 0;
+              bVal = b.score || 0;
+              break;
+            case 'quiz_score':
+              aVal = a.quiz_score || 0;
+              bVal = b.quiz_score || 0;
+              break;
+            case 'writing_score':
+              aVal = a.writing_score || 0;
+              bVal = b.writing_score || 0;
+              break;
+            case 'translation_score':
+              aVal = a.translation_score || 0;
+              bVal = b.translation_score || 0;
+              break;
+            case 'date':
+              aVal = new Date(a.created_at).getTime();
+              bVal = new Date(b.created_at).getTime();
+              break;
+            default:
+              return 0;
+          }
+          
+          // String comparison
+          if (typeof aVal === 'string') {
+            const comparison = aVal.localeCompare(bVal, 'is');
+            return currentSort.direction === 'asc' ? comparison : -comparison;
+          }
+          
+          // Number comparison
+          const comparison = aVal - bVal;
+          return currentSort.direction === 'asc' ? comparison : -comparison;
+        });
+      } else {
+        // Default: raða eftir dagsetningu (nýjast fyrst)
+        exerciseProgress.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      }
 
       // Find exercise type
       const exercise = exercises.find(ex => ex.id === exerciseId);
@@ -261,25 +363,25 @@
           mainTable.innerHTML = `
             <thead class="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="name" onclick="sortTable('name')">
                   Nemandi
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="score" onclick="sortTable('score')">
                   Rétt/Rangt
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="quiz_score" onclick="sortTable('quiz_score')">
                   Krossaspurningar
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="writing_score" onclick="sortTable('writing_score')">
                   Stuttar spurningar
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="translation_score" onclick="sortTable('translation_score')">
                   Þýðingar
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
                   Staða
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="date" onclick="sortTable('date')">
                   Dagsetning
                 </th>
               </tr>
@@ -389,19 +491,19 @@
         mainTable.innerHTML = `
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="name" onclick="sortTable('name')">
                 Nemandi
               </th>
-              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="quiz_score" onclick="sortTable('quiz_score')">
                 Krossaspurningar
               </th>
-              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="score" onclick="sortTable('score')">
                 Skriflegt
               </th>
               <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
                 Staða
               </th>
-              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider">
+              <th class="px-6 py-3 text-left text-xs font-normal text-gray-600 uppercase tracking-wider sortable-header" data-sort="date" onclick="sortTable('date')">
                 Dagsetning
               </th>
             </tr>
