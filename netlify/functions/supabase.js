@@ -59,9 +59,35 @@ exports.handler = async (event) => {
 
     // SAVE PROGRESS
     if (action === 'saveProgress') {
-      const { user_id, exercise_id, completed, score, quiz_score, tf_score, mc_score, short_score, matching_score, open_score } = params;
+      const { 
+        user_id, 
+        exercise_id, 
+        completed, 
+        score, 
+        quiz_score, 
+        tf_score, 
+        mc_score, 
+        short_score, 
+        matching_score, 
+        open_score,
+        writing_score,      // NÝTT - fyrir stuttar spurningar í hljodfaeri
+        translation_score   // NÝTT - fyrir þýðingar í hljodfaeri
+      } = params;
       
-      console.log('🔹 Attempting to save progress:', { user_id, exercise_id, completed, score, quiz_score, tf_score, mc_score, short_score, matching_score, open_score });
+      console.log('🔹 Attempting to save progress:', { 
+        user_id, 
+        exercise_id, 
+        completed, 
+        score, 
+        quiz_score, 
+        tf_score, 
+        mc_score, 
+        short_score, 
+        matching_score, 
+        open_score,
+        writing_score,
+        translation_score
+      });
       
       // Build the data object, only including fields that are defined
       const progressData = {
@@ -78,6 +104,8 @@ exports.handler = async (event) => {
       if (short_score !== undefined) progressData.short_score = short_score;
       if (matching_score !== undefined) progressData.matching_score = matching_score;
       if (open_score !== undefined) progressData.open_score = open_score;
+      if (writing_score !== undefined) progressData.writing_score = writing_score;           // NÝTT
+      if (translation_score !== undefined) progressData.translation_score = translation_score; // NÝTT
       
       const { data, error } = await supabase
         .from('progress')
