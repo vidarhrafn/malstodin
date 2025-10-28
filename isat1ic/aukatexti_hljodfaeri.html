@@ -131,43 +131,49 @@
       return newArray;
     }
 
-    // Save progress to Supabase
-    async function saveProgress(exerciseId, completed, score, quizScore = null) {
+    // Save progress to Supabase (með writing_score og translation_score)
+    async function saveProgress(exerciseId, completed, score = null, quizScore = null, writingScore = null, translationScore = null) {
       const user = getCurrentUser();
       if (!user) return;
 
       try {
+        const payload = {
+          action: 'saveProgress',
+          user_id: user.id,
+          exercise_id: exerciseId,
+          completed: completed
+        };
+        
+        // Bæta við einkunnir ef til
+        if (score !== null) payload.score = score;
+        if (quizScore !== null) payload.quiz_score = quizScore;
+        if (writingScore !== null) payload.writing_score = writingScore;
+        if (translationScore !== null) payload.translation_score = translationScore;
+
         const response = await fetch('/.netlify/functions/supabase', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'saveProgress',
-            user_id: user.id,
-            exercise_id: exerciseId,
-            completed: completed,
-            score: score,
-            quiz_score: quizScore
-          })
+          body: JSON.stringify(payload)
         });
 
         if (response.ok) {
-          console.log('✅ Framvinda vistuð:', exerciseId, '- Score:', score, '- Quiz:', quizScore);
+          console.log('✅ Framvinda vistuð:', exerciseId, payload);
         }
       } catch (error) {
         console.error('❌ Villa við að vista framvindu:', error);
       }
     }
 
-    const READING_TEXT = `Margt fólk hefur áhuga á tónlist og vill læra að spila á hljodfaeri eða syngja.
+    const READING_TEXT = `Margt fólk hefur áhuga á tónlist og vill læra að spila á hljóðfæri eða syngja.
 Sumir spila á gítar, píanó eða fiðlu, en aðrir velja trommur eða flautu.
 Það tekur tíma að læra, en það er mjög gaman.
-Þegar maður byrjar að spila á hljodfaeri þarf maður að æfa sig reglulega.
+Þegar maður byrjar að spila á hljóðfæri þarf maður að æfa sig reglulega.
 Margir æfa sig nokkrum sinnum í viku, kannski hálftíma eða klukkutíma í einu.
 Þegar maður æfir sig oft, verður maður betri og betri.
 Það er gott að vera þolinmóður og ekki gefast upp þó að það gangi hægt í byrjun.
 Sumir læra í tónlistarskóla eða taka einkatíma, en aðrir læra sjálfir með myndböndum á netinu.
-Það þarf ekki alltaf að eiga dýrt hljodfaeri — stundum er hægt að kaupa notað eða fá lánað.
-Að spila á hljodfaeri getur verið bæði róandi og spennandi.
+Það þarf ekki alltaf að eiga dýrt hljóðfæri — stundum er hægt að kaupa notað eða fá lánað.
+Að spila á hljóðfæri getur verið bæði róandi og spennandi.
 Fólk getur spilað eitt eða með öðrum, til dæmis í hljómsveit.
 Það er líka skemmtilegt að spila á tónleikum eða fyrir fjölskylduna heima.
 Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
@@ -177,9 +183,9 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
 
     const MULTIPLE_CHOICE_ORIGINAL = [
       {
-        question: 'Hvað þarf maður að gera til að verða betri í að spila á hljodfaeri?',
+        question: 'Hvað þarf maður að gera til að verða betri í að spila á hljóðfæri?',
         options: [
-          'Kaupa nýtt hljodfaeri á hverju ári.',
+          'Kaupa nýtt hljóðfæri á hverju ári.',
           'Æfa sig reglulega og vera þolinmóður.',
           'Hlusta á tónlist allan daginn.',
           'Fara oft á tónleika.'
@@ -187,7 +193,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         correct: 1
       },
       {
-        question: 'Hvar læra sumir að spila á hljodfaeri samkvæmt textanum?',
+        question: 'Hvar læra sumir að spila á hljóðfæri samkvæmt textanum?',
         options: [
           'Í bókasafni eða íþróttahúsi.',
           'Í tónlistarskóla eða með myndböndum á netinu.',
@@ -197,7 +203,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         correct: 1
       },
       {
-        question: 'Hvers vegna finnst mörgum gott að spila á hljodfaeri?',
+        question: 'Hvers vegna finnst mörgum gott að spila á hljóðfæri?',
         options: [
           'Það hjálpar þeim að sofa betur.',
           'Það hjálpar þeim að slaka á og vera skapandi.',
@@ -210,7 +216,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
 
     const TRUE_FALSE = [
       {
-        statement: 'Það er fljótlegt og auðvelt að læra að spila á hljodfaeri.',
+        statement: 'Það er fljótlegt og auðvelt að læra að spila á hljóðfæri.',
         correct: false
       },
       {
@@ -236,7 +242,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
     ];
 
     const SHORT_OPEN_QUESTIONS = [
-      'Hvað þarf maður til að byrja að spila á hljodfaeri?',
+      'Hvað þarf maður til að byrja að spila á hljóðfæri?',
       'Hvernig getur fólk lært að spila – nefndu tvær leiðir.',
       'Af hverju þarf að æfa sig reglulega?',
       'Hvernig hjálpar tónlist fólki samkvæmt textanum?',
@@ -244,11 +250,11 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
     ];
 
     const TRANSLATION_WORDS = [
-      { icelandic: 'hljodfaeri', translation: '' },
+      { icelandic: 'hljóðfæri', translation: '' },
       { icelandic: 'þolinmóður', translation: '' }
     ];
 
-    const Hljodfaeri = () => {
+    const Hljóðfæri = () => {
       const [stage, setStage] = useState('multiplechoice');
       const [showModal, setShowModal] = useState(false);
       const [mcAnswers, setMcAnswers] = useState([]);
@@ -265,8 +271,8 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       
       const [translations, setTranslations] = useState(['', '']);
       const [translationFeedback, setTranslationFeedback] = useState([null, null]);
-      const [translationLoading, setTranslationLoading] = useState([false, false]);
       const [translationScores, setTranslationScores] = useState([null, null]);
+      const [translationLoading, setTranslationLoading] = useState([false, false]);
 
       // Shuffle questions when component mounts
       useEffect(() => {
@@ -296,14 +302,15 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
           alert('Vinsamlegast svaraðu öllum spurningum!');
           return;
         }
-        setShowMcFeedback(true);
         
         // Telja rétt svör
         const correctCount = mcAnswers.filter((ans, idx) => ans === shuffledQuestions[idx].correct).length;
         const mcScore = Math.round((correctCount / shuffledQuestions.length) * 100);
         
         // Vista MC framvindu
-        saveProgress('hljodfaeri', false, null, mcScore);
+        saveProgress('hljodfaeri', false, null, mcScore, null, null);
+        
+        setShowMcFeedback(true);
       };
 
       const continueToTrueFalse = () => {
@@ -328,7 +335,8 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         const tfScore = Math.round((correctTfCount / TRUE_FALSE.length) * 100);
         
         // Vista TF framvindu
-        saveProgress('hljodfaeri', false, tfScore, null);
+        saveProgress('hljodfaeri', false, tfScore, null, null, null);
+        
         setShowTfFeedback(true);
       };
 
@@ -361,7 +369,16 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
             messages: [
               {
                 role: 'system',
-                content: `Þú ert íslensku kennari. Nemandinn las texta um að spila á hljodfaeri og svarar nú stuttri spurningu. Gefðu stutt, hvetjandi endurgjöf (2-3 línur) á íslensku. Ef svarið er rétt eða svipað og rétt, hvettu nemandann og staðfestu svarið. Ef svarið er rangt eða ónákvæmt, útskýrðu rétta svarið á skemmtilegan hátt.
+                content: `Þú ert íslensku kennari. Nemandinn las texta um að spila á hljóðfæri og svarar nú stuttri spurningu. 
+
+Gefðu endurgjöf með þessu sniði:
+EINKUNN: [0-100]
+ENDURGJÖF: [2-3 línur af hvetjandi endurgjöf á íslensku]
+
+Einkunnin á að byggjast á:
+- Málfræðilegri réttmæti (40%)
+- Innihaldi og svari við spurningunni (40%)
+- Orðaforða og framsetningu (20%)
 
 Spurningin var: "${question}"
 
@@ -374,12 +391,28 @@ Textinn var:
               }
             ],
             temperature: 0.7,
-            max_tokens: 200
+            max_tokens: 250
           });
 
+          // Vinna úr svari og draga út einkunn
+          const scoreMatch = feedback.match(/EINKUNN:\s*(\d+)/);
+          const score = scoreMatch ? parseInt(scoreMatch[1]) : 50;
+          const feedbackText = feedback.replace(/EINKUNN:\s*\d+\s*\n?/, '').replace(/ENDURGJÖF:\s*/, '').trim();
+
           const newFeedback = [...shortFeedback];
-          newFeedback[questionIndex] = feedback;
+          newFeedback[questionIndex] = feedbackText;
           setShortFeedback(newFeedback);
+
+          const newScores = [...shortScores];
+          newScores[questionIndex] = score;
+          setShortScores(newScores);
+
+          // Athuga hvort allar spurningar séu svaraðar og vista framvindu
+          const allAnswered = newScores.every(s => s !== null);
+          if (allAnswered) {
+            const avgScore = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length);
+            saveProgress('hljodfaeri', false, null, null, avgScore, null);
+          }
         } catch (error) {
           alert('Villa kom upp. Reyndu aftur.');
           console.error(error);
@@ -415,7 +448,18 @@ Textinn var:
             messages: [
               {
                 role: 'system',
-                content: `Þú ert íslensku kennari. Nemandinn er að þýða íslensk orð á sitt móðurmál. Athugaðu hvort þýðingin er rétt eða góð nálgun. Gefðu stutt, hvetjandi endurgjöf (1-2 línur) á íslensku. Ef þýðingin er rétt eða góð, hvettu nemandann. Ef þýðingin er röng, gefðu rétta þýðingu á ensku og útskýrðu.
+                content: `Þú ert íslensku kennari. Nemandinn er að þýða íslensk orð á sitt móðurmál. 
+
+Gefðu endurgjöf með þessu sniði:
+EINKUNN: [0-100]
+ENDURGJÖF: [1-2 línur af hvetjandi endurgjöf á íslensku]
+
+Einkunnin:
+- 100 = Rétt eða mjög nálægt
+- 50 = Að hluta rétt
+- 0 = Rangt
+
+Ef þýðingin er rétt, hvettu nemandann. Ef röng, gefðu rétta þýðingu á ensku.
 
 Íslenska orðið er: "${word.icelandic}"
 Nemandinn þýddi: "${translation}"`
@@ -429,16 +473,24 @@ Nemandinn þýddi: "${translation}"`
             max_tokens: 150
           });
 
+          // Vinna úr svari og draga út einkunn
+          const scoreMatch = feedback.match(/EINKUNN:\s*(\d+)/);
+          const score = scoreMatch ? parseInt(scoreMatch[1]) : 50;
+          const feedbackText = feedback.replace(/EINKUNN:\s*\d+\s*\n?/, '').replace(/ENDURGJÖF:\s*/, '').trim();
+
           const newFeedback = [...translationFeedback];
-          newFeedback[wordIndex] = feedback;
+          newFeedback[wordIndex] = feedbackText;
           setTranslationFeedback(newFeedback);
-          
-          // Athuga hvort allt sé lokið
-          if (wordIndex === TRANSLATION_WORDS.length - 1) {
-            const allTranslationsDone = newFeedback.every(f => f !== null);
-            if (allTranslationsDone) {
-              saveProgress('hljodfaeri', true, 100, null);
-            }
+
+          const newScores = [...translationScores];
+          newScores[wordIndex] = score;
+          setTranslationScores(newScores);
+
+          // Athuga hvort allar þýðingar séu komnar og vista framvindu
+          const allDone = newScores.every(s => s !== null);
+          if (allDone) {
+            const avgScore = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length);
+            saveProgress('hljodfaeri', true, null, null, null, avgScore);
           }
         } catch (error) {
           alert('Villa kom upp. Reyndu aftur.');
@@ -458,7 +510,7 @@ Nemandinn þýddi: "${translation}"`
       return (
         <div className="min-h-screen py-8 px-4">
           <header className="text-center mb-8">
-            <h1 className="text-5xl font-light text-gray-800 mb-2">🎸 Að spila á hljodfaeri</h1>
+            <h1 className="text-5xl font-light text-gray-800 mb-2">🎸 Að spila á hljóðfæri</h1>
             <p className="text-gray-600 font-light text-lg">Málstöðin – Lesskilningur</p>
           </header>
 
@@ -819,7 +871,7 @@ Nemandinn þýddi: "${translation}"`
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<Hljodfaeri />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<Hljóðfæri />);
   </script>
 </body>
 </html>
