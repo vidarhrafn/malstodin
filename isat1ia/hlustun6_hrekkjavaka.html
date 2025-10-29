@@ -49,51 +49,7 @@
     }
 
     // Textinn sem nemendur geta lesið eftir að hafa lokið öllum spurningum
-    const LISTENING_TEXT = `Það er seinnipartur á sunnudegi í Hafnarfirði.
-
-Bjarki situr í sófanum með símann í höndunum og brosir út í loftið. Hann skrifar skilaboð, bíður í smá stund og brosir aftur þegar svarið kemur.
-
-Lilja gengur inn í stofuna og segir:
-"Ertu alltaf í símanum? Þú æfir þig aldrei lengur á gítar!"
-
-Bjarki horfir vandræðalegur á hana.
-"Ég var bara að senda skilaboð," segir hann og reynir að vera rólegur.
-
-"Já, já," segir Lilja og brosir. "Við sjáum hvernig þú brosir, Bjarki!"
-
-Anna kemur inn í stofuna með þvott.
-"Hver er það sem lætur þig brosa svona mikið?" spyr hún hlæjandi.
-
-Bjarki roðnar.
-"Enginn sérstakur. Bara vinur... eða svona... stelpa."
-
-"Stelpa?" segir Lilja hátt og hlær.
-"Ég vissi það!"
-
-Bjarki stoppar í smá stund og segir svo hátt feiminn:
-"Hún heitir Tinna. Hún er úr öðrum skóla. Ég kynntist henni á Instagram."
-
-Anna brosir hlýlega.
-"Það er fínt að kynnast nýju fólki," segir hún.
-
-"En mundu bara að vera kurteis og tala við fólk í alvöru líka – ekki bara í símanum. Og farðu varlega!"
-
-Lilja flissar og hvíslar:
-"Bjarki er ástfanginn!"
-
-Bjarki kastar púða í hana og segir:
-"Lilja! Þegiðu!"
-
-Sigurður kallar úr eldhúsinu:
-"Hvað er að gerast þarna inni?"
-
-Anna hlær.
-"Bara Bjarki að æfa sig ... í að tala við stelpur!"
-
-Lilja hlær svo mikið að hún þarf að halda um magann.
-
-Bjarki tekur aftur upp símann og hvíslar:
-"Lilja asni..." og brosir.`;
+    const LISTENING_TEXT = `Lilja og Anna, mamma hennar, eru að skera út grasker í eldhúsinu. Þær setja kerti inn í það. Bjarki er í herberginu sínu að mála sig í framan — hann ætlar að vera vampíra og setur blóð fyrir neðan munninn. Lilja hlær og segir að hann sé hræðilegar! „Sjáfi ætlar hún að vera draugur. Pabbi hjálpar henni að setja yfir sig lak og segir: „Þú ert flott, draugur!" Þegar verður dimmt kemur bekkjarystsir hennar, Katja. Katja er frá Úkraínu. Hún er í búningi sem Baba Jaga — gömul norn úr úkraínskri sögu sem á kústinum sínum. Lilja spyr: „Hver er Baba Jaga?" og Katja hær: „Hún er pínu vond en líka fyndni!" Þær tvær ganga um götuna, banka upp á hjá nágrönnum og syngja stutt lag. Margir bjóða þeim sælgæti og segja: „Vá, hvað þið eruð flottir búningum!" Lilja finnst gaman að sjá allar skreytingarnar með fyrir utan húsin. Þegar þær koma heim telur Lilja allu namminu á borðið. Bjarki bíður hana um að deila með sér, en hún segir: „Bara þú hefur að hræða mig!" Kötturinn Mási reynir að stela lakkrísbita af borðinu. Ekta Íslendingur! Pabbi hér og segir: „Jæja, nóg nammi í ár, ekki satt?"`;
 
     const VOCAB = [
       { w: "búningar", hint: "föt sem maður klæðist á sérstökum degi eða í leik" },
@@ -196,6 +152,17 @@ Bjarki tekur aftur upp símann og hvíslar:
       const [openFeedback, setOpenFeedback] = useState(Array(OPEN_QUESTIONS.length).fill(null));
       const [openLoading, setOpenLoading] = useState(Array(OPEN_QUESTIONS.length).fill(false));
 
+      // Fjölvalsspurningar - með stokkuðum valmöguleikum
+      const shuffledMC = useMemo(
+        () => MULTIPLE_CHOICE.map(q => {
+          const optionsWithIndex = q.options.map((opt, idx) => ({ opt, idx }));
+          const shuffled = optionsWithIndex.sort(() => Math.random() - 0.5);
+          const newCorrect = shuffled.findIndex(item => item.idx === q.correct);
+          return { ...q, shuffledOptions: shuffled.map(item => item.opt), newCorrect };
+        }),
+        []
+      );
+
       // Para - með stokkuðum valmöguleikum
       const [matchingAnswers, setMatchingAnswers] = useState(Array(MATCHING.length).fill(''));
       const [matchingChecked, setMatchingChecked] = useState(false);
@@ -260,7 +227,7 @@ Bjarki tekur aftur upp símann og hvíslar:
         setMcAnswers(newAnswers);
       };
       const checkMcAnswers = () => {
-        const allAnswered = MULTIPLE_CHOICE.every((_, i) => Number.isInteger(mcAnswers[i]));
+        const allAnswered = shuffledMC.every((_, i) => Number.isInteger(mcAnswers[i]));
         if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
         setMcChecked(true);
       };
@@ -479,13 +446,13 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Fjölvalsspurningar</h2>
               <p className="text-gray-600 font-light mb-6">Merktu við eitt svar (A–D).</p>
               <div className="space-y-6">
-                {MULTIPLE_CHOICE.map((q, qIndex) => (
+                {shuffledMC.map((q, qIndex) => (
                   <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-6">
                     <p className="font-normal text-gray-800 mb-4">{qIndex + 1}. {q.question}</p>
                     <div className="space-y-2">
-                      {q.options.map((opt, optIndex) => {
+                      {q.shuffledOptions.map((opt, optIndex) => {
                         const isSelected = mcAnswers[qIndex] === optIndex;
-                        const isCorrect = optIndex === q.correct;
+                        const isCorrect = optIndex === q.newCorrect;
                         const showAsCorrect = mcChecked && isCorrect;
                         const showAsIncorrect = mcChecked && isSelected && !isCorrect;
                         return (
@@ -521,7 +488,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                 </div>
               ) : (
                 <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                  <p className="text-green-800 font-light">✓ Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt!</p>
+                  <p className="text-green-800 font-light">✓ Þú fékkst {mcAnswers.filter((a, i) => a === shuffledMC[i].newCorrect).length} af {shuffledMC.length} rétt!</p>
                   <button onClick={resetMC} className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
                     Reyna aftur
                   </button>
