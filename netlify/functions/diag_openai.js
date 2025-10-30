@@ -1,4 +1,3 @@
-// netlify/functions/diag_openai.js
 export async function handler() {
   const key = process.env.OPENAI_API_KEY || "";
   const keyTail = key ? key.slice(-6) : "(no key)";
@@ -14,7 +13,12 @@ export async function handler() {
     statusCode: res.status || 500,
     headers: { "content-type": "application/json" },
     body: JSON.stringify(
-      { usingKeyEnding: keyTail, status: res.status, openaiProjectHeader: projectHeader, response: body },
+      {
+        usingKeyEnding: keyTail,
+        status: res.status,
+        openaiProjectHeader: projectHeader,
+        response: body
+      },
       null,
       2
     ),
