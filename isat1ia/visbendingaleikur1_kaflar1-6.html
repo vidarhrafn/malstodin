@@ -21,7 +21,7 @@
 
     // ---------- Icons ----------
     const SpeakerIcon = ({ active=false }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-5 h-5 ${active?'text-red-500 animate-pulse':'text-gray-700'}`}>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-5 h-5 ${active?'text-red-500 animate-pulse':'text-white'}`}>
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
       </svg>
@@ -50,7 +50,6 @@
     }
 
     // ---------- Kennaralisti (A1) ----------
-    // Hvert atriði: { word, def } – def er einföld útskýring sem AI notar til að semja lýsingu.
     const DEFAULT_WORDS = [
       { word:'hjón', def:'maður og kona sem eru gift' },
       { word:'sjúkrahús', def:'staður þar sem læknar og hjúkrunarfræðingar vinna' },
@@ -75,36 +74,36 @@
     // ---------- Leikur ----------
     const Game = () => {
       const [words, setWords] = useState(DEFAULT_WORDS);
-      const [target, setTarget] = useState(null); // {word, def}
-      const [desc, setDesc] = useState(''); // AI lýsing á A1
+      const [target, setTarget] = useState(null);
+      const [desc, setDesc] = useState('');
       const [input, setInput] = useState('');
-      const [messages, setMessages] = useState([]); // {role:'assistant'|'user'|'system', content}
+      const [messages, setMessages] = useState([]);
       const [wrong, setWrong] = useState(0);
       const [round, setRound] = useState(1);
+      const [correctCount, setCorrectCount] = useState(0);
       const [speakingDesc, setSpeakingDesc] = useState(false);
+      const [loading, setLoading] = useState(false);
 
       const newRound = async () => {
-        // velja orð
+        setLoading(true);
         const pick = words[Math.floor(Math.random()*words.length)];
         setTarget(pick);
         setWrong(0);
-        // biðja AI um stutta A1 lýsingu út frá def
+        setMessages([]);
+        setInput('');
+        
         const sys = `Þú hjálpar íslenskunema á A1. Lýstu hlut eða hugtaki án þess að nefna orðið sjálft. Notaðu 1–3 mjög einfaldar setningar á íslensku. Ekki nota flókin orð. Ekki nefna orðið beint. Ljúktu með spurningu eins og: \\"Hvað er þetta?\\".`;
         const user = `Orð: "${pick.word}". Einföld útskýring: "${pick.def}". Búðu til A1-lýsingu.`;
+        
         try{
           const content = await callOpenAI({ model:'gpt-4o-mini', temperature:0.3, max_tokens:120, messages:[{role:'system', content: sys},{role:'user', content: user}] });
           setDesc(content);
-          setMessages([{ role:'assistant', content }]);
-          // lesa upp lýsinguna strax
-          setSpeakingDesc(true);
-          await speak(content);
-          setSpeakingDesc(false);
+          setLoading(false);
         }catch(e){
           console.error(e);
           const fallback = `Þetta er ${pick.def}. Hvað er þetta?`;
           setDesc(fallback);
-          setMessages([{ role:'assistant', content: fallback }]);
-          await speak(fallback);
+          setLoading(false);
         }
       };
 
@@ -117,43 +116,45 @@
         setInput('');
 
         if(!target) return;
+        
         if(guess === target.word.toLowerCase()){
-          const ok = `✅ Rétt! Orðið var “${target.word}”.`;
-          setMessages(prev=>[...prev, { role:'assistant', content: ok }]);
+          const ok = `✅ Rétt! Orðið var "${target.word}".`;
+          setMessages(prev=>[...prev, { role:'system', content: ok }]);
           await speak(ok);
-          // næsta umferð eftir smá tíma
+          setCorrectCount(c => c + 1);
           setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 900);
           return;
         }
 
-        // rangt gisk
         const wrongMsg = `❌ Ekki rétt. Prófaðu aftur.`;
-        setMessages(prev=>[...prev, { role:'assistant', content: wrongMsg }]);
+        setMessages(prev=>[...prev, { role:'system', content: wrongMsg }]);
         await speak(wrongMsg);
 
         const n = wrong + 1;
         setWrong(n);
 
-        // AUDIO‑VÍSBENDINGAR – ekkert texta‑hint birtist á skjánum
         if(n === 2){
           const first = target.word[0].toUpperCase();
           await speak(`Vísbending: Orðið byrjar á ${first}.`);
+          setMessages(prev=>[...prev, { role:'system', content: '🔊 Vísbending spiluð' }]);
         } else if(n === 4){
           await speak(`Önnur vísbending: Orðið hefur ${target.word.length} stafi.`);
+          setMessages(prev=>[...prev, { role:'system', content: '🔊 Vísbending spiluð' }]);
         } else if(n === 6){
-          await speak(`Síðasta vísbending: Orðið rím(ar) við ${mkRim(target.word)}.`);
+          const ending = mkEnding(target.word);
+          await speak(`Síðasta vísbending: Orðið endar á ${ending}.`);
+          setMessages(prev=>[...prev, { role:'system', content: '🔊 Vísbending spiluð' }]);
         } else if(n >= 7){
           await speak(`Rétt svar er: ${target.word}. Prófum nýtt orð!`);
+          setMessages(prev=>[...prev, { role:'system', content: `Rétt svar var: ${target.word}` }]);
           setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 700);
         }
       };
 
-      // býr til einfalt "rím" (tekur síðustu 2–3 stafi eða breytir smá til)
-      function mkRim(w){
-        if(w.length <= 2) return w; 
-        const end = w.slice(-2);
-        // smá leikur: ef endar á a/á/i/í/o/ó/u/ú/y/ý/æ/ö – segjum bara síðustu tvo stafi
-        return end;
+      function mkEnding(w){
+        if(w.length <= 2) return w;
+        if(w.length <= 4) return w.slice(-2);
+        return w.slice(-3);
       }
 
       const replaceList = () => {
@@ -168,7 +169,6 @@
         if(parsed.length){
           setWords(parsed);
           speak('Nýr orðalisti kominn!');
-          // hefja nýja umferð með nýja lista
           setTimeout(()=>{ newRound(); }, 300);
         }else{
           alert('Tókst ekki að lesa nýjan lista. Gættu að forminu: "orð - útskýring"');
@@ -176,7 +176,17 @@
       };
 
       const replayDesc = async () => {
-        if(desc){ await speak(desc); }
+        if(desc){ 
+          setSpeakingDesc(true);
+          await speak(desc); 
+          setSpeakingDesc(false);
+        }
+      };
+
+      const resetGame = () => {
+        setRound(1);
+        setCorrectCount(0);
+        newRound();
       };
 
       return (
@@ -187,11 +197,12 @@
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-3xl font-light text-gray-800 mb-1">Finndu orðið</h1>
-                  <p className="text-gray-500 text-sm font-light">A1 · Audio‑vísbendingar aðeins · Umferð {round}</p>
+                  <p className="text-gray-500 text-sm font-light">A1 · Audio‑vísbendingar aðeins</p>
+                  <p className="text-gray-400 text-xs font-light mt-1">Umferð {round} · Rétt: {correctCount}</p>
                 </div>
                 <div className="flex gap-2">
+                  <button onClick={resetGame} className="px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-light">🔄 Byrja upp á nýtt</button>
                   <button onClick={replaceList} className="px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-light">⚙️ Orðalisti</button>
-                  <button onClick={replayDesc} className="px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-light flex items-center gap-2"><SpeakerIcon/> Spila lýsingu</button>
                 </div>
               </div>
             </div>
@@ -200,25 +211,60 @@
           <main className="max-w-3xl mx-auto px-6 mt-8">
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
-                <span className="text-sm text-gray-600 font-light">🎧 Lýsing spilast – skrifaðu gisk</span>
-                <span className={`text-xs font-light ${speakingDesc? 'text-red-600':'text-gray-400'}`}>{speakingDesc?'▶️ í spilun':'⏸️'}</span>
+                <span className="text-sm text-gray-600 font-light">🎧 Hlustaðu á lýsinguna og giskaðu á orðið</span>
+                {loading && <span className="text-xs font-light text-blue-600">⏳ AI er að hugsa...</span>}
               </div>
+
+              {!loading && desc && (
+                <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
+                  <button 
+                    onClick={replayDesc} 
+                    disabled={speakingDesc}
+                    className="flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <SpeakerIcon active={speakingDesc} />
+                    <span>{speakingDesc ? '🔊 Spilar...' : '🎧 Spila lýsingu'}</span>
+                  </button>
+                </div>
+              )}
 
               <div className="p-6 space-y-3 min-h-[260px]">
                 {messages.map((m,i)=> (
                   <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
-                    <div className={`max-w-lg px-4 py-2 rounded-lg font-light shadow-sm ${m.role==='user'?'bg-gray-800 text-white':'bg-gray-100 text-gray-800'}`}>
+                    <div className={`max-w-lg px-4 py-2 rounded-lg font-light shadow-sm ${
+                      m.role==='user'
+                        ?'bg-gray-800 text-white'
+                        : m.role==='system'
+                        ? 'bg-blue-100 text-blue-800 text-sm'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
                       {m.content}
                     </div>
                   </div>
                 ))}
-                <p className="text-xs text-gray-400">Ath: Vísbendingar birtast ekki sem texti – þær spilast aðeins sem hljóð.</p>
+                {messages.length === 0 && !loading && (
+                  <p className="text-center text-gray-400 font-light py-8">Smelltu á hnappin hér að ofan til að byrja 👆</p>
+                )}
               </div>
 
               <div className="border-t p-4 bg-white">
                 <div className="flex gap-2">
-                  <input type="text" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submitGuess()} placeholder="Skrifaðu gisk…" className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light" />
-                  <button onClick={submitGuess} className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light"><SendIcon/></button>
+                  <input 
+                    type="text" 
+                    value={input} 
+                    onChange={e=>setInput(e.target.value)} 
+                    onKeyDown={e=>e.key==='Enter'&&submitGuess()} 
+                    placeholder="Skrifaðu gisk…" 
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light" 
+                    disabled={loading || !desc} 
+                  />
+                  <button 
+                    onClick={submitGuess} 
+                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light disabled:bg-gray-400 disabled:cursor-not-allowed" 
+                    disabled={loading || !desc}
+                  >
+                    <SendIcon/>
+                  </button>
                 </div>
               </div>
             </div>
