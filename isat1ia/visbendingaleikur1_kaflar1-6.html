@@ -110,20 +110,58 @@
       useEffect(()=>{ newRound(); },[]);
 
       const submitGuess = async () => {
-        const guess = input.trim().toLowerCase();
+        const guess = input.trim();
         if(!guess) return;
         setMessages(prev=>[...prev, { role:'user', content: guess }]);
         setInput('');
 
         if(!target) return;
         
-        if(guess === target.word.toLowerCase()){
-          const ok = `✅ Rétt! Orðið var "${target.word}".`;
-          setMessages(prev=>[...prev, { role:'system', content: ok }]);
-          await speak(ok);
-          setCorrectCount(c => c + 1);
-          setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 900);
-          return;
+        // Nota AI til að meta hvort svarið sé rétt
+        const checkSys = `Þú ert að meta hvort nemandi giskaði rétt á orð. Rétta orðið er "${target.word}". Nemandinn giskaði: "${guess}".
+
+SAMÞYKKJA sem rétt:
+- Nákvæmlega rétt orð
+- Fleirtölu (t.d. "hjón" fyrir "hjón", "krydd" fyrir "krydd")
+- Smávægilegar stafsetningarvillur (t.d. "grasker" fyrir "græsker")
+- Eintölu/fleirtölu form (t.d. "barn" fyrir "börn")
+- Samsvarandi orð (t.d. "leikrit" fyrir "leikhús" ef það er skynsamlegt)
+
+HAFNA:
+- Alveg rangt orð
+- Orð sem eru of langt frá
+
+Svaraðu AÐEINS með "RÉTT" eða "RANGT". Ekkert annað.`;
+
+        try {
+          const aiDecision = await callOpenAI({ 
+            model:'gpt-4o-mini', 
+            temperature:0.1, 
+            max_tokens:10, 
+            messages:[{role:'system', content: checkSys}] 
+          });
+          
+          const isCorrect = aiDecision.trim().toUpperCase().includes('RÉTT');
+          
+          if(isCorrect){
+            const ok = `✅ Rétt! Orðið var "${target.word}".`;
+            setMessages(prev=>[...prev, { role:'system', content: ok }]);
+            await speak(ok);
+            setCorrectCount(c => c + 1);
+            setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 900);
+            return;
+          }
+        } catch(e) {
+          console.error('AI check error:', e);
+          // Fallback á gamla kerfið ef AI mistekst
+          if(guess.toLowerCase() === target.word.toLowerCase()){
+            const ok = `✅ Rétt! Orðið var "${target.word}".`;
+            setMessages(prev=>[...prev, { role:'system', content: ok }]);
+            await speak(ok);
+            setCorrectCount(c => c + 1);
+            setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 900);
+            return;
+          }
         }
 
         const wrongMsg = `❌ Ekki rétt. Prófaðu aftur.`;
@@ -133,22 +171,39 @@
         const n = wrong + 1;
         setWrong(n);
 
+        // Vísbendingar sem hnappa í stað þess að spila þær strax
         if(n === 2){
           const first = target.word[0].toUpperCase();
-          await speak(`Vísbending: Orðið byrjar á ${first}.`);
-          setMessages(prev=>[...prev, { role:'system', content: '🔊 Vísbending spiluð' }]);
+          const hintText = `Vísbending: Orðið byrjar á ${first}.`;
+          setMessages(prev=>[...prev, { 
+            role:'hint', 
+            content: '💡 Vísbending 1',
+            hintText: hintText
+          }]);
         } else if(n === 4){
-          await speak(`Önnur vísbending: Orðið hefur ${target.word.length} stafi.`);
-          setMessages(prev=>[...prev, { role:'system', content: '🔊 Vísbending spiluð' }]);
+          const hintText = `Önnur vísbending: Orðið hefur ${target.word.length} stafi.`;
+          setMessages(prev=>[...prev, { 
+            role:'hint', 
+            content: '💡 Vísbending 2',
+            hintText: hintText
+          }]);
         } else if(n === 6){
           const ending = mkEnding(target.word);
-          await speak(`Síðasta vísbending: Orðið endar á ${ending}.`);
-          setMessages(prev=>[...prev, { role:'system', content: '🔊 Vísbending spiluð' }]);
+          const hintText = `Síðasta vísbending: Orðið endar á ${ending}.`;
+          setMessages(prev=>[...prev, { 
+            role:'hint', 
+            content: '💡 Vísbending 3',
+            hintText: hintText
+          }]);
         } else if(n >= 7){
           await speak(`Rétt svar er: ${target.word}. Prófum nýtt orð!`);
           setMessages(prev=>[...prev, { role:'system', content: `Rétt svar var: ${target.word}` }]);
           setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 700);
         }
+      };
+
+      const playHint = async (hintText) => {
+        await speak(hintText);
       };
 
       function mkEnding(w){
@@ -231,15 +286,25 @@
               <div className="p-6 space-y-3 min-h-[260px]">
                 {messages.map((m,i)=> (
                   <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
-                    <div className={`max-w-lg px-4 py-2 rounded-lg font-light shadow-sm ${
-                      m.role==='user'
-                        ?'bg-gray-800 text-white'
-                        : m.role==='system'
-                        ? 'bg-blue-100 text-blue-800 text-sm'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {m.content}
-                    </div>
+                    {m.role === 'hint' ? (
+                      <button
+                        onClick={() => playHint(m.hintText)}
+                        className="bg-yellow-100 border-2 border-yellow-300 text-yellow-800 px-4 py-2 rounded-lg font-light shadow-sm hover:bg-yellow-200 transition-colors flex items-center gap-2"
+                      >
+                        <SpeakerIcon />
+                        <span>{m.content}</span>
+                      </button>
+                    ) : (
+                      <div className={`max-w-lg px-4 py-2 rounded-lg font-light shadow-sm ${
+                        m.role==='user'
+                          ?'bg-gray-800 text-white'
+                          : m.role==='system'
+                          ? 'bg-blue-100 text-blue-800 text-sm'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {m.content}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {messages.length === 0 && !loading && (
