@@ -22,7 +22,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const WORDS = [
       // Auðveld
@@ -57,12 +57,79 @@
       const [timeLeft, setTimeLeft] = useState(60);
       const [isRunning, setIsRunning] = useState(false);
       const [gameFinished, setGameFinished] = useState(false);
+      const audioContextRef = useRef(null);
+
+      // Búa til AudioContext einu sinni
+      useEffect(() => {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        return () => {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+          }
+        };
+      }, []);
+
+      // Spila stutt píp
+      const playBeep = () => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.frequency.value = 800; // Hæð tóns
+        oscillator.type = 'sine'; // Mjúkt hljóð
+        
+        gainNode.gain.setValueAtTime(0.15, ctx.currentTime); // Lágur styrkur (15%)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.1); // 100ms píp
+      };
+
+      // Spila buzzer þegar tíminn er búinn
+      const playBuzzer = () => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.frequency.value = 200; // Lægri tónn fyrir "bzzzz"
+        oscillator.type = 'sawtooth'; // Grófara hljóð
+        
+        gainNode.gain.setValueAtTime(0.2, ctx.currentTime); // 20% styrkur
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.5); // 500ms buzzer
+      };
 
       useEffect(() => {
         let interval;
         if (isRunning && timeLeft > 0) {
           interval = setInterval(() => {
-            setTimeLeft(prev => prev - 1);
+            setTimeLeft(prev => {
+              const newTime = prev - 1;
+              
+              // Píp á síðustu 10 sekúndum
+              if (newTime <= 10 && newTime > 0) {
+                playBeep();
+              }
+              
+              // Buzzer þegar tíminn er búinn
+              if (newTime === 0) {
+                playBuzzer();
+              }
+              
+              return newTime;
+            });
           }, 1000);
         } else if (timeLeft === 0) {
           setIsRunning(false);
