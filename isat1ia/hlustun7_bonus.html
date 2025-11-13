@@ -45,6 +45,25 @@
     .answer-option.disabled {
       cursor: default;
     }
+    .modal-overlay { 
+      position: fixed; 
+      inset: 0; 
+      background: rgba(0,0,0,0.5); 
+      z-index: 100; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      padding: 1rem; 
+    }
+    .modal-content { 
+      background: white; 
+      border-radius: 1rem; 
+      max-width: 48rem; 
+      width: 100%; 
+      max-height: 90vh; 
+      overflow-y: auto; 
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); 
+    }
   </style>
 </head>
 <body>
@@ -73,6 +92,44 @@
     // --- Lykilorð og grunnstillingar ---
     const ORIGINAL_TEXT = "deig (hk)";
 
+    const LISTENING_TEXT = `Anna og Bjarki eru í Bónus. Þau ætla að kaupa í matinn. Sigurður er heima með Lilju og kötturinn Mási er sofandi í sófanum.
+
+Anna tekur fram símann sinn og les innkaupalista:
+„Við þurfum pizzadeig og rifinn ost. Líka eitthvað að drekka."
+
+Bjarki tekur deigið og spyr:
+„Hvað álegg eigum við að hafa?"
+
+„Við gerum tvær pizzur. Eina með pepperóní og sveppum og eina með skinku, sveppum og ólífum."
+
+Þau ganga um búðina. Anna tekur ferska sveppi í grænmetisdeildinni. Bjarki finnur drykki fyrir þau.
+
+„Það vantar krydd!" segir Bjarki.
+
+„Rétt! Við þurfum óreganó."
+
+Þau finna kryddin. Svo ganga þau að kassanum.
+
+„Við gleymdum sósunni!" segir Anna skyndilega.
+
+Bjarki drífur sig aftur inn í búð. Hann finnur pizzusósuna og kemur aftur.
+
+„Nú er allt komið held ég!" segir hann.
+
+Þau borga og fara heim með pokana.
+
+Heima segir Anna:
+„Þessi matur verður mjög ljúffengur! Pabbi þinn elskar pizzu."
+
+Lilja kemur í eldhúsið:
+„Hvað ertu að elda mamma?"
+
+„Pizzu."
+
+„Á ég að aðstoða og fletja deigið?"
+
+„Já takk, endilega!"`;
+
     const VOCAB = [
       { w: "deig (hk)", hint: "blanda af hveiti og vatni til að baka eða gera pizzu" },
       { w: "rifinn ostur (kk)", hint: "ostur sem er skorinn í litla bita" },
@@ -95,7 +152,7 @@
       },
       {
         question: 'Hvað er á pizzunni með pepperóní?',
-        options: ['Pepperóní og sveppir', 'Pepperóní og skinku', 'Bara pepperóní', 'Pepperóní og ólífur'],
+        options: ['Pepperóní og sveppir', 'Pepperóní og skinka', 'Bara pepperóní', 'Pepperóní og ólífur'],
         correct: 0
       },
       {
@@ -148,10 +205,10 @@
       const [playbackRate, setPlaybackRate] = useState(1);
       const [isPlaying, setIsPlaying] = useState(false);
       const audioRef = useRef(null);
+      const [showTextModal, setShowTextModal] = useState(false);
 
       // Þýðing
       const [translationAnswer, setTranslationAnswer] = useState('');
-      const [translationLanguage, setTranslationLanguage] = useState('');
       const [translationFeedback, setTranslationFeedback] = useState(null);
       const [translationLoading, setTranslationLoading] = useState(false);
 
@@ -199,22 +256,24 @@
       // Þýðing
       const checkTranslation = async () => {
         if (translationAnswer.trim().length < 2) { alert('Vinsamlegast skrifaðu þýðingu!'); return; }
-        if (!translationLanguage.trim()) { alert('Vinsamlegast skrifaðu hvaða tungumál þú notaðir!'); return; }
         setTranslationLoading(true);
         try {
           const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
 
 ÍSLENSKA ORÐIÐ: "${ORIGINAL_TEXT}"
-NEMANDI ÞÝDDI Á ${translationLanguage}: "${translationAnswer}"
+SVAR NEMANDA: "${translationAnswer}"
 
 VERKEFNI:
-Meta hvort þýðingin sé rétt (dough). Skila stuttri, jákvæðri endurgjöf.
+1. Greina sjálfkrafa hvaða tungumál nemandinn notaði
+2. Meta hvort þýðingin sé rétt (dough/massa/ciasto osfrv.)
+3. Skila stuttri, jákvæðri endurgjöf
 
 SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
 {
   "correct": boolean,
+  "detected_language": "nafn tungumálsins (t.d. enska, pólska, spænska)",
   "feedback_is": "Endurgjöf á íslensku",
-  "feedback_native": "Endurgjöf á ${translationLanguage}",
+  "feedback_native": "Endurgjöf á greinda tungumálinu",
   "correct_translation": "Góð þýðing ef rangt, annars null"
 }`;
           const response = await callOpenAI({
@@ -325,9 +384,6 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                   <h1 className="text-3xl font-light text-gray-800 mb-2">Hlustun 7: Í Bónus</h1>
                   <p className="text-gray-500 text-sm font-light">Hlustunarverkefni · A1–A2</p>
                 </div>
-                <div className="hidden sm:block flex-shrink-0">
-                  <img src="media/hfj_fjolskylda.png" alt="Fjölskyldan: Sigurður, Anna, Bjarki og Lilja" className="w-24 h-24 object-cover rounded-lg border-2 border-gray-200 shadow-sm" />
-                </div>
               </div>
             </div>
           </header>
@@ -376,21 +432,33 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
               <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Leiðbeiningar</h2>
               <ul className="space-y-2 text-gray-700 font-light">
+                <li>• Lestu lykilorðin hér að neðan fyrst</li>
                 <li>• Hlustaðu á textann 2–3 sinnum</li>
                 <li>• Þú getur hægt eða hraðað á hljóðinu</li>
-                <li>• Svaraðu spurningunum hér að neðan</li>
-                <li>• Þú mátt hlusta eins oft og þú vilt</li>
+                <li>• Svaraðu öllum spurningunum</li>
+                <li>• Þegar þú hefur lokið öllum spurningum geturðu lesið textann</li>
               </ul>
             </div>
+
+            {/* Lykilorð (orðaforðakassi) - EFST */}
+            <section className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-4">📘 Lykilorð</h2>
+              <p className="text-gray-700 font-light mb-4">Lestu yfir orðin áður en þú hlustar.</p>
+              <div className="grid md:grid-cols-2 gap-3">
+                {VOCAB.map((it, i) => (
+                  <div key={i} className="rounded-lg border-2 border-yellow-200 bg-white/70 p-3">
+                    <div className="font-normal text-gray-900">{it.w}</div>
+                    <div className="text-sm text-gray-600 font-light">{it.hint}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
 
             {/* 1. Þýðing */}
             <section className="bg-white rounded-lg shadow-sm p-8">
               <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣ Þýðing</h2>
               <div className="border-2 border-gray-100 rounded-lg p-4">
                 <p className="font-normal text-gray-800 mb-4">Hvað þýðir <strong>„deig"</strong> á þínu móðurmáli?</p>
-                <input type="text" value={translationLanguage} onChange={(e) => setTranslationLanguage(e.target.value)}
-                  disabled={translationFeedback !== null} placeholder="Hvaða tungumál? (t.d. enska, pólska, spænska...)"
-                  className="w-full p-3 mb-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"/>
                 <textarea value={translationAnswer} onChange={(e) => setTranslationAnswer(e.target.value)}
                   disabled={translationFeedback !== null} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
                   rows="3" placeholder="Skrifaðu þýðinguna hér..."></textarea>
@@ -400,7 +468,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                       className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm">
                       {translationLoading ? 'Athuga...' : 'Athuga þýðingu'}
                     </button>
-                    <button onClick={()=>{ setTranslationAnswer(''); setTranslationLanguage(''); setTranslationFeedback(null); }}
+                    <button onClick={()=>{ setTranslationAnswer(''); setTranslationFeedback(null); }}
                       className="px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
                       Endurstilla
                     </button>
@@ -414,7 +482,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                     {translationFeedback.correct_translation && (
                       <p className="text-sm text-gray-600 mt-2 font-light"><strong>Dæmi um góða þýðingu:</strong> {translationFeedback.correct_translation}</p>
                     )}
-                    <button onClick={()=>{ setTranslationAnswer(''); setTranslationLanguage(''); setTranslationFeedback(null); }}
+                    <button onClick={()=>{ setTranslationAnswer(''); setTranslationFeedback(null); }}
                       className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
                       Reyna aftur
                     </button>
@@ -629,27 +697,54 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               )}
             </section>
 
-            {/* Lykilorð (orðaforðakassi) */}
-            <section className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-4">📘 Lykilorð úr hlustun</h2>
-              <p className="text-gray-700 font-light mb-4">Lestu yfir orðin og reyndu að finna þau aftur í hlustuninni.</p>
-              <div className="grid md:grid-cols-2 gap-3">
-                {VOCAB.map((it, i) => (
-                  <div key={i} className="rounded-lg border-2 border-yellow-200 bg-white/70 p-3">
-                    <div className="font-normal text-gray-900">{it.w}</div>
-                    <div className="text-sm text-gray-600 font-light">{it.hint}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Lok */}
+            {/* Lok + hnappur til að lesa textann */}
             <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
-              <p className="text-gray-600 font-light">Þú hefur klárað hlustunarverkefnið um Bónus. Hlustaðu endilega aftur til að æfa!</p>
+              <p className="text-gray-600 font-light mb-6">Þú hefur klárað hlustunarverkefnið um Bónus. Hlustaðu endilega aftur til að æfa!</p>
+              
+              {(mcChecked && tfChecked && matchingChecked && openFeedback.every(f => f !== null)) && (
+                <button 
+                  onClick={() => setShowTextModal(true)}
+                  className="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light text-lg shadow-lg">
+                  📖 Lesa textann
+                </button>
+              )}
             </div>
           </main>
+
+          {/* Modal gluggi með textanum */}
+          {showTextModal && (
+            <div className="modal-overlay" onClick={() => setShowTextModal(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="sticky top-0 bg-white border-b-2 border-gray-200 p-6 flex items-center justify-between">
+                  <h2 className="text-2xl font-light text-gray-800">📖 Hlustunartextinn</h2>
+                  <button 
+                    onClick={() => setShowTextModal(false)}
+                    className="text-gray-500 hover:text-gray-700 text-3xl leading-none"
+                    aria-label="Loka">
+                    ×
+                  </button>
+                </div>
+                <div className="p-8">
+                  <div className="prose prose-lg max-w-none">
+                    {LISTENING_TEXT.split('\n\n').map((paragraph, i) => (
+                      <p key={i} className="mb-4 text-gray-700 font-light leading-relaxed">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="mt-8 text-center">
+                    <button 
+                      onClick={() => setShowTextModal(false)}
+                      className="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors font-light">
+                      Loka
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };
