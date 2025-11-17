@@ -169,16 +169,6 @@ Skólabjallan hringir og frímínúturnar eru búnar. Strákarnir fara aftur í 
       { left: 'Frímínútur', right: 'Pása milli kennslustunda' }
     ];
 
-    // ========== SHUFFLE FUNCTION ==========
-    function shuffleArray(array) {
-      const newArray = [...array];
-      for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-      }
-      return newArray;
-    }
-
     // ========== MAIN COMPONENT ==========
     const HlustunApp = () => {
       const [isPlaying, setIsPlaying] = useState(false);
@@ -191,15 +181,25 @@ Skólabjallan hringir og frímínúturnar eru búnar. Strákarnir fara aftur í 
       const [translationLoading, setTranslationLoading] = useState([false, false]);
 
       // Multiple choice states
-      const [mcAnswers, setMcAnswers] = useState(Array(MULTIPLE_CHOICE.length).fill(null));
+      const [mcAnswers, setMcAnswers] = useState([]);
       const [mcChecked, setMcChecked] = useState(false);
-      const shuffledMC = useMemo(() => 
-        MULTIPLE_CHOICE.map(q => ({
-          ...q,
-          shuffledOptions: shuffleArray(q.options),
-          correctAnswer: q.options[q.correct]
-        })), []
-      );
+      
+      // Randomize options for each question
+      const shuffledMC = useMemo(() => {
+        return MULTIPLE_CHOICE.map(q => {
+          const optionsWithIndex = q.options.map((opt, idx) => ({ text: opt, originalIndex: idx }));
+          // Shuffle
+          for (let i = optionsWithIndex.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [optionsWithIndex[i], optionsWithIndex[j]] = [optionsWithIndex[j], optionsWithIndex[i]];
+          }
+          return {
+            question: q.question,
+            options: optionsWithIndex,
+            correctOriginalIndex: q.correct
+          };
+        });
+      }, []);
 
       // Open questions states
       const [openAnswers, setOpenAnswers] = useState(Array(OPEN_QUESTIONS.length).fill(''));
@@ -213,7 +213,14 @@ Skólabjallan hringir og frímínúturnar eru búnar. Strákarnir fara aftur í 
       // Matching states
       const [matchingAnswers, setMatchingAnswers] = useState(Array(MATCHING.length).fill(''));
       const [matchingChecked, setMatchingChecked] = useState(false);
-      const rightOptions = useMemo(() => shuffleArray(MATCHING.map(m => m.right)), []);
+      const rightOptions = useMemo(() => {
+        const options = MATCHING.map(m => m.right);
+        for (let i = options.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [options[i], options[j]] = [options[j], options[i]];
+        }
+        return options;
+      }, []);
 
       // Modal state
       const [showTextModal, setShowTextModal] = useState(false);
@@ -301,12 +308,21 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
       };
 
       // ========== MULTIPLE CHOICE HANDLERS ==========
+      const handleMcAnswer = (qIndex, shuffledIndex) => {
+        if (mcChecked) return;
+        const newAnswers = [...mcAnswers];
+        newAnswers[qIndex] = shuffledIndex;
+        setMcAnswers(newAnswers);
+      };
+
       const checkMC = () => {
+        const allAnswered = shuffledMC.every((_, i) => Number.isInteger(mcAnswers[i]));
+        if (!allAnswered) return;
         setMcChecked(true);
       };
 
       const resetMC = () => {
-        setMcAnswers(Array(MULTIPLE_CHOICE.length).fill(null));
+        setMcAnswers([]);
         setMcChecked(false);
       };
 
@@ -530,9 +546,9 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                   <div key={qIndex} className="border-2 border-gray-200 rounded-lg p-6">
                     <p className="text-lg font-normal text-gray-800 mb-4">{q.question}</p>
                     <div className="space-y-2">
-                      {q.shuffledOptions.map((option, oIndex) => {
-                        const isSelected = mcAnswers[qIndex] === option;
-                        const isCorrect = option === q.correctAnswer;
+                      {q.options.map((option, shuffledIndex) => {
+                        const isSelected = mcAnswers[qIndex] === shuffledIndex;
+                        const isCorrect = option.originalIndex === q.correctOriginalIndex;
                         const showResult = mcChecked;
                         
                         let className = "w-full text-left px-4 py-3 rounded-lg border-2 transition-all font-light ";
@@ -552,18 +568,12 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
 
                         return (
                           <button
-                            key={oIndex}
-                            onClick={() => {
-                              if (!mcChecked) {
-                                const newAnswers = [...mcAnswers];
-                                newAnswers[qIndex] = option;
-                                setMcAnswers(newAnswers);
-                              }
-                            }}
+                            key={shuffledIndex}
+                            onClick={() => handleMcAnswer(qIndex, shuffledIndex)}
                             className={className}
                             disabled={mcChecked}
                           >
-                            {option}
+                            {option.text}
                             {showResult && isCorrect && " ✓"}
                             {showResult && isSelected && !isCorrect && " ✗"}
                           </button>
@@ -576,7 +586,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               <div className="flex gap-4 mt-6">
                 <button
                   onClick={checkMC}
-                  disabled={mcAnswers.includes(null) || mcChecked}
+                  disabled={shuffledMC.some((_, i) => !Number.isInteger(mcAnswers[i])) || mcChecked}
                   className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-normal transition-colors"
                 >
                   Athuga svör
