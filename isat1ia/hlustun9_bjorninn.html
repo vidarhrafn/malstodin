@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>🎧 Hlustun 9: Lilja og Katja leika Björninn – ÍSAT1ÍA</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -110,7 +110,7 @@ Lilja fer nálægt og segir: „Björn, björn, vaknar þú?"
 
 Katja hoppar upp og hleypur á eftir Lilju. Lilja hleypur hratt en Katja nær henni.
 
-„Ég náði þér! Núna ertu björninn," segir Katja.
+„Ég náði þér! Núna ert þú björninn," segir Katja.
 
 Þær leika þennan leik og fleiri börn koma og leika með.
 
@@ -126,7 +126,7 @@ Anna, mamma Lilju, kemur út og kallar: „Stelpur mínar! Komið að borða!"
 
 „Þú ert alltaf velkomin," svarar Anna og brosir.
 
-Eftir matinn fara Katja og Lilja í herbergi Lilju að lita. Þær teikna myndir af björnum og skrímsli. Lilja teiknar líka mynd af Katja.`;
+Eftir matinn fara Katja og Lilja í herbergi Lilju að lita. Þær teikna myndir af björnum og skrímslum. Lilja teiknar líka mynd af Katja.`;
 
     const VOCAB = [
       { w: "björn (kk)", hint: "stórt dýr sem býr í skógi" },
@@ -135,7 +135,7 @@ Eftir matinn fara Katja og Lilja í herbergi Lilju að lita. Þær teikna myndir
       { w: "að útskýra", hint: "að segja hvernig eitthvað virkar" },
       { w: "gestur (kk)", hint: "einhver sem kemur í heimsókn" },
       { w: "að lita", hint: "að nota liti til að teikna" },
-      { w: "skrímsl (hk)", hint: "stórt og hræðilegt dýr" }
+      { w: "skrímsli (hk)", hint: "stórt og hræðilegt dýr" }
     ];
 
     // --- Þýðingarspurningar ---
@@ -221,9 +221,26 @@ Eftir matinn fara Katja og Lilja í herbergi Lilju að lita. Þær teikna myndir
       const [translationFeedback, setTranslationFeedback] = useState([null, null]);
       const [translationLoading, setTranslationLoading] = useState([false, false]);
 
-      // Krossaspurningar
+      // Krossaspurningar með randomized valmöguleikum
       const [mcAnswers, setMcAnswers] = useState([]);
       const [mcChecked, setMcChecked] = useState(false);
+      
+      // Randomize options for each question
+      const shuffledMC = useMemo(() => {
+        return MULTIPLE_CHOICE.map(q => {
+          const optionsWithIndex = q.options.map((opt, idx) => ({ text: opt, originalIndex: idx }));
+          // Shuffle array
+          for (let i = optionsWithIndex.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [optionsWithIndex[i], optionsWithIndex[j]] = [optionsWithIndex[j], optionsWithIndex[i]];
+          }
+          return {
+            question: q.question,
+            options: optionsWithIndex,
+            correctOriginalIndex: q.correct
+          };
+        });
+      }, []);
 
       // Opnar
       const [openAnswers, setOpenAnswers] = useState(Array(OPEN_QUESTIONS.length).fill(''));
@@ -316,13 +333,16 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         }
       };
 
-      // Krossar
-      const handleMcAnswer = (qIndex, optIndex) => {
+      // Krossar - uppfært til að virka með shuffled valmöguleikum
+      const handleMcAnswer = (qIndex, shuffledIndex) => {
         if (mcChecked) return;
-        const newAnswers = [...mcAnswers]; newAnswers[qIndex] = optIndex; setMcAnswers(newAnswers);
+        const newAnswers = [...mcAnswers]; 
+        newAnswers[qIndex] = shuffledIndex; 
+        setMcAnswers(newAnswers);
       };
+      
       const checkMcAnswers = () => {
-        const allAnswered = MULTIPLE_CHOICE.every((_, i) => Number.isInteger(mcAnswers[i]));
+        const allAnswered = shuffledMC.every((_, i) => Number.isInteger(mcAnswers[i]));
         if (!allAnswered) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
         setMcChecked(true);
       };
@@ -546,23 +566,23 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               </button>
             </section>
 
-            {/* 2. Krossaspurningar */}
+            {/* 2. Krossaspurningar - UPPFÆRT MEÐ RANDOMIZATION */}
             <section className="bg-white rounded-lg shadow-sm p-8">
               <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Krossaspurningar</h2>
               <div className="space-y-6">
-                {MULTIPLE_CHOICE.map((q, qIndex) => (
+                {shuffledMC.map((q, qIndex) => (
                   <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-4">
                     <p className="font-normal text-gray-800 mb-4">{q.question}</p>
                     <div className="space-y-2">
-                      {q.options.map((option, oIndex) => {
-                        const isSelected = mcAnswers[qIndex] === oIndex;
-                        const isCorrect = oIndex === q.correct;
+                      {q.options.map((option, shuffledIndex) => {
+                        const isSelected = mcAnswers[qIndex] === shuffledIndex;
+                        const isCorrect = option.originalIndex === q.correctOriginalIndex;
                         const showAsCorrect = mcChecked && isCorrect;
                         const showAsIncorrect = mcChecked && isSelected && !isCorrect;
                         return (
                           <div
-                            key={oIndex}
-                            onClick={() => handleMcAnswer(qIndex, oIndex)}
+                            key={shuffledIndex}
+                            onClick={() => handleMcAnswer(qIndex, shuffledIndex)}
                             className={`answer-option p-3 rounded-lg ${isSelected && !mcChecked ? 'selected' : ''} ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${mcChecked ? 'disabled' : ''}`}
                           >
                             <div className="flex items-center gap-3">
@@ -572,7 +592,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                                 showAsIncorrect ? 'border-red-500 bg-red-500' : 'border-gray-300'}`}>
                                 {(isSelected || showAsCorrect) && (<div className="w-1.5 h-1.5 bg-white rounded-full"></div>)}
                               </div>
-                              <span className="font-light flex-1">{option}</span>
+                              <span className="font-light flex-1">{option.text}</span>
                               {showAsCorrect && <span className="text-green-600">✓</span>}
                               {showAsIncorrect && <span className="text-red-600">✗</span>}
                             </div>
@@ -597,7 +617,10 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
               ) : (
                 <div className="mt-6 bg-green-50 border-2 border-green-200 rounded-lg p-4">
                   <p className="text-green-800 font-light">
-                    ✓ Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt!
+                    ✓ Þú fékkst {mcAnswers.filter((shuffledIdx, qIdx) => {
+                      const selectedOption = shuffledMC[qIdx].options[shuffledIdx];
+                      return selectedOption.originalIndex === shuffledMC[qIdx].correctOriginalIndex;
+                    }).length} af {shuffledMC.length} rétt!
                   </p>
                   <button onClick={resetMC} className="mt-3 px-4 py-2 rounded-md border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
                     Reyna aftur
