@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>💬 Spjall: Vinna – ÍSAT1ÍA</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ========== AI FUNCTIONS ==========
+    async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model, temperature })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    async function playAudio(text, setSpeaking) {
+      setSpeaking(true);
+      try {
+        const r = await fetch('/.netlify/functions/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text_to_speak: text })
+        });
+        const data = await r.json();
+        if (!r.ok || data.error || !data.audio_base64) {
+          console.error('Villa í hljóðkalli:', data?.error);
+          setSpeaking(false);
+          return;
+        }
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audio.onended = () => setSpeaking(false);
+        audio.onerror = () => setSpeaking(false);
+        await audio.play().catch(() => setSpeaking(false));
+      } catch (e) {
+        console.error('Tenging mistókst:', e);
+        setSpeaking(false);
+      }
+    }
+
+    const SpjallApp = () => {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [isRecording, setIsRecording] = useState(false);
+      const [recognition, setRecognition] = useState(null);
+      const [isSpeaking, setIsSpeaking] = useState(false);
+      const [speakingIndex, setSpeakingIndex] = useState(null);
+      const [isLoading, setIsLoading] = useState(false);
+      const [finished, setFinished] = useState(false);
+      const [conversationState, setConversationState] = useState({
+        questionIndex: 0,
+        hasWorked: null,
+        workplace: null,
+        usePastTense: true
+      });
+      const messagesEndRef = useRef(null);
+
+      // Setup speech recognition
+      useEffect(() => {
+        if ('webkitSpeechRecognition' in window) {
+          const recog = new webkitSpeechRecognition();
+          recog.lang = 'is-IS';
+          recog.continuous = true;
+          recog.interimResults = true;
+          recog.onresult = (e) => {
+            const transcript = Array.from(e.results)
+              .map(r => r[0].transcript).join('');
+            setInput(transcript);
+          };
+          recog.onend = () => setIsRecording(false);
+          recog.onerror = () => setIsRecording(false);
+          setRecognition(recog);
+        }
+      }, []);
+
+      // Auto-scroll
+      useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages]);
+
+      // Start conversation
+      useEffect(() => {
+        if (messages.length === 0) {
+          const firstQuestion = "Hefur þú verið í vinnu?";
+          setMessages([{ role: 'assistant', content: firstQuestion }]);
+        }
+      }, []);
+
+      const toggleRecording = () => {
+        if (!recognition) {
+          alert('Talgreining er ekki í boði í þessum vafra. Notaðu Chrome eða Edge.');
+          return;
+        }
+        if (isRecording) {
+          recognition.stop();
+          setIsRecording(false);
+        } else {
+          recognition.start();
+          setIsRecording(true);
+        }
+      };
+
+      const sendMessage = async () => {
+        if (!input.trim() || isLoading) return;
+
+        const userMessage = input.trim();
+        setInput('');
+        setIsRecording(false);
+        if (recognition && isRecording) recognition.stop();
+
+        // Add user message
+        const newMessages = [...messages, { role: 'user', content: userMessage }];
+        setMessages(newMessages);
+        setIsLoading(true);
+
+        try {
+          const state = conversationState;
+          let systemPrompt = '';
+
+          if (state.questionIndex === 0) {
+            // First question - determine if they've worked
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+1. Greina hvort nemandinn hefur unnið áður (já/nei)
+2. Ef JÁ: Spyrja HVAR hann/hún vann
+3. Ef NEI: Spyrja HVAR honum/henni langar að vinna
+
+DÆMI:
+- Nemandi: "Já ég hef unnið" → "Flott! Hvar vannst þú?"
+- Nemandi: "Nei ég hef ekki unnið" → "Allt í lagi! Hvar langar þig að vinna?"
+- Nemandi: "Nei" → "Það er í lagi! Hvar langar þig að vinna?"
+
+MIKILVÆGT:
+- ALLTAF enda með spurningu
+- Svaraðu BARA á íslensku
+- Vertu vinaleg/ur og hvetjandi
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else if (state.questionIndex === 1) {
+            // Asked where - now ask what they did/will do
+            const tense = state.usePastTense ? 'gerðir' : 'myndir';
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+VINNUSTAÐURINN: "${state.workplace}"
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+Spyrja hvað nemandinn ${tense} gera í vinnunni.
+
+DÆMI:
+${state.usePastTense ? 
+  '- "Hvað gerðir þú í vinnunni?"' : 
+  '- "Hvað myndir þú gera í vinnunni?"'}
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else if (state.questionIndex === 2) {
+            // Asked what they did - now ask if hard/easy
+            const tense = state.usePastTense ? 'Var' : 'Væri';
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN LÝSTI VINNUNNI: "${userMessage}"
+
+VERKEFNI:
+Spyrja hvort vinnan ${state.usePastTense ? 'var' : 'væri'} erfið eða auðveld.
+
+DÆMI:
+- "${tense} það erfitt eða auðvelt?"
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else if (state.questionIndex === 3) {
+            // Asked if hard/easy - now ask specifics
+            const tense = state.usePastTense ? 'var' : 'væri';
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+Spyrja hvað ${tense} erfitt og hvað ${tense} auðvelt.
+
+DÆMI:
+- "Hvað ${tense} erfitt? Og hvað ${tense} auðvelt?"
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else if (state.questionIndex === 4) {
+            // Asked what was hard/easy - now ask fun/boring
+            const tense = state.usePastTense ? 'var' : 'væri';
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+Spyrja hvað ${tense} skemmtilegt og hvað ${tense} leiðinlegt.
+
+DÆMI:
+- "Hvað ${tense} skemmtilegt? Og hvað ${tense} leiðinlegt?"
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else if (state.questionIndex === 5) {
+            // Asked fun/boring - now ask what they learned
+            const tense = state.usePastTense ? 'lærðir' : 'myndir';
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+Spyrja hvað nemandinn ${tense} læra.
+
+DÆMI:
+${state.usePastTense ? 
+  '- "Hvað lærðir þú?"' : 
+  '- "Hvað myndir þú læra?"'}
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else if (state.questionIndex === 6) {
+            // Asked what learned - final question about why
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+Spyrja hvers vegna nemandinn vill vinna ${state.workplace ? `hjá/í ${state.workplace}` : ''}.
+
+DÆMI:
+- "Hvers vegna vilt þú vinna þar?"
+- "Hvers vegna viltu vinna?"
+
+SVARAÐU BARA MEÐ SPURNINGUNNI, EKKERT ANNAÐ.`;
+
+          } else {
+            // Final - thank them
+            systemPrompt = `Þú ert íslenskukennari sem talar við nemanda um vinnu.
+
+NEMANDINN SVARAÐI: "${userMessage}"
+
+VERKEFNI:
+Þakka nemandanum fyrir samtalið.
+Vera STUTT og HVETJANDI.
+
+DÆMI:
+- "Takk fyrir að tala við mig um vinnuna! Gangi þér vel!"
+- "Takk fyrir spjallið! Vonandi færðu góða vinnu!"
+
+EKKI enda með spurningu.
+SVARAÐU BARA MEÐ ÞÖKKUM, EKKERT ANNAÐ.`;
+          }
+
+          const response = await callOpenAI([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+          ], 150, 'gpt-4o-mini', 0.5);
+
+          // Check for grammar feedback (mild)
+          let feedbackMsg = null;
+          if (userMessage.length > 10 && Math.random() > 0.7) {
+            try {
+              const feedbackSys = `Þú ert íslenskukennari sem gefur MJÖG MILDA málfarsendurgjöf á A1-A2 stigi.
+
+Nemandinn er að tala um vinnu og er að æfa sig að tala íslensku.
+
+MIKILVÆGT: Vera mjög VARKÁR með leiðréttingar! Leiðrétta AÐEINS ef:
+1. Nemandi skrifar á öðru tungumáli
+2. Augljósar málfræðivillur
+3. Ritháttarvillur á íslenskum orðum
+
+Gefðu STUTTA endurgjöf (1 setning):
+- Byrjaðu með hrós: "Frábært!" eða "Gott!"
+- EF villa: Leiðréttu vinalega
+- Lokaðu jákvætt: "Annars mjög gott!"
+
+ALDREI leiðrétta ef svarið er skiljanlegt og næstum rétt!
+
+SKILAÐU: Annaðhvort endurgjöf EÐA "ENGIN" ef ekkert að leiðrétta.`;
+
+              const feedbackResponse = await callOpenAI([
+                { role: 'system', content: feedbackSys },
+                { role: 'user', content: userMessage }
+              ], 100, 'gpt-4o-mini', 0.2);
+
+              if (feedbackResponse.trim() !== 'ENGIN' && !feedbackResponse.includes('rétt!')) {
+                feedbackMsg = { role: 'feedback', content: feedbackResponse.trim() };
+              }
+            } catch (e) {
+              console.error('Villa við málfarsendurgjöf:', e);
+            }
+          }
+
+          // Update messages
+          const updatedMessages = [...newMessages];
+          if (feedbackMsg) updatedMessages.push(feedbackMsg);
+          updatedMessages.push({ role: 'assistant', content: response });
+          setMessages(updatedMessages);
+
+          // Update conversation state
+          const newState = { ...state };
+          
+          if (state.questionIndex === 0) {
+            // Determine if they've worked
+            const hasWorked = userMessage.toLowerCase().includes('já') || 
+                             userMessage.toLowerCase().includes('vinn') ||
+                             userMessage.toLowerCase().includes('hef');
+            newState.hasWorked = hasWorked;
+            newState.usePastTense = hasWorked;
+            newState.questionIndex = 1;
+          } else if (state.questionIndex === 1) {
+            // Extract workplace
+            newState.workplace = userMessage;
+            newState.questionIndex = 2;
+          } else if (state.questionIndex < 7) {
+            newState.questionIndex++;
+          } else {
+            setFinished(true);
+          }
+
+          setConversationState(newState);
+
+        } catch (error) {
+          console.error('Villa:', error);
+          setMessages([...newMessages, {
+            role: 'assistant',
+            content: 'Úps! Eitthvað fór úrskeiðis. Reyndu aftur.'
+          }]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const playAssistantAudio = async (index) => {
+        const msg = messages[index];
+        if (msg.role === 'assistant') {
+          setSpeakingIndex(index);
+          await playAudio(msg.content, (speaking) => {
+            setIsSpeaking(speaking);
+            if (!speaking) setSpeakingIndex(null);
+          });
+        }
+      };
+
+      const SpeakerIcon = ({ isSpeaking }) => (
+        <svg className={`w-5 h-5 ${isSpeaking ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+        </svg>
+      );
+
+      const MicIcon = ({ isRecording }) => (
+        <svg className={`w-5 h-5 ${isRecording ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+      );
+
+      return (
+        <div className="min-h-screen pb-12">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">
+                Spjall: Vinna
+              </h1>
+              <p className="text-gray-500 text-sm font-light">
+                Tölum saman · A1-A2
+              </p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            {/* Image */}
+            <div className="rounded-lg overflow-hidden shadow-lg mb-6 mx-auto" style={{maxWidth:'600px'}}>
+              <img 
+                src="media/spjall_vinna.png" 
+                alt="Ungmenni tala um vinnu" 
+                className="w-full h-auto" 
+              />
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">💡 Leiðbeiningar</h2>
+              <ul className="space-y-2 text-gray-700 font-light">
+                <li>• Talaðu um vinnu sem þú hefur átt eða vilt fá</li>
+                <li>• Þú getur notað hljóðnema eða skrifað</li>
+                <li>• Reyndu að svara með heilum setningum</li>
+                <li>• Smelltu á 🎧 til að heyra spurningarnar</li>
+              </ul>
+            </div>
+
+            {/* Chat Box */}
+            <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight:'400px'}}>
+              {/* Chat header */}
+              <div className="flex items-center gap-2 px-6 py-3 border-b bg-gray-50">
+                <span className="text-xs text-gray-400">
+                  💬 Spjall um vinnu
+                </span>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4" style={{maxHeight:'500px'}}>
+                {messages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-lg px-4 py-2 rounded-xl ${
+                      msg.role === 'user' 
+                        ? 'bg-blue-600 text-white' 
+                        : msg.role === 'feedback'
+                        ? 'bg-red-50 text-red-700 border-2 border-red-200 italic'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {msg.role === 'feedback' && (
+                        <span className="font-normal text-red-800">📚 Málfar: </span>
+                      )}
+                      
+                      {msg.role !== 'assistant' && (
+                        <p className="whitespace-pre-wrap font-light">{msg.content}</p>
+                      )}
+                      
+                      {msg.role === 'assistant' && (
+                        <button 
+                          onClick={() => playAssistantAudio(i)}
+                          disabled={isSpeaking && speakingIndex !== i}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors disabled:opacity-50"
+                        >
+                          <SpeakerIcon isSpeaking={speakingIndex === i} />
+                          <span className="text-blue-800 font-light">🎧 Hlustaðu</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 px-4 py-2 rounded-xl">
+                      <p className="text-gray-600 font-light">...</p>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input area */}
+              {!finished && (
+                <div className="border-t p-4 bg-white">
+                  <div className="flex gap-2 mb-2">
+                    <button 
+                      onClick={toggleRecording}
+                      className={`px-4 py-3 rounded-lg transition-colors flex items-center gap-2 ${
+                        isRecording ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <MicIcon isRecording={isRecording} />
+                      <span className="font-light">{isRecording ? '⏹️ Hætta upptöku' : '🎤 Haltu til að tala'}</span>
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={input} 
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                      placeholder="Skrifa eða laga tal..."
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+                      disabled={isLoading}
+                    />
+                    <button 
+                      onClick={sendMessage}
+                      disabled={!input.trim() || isLoading}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-normal transition-colors"
+                    >
+                      Senda
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {finished && (
+                <div className="border-t p-6 bg-gradient-to-r from-green-50 to-green-100 text-center">
+                  <div className="text-6xl mb-4">🎉</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-2">Vel gert!</h2>
+                  <p className="text-gray-600 font-light">Takk fyrir að tala um vinnuna!</p>
+                </div>
+              )}
+            </section>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallApp />);
+  </script>
+</body>
+</html>
