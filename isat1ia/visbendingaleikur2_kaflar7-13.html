@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎯 Finndu orðið 2 – A1 með audio‑vísbendingum</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%); min-height: 100vh;}
+    .recording { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ---------- Icons ----------
+    const SpeakerIcon = ({ active=false }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-5 h-5 ${active?'text-red-500 animate-pulse':'text-white'}`}>
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+    );
+
+    const SendIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    );
+
+    // ---------- Infra ----------
+    async function callOpenAI(payload){
+      const r = await fetch('/.netlify/functions/openai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      const data = await r.json();
+      if(!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    async function speak(text){
+      try{
+        const r = await fetch('/.netlify/functions/speak', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text_to_speak: text })});
+        const data = await r.json();
+        if(!r.ok || data.error || !data.audio_base64) throw new Error(data.error || 'No audio');
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        await audio.play();
+      }catch(e){ console.error('speak error:', e); }
+    }
+
+    // ---------- Orðalisti kaflar 7-13 ----------
+    const DEFAULT_WORDS = [
+      { word:'kjúklingur', def:'fugl sem fólk borðar oft' },
+      { word:'paprika', def:'rautt, grænt eða gult grænmeti með mörgum steinum eða fræjum í' },
+      { word:'laukur', def:'grænmeti sem fær fólk til að gráta' },
+      { word:'ofn', def:'við setjum mat eða brauð í þetta til að baka' },
+      { word:'krydd', def:'bragðefni sem við setjum á mat, til dæmis salt eða chilli' },
+      { word:'gulrót', def:'langt appelsínugult grænmeti' },
+      { word:'kartafla', def:'brúnt grænmeti sem vex í jörðu' },
+      { word:'teppi', def:'ekki sæng en stundum notað eins, heldur á okkur hita' },
+      { word:'að baka', def:'gera brauð eða köku í ofni' },
+      { word:'kaka', def:'sætur matur til að borða, oft bakað í ofni' },
+      { word:'smíði', def:'fag þar sem nemendur búa til hluti úr viði' },
+      { word:'heimilisfræði', def:'fag þar sem nemendur læra að elda' },
+      { word:'verkfæri', def:'hlutir eins og hamar og skrúfjárn' },
+      { word:'að þvo', def:'gera eitthvað hreint með vatni og sápu' },
+      { word:'hjúkrunarfræðingur', def:'manneskja sem hjálpar læknum á sjúkrahúsi' },
+      { word:'læknir', def:'manneskja sem hjálpar veiku fólki' },
+      { word:'málari', def:'manneskja sem málar hús' },
+      { word:'lögreglumaður', def:'manneskja sem verndar fólk og stoppar glæpamenn' },
+      { word:'ferilskrá', def:'skjal með upplýsingum um menntun og vinnu' },
+      { word:'reynsla', def:'það sem þú lærir af því að vinna eða gera eitthvað' },
+      { word:'leikskólakennari', def:'manneskja sem kennir litlum börnum' },
+      { word:'hárgreiðslukona', def:'manneskja sem klippir hár' },
+      { word:'rafvirki', def:'manneskja sem vinnur með rafmagn og ljós' },
+      { word:'börn', def:'litlir drengir og stúlkur' },
+      { word:'að elda', def:'gera mat á potti eða pönnu' }
+    ];
+
+    // ---------- Leikur ----------
+    const Game = () => {
+      const [words, setWords] = useState(DEFAULT_WORDS);
+      const [target, setTarget] = useState(null);
+      const [desc, setDesc] = useState('');
+      const [input, setInput] = useState('');
+      const [messages, setMessages] = useState([]);
+      const [wrong, setWrong] = useState(0);
+      const [round, setRound] = useState(1);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [speakingDesc, setSpeakingDesc] = useState(false);
+      const [loading, setLoading] = useState(false);
+
+      const newRound = async () => {
+        setLoading(true);
+        const pick = words[Math.floor(Math.random()*words.length)];
+        setTarget(pick);
+        setWrong(0);
+        setMessages([]);
+        setInput('');
+        
+        const sys = `Þú hjálpar íslenskunema á A1-A2. Lýstu hlut eða hugtaki án þess að nefna orðið sjálft. Notaðu 1–3 mjög einfaldar setningar á íslensku. Ekki nota flókin orð. Ekki nefna orðið beint. Ljúktu með spurningu eins og: \\"Hvað er þetta?\\".`;
+        const user = `Orð: "${pick.word}". Einföld útskýring: "${pick.def}". Búðu til A1-A2 lýsingu.`;
+        
+        try{
+          const content = await callOpenAI({ model:'gpt-4o-mini', temperature:0.3, max_tokens:120, messages:[{role:'system', content: sys},{role:'user', content: user}] });
+          setDesc(content);
+          setLoading(false);
+        }catch(e){
+          console.error(e);
+          const fallback = `Þetta er ${pick.def}. Hvað er þetta?`;
+          setDesc(fallback);
+          setLoading(false);
+        }
+      };
+
+      useEffect(()=>{ newRound(); },[]);
+
+      const submitGuess = async () => {
+        const guess = input.trim();
+        if(!guess) return;
+        setMessages(prev=>[...prev, { role:'user', content: guess }]);
+        setInput('');
+
+        if(!target) return;
+        
+        // Nota AI til að meta hvort svarið sé rétt
+        const checkSys = `Þú ert að meta hvort nemandi giskaði rétt á orð. Rétta orðið er "${target.word}". Nemandinn giskaði: "${guess}".
+
+SAMÞYKKJA sem rétt:
+- Nákvæmlega rétt orð
+- Sagnir með eða án "að" (t.d. bæði "gista" og "að gista" eru rétt, "elda" og "að elda")
+- Fleirtölu (t.d. "hjón" fyrir "hjón", "krydd" fyrir "krydd")
+- Smávægilegar stafsetningarvillur (t.d. "grasker" fyrir "græsker", "kartofla" fyrir "kartafla")
+- Eintölu/fleirtölu form (t.d. "barn" fyrir "börn")
+- Samsvarandi orð (t.d. "hársnyrtir" fyrir "hárgreiðslukona", "lögreglufulltrúi" fyrir "lögreglumaður", "sjúkraliði" fyrir "hjúkrunarfræðingur" ef það er skynsamlegt samhengi)
+- Algeng samheiti (t.d. "lögga" fyrir "lögreglumaður")
+
+HAFNA:
+- Alveg rangt orð
+- Orð sem eru of langt frá
+
+Svaraðu AÐEINS með "RÉTT" eða "RANGT". Ekkert annað.`;
+
+        try {
+          const aiDecision = await callOpenAI({ 
+            model:'gpt-4o-mini', 
+            temperature:0.1, 
+            max_tokens:10, 
+            messages:[{role:'system', content: checkSys}] 
+          });
+          
+          const isCorrect = aiDecision.trim().toUpperCase().includes('RÉTT');
+          
+          if(isCorrect){
+            const ok = `✅ Rétt! Orðið var "${target.word}".`;
+            setMessages(prev=>[...prev, { role:'system', content: ok }]);
+            await speak(ok);
+            setCorrectCount(c => c + 1);
+            setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 900);
+            return;
+          }
+        } catch(e) {
+          console.error('AI check error:', e);
+          // Fallback á gamla kerfið ef AI mistekst
+          if(guess.toLowerCase() === target.word.toLowerCase()){
+            const ok = `✅ Rétt! Orðið var "${target.word}".`;
+            setMessages(prev=>[...prev, { role:'system', content: ok }]);
+            await speak(ok);
+            setCorrectCount(c => c + 1);
+            setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 900);
+            return;
+          }
+        }
+
+        const wrongMsg = `❌ Ekki rétt. Prófaðu aftur.`;
+        setMessages(prev=>[...prev, { role:'system', content: wrongMsg }]);
+        await speak(wrongMsg);
+
+        const n = wrong + 1;
+        setWrong(n);
+
+        // Vísbendingar sem hnappa í stað þess að spila þær strax
+        if(n === 2){
+          const first = target.word[0];
+          const pronunciation = getLetterPronunciation(first);
+          const hintText = `Vísbending: Orðið byrjar á ${pronunciation}.`;
+          setMessages(prev=>[...prev, { 
+            role:'hint', 
+            content: '💡 Vísbending 1',
+            hintText: hintText
+          }]);
+        } else if(n === 4){
+          const hintText = `Önnur vísbending: Orðið hefur ${target.word.length} stafi.`;
+          setMessages(prev=>[...prev, { 
+            role:'hint', 
+            content: '💡 Vísbending 2',
+            hintText: hintText
+          }]);
+        } else if(n === 6){
+          const ending = mkEnding(target.word);
+          const hintText = `Síðasta vísbending: Orðið endar á ${ending}.`;
+          setMessages(prev=>[...prev, { 
+            role:'hint', 
+            content: '💡 Vísbending 3',
+            hintText: hintText
+          }]);
+        } else if(n >= 7){
+          await speak(`Rétt svar er: ${target.word}. Prófum nýtt orð!`);
+          setMessages(prev=>[...prev, { role:'system', content: `Rétt svar var: ${target.word}` }]);
+          setTimeout(async ()=>{ setRound(r=>r+1); await newRound(); }, 700);
+        }
+      };
+
+      const playHint = async (hintText) => {
+        await speak(hintText);
+      };
+
+      function mkEnding(w){
+        if(w.length <= 2) return w;
+        if(w.length <= 4) return w.slice(-2);
+        return w.slice(-3);
+      }
+
+      // Íslenskur framburður á stöfum
+      function getLetterPronunciation(letter) {
+        const pronunciations = {
+          'a': 'a',
+          'á': 'á',
+          'b': 'bé',
+          'c': 'sé',
+          'd': 'dé',
+          'ð': 'eð',
+          'e': 'e',
+          'é': 'é',
+          'f': 'eff',
+          'g': 'gé',
+          'h': 'há',
+          'i': 'i',
+          'í': 'í',
+          'j': 'joð',
+          'k': 'ká',
+          'l': 'ell',
+          'm': 'emm',
+          'n': 'enn',
+          'o': 'o',
+          'ó': 'ó',
+          'p': 'pé',
+          'r': 'err',
+          's': 'ess',
+          't': 'té',
+          'u': 'u',
+          'ú': 'ú',
+          'v': 'vaff',
+          'x': 'ex',
+          'y': 'ufsilon y',
+          'ý': 'ufsilon ý',
+          'þ': 'þoddn',
+          'æ': 'æ',
+          'ö': 'ö'
+        };
+        return pronunciations[letter.toLowerCase()] || letter;
+      }
+
+      const replaceList = () => {
+        const raw = prompt('Límdu inn nýjan lista – eitt orð á línu (form: orð - einföld útskýring).\nDæmi:\nhjón - maður og kona sem eru gift');
+        if(!raw) return;
+        const lines = raw.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+        const parsed = [];
+        for(const line of lines){
+          const [w, d] = line.split(/\s*-\s*/);
+          if(w && d) parsed.push({ word:w, def:d });
+        }
+        if(parsed.length){
+          setWords(parsed);
+          speak('Nýr orðalisti kominn!');
+          setTimeout(()=>{ newRound(); }, 300);
+        }else{
+          alert('Tókst ekki að lesa nýjan lista. Gættu að forminu: "orð - útskýring"');
+        }
+      };
+
+      const replayDesc = async () => {
+        if(desc){ 
+          setSpeakingDesc(true);
+          await speak(desc); 
+          setSpeakingDesc(false);
+        }
+      };
+
+      const resetGame = () => {
+        setRound(1);
+        setCorrectCount(0);
+        newRound();
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-3xl mx-auto px-6 py-8">
+              <button onClick={()=>window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-light text-gray-800 mb-1">Finndu orðið 2</h1>
+                  <p className="text-gray-500 text-sm font-light">Kaflar 7-13 · A1-A2 · Hlustun</p>
+                  <p className="text-gray-400 text-xs font-light mt-1">Umferð {round} · Rétt: {correctCount} · Orð í lista: {words.length}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={resetGame} className="px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-light">🔄 Byrja upp á nýtt</button>
+                  <button onClick={replaceList} className="px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-light">⚙️ Orðalisti</button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-3xl mx-auto px-6 mt-8">
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+                <span className="text-sm text-gray-600 font-light">🎧 Hlustaðu á lýsinguna og giskaðu á orðið</span>
+                {loading && <span className="text-xs font-light text-blue-600">⏳ Gervigreind er að hugsa...</span>}
+              </div>
+
+              {!loading && desc && (
+                <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
+                  <button 
+                    onClick={replayDesc} 
+                    disabled={speakingDesc}
+                    className="flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <SpeakerIcon active={speakingDesc} />
+                    <span>{speakingDesc ? '🔊 Spilar...' : '🎧 Spila lýsingu'}</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="p-6 space-y-3 min-h-[260px]">
+                {messages.map((m,i)=> (
+                  <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
+                    {m.role === 'hint' ? (
+                      <button
+                        onClick={() => playHint(m.hintText)}
+                        className="bg-yellow-100 border-2 border-yellow-300 text-yellow-800 px-4 py-2 rounded-lg font-light shadow-sm hover:bg-yellow-200 transition-colors flex items-center gap-2"
+                      >
+                        <SpeakerIcon />
+                        <span>{m.content}</span>
+                      </button>
+                    ) : (
+                      <div className={`max-w-lg px-4 py-2 rounded-lg font-light shadow-sm ${
+                        m.role==='user'
+                          ?'bg-gray-800 text-white'
+                          : m.role==='system'
+                          ? 'bg-blue-100 text-blue-800 text-sm'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {m.content}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {messages.length === 0 && !loading && (
+                  <p className="text-center text-gray-400 font-light py-8">Smelltu á hnappin hér að ofan til að byrja 👆</p>
+                )}
+              </div>
+
+              <div className="border-t p-4 bg-white">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={input} 
+                    onChange={e=>setInput(e.target.value)} 
+                    onKeyDown={e=>e.key==='Enter'&&submitGuess()} 
+                    placeholder="Skrifaðu gisk…" 
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 font-light" 
+                    disabled={loading || !desc} 
+                  />
+                  <button 
+                    onClick={submitGuess} 
+                    className="bg-gray-800 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors font-light disabled:bg-gray-400 disabled:cursor-not-allowed" 
+                    disabled={loading || !desc}
+                  >
+                    <SendIcon/>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Game/>);
+  </script>
+</body>
+</html>
