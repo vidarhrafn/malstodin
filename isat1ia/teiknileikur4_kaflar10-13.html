@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎨 Teiknileikur 4 - Pictionary</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const WORDS = [
+      // Auðveld (17)
+      { word: 'skóli', difficulty: 'easy' },
+      { word: 'verkfæri', difficulty: 'easy' },
+      { word: 'skál', difficulty: 'easy' },
+      { word: 'skeið', difficulty: 'easy' },
+      { word: 'skóhorn', difficulty: 'easy' },
+      { word: 'vöfflur', difficulty: 'easy' },
+      { word: 'tuska', difficulty: 'easy' },
+      { word: 'læknir', difficulty: 'easy' },
+      { word: 'spítali', difficulty: 'easy' },
+      { word: 'málari', difficulty: 'easy' },
+      { word: 'pípari', difficulty: 'easy' },
+      { word: 'lögreglumaður', difficulty: 'easy' },
+      { word: 'slökkviliðsmaður', difficulty: 'easy' },
+      { word: 'börn', difficulty: 'easy' },
+      { word: 'leikkona', difficulty: 'easy' },
+      { word: 'hárgreiðslukona', difficulty: 'easy' },
+      { word: 'ljós', difficulty: 'easy' },
+      
+      // Miðlungs (6)
+      { word: 'að þvo', difficulty: 'medium' },
+      { word: 'að sópa', difficulty: 'medium' },
+      { word: 'að passa', difficulty: 'medium' },
+      { word: 'að kenna', difficulty: 'medium' },
+      { word: 'að klippa', difficulty: 'medium' },
+      { word: 'að lita', difficulty: 'medium' }
+    ];
+
+    const PictionaryGame = () => {
+      const [usedWords, setUsedWords] = useState([]);
+      const [currentWord, setCurrentWord] = useState(null);
+      const [timeLeft, setTimeLeft] = useState(60);
+      const [isRunning, setIsRunning] = useState(false);
+      const [gameFinished, setGameFinished] = useState(false);
+      const audioContextRef = useRef(null);
+
+      // Búa til AudioContext einu sinni
+      useEffect(() => {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        return () => {
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+          }
+        };
+      }, []);
+
+      // Spila stutt píp
+      const playBeep = () => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.1);
+      };
+
+      // Spila buzzer þegar tíminn er búinn
+      const playBuzzer = () => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.frequency.value = 200;
+        oscillator.type = 'sawtooth';
+        
+        gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.5);
+      };
+
+      useEffect(() => {
+        let interval;
+        if (isRunning && timeLeft > 0) {
+          interval = setInterval(() => {
+            setTimeLeft(prev => {
+              const newTime = prev - 1;
+              
+              if (newTime <= 10 && newTime > 0) {
+                playBeep();
+              }
+              
+              if (newTime === 0) {
+                playBuzzer();
+              }
+              
+              return newTime;
+            });
+          }, 1000);
+        } else if (timeLeft === 0) {
+          setIsRunning(false);
+        }
+        return () => clearInterval(interval);
+      }, [isRunning, timeLeft]);
+
+      const getRandomWord = () => {
+        const availableWords = WORDS.filter(w => !usedWords.includes(w.word));
+        
+        if (availableWords.length === 0) {
+          setGameFinished(true);
+          return null;
+        }
+        
+        const randomIndex = Math.floor(Math.random() * availableWords.length);
+        return availableWords[randomIndex];
+      };
+
+      const startNewWord = () => {
+        const word = getRandomWord();
+        if (word) {
+          setCurrentWord(word);
+          setTimeLeft(60);
+          setIsRunning(true);
+        }
+      };
+
+      const stopTimer = () => {
+        setIsRunning(false);
+        setCurrentWord(null);
+        setTimeLeft(60);
+      };
+
+      const nextWord = () => {
+        if (currentWord) {
+          setUsedWords(prev => [...prev, currentWord.word]);
+        }
+        const word = getRandomWord();
+        if (word) {
+          setCurrentWord(word);
+          setTimeLeft(60);
+          setIsRunning(true);
+        }
+      };
+
+      const resetGame = () => {
+        setUsedWords([]);
+        setCurrentWord(null);
+        setTimeLeft(60);
+        setIsRunning(false);
+        setGameFinished(false);
+      };
+
+      const getDifficultyColor = (difficulty) => {
+        switch(difficulty) {
+          case 'easy': return 'bg-green-100 text-green-800 border-green-300';
+          case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+          case 'hard': return 'bg-red-100 text-red-800 border-red-300';
+          default: return 'bg-gray-100 text-gray-800 border-gray-300';
+        }
+      };
+
+      const getDifficultyText = (difficulty) => {
+        switch(difficulty) {
+          case 'easy': return 'Auðvelt';
+          case 'medium': return 'Miðlungs';
+          case 'hard': return 'Erfitt';
+          default: return '';
+        }
+      };
+
+      const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">🎨 Teiknileikur 4</h1>
+              <p className="text-gray-500 text-sm font-light">Pictionary á íslensku · Kaflar 10-13 · A1-A2</p>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            
+            {/* Leiðbeiningar */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Leiðbeiningar</h2>
+              <ul className="space-y-2 text-gray-700 font-light">
+                <li>• Smelltu á "Birta orð" til að byrja</li>
+                <li>• Einn nemandi teiknar orðið</li>
+                <li>• Aðrir giska á hvað er verið að teikna</li>
+                <li>• Þú hefur 60 sekúndur</li>
+                <li>• Smelltu á "Næsta orð" þegar giskað er rétt</li>
+              </ul>
+            </div>
+
+            {/* Leiksvæði */}
+            <div className="bg-white rounded-lg shadow-xl p-8">
+              
+              {/* Progress */}
+              <div className="mb-6 text-center">
+                <p className="text-gray-600 font-light">
+                  Orð notuð: <span className="font-normal">{usedWords.length}</span> / <span className="font-normal">{WORDS.length}</span>
+                </p>
+              </div>
+
+              {/* Leikur lokið */}
+              {gameFinished && (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">🎉</div>
+                  <h2 className="text-2xl font-light text-gray-800 mb-4">Leikur lokið!</h2>
+                  <p className="text-gray-600 font-light mb-6">
+                    Þið kláruðuð öll {WORDS.length} orðin!
+                  </p>
+                  <button
+                    onClick={resetGame}
+                    className="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-normal hover:bg-blue-700 transition-colors"
+                  >
+                    🔄 Byrja aftur
+                  </button>
+                </div>
+              )}
+
+              {/* Ekkert orð valið */}
+              {!gameFinished && !currentWord && (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-6">🎨</div>
+                  <button
+                    onClick={startNewWord}
+                    className="bg-green-600 text-white px-8 py-4 rounded-lg text-xl font-normal hover:bg-green-700 transition-colors shadow-lg"
+                  >
+                    📝 Birta orð
+                  </button>
+                </div>
+              )}
+
+              {/* Orð er valið */}
+              {!gameFinished && currentWord && (
+                <div className="text-center">
+                  
+                  {/* Erfiðleikastig */}
+                  <div className="mb-4">
+                    <span className={`inline-block px-4 py-2 rounded-full text-sm font-normal border-2 ${getDifficultyColor(currentWord.difficulty)}`}>
+                      {getDifficultyText(currentWord.difficulty)}
+                    </span>
+                  </div>
+
+                  {/* Orðið */}
+                  <div className="bg-gradient-to-br from-purple-100 to-blue-100 border-4 border-purple-300 rounded-2xl p-12 mb-8">
+                    <p className="text-6xl font-bold text-gray-800">
+                      {currentWord.word}
+                    </p>
+                  </div>
+
+                  {/* Tími */}
+                  <div className="mb-8">
+                    <div className={`inline-block text-5xl font-bold ${timeLeft <= 10 ? 'text-red-600 animate-pulse' : 'text-gray-800'}`}>
+                      {formatTime(timeLeft)}
+                    </div>
+                  </div>
+
+                  {/* Takkar */}
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button
+                      onClick={stopTimer}
+                      className="bg-red-600 text-white px-6 py-3 rounded-lg text-lg font-normal hover:bg-red-700 transition-colors"
+                    >
+                      ⏹️ Stoppa
+                    </button>
+                    <button
+                      onClick={nextWord}
+                      className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg font-normal hover:bg-green-700 transition-colors"
+                    >
+                      ➡️ Næsta orð
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Stigatafla */}
+            {usedWords.length > 0 && !gameFinished && (
+              <div className="mt-6 bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-normal text-gray-800 mb-3">✅ Orð sem hafa verið notuð:</h3>
+                <div className="flex flex-wrap gap-2">
+                  {usedWords.map((word, index) => (
+                    <span 
+                      key={index}
+                      className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-light"
+                    >
+                      {word}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<PictionaryGame />);
+  </script>
+</body>
+</html>
