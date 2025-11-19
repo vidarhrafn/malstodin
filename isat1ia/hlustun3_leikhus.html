@@ -118,6 +118,8 @@
     const HlustunLeikhus = () => {
       const [playbackRate, setPlaybackRate] = useState(1);
       const [isPlaying, setIsPlaying] = useState(false);
+      const [currentTime, setCurrentTime] = useState(0);  // ← BÆTA VIÐ
+      const [duration, setDuration] = useState(0);        // ← BÆTA VIÐ
       const audioRef = useRef(null);
 
       // Þýðing
@@ -306,44 +308,84 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
             </div>
           </header>
 
-          {/* Sticky Audio Player */}
-          <div className="sticky-player">
-            <div className="max-w-4xl mx-auto px-6 py-4">
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border-2 border-blue-200">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={togglePlay}
-                    className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0"
-                    aria-label={isPlaying ? 'Pása' : 'Spila'}
-                  >
-                    {isPlaying ? (
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
-                    ) : (
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-                    )}
-                  </button>
+   {/* Sticky Audio Player */}
+<div className="sticky-player">
+  <div className="max-w-4xl mx-auto px-6 py-4">
+    <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border-2 border-blue-200">
+      <div className="flex items-center gap-4 mb-3">
+        <button
+          onClick={togglePlay}
+          className="bg-blue-500 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors flex-shrink-0"
+          aria-label={isPlaying ? 'Pása' : 'Spila'}
+        >
+          {isPlaying ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+          )}
+        </button>
 
-                  <div className="flex-1">
-                    <p className="text-sm font-normal text-gray-800 mb-1">🎧 Hlusta á textann</p>
-                    <audio
-                      ref={audioRef}
-                      src="media/hlustun3_leikhus.mp3"
-                      preload="none"
-                      onEnded={() => setIsPlaying(false)}
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                    />
-                  </div>
+        <button
+          onClick={() => { if (audioRef.current) audioRef.current.currentTime -= 10; }}
+          className="bg-white text-gray-700 w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-sm"
+          aria-label="10 sekúndur til baka"
+        >
+          ⏮️
+        </button>
 
-                  <div className="flex gap-2">
-                    <button onClick={() => setPlaybackRate(0.75)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 0.75 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>0.75×</button>
-                    <button onClick={() => setPlaybackRate(1)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 1 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>1×</button>
-                    <button onClick={() => setPlaybackRate(1.25)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 1.25 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>1.25×</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-normal text-gray-800">🎧 Hlusta á textann</p>
+            <span className="text-xs text-gray-600 font-mono">
+              {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')} / {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
+            </span>
           </div>
+          
+          {/* Progress bar */}
+          <div 
+            className="w-full h-2 bg-white/50 rounded-full cursor-pointer relative overflow-hidden"
+            onClick={(e) => {
+              if (!audioRef.current) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const percent = (e.clientX - rect.left) / rect.width;
+              audioRef.current.currentTime = percent * duration;
+            }}
+          >
+            <div 
+              className="absolute top-0 left-0 h-full bg-blue-500 transition-all"
+              style={{ width: `${(currentTime / duration) * 100}%` }}
+            />
+          </div>
+
+          <audio
+            ref={audioRef}
+            src="media/hlustun8_pizzan.mp3"
+            preload="metadata"
+            onEnded={() => setIsPlaying(false)}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+            onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+          />
+        </div>
+
+        <button
+          onClick={() => { if (audioRef.current) audioRef.current.currentTime += 10; }}
+          className="bg-white text-gray-700 w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-sm"
+          aria-label="10 sekúndur áfram"
+        >
+          ⏭️
+        </button>
+
+        <div className="flex gap-2">
+          <button onClick={() => setPlaybackRate(0.75)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 0.75 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>0.75×</button>
+          <button onClick={() => setPlaybackRate(1)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 1 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>1×</button>
+          <button onClick={() => setPlaybackRate(1.25)} className={`px-3 py-1 rounded-md text-sm font-light transition-colors ${playbackRate === 1.25 ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>1.25×</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
           <main className="max-w-4xl mx-auto px-6 mt-8 space-y-8">
             {/* Leiðbeiningar */}
