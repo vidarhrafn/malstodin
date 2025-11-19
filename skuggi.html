@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎤 Framburðaræfing</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .pulse-recording {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+    .sound-focus {
+      background: #fff3cd;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ========== AI FUNCTIONS ==========
+    async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model, temperature })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    async function playAudio(text, setSpeakingCallback) {
+      setSpeakingCallback(true);
+      try {
+        const r = await fetch('/.netlify/functions/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text_to_speak: text })
+        });
+        const data = await r.json();
+        if (!r.ok || data.error || !data.audio_base64) {
+          console.error('Villa í hljóðkalli:', data?.error);
+          setSpeakingCallback(false);
+          return;
+        }
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audio.onended = () => setSpeakingCallback(false);
+        audio.onerror = () => setSpeakingCallback(false);
+        await audio.play().catch(() => setSpeakingCallback(false));
+      } catch (e) {
+        console.error('Tenging mistókst:', e);
+        setSpeakingCallback(false);
+      }
+    }
+
+    // ========== DATA ==========
+    const SENTENCES = [
+      {
+        text: "Ég fer í búðina á morgun",
+        difficult: ["ð", "ö"],
+        tip: "Athugaðu 'ð' hljóðið í 'búðina' og 'ö' í 'morgun'"
+      },
+      {
+        text: "Börn læra að lesa í skólanum",
+        difficult: ["ö", "æ", "rn"],
+        tip: "Athugaðu 'ö' í 'börn', 'æ' í 'læra' og 'rn' samsetninguna"
+      },
+      {
+        text: "Þetta er gott brauð með smjöri",
+        difficult: ["þ", "ð", "ö"],
+        tip: "Athugaðu 'þ' í 'þetta', 'ð' í 'brauð' og 'ö' í 'smjöri'"
+      },
+      {
+        text: "Amma situr í rauðum stól",
+        difficult: ["ð", "ö", "au"],
+        tip: "Athugaðu 'au' í 'rauðum', 'ð' og 'ö' í 'rauðum' og 'stól'"
+      },
+      {
+        text: "Ég elska að fara á fjöruna",
+        difficult: ["ö", "rn"],
+        tip: "Athugaðu 'ö' í 'fjöruna' og 'rn' samsetninguna"
+      }
+    ];
+
+    // ========== COMPONENTS ==========
+    const SoundGuide = () => (
+      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6 mb-6">
+        <h3 className="text-xl font-normal text-gray-800 mb-4">📚 Erfiðustu hljóðin fyrir víetnamska nemendur:</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg p-3 border border-yellow-200">
+            <span className="font-semibold text-blue-600">ð</span> (mjúkt d)
+            <p className="text-sm text-gray-600 mt-1">Settu tunguna milli tannanna og blásðu</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-yellow-200">
+            <span className="font-semibold text-blue-600">þ</span> (th)
+            <p className="text-sm text-gray-600 mt-1">Eins og enska "th" í "thing"</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-yellow-200">
+            <span className="font-semibold text-blue-600">ö</span>
+            <p className="text-sm text-gray-600 mt-1">Munnur hálf-opinn, varir fram</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-yellow-200">
+            <span className="font-semibold text-blue-600">æ</span>
+            <p className="text-sm text-gray-600 mt-1">Eins og "ai" í "fair"</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-yellow-200">
+            <span className="font-semibold text-blue-600">r</span> (rúllað)
+            <p className="text-sm text-gray-600 mt-1">Tunga snertir efri tannkjöt, titrað</p>
+          </div>
+          <div className="bg-white rounded-lg p-3 border border-yellow-200">
+            <span className="font-semibold text-blue-600">rn</span> (samsetning)
+            <p className="text-sm text-gray-600 mt-1">Hljómar eins og "tn" (t.d. "börn" → "bötn")</p>
+          </div>
+        </div>
+      </div>
+    );
+
+    // ========== SHADOWING COMPONENT ==========
+    const ShadowingExercise = ({ sentence, index }) => {
+      const [step, setStep] = useState('ready'); // ready, playing, recording, analyzing, complete
+      const [isRecording, setIsRecording] = useState(false);
+      const [recognition, setRecognition] = useState(null);
+      const [transcribed, setTranscribed] = useState('');
+      const [feedback, setFeedback] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [isSpeaking, setIsSpeaking] = useState(false);
+
+      useEffect(() => {
+        if ('webkitSpeechRecognition' in window) {
+          const recog = new webkitSpeechRecognition();
+          recog.lang = 'is-IS';
+          recog.continuous = false;
+          recog.interimResults = false;
+          recog.onresult = (e) => {
+            const transcript = e.results[0][0].transcript;
+            setTranscribed(transcript);
+            analyzeShadowing(transcript);
+          };
+          recog.onend = () => setIsRecording(false);
+          recog.onerror = () => {
+            setIsRecording(false);
+            setStep('ready');
+          };
+          setRecognition(recog);
+        }
+      }, []);
+
+      const playOriginal = async () => {
+        setStep('playing');
+        await playAudio(sentence.text, setIsSpeaking);
+        setStep('recording');
+        startRecording();
+      };
+
+      const startRecording = () => {
+        if (!recognition) {
+          alert('Vafrinn þinn styður ekki talgreiningu. Notaðu Chrome eða Edge.');
+          setStep('ready');
+          return;
+        }
+        setIsRecording(true);
+        recognition.start();
+      };
+
+      const analyzeShadowing = async (studentSaid) => {
+        setStep('analyzing');
+        setLoading(true);
+
+        try {
+          const prompt = `Þú ert íslenskukennari sem metur skuggalestur (shadowing).
+
+UPPRUNALEGUR TEXTI: "${sentence.text}"
+NEMANDI SAGÐI: "${studentSaid}"
+
+ERFIÐ HLJÓÐ Í ÞESSARI SETNINGU: ${sentence.difficult.join(', ')}
+
+Nemandinn er frá Víetnam og á oft erfitt með þessi hljóð.
+
+VERKEFNI:
+1. Ber saman textana - hversu nákvæmur var nemandinn?
+2. Athugaðu sérstaklega erfið hljóð (${sentence.difficult.join(', ')})
+3. Gefðu hvetjandi endurgjöf með ábendingum
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "accuracy": 0-100,
+  "correct_words": ["listi", "af", "orðum", "sem", "voru", "rétt"],
+  "incorrect_words": [
+    {
+      "expected": "búðina",
+      "said": "búdina",
+      "tip": "Athugaðu 'ð' hljóðið - settu tunguna milli tannanna"
+    }
+  ],
+  "overall_feedback": "Mjög gott! En æfðu 'ð' hljóðið aðeins meira."
+}`;
+
+          const result = await callOpenAI([
+            { role: 'system', content: 'Þú ert íslenskukennari sem metur framburð.' },
+            { role: 'user', content: prompt }
+          ], 400, 'gpt-4o', 0.2);
+
+          const parsed = JSON.parse(result);
+          setFeedback(parsed);
+          setStep('complete');
+        } catch (error) {
+          console.error('Villa við greiningu:', error);
+          setStep('ready');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const reset = () => {
+        setStep('ready');
+        setTranscribed('');
+        setFeedback(null);
+      };
+
+      return (
+        <div className="border-2 border-blue-200 rounded-lg p-6 bg-white">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h4 className="text-lg font-normal text-gray-800 mb-2">
+                {index + 1}. {sentence.text}
+              </h4>
+              <p className="text-sm text-gray-600 italic">{sentence.tip}</p>
+            </div>
+          </div>
+
+          {step === 'ready' && (
+            <button
+              onClick={playOriginal}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-normal transition-colors flex items-center gap-2"
+            >
+              🎧 Hlustra og endurtaka
+            </button>
+          )}
+
+          {step === 'playing' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-blue-800 font-normal flex items-center gap-2">
+                <span className="animate-pulse">🔊</span> Hlusta vel...
+              </p>
+            </div>
+          )}
+
+          {step === 'recording' && (
+            <div className="bg-red-50 border border-red-300 rounded-lg p-4">
+              <p className="text-red-800 font-normal flex items-center gap-2">
+                <span className="pulse-recording">🎤</span> Endurtaktu núna!
+              </p>
+            </div>
+          )}
+
+          {step === 'analyzing' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-800 font-normal flex items-center gap-2">
+                <span className="animate-spin">⏳</span> Greini framburð...
+              </p>
+            </div>
+          )}
+
+          {step === 'complete' && feedback && (
+            <div className="space-y-4">
+              <div className={`rounded-lg p-4 border-2 ${
+                feedback.accuracy >= 80 
+                  ? 'bg-green-50 border-green-300 text-green-900'
+                  : feedback.accuracy >= 60
+                  ? 'bg-yellow-50 border-yellow-300 text-yellow-900'
+                  : 'bg-orange-50 border-orange-300 text-orange-900'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-lg">
+                    {feedback.accuracy >= 80 ? '✅' : feedback.accuracy >= 60 ? '👍' : '💪'} 
+                    Nákvæmni: {feedback.accuracy}%
+                  </span>
+                </div>
+                <p className="font-light mb-3">{feedback.overall_feedback}</p>
+
+                {transcribed && (
+                  <div className="bg-white/50 rounded p-2 text-sm">
+                    <span className="font-normal">Þú sagðir:</span> "{transcribed}"
+                  </div>
+                )}
+              </div>
+
+              {feedback.correct_words.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="font-normal text-green-800 mb-2">✅ Rétt orð:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {feedback.correct_words.map((word, i) => (
+                      <span key={i} className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                        {word}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {feedback.incorrect_words.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="font-normal text-orange-800 mb-3">💡 Til að bæta:</p>
+                  {feedback.incorrect_words.map((item, i) => (
+                    <div key={i} className="mb-3 last:mb-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm font-mono">
+                          {item.expected}
+                        </span>
+                        <span className="text-gray-400">→</span>
+                        <span className="text-gray-600 text-sm">þú sagðir: "{item.said}"</span>
+                      </div>
+                      <p className="text-sm text-gray-700 italic">{item.tip}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={reset}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-normal transition-colors"
+              >
+                🔄 Reyna aftur
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ========== PRONUNCIATION COMPONENT ==========
+    const PronunciationExercise = ({ sentence, index }) => {
+      const [isRecording, setIsRecording] = useState(false);
+      const [recognition, setRecognition] = useState(null);
+      const [transcribed, setTranscribed] = useState('');
+      const [feedback, setFeedback] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      useEffect(() => {
+        if ('webkitSpeechRecognition' in window) {
+          const recog = new webkitSpeechRecognition();
+          recog.lang = 'is-IS';
+          recog.continuous = false;
+          recog.interimResults = false;
+          recog.onresult = (e) => {
+            const transcript = e.results[0][0].transcript;
+            setTranscribed(transcript);
+            analyzePronunciation(transcript);
+          };
+          recog.onend = () => setIsRecording(false);
+          recog.onerror = () => setIsRecording(false);
+          setRecognition(recog);
+        }
+      }, []);
+
+      const startRecording = () => {
+        if (!recognition) {
+          alert('Vafrinn þinn styður ekki talgreiningu. Notaðu Chrome eða Edge.');
+          return;
+        }
+        setIsRecording(true);
+        setFeedback(null);
+        setTranscribed('');
+        recognition.start();
+      };
+
+      const analyzePronunciation = async (studentSaid) => {
+        setLoading(true);
+
+        try {
+          const prompt = `Þú ert íslenskukennari sem metur framburð nemenda.
+
+ÁTTI AÐ SEGJA: "${sentence.text}"
+NEMANDI SAGÐI: "${studentSaid}"
+
+ERFIÐ HLJÓÐ Í ÞESSARI SETNINGU: ${sentence.difficult.join(', ')}
+
+Nemandinn er frá Víetnam og á oft erfitt með þessi hljóð.
+
+VERKEFNI:
+1. Greina hvaða orð voru rétt/röng
+2. Athuga sérstaklega erfið hljóð (${sentence.difficult.join(', ')})
+3. Gefa nákvæmar leiðbeiningar um framburð
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "accuracy": 0-100,
+  "correct_words": ["listi", "af", "réttum", "orðum"],
+  "incorrect_words": [
+    {
+      "word": "búðina",
+      "said": "búdina",
+      "tip": "Íslenska 'ð' er ekki eins og 'd'. Settu tunguna milli tannanna og blásðu léttu."
+    }
+  ],
+  "overall_feedback": "Mjög gott! En æfðu 'ð' hljóðið aðeins meira."
+}`;
+
+          const result = await callOpenAI([
+            { role: 'system', content: 'Þú ert íslenskukennari sem metur framburð.' },
+            { role: 'user', content: prompt }
+          ], 400, 'gpt-4o', 0.2);
+
+          const parsed = JSON.parse(result);
+          setFeedback(parsed);
+        } catch (error) {
+          console.error('Villa við greiningu:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const reset = () => {
+        setTranscribed('');
+        setFeedback(null);
+      };
+
+      return (
+        <div className="border-2 border-purple-200 rounded-lg p-6 bg-white">
+          <div className="mb-4">
+            <h4 className="text-lg font-normal text-gray-800 mb-2">
+              {index + 1}. Lestu þetta upphátt:
+            </h4>
+            <p className="text-2xl font-light text-blue-600 mb-2">{sentence.text}</p>
+            <p className="text-sm text-gray-600 italic">{sentence.tip}</p>
+          </div>
+
+          {!feedback && (
+            <button
+              onClick={startRecording}
+              disabled={isRecording || loading}
+              className={`px-6 py-3 rounded-lg font-normal transition-colors flex items-center gap-2 ${
+                isRecording 
+                  ? 'bg-red-600 text-white pulse-recording'
+                  : 'bg-purple-600 text-white hover:bg-purple-700'
+              }`}
+            >
+              {isRecording ? '🎤 Hlusta...' : loading ? '⏳ Greini...' : '🎤 Byrja að lesa'}
+            </button>
+          )}
+
+          {transcribed && !feedback && loading && (
+            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-800 font-normal">⏳ Greini framburð...</p>
+              <p className="text-sm text-gray-600 mt-1">Þú sagðir: "{transcribed}"</p>
+            </div>
+          )}
+
+          {feedback && (
+            <div className="mt-4 space-y-4">
+              <div className={`rounded-lg p-4 border-2 ${
+                feedback.accuracy >= 80 
+                  ? 'bg-green-50 border-green-300 text-green-900'
+                  : feedback.accuracy >= 60
+                  ? 'bg-yellow-50 border-yellow-300 text-yellow-900'
+                  : 'bg-orange-50 border-orange-300 text-orange-900'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-lg">
+                    {feedback.accuracy >= 80 ? '🌟' : feedback.accuracy >= 60 ? '👍' : '💪'} 
+                    Nákvæmni: {feedback.accuracy}%
+                  </span>
+                </div>
+                <p className="font-light">{feedback.overall_feedback}</p>
+                {transcribed && (
+                  <div className="mt-2 bg-white/50 rounded p-2 text-sm">
+                    <span className="font-normal">Þú sagðir:</span> "{transcribed}"
+                  </div>
+                )}
+              </div>
+
+              {feedback.correct_words.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="font-normal text-green-800 mb-2">✅ Rétt orð:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {feedback.correct_words.map((word, i) => (
+                      <span key={i} className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                        {word}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {feedback.incorrect_words.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="font-normal text-orange-800 mb-3">💡 Hvernig á að bæta:</p>
+                  {feedback.incorrect_words.map((item, i) => (
+                    <div key={i} className="mb-3 last:mb-0 bg-white rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-semibold text-gray-800">Orð:</span>
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-mono">
+                          {item.word}
+                        </span>
+                        <span className="text-gray-400">→</span>
+                        <span className="text-gray-600 text-sm">þú sagðir: "{item.said}"</span>
+                      </div>
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-2 rounded">
+                        <p className="text-sm text-gray-800">💡 {item.tip}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={reset}
+                className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 font-normal transition-colors"
+              >
+                🔄 Reyna aftur
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ========== MAIN APP ==========
+    const FramburdarApp = () => {
+      const [activeTab, setActiveTab] = useState('pronunciation'); // pronunciation or shadowing
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">
+                🎤 Framburðaræfing
+              </h1>
+              <p className="text-gray-500 text-sm font-light">
+                Æfðu íslenskan framburð · A1–A2
+              </p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-6">
+            <SoundGuide />
+
+            {/* Tab Navigation */}
+            <div className="bg-white rounded-lg shadow-md p-2 flex gap-2">
+              <button
+                onClick={() => setActiveTab('pronunciation')}
+                className={`flex-1 px-6 py-3 rounded-lg font-normal transition-colors ${
+                  activeTab === 'pronunciation'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📖 Framburðargreining
+                <span className="block text-xs font-light mt-1">Les setningar upphátt</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('shadowing')}
+                className={`flex-1 px-6 py-3 rounded-lg font-normal transition-colors ${
+                  activeTab === 'shadowing'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                🎧 Skuggalestur
+                <span className="block text-xs font-light mt-1">Hlustar og endurtekur</span>
+              </button>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+              <p className="text-blue-800 font-light">
+                {activeTab === 'pronunciation' ? (
+                  <>
+                    <span className="font-normal">📖 Framburðargreining:</span> Lestu setningunar upphátt. 
+                    AI greinir framburð þinn og gefur endurgjöf á hljóðum sem þú þarft að æfa.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-normal">🎧 Skuggalestur:</span> Hlustaðu á setninguna og endurtaktu hana strax. 
+                    Þetta þjálfar framburð og hraða í tali.
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Exercises */}
+            <div className="space-y-6">
+              {activeTab === 'pronunciation' ? (
+                <>
+                  <h2 className="text-2xl font-light text-gray-800">📖 Framburðargreining</h2>
+                  {SENTENCES.map((sentence, index) => (
+                    <PronunciationExercise key={index} sentence={sentence} index={index} />
+                  ))}
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-light text-gray-800">🎧 Skuggalestur</h2>
+                  {SENTENCES.map((sentence, index) => (
+                    <ShadowingExercise key={index} sentence={sentence} index={index} />
+                  ))}
+                </>
+              )}
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<FramburdarApp />);
+  </script>
+</body>
+</html>
