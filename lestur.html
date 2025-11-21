@@ -3,107 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TTS Bulk Generator - Kafli 1</title>
+    <title>🎙️ TTS Generator - Málstöðin</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
         }
+        .tab-button.active {
+            border-bottom: 3px solid #2563eb;
+            color: #2563eb;
+        }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen p-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="bg-white rounded-lg shadow-lg p-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">🎙️ TTS Bulk Generator</h1>
-            <p class="text-gray-600 mb-6">Kafli 1: Heimilishlutirnir - 26 spurningar</p>
-            
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <p class="text-sm text-blue-800">
-                    <strong>Athugið:</strong> Þessi síða notar Azure TTS í gegnum Netlify function. 
-                    Hún býr til 26 mp3 skrár og pakkar þeim í zip skrá.
-                </p>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-5xl mx-auto p-8">
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+                <h1 class="text-3xl font-bold mb-2">🎙️ TTS Generator</h1>
+                <p class="text-blue-100">Azure Text-to-Speech fyrir Málstöðina</p>
             </div>
 
-            <button 
-                id="generateBtn"
-                class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-                🚀 Búa til allar hljóðskrár
-            </button>
-
-            <div id="progress" class="mt-6 hidden">
-                <div class="mb-2 flex justify-between text-sm">
-                    <span class="text-gray-700 font-medium">Framvinda:</span>
-                    <span id="progressText" class="text-gray-600">0 / 26</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                    <div 
-                        id="progressBar" 
-                        class="bg-blue-600 h-4 transition-all duration-300 rounded-full"
-                        style="width: 0%"
-                    ></div>
-                </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-200">
+                <button class="tab-button active px-6 py-4 font-medium text-gray-700 hover:text-blue-600 transition-colors" data-tab="tab1">
+                    📝 Stuttar setningar
+                </button>
+                <button class="tab-button px-6 py-4 font-medium text-gray-700 hover:text-blue-600 transition-colors" data-tab="tab2">
+                    📖 Langur texti
+                </button>
+                <button class="tab-button px-6 py-4 font-medium text-gray-700 hover:text-blue-600 transition-colors" data-tab="tab3">
+                    💬 Samtal
+                </button>
             </div>
 
-            <div id="log" class="mt-6 bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto hidden">
-                <h3 class="text-sm font-semibold text-gray-700 mb-2">Atvikalog:</h3>
-                <div id="logContent" class="text-xs text-gray-600 space-y-1 font-mono"></div>
-            </div>
+            <!-- Tab Content -->
+            <div class="p-6">
+                
+                <!-- TAB 1: Stuttar setningar -->
+                <div id="tab1" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Stuttar setningar</h2>
+                    <p class="text-gray-600 mb-6">Límdu inn margar setningar (ein per línu) og fáðu ZIP skrá með mp3 fyrir hverja setningu.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Kaflaheiti:</label>
+                            <input type="text" id="tab1-prefix" value="kafli01" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Setningaheiti:</label>
+                            <input type="text" id="tab1-suffix" value="spurning" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                    </div>
 
-            <div id="result" class="mt-6 hidden">
-                <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                    <div class="text-green-600 text-5xl mb-3">✅</div>
-                    <h3 class="text-xl font-bold text-green-800 mb-2">Lokið!</h3>
-                    <p class="text-green-700 mb-4">Allar 26 hljóðskrár hafa verið búnar til</p>
-                    <button 
-                        id="downloadBtn"
-                        class="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 transition-colors font-semibold"
-                    >
-                        📥 Hlaða niður ZIP skrá
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Rödd:</label>
+                        <select id="tab1-voice" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="is-IS-GudrunNeural">Guðrún (kona)</option>
+                            <option value="is-IS-GunnarNeural">Gunnar (karl)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Setningar (ein per línu):</label>
+                        <textarea id="tab1-text" rows="12" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                            placeholder="Þetta er fyrsta setningin.
+Þetta er önnur setningin.
+Þetta er þriðja setningin."></textarea>
+                        <p class="text-sm text-gray-500 mt-2">Dæmi um skráarnafn: <code class="bg-gray-100 px-2 py-1 rounded">kafli01_spurning01.mp3</code></p>
+                    </div>
+
+                    <button id="tab1-generate" 
+                        class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg">
+                        🚀 Búa til hljóðskrár
                     </button>
+
+                    <div id="tab1-progress" class="mt-6 hidden"></div>
+                    <div id="tab1-log" class="mt-6 hidden"></div>
+                    <div id="tab1-result" class="mt-6 hidden"></div>
                 </div>
+
+                <!-- TAB 2: Langur texti -->
+                <div id="tab2" class="tab-content hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Langur texti</h2>
+                    <p class="text-gray-600 mb-6">Límdu inn langan samfeldan texta og fáðu eina mp3 skrá.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Skráarnafn:</label>
+                            <input type="text" id="tab2-filename" value="frasogn01" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Rödd:</label>
+                            <select id="tab2-voice" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="is-IS-GudrunNeural">Guðrún (kona)</option>
+                                <option value="is-IS-GunnarNeural">Gunnar (karl)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Texti:</label>
+                        <textarea id="tab2-text" rows="15" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                            placeholder="Límdu inn langan texta hér...
+
+Azure TTS getur lesið allt að ~5000 stafi í einu."></textarea>
+                    </div>
+
+                    <button id="tab2-generate" 
+                        class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg">
+                        🚀 Búa til hljóðskrá
+                    </button>
+
+                    <div id="tab2-log" class="mt-6 hidden"></div>
+                    <div id="tab2-result" class="mt-6 hidden"></div>
+                </div>
+
+                <!-- TAB 3: Samtal -->
+                <div id="tab3" class="tab-content hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Samtal</h2>
+                    <p class="text-gray-600 mb-6">Búðu til samtal með tveimur röddum. Merktu línur með A: og B:</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Skráarnafn:</label>
+                            <input type="text" id="tab3-filename" value="samtal01" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Rödd A:</label>
+                            <select id="tab3-voiceA" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="is-IS-GudrunNeural">Guðrún (kona)</option>
+                                <option value="is-IS-GunnarNeural">Gunnar (karl)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Rödd B:</label>
+                            <select id="tab3-voiceB" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="is-IS-GunnarNeural">Gunnar (karl)</option>
+                                <option value="is-IS-GudrunNeural">Guðrún (kona)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Samtal (merktu með A: og B:):</label>
+                        <textarea id="tab3-text" rows="15" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                            placeholder="A: Góðan daginn! Hvað segir þú gott?
+B: Hæ! Allt fínt, takk. En sjálfur?
+A: Bara gott, takk fyrir að spyrja.
+B: Frábært að heyra!"></textarea>
+                        <p class="text-sm text-gray-500 mt-2">💡 Hver lína sem byrjar á "A:" notar rödd A, og "B:" notar rödd B.</p>
+                    </div>
+
+                    <button id="tab3-generate" 
+                        class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg">
+                        🚀 Búa til samtalshljóð
+                    </button>
+
+                    <div id="tab3-progress" class="mt-6 hidden"></div>
+                    <div id="tab3-log" class="mt-6 hidden"></div>
+                    <div id="tab3-result" class="mt-6 hidden"></div>
+                </div>
+
             </div>
         </div>
     </div>
 
     <script>
-        const sentences = [
-            "Þetta er rafmagnstæki sem þvær föt.",
-            "Þetta er þegar þú ferð í búð og færð mat og hluti fyrir heimilið.",
-            "Þetta er rafmagnstæki sem hreinsar gólf ef þau eru óhrein.",
-            "Þetta er þegar þú hreinsar diska og glös eftir matinn.",
-            "Þetta er rafmagnstæki sem þvær diska og glös.",
-            "Þetta er þegar þú hreinsar klósett, sturtu og vask.",
-            "Þetta er í eldhúsi og þú bakar og eldar mat í þessu.",
-            "Þetta er þegar þú gerir herbergi snyrtilegra og setur hluti í rétta staði.",
-            "Þetta er þegar þú hreinsar föt í þvottavél.",
-            "Þetta er þegar þú býrð til eitthvað að borða.",
-            "Þetta er þegar þú hreinsar gólfið vel með bursta og vatni.",
-            "Þetta er herbergi þar sem er rúm.",
-            "Þetta er herbergi þar sem fjölskyldan situr saman og horfir á sjónvarp.",
-            "Þetta er herbergi þar sem þú býrð til mat.",
-            "Þetta er herbergi með sturtu og klósetti.",
-            "Þetta er þegar þú gerir hluti hreina með vatni.",
-            "Þetta er þegar þú setur föt í þvottavél og hreinsar þau.",
-            "Þetta er tæki sem gerir föt slétt.",
-            "Þetta er þegar þú gerir föt slétt með heitu járni.",
-            "Þetta er stór kassi í eldhúsi sem heldur mat köldum.",
-            "Þetta er þegar þú setur hluti á rétta staði og gerir snyrtilegt.",
-            "Þetta er þegar föt eru blaut og þú gerir þau þurr.",
-            "Þetta er herbergi þar sem fjölskyldan borðar mat saman.",
-            "Þetta er þegar þú gerir rúmið snyrtilegra á morgnana.",
-            "Þetta er þegar þú hreinsar ryk af borðum og hillum með klút.",
-            "Þetta er þegar þú hreinsar gólf með tusku og vatni."
-        ];
+        // Tab switching
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const tabId = button.dataset.tab;
+                
+                // Update buttons
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                
+                // Update content
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+                document.getElementById(tabId).classList.remove('hidden');
+            });
+        });
 
-        let zipBlob = null;
-
-        function addLog(message, type = 'info') {
-            const logContent = document.getElementById('logContent');
-            const logDiv = document.getElementById('log');
+        // Utility functions
+        function addLog(tabId, message, type = 'info') {
+            const logDiv = document.getElementById(`${tabId}-log`);
+            if (!logDiv.querySelector('.log-content')) {
+                logDiv.innerHTML = `
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">Atvikalog:</h3>
+                    <div class="log-content bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto text-xs text-gray-600 space-y-1 font-mono"></div>
+                `;
+            }
             logDiv.classList.remove('hidden');
             
+            const logContent = logDiv.querySelector('.log-content');
             const entry = document.createElement('div');
             const timestamp = new Date().toLocaleTimeString('is-IS');
             
@@ -119,22 +220,37 @@
             logContent.scrollTop = logContent.scrollHeight;
         }
 
-        function updateProgress(current, total) {
-            const progressDiv = document.getElementById('progress');
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-            
+        function updateProgress(tabId, current, total) {
+            const progressDiv = document.getElementById(`${tabId}-progress`);
+            if (!progressDiv.querySelector('.progress-bar')) {
+                progressDiv.innerHTML = `
+                    <div class="mb-2 flex justify-between text-sm">
+                        <span class="text-gray-700 font-medium">Framvinda:</span>
+                        <span class="progress-text text-gray-600">0 / ${total}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                        <div class="progress-bar bg-blue-600 h-4 transition-all duration-300 rounded-full" style="width: 0%"></div>
+                    </div>
+                `;
+            }
             progressDiv.classList.remove('hidden');
+            
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            const progressText = progressDiv.querySelector('.progress-text');
+            
             const percentage = (current / total) * 100;
             progressBar.style.width = `${percentage}%`;
             progressText.textContent = `${current} / ${total}`;
         }
 
-        async function generateAudio(text) {
+        async function generateAudio(text, voice = 'is-IS-GudrunNeural') {
             const response = await fetch('/.netlify/functions/speak', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text_to_speak: text })
+                body: JSON.stringify({ 
+                    text_to_speak: text,
+                    voice: voice 
+                })
             });
 
             const data = await response.json();
@@ -155,75 +271,227 @@
             return new Blob([bytes], { type: 'audio/mp3' });
         }
 
-        async function generateAllAudio() {
-            const generateBtn = document.getElementById('generateBtn');
-            const resultDiv = document.getElementById('result');
-            
-            generateBtn.disabled = true;
-            generateBtn.textContent = '⏳ Vinnsla í gangi...';
-            resultDiv.classList.add('hidden');
-            
-            addLog('Byrja að búa til hljóðskrár...', 'info');
-            
-            const zip = new JSZip();
-            
-            for (let i = 0; i < sentences.length; i++) {
-                const questionNum = i + 1; // Einfaldlega 1, 2, 3, ... 26
-                const sentence = sentences[i];
-                const filename = `kafli1_spurning${String(questionNum).padStart(2, '0')}.mp3`;
-                
-                try {
-                    addLog(`Býr til ${filename}...`, 'info');
-                    const audioBase64 = await generateAudio(sentence);
-                    const audioBlob = base64ToBlob(audioBase64);
-                    zip.file(filename, audioBlob);
-                    
-                    updateProgress(i + 1, sentences.length);
-                    addLog(`✓ ${filename} tilbúin`, 'success');
-                    
-                    // Smá töf til að forðast rate limiting
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    
-                } catch (error) {
-                    addLog(`✗ Villa í ${filename}: ${error.message}`, 'error');
-                    throw error;
-                }
-            }
-            
-            addLog('Pakka skrám í ZIP...', 'info');
-            zipBlob = await zip.generateAsync({ type: 'blob' });
-            addLog('✓ ZIP skrá tilbúin!', 'success');
-            
+        function showResult(tabId, downloadCallback, buttonText = '📥 Hlaða niður') {
+            const resultDiv = document.getElementById(`${tabId}-result`);
+            resultDiv.innerHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                    <div class="text-green-600 text-5xl mb-3">✅</div>
+                    <h3 class="text-xl font-bold text-green-800 mb-2">Lokið!</h3>
+                    <p class="text-green-700 mb-4">Hljóðskrá(r) tilbúnar</p>
+                    <button class="download-btn bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 transition-colors font-semibold">
+                        ${buttonText}
+                    </button>
+                </div>
+            `;
             resultDiv.classList.remove('hidden');
-            generateBtn.textContent = '✅ Lokið!';
+            resultDiv.querySelector('.download-btn').addEventListener('click', downloadCallback);
         }
 
-        document.getElementById('generateBtn').addEventListener('click', async () => {
-            try {
-                await generateAllAudio();
-            } catch (error) {
-                alert('Villa kom upp: ' + error.message);
-                document.getElementById('generateBtn').disabled = false;
-                document.getElementById('generateBtn').textContent = '🚀 Búa til allar hljóðskrár';
-            }
-        });
-
-        document.getElementById('downloadBtn').addEventListener('click', () => {
-            if (!zipBlob) {
-                alert('Engin ZIP skrá tilbúin!');
+        // TAB 1: Stuttar setningar
+        document.getElementById('tab1-generate').addEventListener('click', async () => {
+            const button = document.getElementById('tab1-generate');
+            const text = document.getElementById('tab1-text').value.trim();
+            const prefix = document.getElementById('tab1-prefix').value.trim();
+            const suffix = document.getElementById('tab1-suffix').value.trim();
+            const voice = document.getElementById('tab1-voice').value;
+            
+            if (!text) {
+                alert('Vinsamlegast límdu inn setningar!');
                 return;
             }
             
-            const url = URL.createObjectURL(zipBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'kafli1_spurningar.zip';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const sentences = text.split('\n').filter(s => s.trim());
             
-            addLog('✓ ZIP skrá hlaðin niður!', 'success');
+            if (sentences.length === 0) {
+                alert('Engar setningar fundust!');
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = '⏳ Vinnsla í gangi...';
+            document.getElementById('tab1-result').classList.add('hidden');
+            
+            addLog('tab1', `Byrja að búa til ${sentences.length} hljóðskrár...`, 'info');
+            
+            const zip = new JSZip();
+            
+            try {
+                for (let i = 0; i < sentences.length; i++) {
+                    const num = String(i + 1).padStart(2, '0');
+                    const filename = `${prefix}_${suffix}${num}.mp3`;
+                    
+                    addLog('tab1', `Býr til ${filename}...`, 'info');
+                    const audioBase64 = await generateAudio(sentences[i], voice);
+                    const audioBlob = base64ToBlob(audioBase64);
+                    zip.file(filename, audioBlob);
+                    
+                    updateProgress('tab1', i + 1, sentences.length);
+                    addLog('tab1', `✓ ${filename} tilbúin`, 'success');
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                addLog('tab1', 'Pakka skrám í ZIP...', 'info');
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                addLog('tab1', '✓ ZIP skrá tilbúin!', 'success');
+                
+                showResult('tab1', () => {
+                    const url = URL.createObjectURL(zipBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${prefix}_${suffix}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    addLog('tab1', '✓ ZIP skrá hlaðin niður!', 'success');
+                }, '📥 Hlaða niður ZIP skrá');
+                
+                button.textContent = '✅ Lokið!';
+                
+            } catch (error) {
+                addLog('tab1', `✗ Villa: ${error.message}`, 'error');
+                alert('Villa kom upp: ' + error.message);
+                button.disabled = false;
+                button.textContent = '🚀 Búa til hljóðskrár';
+            }
+        });
+
+        // TAB 2: Langur texti
+        document.getElementById('tab2-generate').addEventListener('click', async () => {
+            const button = document.getElementById('tab2-generate');
+            const text = document.getElementById('tab2-text').value.trim();
+            const filename = document.getElementById('tab2-filename').value.trim();
+            const voice = document.getElementById('tab2-voice').value;
+            
+            if (!text) {
+                alert('Vinsamlegast límdu inn texta!');
+                return;
+            }
+            
+            if (text.length > 5000) {
+                alert('Textinn er of langur! Azure TTS takmarkar við ~5000 stafi.');
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = '⏳ Vinnsla í gangi...';
+            document.getElementById('tab2-result').classList.add('hidden');
+            
+            addLog('tab2', 'Byrja að búa til hljóðskrá...', 'info');
+            
+            try {
+                const audioBase64 = await generateAudio(text, voice);
+                const audioBlob = base64ToBlob(audioBase64);
+                
+                addLog('tab2', '✓ Hljóðskrá tilbúin!', 'success');
+                
+                showResult('tab2', () => {
+                    const url = URL.createObjectURL(audioBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${filename}.mp3`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    addLog('tab2', '✓ MP3 skrá hlaðin niður!', 'success');
+                }, '📥 Hlaða niður MP3');
+                
+                button.textContent = '✅ Lokið!';
+                button.disabled = false;
+                
+            } catch (error) {
+                addLog('tab2', `✗ Villa: ${error.message}`, 'error');
+                alert('Villa kom upp: ' + error.message);
+                button.disabled = false;
+                button.textContent = '🚀 Búa til hljóðskrá';
+            }
+        });
+
+        // TAB 3: Samtal
+        document.getElementById('tab3-generate').addEventListener('click', async () => {
+            const button = document.getElementById('tab3-generate');
+            const text = document.getElementById('tab3-text').value.trim();
+            const filename = document.getElementById('tab3-filename').value.trim();
+            const voiceA = document.getElementById('tab3-voiceA').value;
+            const voiceB = document.getElementById('tab3-voiceB').value;
+            
+            if (!text) {
+                alert('Vinsamlegast límdu inn samtal!');
+                return;
+            }
+            
+            const lines = text.split('\n').filter(l => l.trim());
+            
+            if (lines.length === 0) {
+                alert('Engar línur fundust!');
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = '⏳ Vinnsla í gangi...';
+            document.getElementById('tab3-result').classList.add('hidden');
+            
+            addLog('tab3', `Byrja að búa til samtal með ${lines.length} línum...`, 'info');
+            
+            try {
+                const audioBlobs = [];
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    let voice = voiceA;
+                    let lineText = line;
+                    
+                    if (line.startsWith('A:')) {
+                        voice = voiceA;
+                        lineText = line.substring(2).trim();
+                    } else if (line.startsWith('B:')) {
+                        voice = voiceB;
+                        lineText = line.substring(2).trim();
+                    }
+                    
+                    if (!lineText) continue;
+                    
+                    addLog('tab3', `Býr til línu ${i + 1}: "${lineText.substring(0, 30)}..."`, 'info');
+                    const audioBase64 = await generateAudio(lineText, voice);
+                    const audioBlob = base64ToBlob(audioBase64);
+                    audioBlobs.push(audioBlob);
+                    
+                    updateProgress('tab3', i + 1, lines.length);
+                    addLog('tab3', `✓ Lína ${i + 1} tilbúin`, 'success');
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                addLog('tab3', 'Sameina allar línur í eina skrá...', 'info');
+                
+                // Merge all audio blobs
+                const mergedBlob = new Blob(audioBlobs, { type: 'audio/mp3' });
+                
+                addLog('tab3', '✓ Samtal tilbúið!', 'success');
+                
+                showResult('tab3', () => {
+                    const url = URL.createObjectURL(mergedBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${filename}.mp3`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    addLog('tab3', '✓ MP3 skrá hlaðin niður!', 'success');
+                }, '📥 Hlaða niður samtal');
+                
+                button.textContent = '✅ Lokið!';
+                button.disabled = false;
+                
+            } catch (error) {
+                addLog('tab3', `✗ Villa: ${error.message}`, 'error');
+                alert('Villa kom upp: ' + error.message);
+                button.disabled = false;
+                button.textContent = '🚀 Búa til samtalshljóð';
+            }
         });
     </script>
 </body>
