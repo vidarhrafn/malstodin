@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Bulk Generator - Kafli 1</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">🎙️ TTS Bulk Generator</h1>
+            <p class="text-gray-600 mb-6">Kafli 1: Heimilishlutirnir - 26 spurningar</p>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p class="text-sm text-blue-800">
+                    <strong>Athugið:</strong> Þessi síða notar Azure TTS í gegnum Netlify function. 
+                    Hún býr til 26 mp3 skrár og pakkar þeim í zip skrá.
+                </p>
+            </div>
+
+            <button 
+                id="generateBtn"
+                class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+                🚀 Búa til allar hljóðskrár
+            </button>
+
+            <div id="progress" class="mt-6 hidden">
+                <div class="mb-2 flex justify-between text-sm">
+                    <span class="text-gray-700 font-medium">Framvinda:</span>
+                    <span id="progressText" class="text-gray-600">0 / 26</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                    <div 
+                        id="progressBar" 
+                        class="bg-blue-600 h-4 transition-all duration-300 rounded-full"
+                        style="width: 0%"
+                    ></div>
+                </div>
+            </div>
+
+            <div id="log" class="mt-6 bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto hidden">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Atvikalog:</h3>
+                <div id="logContent" class="text-xs text-gray-600 space-y-1 font-mono"></div>
+            </div>
+
+            <div id="result" class="mt-6 hidden">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                    <div class="text-green-600 text-5xl mb-3">✅</div>
+                    <h3 class="text-xl font-bold text-green-800 mb-2">Lokið!</h3>
+                    <p class="text-green-700 mb-4">Allar 26 hljóðskrár hafa verið búnar til</p>
+                    <button 
+                        id="downloadBtn"
+                        class="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                    >
+                        📥 Hlaða niður ZIP skrá
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sentences = [
+            "Þetta er rafmagnstæki sem þvær föt.",
+            "Þetta er þegar þú ferð í búð og færð mat og hluti fyrir heimilið.",
+            "Þetta er rafmagnstæki sem hreinsar gólf ef þau eru óhrein.",
+            "Þetta er þegar þú hreinsar diska og glös eftir matinn.",
+            "Þetta er rafmagnstæki sem þvær diska og glös.",
+            "Þetta er þegar þú hreinsar klósett, sturtu og vask.",
+            "Þetta er í eldhúsi og þú bakar og eldar mat í þessu.",
+            "Þetta er þegar þú gerir herbergi snyrtilegra og setur hluti í rétta staði.",
+            "Þetta er þegar þú hreinsar föt í þvottavél.",
+            "Þetta er þegar þú býrð til eitthvað að borða.",
+            "Þetta er þegar þú hreinsar gólfið vel með bursta og vatni.",
+            "Þetta er herbergi þar sem er rúm.",
+            "Þetta er herbergi þar sem fjölskyldan situr saman og horfir á sjónvarp.",
+            "Þetta er herbergi þar sem þú býrð til mat.",
+            "Þetta er herbergi með sturtu og klósetti.",
+            "Þetta er þegar þú gerir hluti hreina með vatni.",
+            "Þetta er þegar þú setur föt í þvottavél og hreinsar þau.",
+            "Þetta er tæki sem gerir föt slétt.",
+            "Þetta er þegar þú gerir föt slétt með heitu járni.",
+            "Þetta er stór kassi í eldhúsi sem heldur mat köldum.",
+            "Þetta er þegar þú setur hluti á rétta staði og gerir snyrtilegt.",
+            "Þetta er þegar föt eru blaut og þú gerir þau þurr.",
+            "Þetta er herbergi þar sem fjölskyldan borðar mat saman.",
+            "Þetta er þegar þú gerir rúmið snyrtilegra á morgnana.",
+            "Þetta er þegar þú hreinsar ryk af borðum og hillum með klút.",
+            "Þetta er þegar þú hreinsar gólf með tusku og vatni."
+        ];
+
+        let zipBlob = null;
+
+        function addLog(message, type = 'info') {
+            const logContent = document.getElementById('logContent');
+            const logDiv = document.getElementById('log');
+            logDiv.classList.remove('hidden');
+            
+            const entry = document.createElement('div');
+            const timestamp = new Date().toLocaleTimeString('is-IS');
+            
+            const colors = {
+                'info': 'text-gray-600',
+                'success': 'text-green-600',
+                'error': 'text-red-600'
+            };
+            
+            entry.className = colors[type] || colors['info'];
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContent.appendChild(entry);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        function updateProgress(current, total) {
+            const progressDiv = document.getElementById('progress');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            
+            progressDiv.classList.remove('hidden');
+            const percentage = (current / total) * 100;
+            progressBar.style.width = `${percentage}%`;
+            progressText.textContent = `${current} / ${total}`;
+        }
+
+        async function generateAudio(text) {
+            const response = await fetch('/.netlify/functions/speak', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text_to_speak: text })
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok || data.error || !data.audio_base64) {
+                throw new Error(data.error || 'Villa í TTS');
+            }
+
+            return data.audio_base64;
+        }
+
+        function base64ToBlob(base64) {
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return new Blob([bytes], { type: 'audio/mp3' });
+        }
+
+        async function generateAllAudio() {
+            const generateBtn = document.getElementById('generateBtn');
+            const resultDiv = document.getElementById('result');
+            
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⏳ Vinnsla í gangi...';
+            resultDiv.classList.add('hidden');
+            
+            addLog('Byrja að búa til hljóðskrár...', 'info');
+            
+            const zip = new JSZip();
+            
+            for (let i = 0; i < sentences.length; i++) {
+                const questionNum = i + 1; // Einfaldlega 1, 2, 3, ... 26
+                const sentence = sentences[i];
+                const filename = `kafli1_spurning${String(questionNum).padStart(2, '0')}.mp3`;
+                
+                try {
+                    addLog(`Býr til ${filename}...`, 'info');
+                    const audioBase64 = await generateAudio(sentence);
+                    const audioBlob = base64ToBlob(audioBase64);
+                    zip.file(filename, audioBlob);
+                    
+                    updateProgress(i + 1, sentences.length);
+                    addLog(`✓ ${filename} tilbúin`, 'success');
+                    
+                    // Smá töf til að forðast rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                } catch (error) {
+                    addLog(`✗ Villa í ${filename}: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+            
+            addLog('Pakka skrám í ZIP...', 'info');
+            zipBlob = await zip.generateAsync({ type: 'blob' });
+            addLog('✓ ZIP skrá tilbúin!', 'success');
+            
+            resultDiv.classList.remove('hidden');
+            generateBtn.textContent = '✅ Lokið!';
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            try {
+                await generateAllAudio();
+            } catch (error) {
+                alert('Villa kom upp: ' + error.message);
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('generateBtn').textContent = '🚀 Búa til allar hljóðskrár';
+            }
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            if (!zipBlob) {
+                alert('Engin ZIP skrá tilbúin!');
+                return;
+            }
+            
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'kafli1_spurningar.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            addLog('✓ ZIP skrá hlaðin niður!', 'success');
+        });
+    </script>
+</body>
+</html>
