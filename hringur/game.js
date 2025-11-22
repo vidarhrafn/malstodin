@@ -32,13 +32,67 @@ const locations = [
     { name: "Bláa lónið", x: 0.2549, y: 0.7330 }
 ];
 
-// Prófunargögn - sama spurning alls staðar
-const questionData = {
-    story: "Jökulsárlón er stærsta jökullón Íslands. Það myndaðist þegar Breiðamerkurjökull fór að hopa. Í lóninu sjást margir jökulsárar og selir synda oft í vatninu.",
+// Spurningar fyrir hvern stað
+const questionsForLocations = {
+    "Reykjavík": {
+        story: "Reykjavík er höfuðborg Íslands og eina borg landsins. Almennt er fyrsti íbúinn talinn Ingólfur Arnarson sem settist þar að árið 874. Í dag búa nálægt 140 þúsund manns í Reykjavík.",
+        question: "Hver var fyrsti íbúi Reykjavíkur?",
+        answers: ["Ingólfur Arnarson", "Snorri Sturluson", "Jón Sigurðsson", "Leifur Eiríksson"],
+        correctAnswer: 0,
+        imageUrl: "https://images.pexels.com/photos/6730779/pexels-photo-6730779.jpeg"
+    },
+    "Borgarnes": {
+        story: "Borgarnes er bær í Borgarfirði og þar bjuggu margir af fyrstu landnámsmönnum Íslands. Egill Skallagrímsson, frægur víkingur og skáld, ólst upp í Borg á Mýrum nálægt Borgarnesi. Í bænum er Landnámssetur þar sem sagan af landnáminu er sögð.",
+        question: "Hvaða frægur víkingur og skáld ólst upp nálægt Borgarnesi?",
+        answers: ["Snorri Sturluson", "Egill Skallagrímsson", "Grettir Ásmundarson", "Gunnar á Hlíðarenda"],
+        correctAnswer: 1,
+        imageUrl: "https://res.cloudinary.com/itb-database/image/upload/s--hPlls4T3--/c_fill,dpr_auto,f_auto,q_auto:eco,w_1280/v1/Municipalities/b3avs8wqrizl90tgah7y"
+    },
+    "Snæfellsjökull": {
+        story: "Snæfellsjökull er 1446 metra hátt eldfjall og jökull á vestasta enda Snæfellsness. Jökullinn er eitt frægasta fjall Íslands og má sjá hann alla leið frá Reykjavík. Í bók Jules Verne fer ferðin að miðju jarðar af stað frá Snæfellsjökli.",
+        question: "Hversu hár er Snæfellsjökull?",
+        answers: ["1246 metrar", "1446 metrar", "1646 metrar", "1846 metrar"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/0/00/Sn%C3%A6fellsj%C3%B6kull_iceland.jpg"
+    },
+    "Stykkishólmur": {
+        story: "Stykkishólmur er bær á norðurströnd Snæfellsness og einn elsti verslunarstaður landsins. Bærinn er þekktur fyrir litlu litríku húsin sín og fallegu höfnina. Frá Stykkishólmi siglir ferjan Baldur til Vestfjarða.",
+        question: "Hvað heitir ferjan sem siglir frá Stykkishólmi til Vestfjarða?",
+        answers: ["Herjólfur", "Sævar", "Baldur", "Ævar"],
+        correctAnswer: 2,
+        imageUrl: "https://cdn.pixabay.com/photo/2016/09/07/13/48/stykkisholmur-1651662_1280.jpg"
+    },
+    "Rauðisandur": {
+        story: "Rauðisandur er stór rauðgulur sandströnd á Vestfjörðum og ein fallegasta strönd Íslands. Sandurinn fær lit sinn frá muldum skeljum og ströndin er um 10 kílómetra löng. Þar má oft sjá seli og fugla á ströndinni.",
+        question: "Hvað gefur Rauðasandi lit sinn?",
+        answers: ["Rautt grjót", "Járnmálmur", "Muldar skeljar", "Eldgos"],
+        correctAnswer: 2,
+        imageUrl: "https://images.pexels.com/photos/10436195/pexels-photo-10436195.jpeg"
+    },
+    "Látrabjarg": {
+        story: "Látrabjarg er stærsti fuglabjarg Evrópu og um 14 kílómetra langt. Bjargið er allt að 440 metra hátt og þar búa milljónir fugla. Þar má sjá lunda, álkur og annað flott.",
+        question: "Hversu hátt er Látrabjarg?",
+        answers: ["240 metrar", "340 metrar", "440 metrar", "540 metrar"],
+        correctAnswer: 2,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/3/3f/Latrabjarg_1.jpg"
+    },
+    // Tímabundin gögn fyrir aðra staði - notum Jökulsárlón spurninguna
+    "Dynjandi": {
+        story: "Jökulsárlón er stærsta jökullón Íslands og varð til þegar Breiðamerkurjökull fór að hopa. Í lóninu sjást stórir ísjakar sem reka í átt að sjó. Selir og sjófuglar búa í lóninu.",
+        question: "Hvað heitir jökullinn sem myndaði Jökulsárlón?",
+        answers: ["Vatnajökull", "Breiðamerkurjökull", "Langjökull", "Hofsjökull"],
+        correctAnswer: 1,
+        imageUrl: "https://images.pexels.com/photos/34060262/pexels-photo-34060262.jpeg"
+    }
+};
+
+// Fallback spurning fyrir staði sem hafa ekki ennþá spurningu
+const defaultQuestion = {
+    story: "Jökulsárlón er stærsta jökullón Íslands og varð til þegar Breiðamerkurjökull fór að hopa. Í lóninu sjást stórir ísjakar sem reka í átt að sjó. Selir og sjófuglar búa í lóninu.",
     question: "Hvað heitir jökullinn sem myndaði Jökulsárlón?",
     answers: ["Vatnajökull", "Breiðamerkurjökull", "Langjökull", "Hofsjökull"],
     correctAnswer: 1,
-    icon: "🏔️"
+    imageUrl: "https://images.pexels.com/photos/34060262/pexels-photo-34060262.jpeg"
 };
 
 const landvaettir = ["🐉", "🦅", "🐂", "🗿"];
@@ -49,7 +103,8 @@ let gameState = {
     playerCount: 3,
     consecutiveRolls: 0,
     waitingForAnswer: false,
-    currentAudio: null
+    currentAudio: null,
+    currentQuestion: null
 };
 
 // Setja fjölda leikmanna
@@ -115,6 +170,7 @@ function createLocationMarkers() {
     locations.forEach((loc, i) => {
         const marker = document.createElement('div');
         marker.className = 'location-marker';
+        marker.id = `location-marker-${i}`;
         marker.style.left = (loc.x * 100) + '%';
         marker.style.top = (loc.y * 100) + '%';
         container.appendChild(marker);
@@ -205,13 +261,24 @@ function animateMovement(player, targetPosition, callback) {
     let currentPos = player.position;
     const interval = setInterval(() => {
         currentPos++;
+        
+        // Animate marker
+        const marker = document.getElementById(`location-marker-${currentPos}`);
+        if (marker) {
+            marker.classList.add('active');
+            setTimeout(() => {
+                marker.classList.remove('active');
+                marker.classList.add('visited');
+            }, 500);
+        }
+        
         updatePlayerPiecePosition(player, currentPos);
         
         if (currentPos >= targetPosition) {
             clearInterval(interval);
             callback();
         }
-    }, 300);
+    }, 400);
 }
 
 function updatePlayerPiecePosition(player, position) {
@@ -233,10 +300,19 @@ function showQuestion() {
     const player = gameState.players[gameState.currentPlayerIndex];
     const location = locations[player.position];
     
+    // Sækja spurningu fyrir þennan stað, eða nota default
+    const questionData = questionsForLocations[location.name] || defaultQuestion;
+    
     document.getElementById('question-location').textContent = location.name;
-    document.getElementById('story-text').textContent = questionData.story;
     document.getElementById('question-text').textContent = questionData.question;
-    document.getElementById('location-image').textContent = questionData.icon;
+    
+    // Setja mynd
+    const locationImage = document.getElementById('location-image');
+    if (questionData.imageUrl) {
+        locationImage.innerHTML = `<img src="${questionData.imageUrl}" alt="${location.name}">`;
+    } else {
+        locationImage.innerHTML = '🏔️';
+    }
     
     const answersDiv = document.getElementById('answers');
     answersDiv.innerHTML = questionData.answers.map((answer, i) => 
@@ -246,19 +322,20 @@ function showQuestion() {
     document.getElementById('result-message').classList.remove('show', 'correct', 'wrong');
     document.getElementById('continue-btn').style.display = 'none';
     
+    // Geyma current question data
+    gameState.currentQuestion = questionData;
+    
     // Reset listen button
     const listenBtn = document.getElementById('listen-btn');
     listenBtn.disabled = false;
-    listenBtn.innerHTML = '🔊 Hlusta';
+    listenBtn.innerHTML = '🔊 Hlusta á lýsingu';
     
     document.getElementById('question-modal').classList.add('active');
     
-    // Spila hljóð sjálfvirkt
-    playAudio();
+    // EKKI spila sjálfvirkt
 }
 
 async function playAudio() {
-    const storyText = document.getElementById('story-text').textContent;
     const listenBtn = document.getElementById('listen-btn');
     
     listenBtn.disabled = true;
@@ -269,7 +346,7 @@ async function playAudio() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                text_to_speak: storyText,
+                text_to_speak: gameState.currentQuestion.story,
                 voice: 'is-IS-GudrunNeural'
             })
         });
@@ -313,10 +390,10 @@ function checkAnswer(answerIndex) {
     buttons.forEach(btn => btn.disabled = true);
     
     const resultMsg = document.getElementById('result-message');
-    const isCorrect = answerIndex === questionData.correctAnswer;
+    const isCorrect = answerIndex === gameState.currentQuestion.correctAnswer;
     
     buttons[answerIndex].classList.add(isCorrect ? 'correct' : 'wrong');
-    buttons[questionData.correctAnswer].classList.add('correct');
+    buttons[gameState.currentQuestion.correctAnswer].classList.add('correct');
     
     resultMsg.textContent = isCorrect ? '✅ Rétt svar! Þú færð að kasta aftur.' : '❌ Rangt svar. Næsti leikmaður.';
     resultMsg.className = 'result-message show ' + (isCorrect ? 'correct' : 'wrong');
