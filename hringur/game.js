@@ -76,13 +76,173 @@ const questionsForLocations = {
         correctAnswer: 2,
         imageUrl: "https://upload.wikimedia.org/wikipedia/commons/3/3f/Latrabjarg_1.jpg"
     },
-    // Tímabundin gögn fyrir aðra staði - notum Jökulsárlón spurninguna
     "Dynjandi": {
+        story: "Dynjandi er einn fallegasti foss Vestfjarða og um 100 metra hár. Fossinn er í raun sjö fossar sem renna niður fjallshlíðina eins og brúðarkápa. Nafnið kemur af hávaðanum frá fossinum.",
+        question: "Hversu hár er Dynjandi?",
+        answers: ["60 metrar", "80 metrar", "100 metrar", "120 metrar"],
+        correctAnswer: 2,
+        imageUrl: "https://images.freeimages.com/images/large-previews/8d1/dynjandi-1-1460672.jpg?fmt=webp&h=350"
+    },
+    "Ísafjörður": {
+        story: "Ísafjörður er stærsti bær Vestfjarða og liggur djúpt inni í Ísafjarðardjúpi. Bærinn er umkringdur háum fjöllum og þar eru mörg gömul timburhús sem eru friðuð. Ísafjörður er menningar- og verslunarmiðstöð Vestfjarða.",
+        question: "Hvað er Ísafjörður?",
+        answers: ["Höfuðborg Íslands", "Stærsti bær Vestfjarða", "Hæsta fjall Íslands", "Stærsta jökullón Íslands"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Isafjordur.jpg?20060901163203"
+    },
+    "Hólmavík": {
+        story: "Hólmavík er þéttbýlisstaður í Strandasýslu á Vestfjörðum. Þar er Galdrasýning á Ströndum sem fjallar um galdra og töfra í íslenskri sögu. Í Hólmavík búa um 400 íbúar.",
+        question: "Hvað er sérstakt við Hólmavík?",
+        answers: ["Þar er galdrasýning", "Þar er hæsta fjall Íslands", "Þar er stærsti jökull landsins", "Þar er Alþingi"],
+        correctAnswer: 0,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Holmavik%2C_Harbour_and_Church%2C_Iceland_%2848768801657%29.jpg/960px-Holmavik%2C_Harbour_and_Church%2C_Iceland_%2848768801657%29.jpg?20210811162047"
+    },
+    "Hvammstangi": {
+        story: "Hvammstangi er þorp í Húnaþingi vestra og þar búa um 500 íbúar. Þorpið er þekkt fyrir selaskoðun þar sem margir selir koma að landi í nágrenninu. Á Hvammstanga er Selasetur Íslands þar sem hægt er að læra um seli.",
+        question: "Hvað er Hvammstangi þekkt fyrir?",
+        answers: ["Lundabyggðir", "Selaskoðun", "Hvalaskoðun", "Jöklasiglingur"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Hvammstangi_2.jpg/1280px-Hvammstangi_2.jpg"
+    },
+    "Blönduós": {
+        story: "Blönduós er bær við ósinn á Blöndu á Norðurlandi vestra. Þar búa um 900 íbúar og bærinn er þekktur fyrir fallega kirkju sem stendur á hæð. Blönduós er miðstöð landbúnaðarsvæðis og þar er góð þjónusta fyrir ferðamenn.",
+        question: "Við hvaða á liggur Blönduós?",
+        answers: ["Þjórsá", "Blanda", "Ölfusá", "Hvítá"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Blonduos4.jpg/960px-Blonduos4.jpg"
+    },
+    "Siglufjörður": {
+        story: "Siglufjörður er bær á Tröllaskaga á Norðurlandi. Bærinn var áður stærsti síldveiðibær Íslands og þar er Síldarminjasafn sem sýnir sögu síldarinnar. Siglufjörður er umkringdur háum fjöllum og þar búa um 1300 íbúar.",
+        question: "Hvað var Siglufjörður þekktur fyrir áður fyrr?",
+        answers: ["Hvalveiðar", "Síldveiðar", "Ullarframleiðslu", "Kolavinnuslu"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Siglufj%C3%B6r%C3%B0ur_Overview.jpg/960px-Siglufj%C3%B6r%C3%B0ur_Overview.jpg?20111016233100"
+    },
+    "Akureyri": {
+        story: "Akureyri er næststærsti þéttbýlisstaður Íslands og oft kallaður höfuðstaður Norðurlands. Þar búa um 20 þúsund manns og bærinn er þekktur fyrir fallega náttúru, skíðasvæði og menningarlíf. Akureyri er miðstöð viðskipta og þjónustu á Norðurlandi.",
+        question: "Hvað er Akureyri oft kallaður?",
+        answers: ["Höfuðborg Íslands", "Perla Vestfjarða", "Höfuðstaður Norðurlands", "Gátt Austurlands"],
+        correctAnswer: 2,
+        imageUrl: "https://cdn.pixabay.com/photo/2017/09/06/12/49/koningsdam-2721308_1280.jpg"
+    },
+    "Goðafoss": {
+        story: "Goðafoss er einn fallegasti foss Íslands og er um 12 metra hár. Nafnið þýðir foss goðanna og kemur frá sögunni um að lögsögumaður hafi kastað heiðnum goðum í fossinn þegar Íslendingar tóku upp kristna trú árið 1000. Fossinn er í Skjálfandafljóti.",
+        question: "Hvenær tóku Íslendingar upp kristna trú?",
+        answers: ["Árið 874", "Árið 930", "Árið 1000", "Árið 1262"],
+        correctAnswer: 2,
+        imageUrl: "https://cdn.pixabay.com/photo/2016/11/19/18/57/godafoss-1840758_1280.jpg"
+    },
+    "Mývatn": {
+        story: "Mývatn er stórt og grunnt vatn á Norðurlandi eystra. Vatnið er þekkt fyrir fallega náttúru, eldvirkni og margar fuglategundir. Í kringum Mývatn eru gígar, hraunsvæði og heitar uppsprettur. Nafnið er dregið af miklum fjölda mýflugna sem eru þar á sumrin.",
+        question: "Hvaðan kemur nafnið Mývatn?",
+        answers: ["Frá mörgum selum", "Frá mörgum mýflugum", "Frá mörgum lundafuglum", "Frá mörgum fiskum"],
+        correctAnswer: 1,
+        imageUrl: "https://cdn.pixabay.com/photo/2014/02/20/08/29/iceland-270406_1280.jpg"
+    },
+    "Húsavík": {
+        story: "Húsavík er bær á Norðurlandi eystra og oft kallaður hvalaskoðunarstaður Íslands. Þar er Hvalasafnið á Íslandi sem sýnir náttúru og líf hvala. Frá Húsavík er hægt að fara í hvalaskoðunarferðir þar sem oft sjást hnúfubakur og fleiri hvalategundir.",
+        question: "Hvað er Húsavík þekkt fyrir?",
+        answers: ["Síldveiðar", "Hvalaskoðun", "Jöklasiglingar", "Lundabyggðir"],
+        correctAnswer: 1,
+        imageUrl: "https://cdn.pixabay.com/photo/2016/08/17/22/07/husavik-1601646_1280.jpg"
+    },
+    "Ásbyrgi": {
+        story: "Ásbyrgi er gríðarstór skeifulaga gjá á Norðurlandi eystra. Kletturinn er um 100 metra hár og 1 kílómetri á breidd. Samkvæmt goðsögn myndaðist Ásbyrgi þegar hestur Óðins, Sleipnir, snerti jörðina. Þar er fallegur skógur og mikil náttúrufegurð.",
+        question: "Hvað heitir hestur Óðins sem myndaði Ásbyrgi?",
+        answers: ["Hófvarpnir", "Gulltoppur", "Sleipnir", "Grani"],
+        correctAnswer: 2,
+        imageUrl: "https://images.pexels.com/photos/30100431/pexels-photo-30100431.jpeg"
+    },
+    "Dettifoss": {
+        story: "Dettifoss er öflugasti foss Evrópu og er í Jökulsá á Fjöllum á Norðurlandi eystra. Fossinn er um 45 metra hár og 100 metrar á breidd. Mikið vatn fellur um fossinn og hann er mjög hávær og glæsilegur.",
+        question: "Hvað er Dettifoss?",
+        answers: ["Stærsti jökull Evrópu", "Öflugasti foss Evrópu", "Dýpsta lónið á Íslandi", "Hæsta fjall Norðurlanda"],
+        correctAnswer: 1,
+        imageUrl: "https://cdn.pixabay.com/photo/2022/01/11/15/20/waterfall-6930860_960_720.jpg"
+    },
+    "Vopnafjörður": {
+        story: "Vopnafjörður er bær á Austurlandi og þar búa um 700 íbúar. Bærinn er þekktur fyrir fallega náttúru og góða höfn. Á Vopnafirði er Kaupfélagssafnið sem sýnir sögu verslunar og lífs í sveitinni.",
+        question: "Hvar er Vopnafjörður?",
+        answers: ["Á Vestfjörðum", "Á Norðurlandi", "Á Austurlandi", "Á Suðurlandi"],
+        correctAnswer: 2,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Vopnafj%C3%B6r%C3%B0ur.jpg/960px-Vopnafj%C3%B6r%C3%B0ur.jpg?20120109202419"
+    },
+    "Egilsstaðir": {
+        story: "Egilsstaðir er stærsti bær á Austurlandi og þar búa um 2500 íbúar. Bærinn er miðstöð viðskipta og þjónustu á svæðinu. Nálægt Egilsstöðum er Lagarfljót sem er langt og djúpt vatn þar sem segir að Lagarfljótsormurinn búi.",
+        question: "Hvað er Egilsstaðir?",
+        answers: ["Stærsti bær Vestfjarða", "Stærsti bær Austurlands", "Höfuðborg Íslands", "Stærsti bær Suðurlands"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Egilssta%C3%B0ir_2023.jpg/960px-Egilssta%C3%B0ir_2023.jpg?20230801143429"
+    },
+    "Seyðisfjörður": {
+        story: "Seyðisfjörður er fallegur bær í djúpum firði á Austurlandi. Bærinn er þekktur fyrir litríka kirkju og falleg timburhús. Þar er mikið menningarlíf og listamenn búa í bænum. Frá Seyðisfirði siglir ferjan Norræna til Danmerkur.",
+        question: "Hvað siglir frá Seyðisfirði?",
+        answers: ["Ferjan Herjólfur", "Ferjan Baldur", "Ferjan Norræna", "Ferjan Sævar"],
+        correctAnswer: 2,
+        imageUrl: "https://images.pexels.com/photos/20126774/pexels-photo-20126774.jpeg"
+    },
+    "Djúpivogur": {
+        story: "Djúpivogur er lítill bær á Austurlandi og þar búa um 400 íbúar. Bærinn er þekktur fyrir fallega náttúru og listaverkið Eggin í Gleðivík sem eru 34 stór egg sem tákna fugla svæðisins. Djúpivogur er einn elsti verslunarstaður landsins.",
+        question: "Hvað heitir listaverkið í Djúpavogi?",
+        answers: ["Fuglar í fjöru", "Eggin í Gleðivík", "Selir í sundi", "Steinar á strönd"],
+        correctAnswer: 1,
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Dj%C3%BApivogur_2023.jpg/960px-Dj%C3%BApivogur_2023.jpg?20230801143331"
+    },
+    "Höfn": {
+        story: "Höfn í Hornafirði er bær á Suðausturlandi og þar búa um 1700 íbúar. Bærinn er þekktur fyrir humarveiðar og oft kallaður humarkaupstaður Íslands. Frá Höfn er stutt í Vatnajökul sem er stærsti jökull Evrópu.",
+        question: "Hvað er Höfn þekkt fyrir?",
+        answers: ["Síldveiðar", "Selaskoðun", "Humarveiðar", "Hvalveiðar"],
+        correctAnswer: 2,
+        imageUrl: "https://res.cloudinary.com/itb-database/image/upload/s--RHM1mCLg--/c_fill,dpr_auto,f_auto,q_auto:eco,w_1280/v1/Municipalities/fravtj47jmg3h78bqvbe"
+    },
+    "Jökulsárlón": {
         story: "Jökulsárlón er stærsta jökullón Íslands og varð til þegar Breiðamerkurjökull fór að hopa. Í lóninu sjást stórir ísjakar sem reka í átt að sjó. Selir og sjófuglar búa í lóninu.",
         question: "Hvað heitir jökullinn sem myndaði Jökulsárlón?",
         answers: ["Vatnajökull", "Breiðamerkurjökull", "Langjökull", "Hofsjökull"],
         correctAnswer: 1,
         imageUrl: "https://images.pexels.com/photos/34060262/pexels-photo-34060262.jpeg"
+    },
+    "Skaftafell": {
+        story: "Skaftafell er vinsæll þjóðgarður á Suðurlandi og hluti af Vatnajökulsþjóðgarði. Þar er falleg náttúra með jöklum, fossum og fjöllum. Í Skaftafelli er Svartifoss sem er þekktur fyrir basaltsúlurnar í kringum hann. Margir ganga um svæðið og skoða náttúruna.",
+        question: "Hvað heitir fossinn í Skaftafelli sem er þekktur fyrir basaltsúlur?",
+        answers: ["Goðafoss", "Dettifoss", "Svartifoss", "Seljalandsfoss"],
+        correctAnswer: 2,
+        imageUrl: "https://images.pexels.com/photos/20582105/pexels-photo-20582105.jpeg"
+    },
+    "Vík í Mýrdal": {
+        story: "Vík í Mýrdal er syðsti bær Íslands og þar búa um 300 íbúar. Bærinn er þekktur fyrir svarta sandinn á ströndinni og Reynisdranga sem eru stórir klettar úti í sjó. Nálægt Vík er Mýrdalsjökull og Katla eldfjall sem er undir jöklinum.",
+        question: "Hvað heitir eldfjallið undir Mýrdalsjökli?",
+        answers: ["Hekla", "Katla", "Eyjafjallajökull", "Askja"],
+        correctAnswer: 1,
+        imageUrl: "https://images.pexels.com/photos/2602543/pexels-photo-2602543.jpeg"
+    },
+    "Skógafoss": {
+        story: "Skógafoss er einn fallegasti og þekktasti foss Íslands. Hann er 60 metra hár og 25 metrar á breidd. Oft má sjá regnboga í fossinum þegar sól skín. Samkvæmt sögn er gullkista falin á bak við fossinn.",
+        question: "Hversu hár er Skógafoss?",
+        answers: ["40 metrar", "50 metrar", "60 metrar", "70 metrar"],
+        correctAnswer: 2,
+        imageUrl: "https://images.pexels.com/photos/28467967/pexels-photo-28467967.jpeg"
+    },
+    "Seljalandsfoss": {
+        story: "Seljalandsfoss er einn vinsælasti foss Íslands og er um 60 metra hár. Það sem gerir fossinn sérstakan er að hægt er að ganga á bak við hann. Margir ferðamenn koma til að skoða fossinn og taka myndir. Fossinn er við hringveginn á Suðurlandi.",
+        question: "Hvað er sérstakt við Seljalandsfoss?",
+        answers: ["Hægt er að synda í honum", "Hægt er að ganga á bak við hann", "Hann er hæsti foss Íslands", "Hann frýs á veturna"],
+        correctAnswer: 1,
+        imageUrl: "https://images.pexels.com/photos/210186/pexels-photo-210186.jpeg"
+    },
+    "Vestmannaeyjar": {
+        story: "Vestmannaeyjar eru eyjaklasi fyrir sunnan Ísland og þar búa um 4300 íbúar. Stærsta eyjan heitir Heimaey og þar er Eldfell sem gaus árið 1973. Vestmannaeyjar eru þekktar fyrir lundabyggðir og mikla sögu. Ferjan Herjólfur siglir frá Landeyjahöfn til eyjanna.",
+        question: "Hvað gaus í Vestmannaeyjum árið 1973?",
+        answers: ["Hekla", "Katla", "Eldfell", "Eyjafjallajökull"],
+        correctAnswer: 2,
+        imageUrl: "https://images.pexels.com/photos/6731723/pexels-photo-6731723.jpeg"
+    },
+    "Bláa lónið": {
+        story: "Bláa lónið er á Reykjanesi. Það er stórt, heitt lón með bláu vatni. Margir fara þangað að baða sig og til að slaka á. Vatnið kemur heitt úr jörðinni og er heitt allan ársins hring. Gestir geta einnig fengið maska á húðina.",
+        question: "Hvar er Bláa lónið?",
+        answers: ["Á Vestfjörðum", "Á Reykjanesi", "Við Mývatn", "Á Austurlandi"],
+        correctAnswer: 1,
+        imageUrl: "https://images.pexels.com/photos/346972/pexels-photo-346972.jpeg"
     }
 };
 
@@ -306,7 +466,7 @@ function zoomToLocation(position, callback) {
     
     // Zoom in animation - MIKLU meira zoom (2x)
     mapContainer.style.transition = 'transform 0.6s ease-in-out';
-    mapContainer.style.transform = `scale(3) translate(${(0.5 - loc.x) * 50}%, ${(0.5 - loc.y) * 50}%)`;
+    mapContainer.style.transform = `scale(2) translate(${(0.5 - loc.x) * 50}%, ${(0.5 - loc.y) * 50}%)`;
     
     // Halda zoom - ekki zooma út fyrr en eftir spurningu
     setTimeout(() => {
