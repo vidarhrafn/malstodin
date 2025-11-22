@@ -276,9 +276,15 @@ function animateMovement(player, targetPosition, callback) {
         
         if (currentPos >= targetPosition) {
             clearInterval(interval);
-            callback();
+            
+            // Zoom inn á staðinn
+            setTimeout(() => {
+                zoomToLocation(currentPos, () => {
+                    callback();
+                });
+            }, 300);
         }
-    }, 400);
+    }, 600); // Hægar (var 400ms)
 }
 
 function updatePlayerPiecePosition(player, position) {
@@ -291,6 +297,25 @@ function updatePlayerPiecePosition(player, position) {
     
     piece.style.left = `calc(${loc.x * 100}% + ${offsetX}px)`;
     piece.style.top = (loc.y * 100) + '%';
+}
+
+// Zoom inn á stað
+function zoomToLocation(position, callback) {
+    const mapContainer = document.getElementById('map-container');
+    const loc = locations[position];
+    
+    // Zoom in animation
+    mapContainer.style.transition = 'transform 0.5s ease-in-out';
+    mapContainer.style.transform = `scale(1.3) translate(${(0.5 - loc.x) * 30}%, ${(0.5 - loc.y) * 30}%)`;
+    
+    // Zoom out aftur eftir 800ms
+    setTimeout(() => {
+        mapContainer.style.transform = 'scale(1) translate(0, 0)';
+        setTimeout(() => {
+            mapContainer.style.transition = '';
+            callback();
+        }, 500);
+    }, 800);
 }
 
 // Sýna spurningu
