@@ -306,7 +306,7 @@ function zoomToLocation(position, callback) {
     
     // Zoom in animation - MIKLU meira zoom (2x)
     mapContainer.style.transition = 'transform 0.6s ease-in-out';
-    mapContainer.style.transform = `scale(2) translate(${(0.5 - loc.x) * 50}%, ${(0.5 - loc.y) * 50}%)`;
+    mapContainer.style.transform = `scale(3) translate(${(0.5 - loc.x) * 50}%, ${(0.5 - loc.y) * 50}%)`;
     
     // Halda zoom - ekki zooma út fyrr en eftir spurningu
     setTimeout(() => {
