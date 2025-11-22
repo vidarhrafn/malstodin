@@ -304,18 +304,25 @@ function zoomToLocation(position, callback) {
     const mapContainer = document.getElementById('map-container');
     const loc = locations[position];
     
-    // Zoom in animation
-    mapContainer.style.transition = 'transform 0.5s ease-in-out';
-    mapContainer.style.transform = `scale(1.3) translate(${(0.5 - loc.x) * 30}%, ${(0.5 - loc.y) * 30}%)`;
+    // Zoom in animation - MIKLU meira zoom (2x)
+    mapContainer.style.transition = 'transform 0.6s ease-in-out';
+    mapContainer.style.transform = `scale(2) translate(${(0.5 - loc.x) * 50}%, ${(0.5 - loc.y) * 50}%)`;
     
-    // Zoom out aftur eftir 800ms
+    // Halda zoom - ekki zooma út fyrr en eftir spurningu
     setTimeout(() => {
-        mapContainer.style.transform = 'scale(1) translate(0, 0)';
-        setTimeout(() => {
-            mapContainer.style.transition = '';
-            callback();
-        }, 500);
-    }, 800);
+        callback();
+    }, 600);
+}
+
+// Zoom út úr stað (kallað eftir spurningu)
+function zoomOut() {
+    const mapContainer = document.getElementById('map-container');
+    mapContainer.style.transition = 'transform 0.6s ease-in-out';
+    mapContainer.style.transform = 'scale(1) translate(0, 0)';
+    
+    setTimeout(() => {
+        mapContainer.style.transition = '';
+    }, 600);
 }
 
 // Sýna spurningu
@@ -441,6 +448,9 @@ function continueGame() {
         gameState.currentAudio.pause();
         gameState.currentAudio = null;
     }
+    
+    // Zoom út úr staðnum
+    zoomOut();
     
     // Ef svarið var rétt og < 2 í röð, leyfa að kasta aftur
     if (gameState.consecutiveRolls > 0 && gameState.consecutiveRolls < 2) {
