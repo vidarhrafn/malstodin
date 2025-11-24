@@ -42,7 +42,7 @@ const questionsForLocations = {
         imageUrl: "https://images.pexels.com/photos/6730779/pexels-photo-6730779.jpeg"
     },
     "Borgarnes": {
-        story: "Borgarnes er bær í Borgarfirði og þar bjuggu margir af fyrstu landnámsmönnum Íslands. Egill Skallagrímsson, frægur víkingur og skáld, ólst upp í Borg á Mýrum nálægt Borgarnesi. Í bænum er Landnámssetur þar sem sagan af landnáminu er sögð.",
+        story: "Borgarnes er bær í Borgarfirði og þar bjuggu margir af fyrstu landnámsmönnum Íslands. Egill Skallagrímsson, frægur víkingur og skáld, ólst upp á Borg á Mýrum nálægt Borgarnesi. Í bænum er Landnámssetur þar sem sagan af landnáminu er sögð.",
         question: "Hvaða frægur víkingur og skáld ólst upp nálægt Borgarnesi?",
         answers: ["Snorri Sturluson", "Egill Skallagrímsson", "Grettir Ásmundarson", "Gunnar á Hlíðarenda"],
         correctAnswer: 1,
@@ -63,7 +63,7 @@ const questionsForLocations = {
         imageUrl: "https://cdn.pixabay.com/photo/2016/09/07/13/48/stykkisholmur-1651662_1280.jpg"
     },
     "Rauðisandur": {
-        story: "Rauðisandur er stór rauðgulu sandströnd á Vestfjörðum og ein fallegasta strönd Íslands. Sandurinn fær lit sinn frá muldum skeljum og ströndin er um 10 kílómetra löng. Þar má oft sjá seli og fugla á ströndinni.",
+        story: "Rauðisandur er stór rauðgul sandströnd á Vestfjörðum og ein fallegasta strönd Íslands. Sandurinn fær lit sinn frá muldum skeljum og ströndin er um 10 kílómetra löng. Þar má oft sjá seli og fugla á ströndinni.",
         question: "Hvað gefur Rauðasandi lit sinn?",
         answers: ["Rautt grjót", "Járnmálmur", "Muldar skeljar", "Eldgos"],
         correctAnswer: 2,
@@ -100,14 +100,14 @@ const questionsForLocations = {
     "Hvammstangi": {
         story: "Hvammstangi er þorp í Húnaþingi vestra og þar búa um 500 íbúar. Þorpið er þekkt fyrir selaskoðun þar sem margir selir koma að landi í nágrenninu. Á Hvammstanga er Selasetur Íslands þar sem hægt er að læra um seli.",
         question: "Hvað er Hvammstangi þekkt fyrir?",
-        answers: ["Lundabyggðir", "Selaskoðun", "Hvalaskoðun", "Jöklasiglingur"],
+        answers: ["Lundabyggðir", "Selaskoðun", "Hvalaskoðun", "Jöklasiglingar"],
         correctAnswer: 1,
         imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Hvammstangi_2.jpg/1280px-Hvammstangi_2.jpg"
     },
     "Blönduós": {
-        story: "Blönduós er bær við ósinn á Blöndu á Norðurlandi vestra. Þar búa um 900 íbúar og bærinn er þekktur fyrir fallega kirkju sem stendur á hæð. Blönduós er miðstöð landbúnaðarsvæðis og þar er góð þjónusta fyrir ferðamenn.",
+        story: "Blönduós er bær við ósinn á ánni Blöndu á Norðurlandi vestra. Þar búa um 900 íbúar og bærinn er þekktur fyrir fallega kirkju sem stendur á hæð. Blönduós er miðstöð landbúnaðarsvæðis og þar er góð þjónusta fyrir ferðamenn.",
         question: "Við hvaða á liggur Blönduós?",
-        answers: ["Þjórsá", "Blanda", "Ölfusá", "Hvítá"],
+        answers: ["Þjórsá", "Blöndu", "Ölfusá", "Hvítá"],
         correctAnswer: 1,
         imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Blonduos4.jpg/960px-Blonduos4.jpg"
     },
@@ -135,7 +135,7 @@ const questionsForLocations = {
     "Mývatn": {
         story: "Mývatn er stórt og grunnt vatn á Norðurlandi eystra. Vatnið er þekkt fyrir fallega náttúru, eldvirkni og margar fuglategundir. Í kringum Mývatn eru gígar, hraunsvæði og heitar uppsprettur. Nafnið er dregið af miklum fjölda mýflugna sem eru þar á sumrin.",
         question: "Hvaðan kemur nafnið Mývatn?",
-        answers: ["Frá mörgum selum", "Frá mörgum mýflugum", "Frá mörgum lundafuglum", "Frá mörgum fiskum"],
+        answers: ["Frá mörgum selum", "Frá mörgum mýflugum", "Frá mörgum fuglum", "Frá mörgum fiskum"],
         correctAnswer: 1,
         imageUrl: "https://cdn.pixabay.com/photo/2014/02/20/08/29/iceland-270406_1280.jpg"
     },
