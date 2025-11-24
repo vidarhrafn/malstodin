@@ -63,7 +63,7 @@ const questionsForLocations = {
         imageUrl: "https://cdn.pixabay.com/photo/2016/09/07/13/48/stykkisholmur-1651662_1280.jpg"
     },
     "Rauðisandur": {
-        story: "Rauðisandur er stór rauðgulur sandströnd á Vestfjörðum og ein fallegasta strönd Íslands. Sandurinn fær lit sinn frá muldum skeljum og ströndin er um 10 kílómetra löng. Þar má oft sjá seli og fugla á ströndinni.",
+        story: "Rauðisandur er stór rauðgulu sandströnd á Vestfjörðum og ein fallegasta strönd Íslands. Sandurinn fær lit sinn frá muldum skeljum og ströndin er um 10 kílómetra löng. Þar má oft sjá seli og fugla á ströndinni.",
         question: "Hvað gefur Rauðasandi lit sinn?",
         answers: ["Rautt grjót", "Járnmálmur", "Muldar skeljar", "Eldgos"],
         correctAnswer: 2,
