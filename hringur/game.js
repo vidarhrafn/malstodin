@@ -70,7 +70,7 @@ const questionsForLocations = {
         imageUrl: "https://images.pexels.com/photos/10436195/pexels-photo-10436195.jpeg"
     },
     "Látrabjarg": {
-        story: "Látrabjarg er stærsti fuglabjarg Evrópu og um 14 kílómetra langt. Bjargið er allt að 440 metra hátt og þar búa milljónir fugla. Þar má sjá lunda, álkur og annað flott.",
+        story: "Látrabjarg er stærsta fuglabjarg Evrópu og um 14 kílómetra langt. Bjargið er allt að 440 metra hátt og þar búa milljónir fugla. Þar má sjá lunda, álkur og fleiri fugla.",
         question: "Hversu hátt er Látrabjarg?",
         answers: ["240 metrar", "340 metrar", "440 metrar", "540 metrar"],
         correctAnswer: 2,
