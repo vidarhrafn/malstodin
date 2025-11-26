@@ -74,7 +74,10 @@
                             placeholder="Þetta er fyrsta setningin.
 Þetta er önnur setningin.
 Þetta er þriðja setningin."></textarea>
-                        <p class="text-sm text-gray-500 mt-2">Dæmi um skráarnafn: <code class="bg-gray-100 px-2 py-1 rounded">kafli01_spurning01.mp3</code></p>
+                        <div class="flex justify-between items-center mt-2">
+                            <p class="text-sm text-gray-500">Dæmi um skráarnafn: <code class="bg-gray-100 px-2 py-1 rounded">kafli01_spurning01.mp3</code></p>
+                            <p id="tab1-cost" class="text-sm font-semibold text-blue-600">📊 Kostnaður: 0 kr</p>
+                        </div>
                     </div>
 
                     <button id="tab1-generate" 
@@ -114,6 +117,9 @@
                             placeholder="Límdu inn langan texta hér...
 
 Azure TTS getur lesið allt að ~5000 stafi í einu."></textarea>
+                        <div class="flex justify-end items-center mt-2">
+                            <p id="tab2-cost" class="text-sm font-semibold text-blue-600">📊 Kostnaður: 0 kr</p>
+                        </div>
                     </div>
 
                     <button id="tab2-generate" 
@@ -160,7 +166,10 @@ Azure TTS getur lesið allt að ~5000 stafi í einu."></textarea>
 B: Hæ! Allt fínt, takk. En sjálfur?
 A: Bara gott, takk fyrir að spyrja.
 B: Frábært að heyra!"></textarea>
-                        <p class="text-sm text-gray-500 mt-2">💡 Hver lína sem byrjar á "A:" notar rödd A, og "B:" notar rödd B.</p>
+                        <div class="flex justify-between items-center mt-2">
+                            <p class="text-sm text-gray-500">💡 Hver lína sem byrjar á "A:" notar rödd A, og "B:" notar rödd B.</p>
+                            <p id="tab3-cost" class="text-sm font-semibold text-blue-600">📊 Kostnaður: 0 kr</p>
+                        </div>
                     </div>
 
                     <button id="tab3-generate" 
@@ -178,6 +187,32 @@ B: Frábært að heyra!"></textarea>
     </div>
 
     <script>
+        // Azure TTS verðlagning: $16 per 1M stafir fyrir Neural voices
+        // Gengi: ~140 ISK/USD
+        const COST_PER_CHAR_USD = 0.000016;
+        const USD_TO_ISK = 140;
+
+        function calculateCost(text) {
+            const charCount = text.length;
+            const costUSD = charCount * COST_PER_CHAR_USD;
+            const costISK = costUSD * USD_TO_ISK;
+            return {
+                chars: charCount,
+                usd: costUSD,
+                isk: Math.ceil(costISK) // Námunda upp
+            };
+        }
+
+        function updateCostDisplay(tabId, text) {
+            const cost = calculateCost(text);
+            const costElement = document.getElementById(`${tabId}-cost`);
+            if (cost.isk < 1) {
+                costElement.textContent = `📊 Kostnaður: <1 kr (${cost.chars} stafir)`;
+            } else {
+                costElement.textContent = `📊 Kostnaður: ~${cost.isk} kr (${cost.chars} stafir)`;
+            }
+        }
+
         // Tab switching
         document.querySelectorAll('.tab-button').forEach(button => {
             button.addEventListener('click', () => {
@@ -191,6 +226,19 @@ B: Frábært að heyra!"></textarea>
                 document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
                 document.getElementById(tabId).classList.remove('hidden');
             });
+        });
+
+        // Cost calculation listeners
+        document.getElementById('tab1-text').addEventListener('input', (e) => {
+            updateCostDisplay('tab1', e.target.value);
+        });
+
+        document.getElementById('tab2-text').addEventListener('input', (e) => {
+            updateCostDisplay('tab2', e.target.value);
+        });
+
+        document.getElementById('tab3-text').addEventListener('input', (e) => {
+            updateCostDisplay('tab3', e.target.value);
         });
 
         // Utility functions
