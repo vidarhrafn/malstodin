@@ -31,6 +31,20 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const ORIGINAL_TEXT_1 = "vandræðalegur";
+    const ORIGINAL_TEXT_2 = "að hvísla";
+
     // Textinn sem nemendur geta lesið eftir að hafa lokið öllum spurningum
     const LISTENING_TEXT = `Það er seinnipartur á sunnudegi í Hafnarfirði.
 
@@ -165,6 +179,18 @@ Bjarki tekur aftur upp símann og hvíslar:
       const audioRef = useRef(null);
       const [showTextModal, setShowTextModal] = useState(false);
 
+      // Translation 1
+      const [translation1Answer, setTranslation1Answer] = useState('');
+      const [translation1Language, setTranslation1Language] = useState('');
+      const [translation1Feedback, setTranslation1Feedback] = useState(null);
+      const [translation1Loading, setTranslation1Loading] = useState(false);
+
+      // Translation 2
+      const [translation2Answer, setTranslation2Answer] = useState('');
+      const [translation2Language, setTranslation2Language] = useState('');
+      const [translation2Feedback, setTranslation2Feedback] = useState(null);
+      const [translation2Loading, setTranslation2Loading] = useState(false);
+
       // Rétt/Rangt
       const [tfAnswers, setTfAnswers] = useState([]);
       const [tfChecked, setTfChecked] = useState(false);
@@ -183,7 +209,7 @@ Bjarki tekur aftur upp símann og hvíslar:
       const [matchingChecked, setMatchingChecked] = useState(false);
 
       // Athuga hvort allar spurningar séu svaraðar
-      const allQuestionsAnswered = tfChecked && mcChecked && 
+      const allQuestionsAnswered = translation1Feedback && translation2Feedback && tfChecked && mcChecked &&
         openFeedback.every(f => f !== null) && matchingChecked;
 
       // Endurstilla föll
@@ -196,6 +222,126 @@ Bjarki tekur aftur upp símann og hvíslar:
       const resetMatching = () => { 
         setMatchingAnswers(Array(MATCHING.length).fill('')); 
         setMatchingChecked(false); 
+      };
+
+      // Translation 1 - vandræðalegur
+      const checkTranslation1 = async () => {
+        if (translation1Answer.trim().length < 2) {
+          alert('Vinsamlegast skrifaðu þýðingu!');
+          return;
+        }
+        if (!translation1Language.trim()) {
+          alert('Vinsamlegast skrifaðu hvaða tungumál þú notaðir!');
+          return;
+        }
+
+        setTranslation1Loading(true);
+
+        try {
+          const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
+
+ÍSLENSKA ORÐIÐ: "${ORIGINAL_TEXT_1}"
+NEMANDI ÞÝDDI Á ${translation1Language}: "${translation1Answer}"
+
+VERKEFNI:
+Meta hvort þýðingin er rétt. Samþykkja þýðingar sem þýða "embarrassed" eða "awkward" á réttu tungumáli.
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": boolean,
+  "feedback_is": "Endurgjöf á íslensku",
+  "feedback_native": "Endurgjöf á ${translation1Language}",
+  "correct_translation": "Góð þýðing ef rangt, annars null"
+}
+
+Vertu hvetjandi og jákvæður!`;
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 300,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Meta þýðingu' }
+            ]
+          });
+
+          let cleanResponse = response
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .replace(/^[^{]*/g, '')
+            .replace(/[^}]*$/g, '')
+            .trim();
+
+          const data = JSON.parse(cleanResponse);
+          setTranslation1Feedback(data);
+
+        } catch (e) {
+          console.error('Error checking translation:', e);
+          alert('Villa við að meta þýðingu. Reyndu aftur.');
+        } finally {
+          setTranslation1Loading(false);
+        }
+      };
+
+      // Translation 2 - að hvísla
+      const checkTranslation2 = async () => {
+        if (translation2Answer.trim().length < 2) {
+          alert('Vinsamlegast skrifaðu þýðingu!');
+          return;
+        }
+        if (!translation2Language.trim()) {
+          alert('Vinsamlegast skrifaðu hvaða tungumál þú notaðir!');
+          return;
+        }
+
+        setTranslation2Loading(true);
+
+        try {
+          const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
+
+ÍSLENSKA ORÐIÐ: "${ORIGINAL_TEXT_2}"
+NEMANDI ÞÝDDI Á ${translation2Language}: "${translation2Answer}"
+
+VERKEFNI:
+Meta hvort þýðingin er rétt. Samþykkja þýðingar sem þýða "to whisper" á réttu tungumáli.
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": boolean,
+  "feedback_is": "Endurgjöf á íslensku",
+  "feedback_native": "Endurgjöf á ${translation2Language}",
+  "correct_translation": "Góð þýðing ef rangt, annars null"
+}
+
+Vertu hvetjandi og jákvæður!`;
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.3,
+            max_tokens: 300,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Meta þýðingu' }
+            ]
+          });
+
+          let cleanResponse = response
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .replace(/^[^{]*/g, '')
+            .replace(/[^}]*$/g, '')
+            .trim();
+
+          const data = JSON.parse(cleanResponse);
+          setTranslation2Feedback(data);
+
+        } catch (e) {
+          console.error('Error checking translation:', e);
+          alert('Villa við að meta þýðingu. Reyndu aftur.');
+        } finally {
+          setTranslation2Loading(false);
+        }
       };
 
       // Hljóðspilari
@@ -405,9 +551,133 @@ Bjarki tekur aftur upp símann og hvíslar:
   </div>
 </div>
 
-            {/* 1. Rétt eða rangt */}
+            {/* 1a. Translation - vandræðalegur */}
             <section className="bg-white rounded-lg shadow-sm p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣ Rétt eða rangt?</h2>
+              <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣a Þýðing: vandræðalegur</h2>
+              <div className="border-2 border-gray-100 rounded-lg p-4">
+                <p className="font-normal text-gray-800 mb-4">
+                  Hvað þýðir orðið <strong>"vandræðalegur"</strong> á þínu móðurmáli?
+                </p>
+
+                <input
+                  type="text"
+                  value={translation1Language}
+                  onChange={(e) => setTranslation1Language(e.target.value)}
+                  disabled={translation1Feedback !== null}
+                  placeholder="Hvaða tungumál? (t.d. enska, pólska, spænska...)"
+                  className="w-full p-3 mb-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                />
+
+                <textarea
+                  value={translation1Answer}
+                  onChange={(e) => setTranslation1Answer(e.target.value)}
+                  disabled={translation1Feedback !== null}
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                  rows="3"
+                  placeholder="Skrifaðu þýðinguna hér..."
+                />
+
+                {!translation1Feedback && (
+                  <button
+                    onClick={checkTranslation1}
+                    disabled={translation1Loading}
+                    className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm"
+                  >
+                    {translation1Loading ? 'Athuga...' : 'Athuga þýðingu'}
+                  </button>
+                )}
+
+                {translation1Feedback && (
+                  <div className={`mt-3 p-4 rounded-lg ${
+                    translation1Feedback.correct
+                      ? 'bg-green-50 border-2 border-green-200'
+                      : 'bg-yellow-50 border-2 border-yellow-200'
+                  }`}>
+                    <p className={`font-light mb-2 ${
+                      translation1Feedback.correct ? 'text-green-800' : 'text-yellow-800'
+                    }`}>
+                      {translation1Feedback.correct ? '✓' : '💡'} {translation1Feedback.feedback_is}
+                    </p>
+                    <p className={`text-sm font-light ${
+                      translation1Feedback.correct ? 'text-green-700' : 'text-yellow-700'
+                    }`}>
+                      {translation1Feedback.feedback_native}
+                    </p>
+                    {translation1Feedback.correct_translation && (
+                      <p className="text-sm text-gray-600 mt-2 font-light">
+                        <strong>Dæmi um góða þýðingu:</strong> {translation1Feedback.correct_translation}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 1b. Translation - að hvísla */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">1️⃣b Þýðing: að hvísla</h2>
+              <div className="border-2 border-gray-100 rounded-lg p-4">
+                <p className="font-normal text-gray-800 mb-4">
+                  Hvað þýðir orðið <strong>"að hvísla"</strong> á þínu móðurmáli?
+                </p>
+
+                <input
+                  type="text"
+                  value={translation2Language}
+                  onChange={(e) => setTranslation2Language(e.target.value)}
+                  disabled={translation2Feedback !== null}
+                  placeholder="Hvaða tungumál? (t.d. enska, pólska, spænska...)"
+                  className="w-full p-3 mb-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                />
+
+                <textarea
+                  value={translation2Answer}
+                  onChange={(e) => setTranslation2Answer(e.target.value)}
+                  disabled={translation2Feedback !== null}
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                  rows="3"
+                  placeholder="Skrifaðu þýðinguna hér..."
+                />
+
+                {!translation2Feedback && (
+                  <button
+                    onClick={checkTranslation2}
+                    disabled={translation2Loading}
+                    className="mt-3 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition-colors font-light text-sm"
+                  >
+                    {translation2Loading ? 'Athuga...' : 'Athuga þýðingu'}
+                  </button>
+                )}
+
+                {translation2Feedback && (
+                  <div className={`mt-3 p-4 rounded-lg ${
+                    translation2Feedback.correct
+                      ? 'bg-green-50 border-2 border-green-200'
+                      : 'bg-yellow-50 border-2 border-yellow-200'
+                  }`}>
+                    <p className={`font-light mb-2 ${
+                      translation2Feedback.correct ? 'text-green-800' : 'text-yellow-800'
+                    }`}>
+                      {translation2Feedback.correct ? '✓' : '💡'} {translation2Feedback.feedback_is}
+                    </p>
+                    <p className={`text-sm font-light ${
+                      translation2Feedback.correct ? 'text-green-700' : 'text-yellow-700'
+                    }`}>
+                      {translation2Feedback.feedback_native}
+                    </p>
+                    {translation2Feedback.correct_translation && (
+                      <p className="text-sm text-gray-600 mt-2 font-light">
+                        <strong>Dæmi um góða þýðingu:</strong> {translation2Feedback.correct_translation}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 2. Rétt eða rangt */}
+            <section className="bg-white rounded-lg shadow-sm p-8">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Rétt eða rangt?</h2>
               <div className="space-y-4">
                 {TRUE_FALSE.map((item, index) => (
                   <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
@@ -462,9 +732,9 @@ Bjarki tekur aftur upp símann og hvíslar:
               )}
             </section>
 
-            {/* 2. Fjölvalsspurningar */}
+            {/* 3. Fjölvalsspurningar */}
             <section className="bg-white rounded-lg shadow-sm p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-6">2️⃣ Fjölvalsspurningar</h2>
+              <h2 className="text-2xl font-light text-gray-800 mb-6">3️⃣ Fjölvalsspurningar</h2>
               <p className="text-gray-600 font-light mb-6">Merktu við eitt svar (A–D).</p>
               <div className="space-y-6">
                 {MULTIPLE_CHOICE.map((q, qIndex) => (
@@ -517,9 +787,9 @@ Bjarki tekur aftur upp símann og hvíslar:
               )}
             </section>
 
-            {/* 3. Stuttar spurningar */}
+            {/* 4. Stuttar spurningar */}
             <section className="bg-white rounded-lg shadow-sm p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-6">3️⃣ Stuttar spurningar</h2>
+              <h2 className="text-2xl font-light text-gray-800 mb-6">4️⃣ Stuttar spurningar</h2>
               <p className="text-gray-600 font-light mb-6">Svaraðu með þínum eigin orðum (1–2 setningar).</p>
               <div className="space-y-6">
                 {OPEN_QUESTIONS.map((q, index) => (
@@ -556,9 +826,9 @@ Bjarki tekur aftur upp símann og hvíslar:
               </div>
             </section>
 
-            {/* 4. Paraðu saman */}
+            {/* 5. Paraðu saman */}
             <section className="bg-white rounded-lg shadow-sm p-8">
-              <h2 className="text-2xl font-light text-gray-800 mb-6">4️⃣ Paraðu saman</h2>
+              <h2 className="text-2xl font-light text-gray-800 mb-6">5️⃣ Paraðu saman</h2>
               <div className="space-y-4">
                 {MATCHING.map((item, index) => (
                   <div key={index} className="border-2 border-gray-100 rounded-lg p-4">
