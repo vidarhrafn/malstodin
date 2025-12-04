@@ -31,6 +31,8 @@
     .answer-option.correct { border-color:#4caf50; background:#e8f5e9; }
     .answer-option.incorrect { border-color:#f44336; background:#ffebee; }
     .answer-option.disabled { cursor: default; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-content { background: white; border-radius: 1rem; max-width: 48rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
@@ -58,6 +60,9 @@
 
     // --- Lykilorð og grunnstillingar ---
     const ORIGINAL_TEXT = "að hnoða (deig)";
+
+    // Textinn sem nemendur geta lesið eftir að hafa lokið öllum spurningum
+    const LISTENING_TEXT = `Það er laugardagur í Hafnarfirði. Sigurður er í eldhúsinu og er að baka brauð. Hann blandar saman hveiti, salti, geri og volgu vatni. Lilja hjálpar þabba sínum að hnoða deigið og finnst það mjúkt og hlýtt. Anna situr við borðið og les bók, en Bjarki spilar í stofunni. Kötturinn Mási liggur í sófanum og sofnar um stund. Sigurður tekur brauðið úr ofninum, sker það og smyr smjörjá á heita sneíð. Smjörið bráðnar og rennur ofan í brauðið. Lilja segir: „Þetta er besta brauð í heimi!" Bjarki biður þabba sinn að smyrja sneíð handa sér og amma.`;
 
     const VOCAB = [
       { w: "að baka", hint: "búa til brauð/köku í ofni" },
@@ -106,9 +111,10 @@
     const HlustunBakstur = () => {
       const [playbackRate, setPlaybackRate] = useState(1);
       const [isPlaying, setIsPlaying] = useState(false);
-      const [currentTime, setCurrentTime] = useState(0);  // ← BÆTA VIÐ
-      const [duration, setDuration] = useState(0);        // ← BÆTA VIÐ
+      const [currentTime, setCurrentTime] = useState(0);
+      const [duration, setDuration] = useState(0);
       const audioRef = useRef(null);
+      const [showTextModal, setShowTextModal] = useState(false);
 
       // Þýðing
       const [translationAnswer, setTranslationAnswer] = useState('');
@@ -136,6 +142,10 @@
         () => MATCHING.map(m => m.right).sort(() => Math.random() - 0.5),
         []
       );
+
+      // Athuga hvort allar spurningar séu svaraðar
+      const allQuestionsAnswered = translationFeedback && mcChecked &&
+        openFeedback.every(f => f !== null) && tfChecked && matchingChecked;
 
       // Endurstilla föll
       const resetMC = () => { setMcAnswers([]); setMcChecked(false); };
@@ -646,12 +656,49 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
             </section>
 
             {/* Lok */}
+            {allQuestionsAnswered && (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">🎉 Vel gert!</h2>
+                <p className="text-gray-700 font-light mb-4">Þú hefur lokið öllum spurningunum!</p>
+                <button
+                  onClick={() => setShowTextModal(true)}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light"
+                >
+                  📖 Lesa textann
+                </button>
+              </div>
+            )}
+
             <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
               <p className="text-gray-600 font-light">Þú hefur klárað hlustunarverkefnið um brauðbakstur. Hlustaðu endilega aftur til að æfa!</p>
             </div>
           </main>
+
+          {/* Modal gluggi með textanum */}
+          {showTextModal && (
+            <div className="modal-overlay" onClick={() => setShowTextModal(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-light text-gray-800">📖 Hlustunartextinn</h2>
+                    <button
+                      onClick={() => setShowTextModal(false)}
+                      className="text-gray-500 hover:text-gray-700 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="prose max-w-none">
+                    <p className="text-gray-800 font-light leading-relaxed whitespace-pre-line">
+                      {LISTENING_TEXT}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };

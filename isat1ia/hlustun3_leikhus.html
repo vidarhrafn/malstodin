@@ -21,6 +21,8 @@
     .answer-option.correct { border-color:#4caf50; background:#e8f5e9; }
     .answer-option.incorrect { border-color:#f44336; background:#ffebee; }
     .answer-option.disabled { cursor: default; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-content { background: white; border-radius: 1rem; max-width: 48rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
@@ -48,6 +50,27 @@
 
     // --- Lykilorð og grunnstillingar fyrir LEIKHÚS ---
     const ORIGINAL_TEXT = "leikhús (hk)";
+
+    // Textinn sem nemendur geta lesið eftir að hafa lokið öllum spurningum
+    const LISTENING_TEXT = `Sigurður og Anna ákveða að fara með börnin, Bjarka og Lilju, í leikhús á laugardaginn. Þetta er barnasýning í Borgarleikhúsinu sem heitir Litla ljónið.
+
+Lilja er mjög spennt því hún elskar lög og öðrum sýningum.
+
+Fjölskyldan kaupir miða á netinu og prentar þá út. Þau fá líka afslátt því Anna vinnur á bókasafninu. Þegar þau koma í leikhúsið kaupa þau leikskrá til að sjá hverjir leika í sýningunni.
+
+Bjarki spyr: „Mamma, hvað er aðalleikari?"
+
+Anna útskýrir að það sé sá sem hefur stærsta hlutverkið í leikritinu.
+
+Þau sitja á fremsta bekk og sjá vél á svíðið.
+
+Lilja hvíslar: „Vá, leikararnir eru svo flottir!"
+
+Í lokin klappa byrjar, klappar hún taktinn og brosir allan tímann.
+
+Eftir sýninguna segja bæði börnin: „Þetta var frábært! Við viljum fara aftur í leikhús!"
+
+Sigurður brosir og segir: „Já, kannski förum við næst á annan söngleik."`;
 
     const VOCAB = [
       { w: "leikhús (hk)", hint: "hús þar sem leikarar sýna leikrit" },
@@ -118,9 +141,10 @@
     const HlustunLeikhus = () => {
       const [playbackRate, setPlaybackRate] = useState(1);
       const [isPlaying, setIsPlaying] = useState(false);
-      const [currentTime, setCurrentTime] = useState(0);  // ← BÆTA VIÐ
-      const [duration, setDuration] = useState(0);        // ← BÆTA VIÐ
+      const [currentTime, setCurrentTime] = useState(0);
+      const [duration, setDuration] = useState(0);
       const audioRef = useRef(null);
+      const [showTextModal, setShowTextModal] = useState(false);
 
       // Þýðing
       const [translationAnswer, setTranslationAnswer] = useState('');
@@ -148,6 +172,10 @@
         () => MATCHING.map(m => m.right).sort(() => Math.random() - 0.5),
         []
       );
+
+      // Athuga hvort allar spurningar séu svaraðar
+      const allQuestionsAnswered = translationFeedback && mcChecked &&
+        openFeedback.every(f => f !== null) && tfChecked && matchingChecked;
 
       // Endurstilla föll
       const resetMC = () => { setMcAnswers([]); setMcChecked(false); };
@@ -659,12 +687,49 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
             </section>
 
             {/* Lok */}
+            {allQuestionsAnswered && (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">🎉 Vel gert!</h2>
+                <p className="text-gray-700 font-light mb-4">Þú hefur lokið öllum spurningunum!</p>
+                <button
+                  onClick={() => setShowTextModal(true)}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light"
+                >
+                  📖 Lesa textann
+                </button>
+              </div>
+            )}
+
             <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
               <p className="text-gray-600 font-light">Þú hefur klárað hlustunarverkefnið um leikhús. Hlustaðu endilega aftur til að æfa!</p>
             </div>
           </main>
+
+          {/* Modal gluggi með textanum */}
+          {showTextModal && (
+            <div className="modal-overlay" onClick={() => setShowTextModal(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-light text-gray-800">📖 Hlustunartextinn</h2>
+                    <button
+                      onClick={() => setShowTextModal(false)}
+                      className="text-gray-500 hover:text-gray-700 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="prose max-w-none">
+                    <p className="text-gray-800 font-light leading-relaxed whitespace-pre-line">
+                      {LISTENING_TEXT}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };
