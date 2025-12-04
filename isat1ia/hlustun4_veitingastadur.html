@@ -21,6 +21,8 @@
     .answer-option.correct { border-color:#4caf50; background:#e8f5e9; }
     .answer-option.incorrect { border-color:#f44336; background:#ffebee; }
     .answer-option.disabled { cursor: default; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-content { background: white; border-radius: 1rem; max-width: 48rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
@@ -48,6 +50,25 @@
 
     // --- Lykilorð og grunnstillingar fyrir VEITINGASTAÐ ---
     const ORIGINAL_TEXT = "bragð (hk)";
+
+    // Textinn sem nemendur geta lesið eftir að hafa lokið öllum spurningum
+    const LISTENING_TEXT = `Það er föstudagur og hádegishléí vínnunni. Sigurður vinnur á tannlæknastofu í Kópavogi og ákveður að fara út að borða með vinnufélaga sínum, Ólafi.
+
+„Það er nýr staður hérna við götuna," segir Ólafur. „Þar er víetnamskur matur."
+
+Sigurður hefur aldrei smakkað mat frá Víetnam áður, en hann vill prófa eitthvað nýtt. Þeir fara inn á lítla, hlýlega veitingastöðinn. Það ilmar af kryddi, fersku brauði og grænmeti.
+
+Þeir panta báðir fahn mí noodle-súpu. Þegar maturinn kemur, segir Sigurður:
+
+„Vá, þetta er bæði milt og svolítið sterkt á sama tíma. Þetta hefur sérstakt bragð."
+
+Ólafur hlær og segir: „Já, ekki alveg eins og hefðbundinn hádegismatur."
+
+Þau kvölva yfir matinn og Ólafi Önnu:
+
+„Ég smakkaði í dag víetnmamska samloku og hún var frábær."
+
+Anna brosir: „Þú verður að bjóða okkur næst – kannski lærum við að elda svona heima!"`;
 
     const VOCAB = [
       { w: "veitingastaður (kk)", hint: "staður þar sem hægt er að kaupa og borða mat" },
@@ -115,9 +136,10 @@
     const HlustunVeitingastadur = () => {
       const [playbackRate, setPlaybackRate] = useState(1);
       const [isPlaying, setIsPlaying] = useState(false);
-      const [currentTime, setCurrentTime] = useState(0);  // ← BÆTA VIÐ
-      const [duration, setDuration] = useState(0);        // ← BÆTA VIÐ
+      const [currentTime, setCurrentTime] = useState(0);
+      const [duration, setDuration] = useState(0);
       const audioRef = useRef(null);
+      const [showTextModal, setShowTextModal] = useState(false);
 
       // Þýðing
       const [translationAnswer, setTranslationAnswer] = useState('');
@@ -155,6 +177,10 @@
         () => shuffleArray(MATCHING.map(m => m.right)),
         []
       );
+
+      // Athuga hvort allar spurningar séu svaraðar
+      const allQuestionsAnswered = translationFeedback && mcChecked &&
+        openFeedback.every(f => f !== null) && tfChecked && matchingChecked;
 
       // Endurstilla föll
       const resetTranslation = () => {
@@ -659,12 +685,49 @@ Svaraðu EINGÖNGU með JSON, ekkert annað.`
             </section>
 
             {/* Lok */}
+            {allQuestionsAnswered && (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">🎉 Vel gert!</h2>
+                <p className="text-gray-700 font-light mb-4">Þú hefur lokið öllum spurningunum!</p>
+                <button
+                  onClick={() => setShowTextModal(true)}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light"
+                >
+                  📖 Lesa textann
+                </button>
+              </div>
+            )}
+
             <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
               <p className="text-gray-600 font-light">Þú hefur klárað hlustunarverkefnið um veitingastaðinn. Hlustaðu endilega aftur til að æfa!</p>
             </div>
           </main>
+
+          {/* Modal gluggi með textanum */}
+          {showTextModal && (
+            <div className="modal-overlay" onClick={() => setShowTextModal(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-light text-gray-800">📖 Hlustunartextinn</h2>
+                    <button
+                      onClick={() => setShowTextModal(false)}
+                      className="text-gray-500 hover:text-gray-700 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="prose max-w-none">
+                    <p className="text-gray-800 font-light leading-relaxed whitespace-pre-line">
+                      {LISTENING_TEXT}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };

@@ -45,6 +45,8 @@
     .answer-option.disabled {
       cursor: default;
     }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-content { background: white; border-radius: 1rem; max-width: 48rem; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
@@ -65,6 +67,11 @@
     }
 
     const ORIGINAL_TEXT = "gift (að vera gift/giftur)";
+
+    // Textinn sem nemendur geta lesið eftir að hafa lokið öllum spurningum
+    const LISTENING_TEXT = `Sigurður, Anna, Bjarki og Lilja
+
+Sigurður og Anna eru gift. Þau búa í Hafnarfirði í raðhúsi með litlum garði. Anna vinnur á bókasafni og Sigurður er tannlæknir í Kópavogi. Þau eiga tvö börn: Sonur þeirra heitir Bjarki og er 13 ára. Hann er mjög duglegur í tónlist og fer þrisvar í viku í tónlistarskólanum. Dóttir þeirra heitir Lilja og er 8 ára. Hún er mjög dugleg í karate og fer þrisvar í viku í æfingar. Fjölskyldan á kötti sem heitir Mási og hann er mjög gamall og liggur mest í sófanum en hann bara liggur á sófanum! Þau búa oft í góðu veðri og fara svo á göngutúr yfir Esju eða á göngutúr með stundum brauð á laugardögum og bjálpa börnin við að hnoða deigsið og ganga frá. Öllum finnst nýbakað brauð gott! Sigurður elskar að horfa á fótbolta og heldur með FH og fer oft á völlinn.`;
 
     const MULTIPLE_CHOICE = [
       {
@@ -138,9 +145,10 @@
     const HlustunFjolskyldan = () => {
       const [playbackRate, setPlaybackRate] = useState(1);
       const [isPlaying, setIsPlaying] = useState(false);
-      const [currentTime, setCurrentTime] = useState(0);  
-      const [duration, setDuration] = useState(0);        
+      const [currentTime, setCurrentTime] = useState(0);
+      const [duration, setDuration] = useState(0);
       const audioRef = useRef(null);
+      const [showTextModal, setShowTextModal] = useState(false);
 
       // Translation question
       const [translationAnswer, setTranslationAnswer] = useState('');
@@ -164,6 +172,10 @@
       // Matching
       const [matchingAnswers, setMatchingAnswers] = useState(Array(MATCHING.length).fill(''));
       const [matchingChecked, setMatchingChecked] = useState(false);
+
+      // Athuga hvort allar spurningar séu svaraðar
+      const allQuestionsAnswered = translationFeedback && mcChecked &&
+        openFeedback.every(f => f !== null) && tfChecked && matchingChecked;
 
       useEffect(() => {
         if (audioRef.current) {
@@ -773,6 +785,19 @@ Vertu hvetjandi og jákvæður!`;
             </section>
 
             {/* Completion */}
+            {allQuestionsAnswered && (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">🎉 Vel gert!</h2>
+                <p className="text-gray-700 font-light mb-4">Þú hefur lokið öllum spurningunum!</p>
+                <button
+                  onClick={() => setShowTextModal(true)}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light"
+                >
+                  📖 Lesa textann
+                </button>
+              </div>
+            )}
+
             <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
               <div className="text-6xl mb-4">🎉</div>
               <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
@@ -782,6 +807,30 @@ Vertu hvetjandi og jákvæður!`;
             </div>
 
           </main>
+
+          {/* Modal gluggi með textanum */}
+          {showTextModal && (
+            <div className="modal-overlay" onClick={() => setShowTextModal(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-light text-gray-800">📖 Hlustunartextinn</h2>
+                    <button
+                      onClick={() => setShowTextModal(false)}
+                      className="text-gray-500 hover:text-gray-700 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="prose max-w-none">
+                    <p className="text-gray-800 font-light leading-relaxed whitespace-pre-line">
+                      {LISTENING_TEXT}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };
