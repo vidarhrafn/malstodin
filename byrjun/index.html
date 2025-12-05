@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Velkomin í íslensku!</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f0f9ff 0%, #e0f2fe 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model, temperature })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const SYSTEM_PROMPT = `You are a friendly, warm, and non-threatening AI assistant helping new students begin their Icelandic language learning journey. Your role is to conduct an initial interview to understand the student and create a personalized learning experience.
+
+## Your personality
+- Warm, patient, encouraging
+- Never intimidating or judgmental
+- Use simple language
+- Celebrate small things ("Great! Nice to meet you!")
+
+## Interview flow
+
+### Phase 1: Welcome
+- Greet the student warmly in English first
+- Ask what language they prefer to communicate in
+- Once you know their language, SWITCH TO THAT LANGUAGE for the rest of the interview
+- Ask their name
+
+### Phase 2: Get to know them (in their language)
+- Ask about their interests and hobbies (2-3 questions, conversational)
+- Ask why they want to learn Icelandic
+- Ask if they have any connection to Iceland
+
+### Phase 3: Assess Icelandic level (gentle, not test-like)
+- Ask: "Do you know how to say 'hello' in Icelandic?" (in their language)
+- Ask: "Do you know what 'Hvað segir þú gott?' means?"
+- If they seem to know something, ask a few more simple questions
+- If they know nothing, that's perfectly fine - reassure them
+
+### Phase 4: Character creation (in their language)
+- Explain: "I'm going to create a character just for you who will help you learn Icelandic!"
+- Ask: "Would you prefer to learn with a young person or an adult?"
+- Ask: "A man or a woman?"
+
+### Phase 5: Summary
+When you have gathered ALL information (name, native language, interests, Iceland connection, Icelandic level assessment, character preferences), end your message with a summary in this EXACT format on new lines:
+
+---NEMANDAUPPLÝSINGAR---
+Nafn: [name]
+Móðurmál: [language]
+Áhugamál: [interests, comma separated]
+Tengsl við Ísland: [connection or "Engin sérstök"]
+Íslensku stig: [A0 if no knowledge, A1 if basic words/phrases]
+Persóna óskir: [young/adult], [man/woman]
+---LOK---
+
+Then tell the student (in their language): "Perfect! I'm now ready to create your personal learning companion!"
+
+## Important rules
+- ONE question at a time - never overwhelm
+- Keep it conversational, not like a form
+- If student answers in Icelandic, praise them and adjust assessment
+- Always be encouraging
+- Move through phases naturally but don't rush
+- The summary must only appear when you have ALL the information`;
+
+    const Upphafsvidtal = () => {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [studentData, setStudentData] = useState(null);
+      const messagesEndRef = useRef(null);
+      const hasStarted = useRef(false);
+
+      useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages, loading]);
+
+      useEffect(() => {
+        if (!hasStarted.current) {
+          hasStarted.current = true;
+          startConversation();
+        }
+      }, []);
+
+      const parseStudentData = (text) => {
+        const match = text.match(/---NEMANDAUPPLÝSINGAR---([\s\S]*?)---LOK---/);
+        if (!match) return null;
+        
+        const dataText = match[1];
+        const data = {};
+        
+        const lines = dataText.trim().split('\n');
+        lines.forEach(line => {
+          const [key, ...valueParts] = line.split(':');
+          if (key && valueParts.length > 0) {
+            const value = valueParts.join(':').trim();
+            const cleanKey = key.trim().toLowerCase();
+            if (cleanKey === 'nafn') data.nafn = value;
+            if (cleanKey === 'móðurmál') data.modurmal = value;
+            if (cleanKey === 'áhugamál') data.ahugamal = value;
+            if (cleanKey === 'tengsl við ísland') data.tengsl = value;
+            if (cleanKey === 'íslensku stig') data.stig = value;
+            if (cleanKey === 'persóna óskir') data.personuOskir = value;
+          }
+        });
+        
+        return Object.keys(data).length >= 4 ? data : null;
+      };
+
+      const startConversation = async () => {
+        setLoading(true);
+        try {
+          const response = await callOpenAI([
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: 'Start the interview.' }
+          ], 200, 'gpt-4o-mini', 0.7);
+          
+          setMessages([{ role: 'assistant', content: response }]);
+        } catch (e) {
+          console.error('Villa:', e);
+          setMessages([{ role: 'assistant', content: 'Hello! Welcome! I\'m so happy you want to learn Icelandic. What language would you like us to communicate in?' }]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const sendMessage = async () => {
+        if (!input.trim() || loading) return;
+        
+        const userMessage = input.trim();
+        setInput('');
+        const newMessages = [...messages, { role: 'user', content: userMessage }];
+        setMessages(newMessages);
+        setLoading(true);
+
+        try {
+          const aiMessages = [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...newMessages.map(m => ({ role: m.role, content: m.content }))
+          ];
+          
+          const response = await callOpenAI(aiMessages, 400, 'gpt-4o-mini', 0.7);
+          
+          const parsed = parseStudentData(response);
+          if (parsed) {
+            setStudentData(parsed);
+            const cleanResponse = response.replace(/---NEMANDAUPPLÝSINGAR---[\s\S]*?---LOK---/, '').trim();
+            setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
+          } else {
+            setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+          }
+        } catch (e) {
+          console.error('Villa:', e);
+          setMessages(prev => [...prev, { role: 'assistant', content: 'I\'m sorry, something went wrong. Could you repeat that?' }]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleNextStep = () => {
+        console.log('Nemandaupplýsingar:', studentData);
+        alert('Næsta skref: Búa til persónu og fyrsta kafla!\n\nGögn:\n' + JSON.stringify(studentData, null, 2));
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-2xl mx-auto px-6 py-8">
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Velkomin! 🇮🇸</h1>
+              <p className="text-gray-500 text-sm font-light">Við skulum kynnast áður en við byrjum</p>
+            </div>
+          </header>
+
+          <main className="max-w-2xl mx-auto px-6 mt-8">
+            <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight: '500px'}}>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {messages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-md px-4 py-3 rounded-2xl font-light ${
+                      msg.role === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-800'
+                    } shadow-sm`}>
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 text-gray-500 px-4 py-3 rounded-2xl">
+                      <span className="animate-pulse">...</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {studentData ? (
+                <div className="border-t p-6 bg-green-50">
+                  <div className="text-center">
+                    <p className="text-green-800 font-medium mb-4">✅ Frábært! Ég er tilbúin/n að búa til persónu fyrir þig!</p>
+                    <div className="bg-white rounded-lg p-4 mb-4 text-left text-sm text-gray-600">
+                      <p><strong>Nafn:</strong> {studentData.nafn}</p>
+                      <p><strong>Móðurmál:</strong> {studentData.modurmal}</p>
+                      <p><strong>Áhugamál:</strong> {studentData.ahugamal}</p>
+                      <p><strong>Stig:</strong> {studentData.stig}</p>
+                      <p><strong>Persóna:</strong> {studentData.personuOskir}</p>
+                    </div>
+                    <button
+                      onClick={handleNextStep}
+                      className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 font-medium text-lg"
+                    >
+                      Næsta skref →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t p-4 bg-white">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                      placeholder="Skrifaðu hér..."
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+                      disabled={loading}
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={!input.trim() || loading}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-normal"
+                    >
+                      Senda
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Upphafsvidtal />);
+  </script>
+</body>
+</html>
