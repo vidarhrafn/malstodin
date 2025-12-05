@@ -20,14 +20,14 @@
     const { useState, useEffect, useRef } = React;
 
     const SpeakerIcon = ({ isSpeaking }) => (
-      <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2" 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         className={`w-5 h-5 transition-colors ${
           isSpeaking ? 'text-red-500 animate-pulse' : 'text-green-600'
         }`}
@@ -35,6 +35,14 @@
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
       </svg>
+    );
+
+    const ListenPill = ({ onClick, speaking }) => (
+      <button onClick={onClick} className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl text-sm border ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+        <span className="opacity-70">🎧</span>
+        <span className="font-light">Hlustaðu:</span>
+        <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+      </button>
     );
 
     const MicIcon = ({ isRecording }) => (
@@ -89,12 +97,9 @@
     }
 
     const SpjallLeikir = () => {
-      const initialMessage = { 
-        role: 'assistant', 
-        content: 'Hæ! Getur þú sagt mér frá leik sem þú lékst þegar þú varst barn?'
-      };
-      
-      const [messages, setMessages] = useState([initialMessage]);
+      const FIRST_Q = 'Hæ! Getur þú sagt mér frá leik sem þú lékst þegar þú varst barn?';
+
+      const [messages, setMessages] = useState([]);
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
       const [isRecording, setIsRecording] = useState(false);
@@ -102,7 +107,6 @@
       const [speakingIndex, setSpeakingIndex] = useState(null);
       const [finished, setFinished] = useState(false);
       const [userResponseCount, setUserResponseCount] = useState(0);
-      const [hasPlayedInitial, setHasPlayedInitial] = useState(false);
       const messagesEndRef = useRef(null);
 
       const TOTAL_QUESTIONS = 8;
@@ -160,17 +164,20 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
       }, []);
 
       useEffect(() => {
-        if (!hasPlayedInitial && messages.length > 0) {
-          setHasPlayedInitial(true);
-          playAudio(initialMessage.content, (speaking) => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages, loading]);
+
+      const handleListenClick = async () => {
+        if (messages.length === 0) {
+          setMessages([{ role: 'assistant', content: FIRST_Q }]);
+          await playAudio(FIRST_Q, (speaking) => {
             if (!speaking) setSpeakingIndex(null);
           });
+        } else {
+          const lastIdx = messages.map((m, i) => ({ m, i })).filter(o => o.m.role === 'assistant').slice(-1)[0]?.i;
+          if (lastIdx != null) await playAssistantAt(lastIdx);
         }
-      }, []);
-
-      useEffect(() => { 
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
-      }, [messages, loading]);
+      };
 
       const playAssistantAt = async (idx) => {
         const msg = messages[idx];
@@ -289,7 +296,8 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
 
             <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight:'400px'}}>
               <div className="flex items-center gap-2 px-6 py-3 border-b bg-gray-50">
-                <span className="text-xs text-gray-400">
+                <ListenPill onClick={handleListenClick} speaking={speakingIndex !== null} />
+                <span className="text-xs text-gray-400 ml-auto">
                   📍 Spurning {Math.min(userResponseCount + 1, TOTAL_QUESTIONS)} af {TOTAL_QUESTIONS}
                 </span>
               </div>
