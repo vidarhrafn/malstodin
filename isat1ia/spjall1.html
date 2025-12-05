@@ -124,12 +124,9 @@
         }
 
         const Myndaspjall = () => {
-            const initialMessage = { 
-                role: 'assistant', 
-                content: 'Hæ! Sjáðu þessa mynd af þremur ungmennum í Reykjavík. Segðu mér frá þessum krökkum! Hvað heitir strákurinn til vinstri? 😊'
-            };
-            
-            const [messages, setMessages] = useState([initialMessage]);
+            const FIRST_Q = 'Hæ! Sjáðu þessa mynd af þremur ungmennum í Reykjavík. Segðu mér frá þessum krökkum! Hvað heitir strákurinn til vinstri? 😊';
+
+      const [messages, setMessages] = useState([]);
             const [input, setInput] = useState('');
             const [loading, setLoading] = useState(false);
             const [speakingIndex, setSpeakingIndex] = useState(null);
@@ -241,6 +238,16 @@ Ef nemandi sagði ekki eitthvað, skrifaðu [ekki nefnt].
                     inputRef.current.focus();
                 }
             }, [messages, loading]);
+
+      const handleListenClick = async () => {
+        if (messages.length === 0) {
+          setMessages([{ role: \'assistant\', content: FIRST_Q }]);
+          await playAudio(FIRST_Q, () => setSpeakingIndex(null));
+        } else {
+          const lastIdx = messages.map((m, i) => ({ m, i })).filter(o => o.m.role === \'assistant\').slice(-1)[0]?.i;
+          if (lastIdx != null) await playAssistantAt(lastIdx);
+        }
+      };
 
             const toggleRecording = () => {
                 if (!recognition) {
@@ -385,7 +392,11 @@ Ef nemandi sagði ekki eitthvað, skrifaðu [ekki nefnt].
 
                         {/* Chat */}
                         <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{height: '50vh', minHeight: '400px'}}>
-                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                            <div className="flex items-center gap-2 px-6 py-3 border-b bg-gray-50">
+                <ListenPill onClick={handleListenClick} speaking={speakingIndex !== null} />
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
                                 {messages.map((msg, idx) => (
                                     <div
                                         key={idx}
