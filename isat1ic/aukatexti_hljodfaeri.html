@@ -8,7 +8,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/isat1ic/auth.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -129,39 +128,6 @@
         [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
       }
       return newArray;
-    }
-
-    // Save progress to Supabase (með writing_score og translation_score)
-    async function saveProgress(exerciseId, completed, score = null, quizScore = null, writingScore = null, translationScore = null) {
-      const user = getCurrentUser();
-      if (!user) return;
-
-      try {
-        const payload = {
-          action: 'saveProgress',
-          user_id: user.id,
-          exercise_id: exerciseId,
-          completed: completed
-        };
-        
-        // Bæta við einkunnir ef til
-        if (score !== null) payload.score = score;
-        if (quizScore !== null) payload.quiz_score = quizScore;
-        if (writingScore !== null) payload.writing_score = writingScore;
-        if (translationScore !== null) payload.translation_score = translationScore;
-
-        const response = await fetch('/.netlify/functions/supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-          console.log('✅ Framvinda vistuð:', exerciseId, payload);
-        }
-      } catch (error) {
-        console.error('❌ Villa við að vista framvindu:', error);
-      }
     }
 
     const READING_TEXT = `Margt fólk hefur áhuga á tónlist og vill læra að spila á hljóðfæri eða syngja.
@@ -306,10 +272,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         // Telja rétt svör
         const correctCount = mcAnswers.filter((ans, idx) => ans === shuffledQuestions[idx].correct).length;
         const mcScore = Math.round((correctCount / shuffledQuestions.length) * 100);
-        
-        // Vista MC framvindu
-        saveProgress('hljodfaeri', false, null, mcScore, null, null);
-        
+
         setShowMcFeedback(true);
       };
 
@@ -333,10 +296,7 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         // Telja rétt svör í T/F
         const correctTfCount = tfAnswers.filter((ans, idx) => ans === TRUE_FALSE[idx].correct).length;
         const tfScore = Math.round((correctTfCount / TRUE_FALSE.length) * 100);
-        
-        // Vista TF framvindu
-        saveProgress('hljodfaeri', false, tfScore, null, null, null);
-        
+
         setShowTfFeedback(true);
       };
 
@@ -407,12 +367,6 @@ Textinn var:
           newScores[questionIndex] = score;
           setShortScores(newScores);
 
-          // Athuga hvort allar spurningar séu svaraðar og vista framvindu
-          const allAnswered = newScores.every(s => s !== null);
-          if (allAnswered) {
-            const avgScore = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length);
-            saveProgress('hljodfaeri', false, null, null, avgScore, null);
-          }
         } catch (error) {
           alert('Villa kom upp. Reyndu aftur.');
           console.error(error);
@@ -486,12 +440,6 @@ Nemandinn þýddi: "${translation}"`
           newScores[wordIndex] = score;
           setTranslationScores(newScores);
 
-          // Athuga hvort allar þýðingar séu komnar og vista framvindu
-          const allDone = newScores.every(s => s !== null);
-          if (allDone) {
-            const avgScore = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length);
-            saveProgress('hljodfaeri', true, null, null, null, avgScore);
-          }
         } catch (error) {
           alert('Villa kom upp. Reyndu aftur.');
           console.error(error);
