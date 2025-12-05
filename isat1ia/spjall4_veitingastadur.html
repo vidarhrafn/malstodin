@@ -73,28 +73,33 @@
           body: JSON.stringify({ text_to_speak: text })
         });
         const data = await r.json();
-        if (!r.ok || data.error || !data.audio_base64) { 
-          console.error('Villa í hljóðkalli:', data?.error); 
-          setSpeakingCallback(false); 
-          return; 
+        if (!r.ok || data.error || !data.audio_base64) {
+          console.error('Villa í hljóðkalli:', data?.error);
+          setSpeakingCallback(false);
+          return;
         }
         const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
         audio.onended = () => setSpeakingCallback(false);
         audio.onerror = () => setSpeakingCallback(false);
         await audio.play().catch(() => setSpeakingCallback(false));
-      } catch (e) { 
-        console.error('Tenging mistókst:', e); 
-        setSpeakingCallback(false); 
+      } catch (e) {
+        console.error('Tenging mistókst:', e);
+        setSpeakingCallback(false);
       }
     }
 
+    const ListenPill = ({ onClick, speaking }) => (
+      <button onClick={onClick} className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl text-sm border ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+        <span className="opacity-70">🎧</span>
+        <span className="font-light">Hlustaðu:</span>
+        <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+      </button>
+    );
+
     const SpjallSkyndibitastadur = () => {
-      const initialMessage = { 
-        role: 'assistant', 
-        content: 'Hæ! Sjáðu myndina. Hvað sérðu hér?'
-      };
-      
-      const [messages, setMessages] = useState([initialMessage]);
+      const FIRST_Q = 'Hæ! Sjáðu myndina. Hvað sérðu hér?';
+
+      const [messages, setMessages] = useState([]);
       const [input, setInput] = useState('');
       const [loading, setLoading] = useState(false);
       const [isRecording, setIsRecording] = useState(false);
@@ -103,7 +108,6 @@
       const [finished, setFinished] = useState(false);
       const [userResponseCount, setUserResponseCount] = useState(0);
       const [phase, setPhase] = useState(1); // 1 = lýsing, 2 = pöntun
-      const [hasPlayedInitial, setHasPlayedInitial] = useState(false);
       const messagesEndRef = useRef(null);
 
       const PHASE1_SYSTEM = `Þú ert íslenskukennari á A1 stigi. Nemandi sér mynd af skyndibitastað þar sem starfsmaður er við kassa og tvær stelpur (viðskiptavinir) eru að panta. Á vegg eru stafrænn matseðill með hamborgara, frönskum og drykkjum.
@@ -159,17 +163,18 @@ Vertu náttúrulegur og hjálpsamur eins og afgreiðslumaður.`;
       }, []);
 
       useEffect(() => {
-        if (!hasPlayedInitial && messages.length > 0) {
-          setHasPlayedInitial(true);
-          playAudio(initialMessage.content, (speaking) => {
-            if (!speaking) setSpeakingIndex(null);
-          });
-        }
-      }, []);
-
-      useEffect(() => { 
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, [messages, loading]);
+
+      const handleListenClick = async () => {
+        if (messages.length === 0) {
+          setMessages([{ role: 'assistant', content: FIRST_Q }]);
+          await playAudio(FIRST_Q, () => setSpeakingIndex(null));
+        } else {
+          const lastIdx = messages.map((m, i) => ({ m, i })).filter(o => o.m.role === 'assistant').slice(-1)[0]?.i;
+          if (lastIdx != null) await playAssistantAt(lastIdx);
+        }
+      };
 
       const playAssistantAt = async (idx) => {
         const msg = messages[idx];
@@ -281,17 +286,24 @@ Vertu náttúrulegur og hjálpsamur eins og afgreiðslumaður.`;
           </header>
 
           <main className="max-w-4xl mx-auto px-6 mt-8">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+              <p className="text-blue-800 font-light text-center">
+                💡 <span className="font-normal">Ábending:</span> Skoðaðu myndina og panta mat á skyndibitastað!
+              </p>
+            </div>
+
             <div className="rounded-lg overflow-hidden shadow-lg mb-6 mx-auto" style={{maxWidth:'600px'}}>
-              <img 
-                src="media/spjall4_skyndibitastadur.png" 
-                alt="Skyndibitastaður með starfsmanni og viðskiptavinum" 
-                className="w-full h-auto" 
+              <img
+                src="media/spjall4_skyndibitastadur.png"
+                alt="Skyndibitastaður með starfsmanni og viðskiptavinum"
+                className="w-full h-auto"
               />
             </div>
 
             <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col" style={{minHeight:'400px'}}>
               <div className="flex items-center gap-2 px-6 py-3 border-b bg-gray-50">
-                <span className="text-xs text-gray-400">
+                <ListenPill onClick={handleListenClick} speaking={speakingIndex !== null} />
+                <span className="text-xs text-gray-400 ml-auto">
                   {phase === 1 ? '📍 Hluti 1: Lýsing' : '📍 Hluti 2: Pöntun'}
                 </span>
               </div>
