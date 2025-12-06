@@ -87,9 +87,10 @@ OUTPUT FORMAT (valid JSON only, no markdown):
     },
     {
       "tegund": "fylla_i_eydu",
-      "setning": "[Sentence with ___ blank]",
-      "pilar_translated": "[Translation]",
-      "svar": "[answer]"
+      "setning": "[Sentence in Icelandic with ___ blank]",
+      "pilar_translated": "[Full translation of sentence in student's language]",
+      "svar": "[correct Icelandic word]",
+      "hint": "[translation of the missing word in student's language]"
     },
     {
       "tegund": "para_saman",
@@ -101,7 +102,22 @@ OUTPUT FORMAT (valid JSON only, no markdown):
         {"is": "[word4]", "pilar": "[trans4]"}
       ]
     }
-  ]
+  ],
+  "hlustun": {
+    "texti": "[Short 2-3 sentence listening text in simple Icelandic, related to the chapter topic but slightly different from main text]",
+    "spurningar": [
+      {
+        "spurning": "[Question about listening text in student's language]",
+        "pilar": ["[correct answer]", "[wrong1]", "[wrong2]"],
+        "rett": 0
+      },
+      {
+        "spurning": "[Second question in student's language]",
+        "pilar": ["[correct]", "[wrong1]", "[wrong2]"],
+        "rett": 0
+      }
+    ]
+  }
 }
 
 IMPORTANT:
@@ -153,6 +169,11 @@ Include questions about:
       const [submitted, setSubmitted] = useState({});
       const [matchPairs, setMatchPairs] = useState({ selected: null, matched: [] });
       const [shuffledOrders, setShuffledOrders] = useState({});
+      
+      // Listening states
+      const [listenAnswers, setListenAnswers] = useState({});
+      const [listenSubmitted, setListenSubmitted] = useState({});
+      const [isPlaying, setIsPlaying] = useState(false);
       
       // Quiz states
       const [quiz, setQuiz] = useState(null);
@@ -211,6 +232,10 @@ Include questions about:
           setAnswers({});
           setSubmitted({});
           setMatchPairs({ selected: null, matched: [] });
+          setListenAnswers({});
+          setListenSubmitted({});
+          setListenAnswers({});
+          setListenSubmitted({});
           return;
         }
         
@@ -315,6 +340,33 @@ Create the final quiz with 15 questions covering all chapters.`
 
       const handleAnswer = (idx, val) => setAnswers(prev => ({ ...prev, [idx]: val }));
       const checkAnswer = (idx) => setSubmitted(prev => ({ ...prev, [idx]: true }));
+      
+      const handleListenAnswer = (idx, val) => setListenAnswers(prev => ({ ...prev, [idx]: val }));
+      const checkListenAnswer = (idx) => setListenSubmitted(prev => ({ ...prev, [idx]: true }));
+
+      // Text-to-speech function
+      const playAudio = async (text) => {
+        setIsPlaying(true);
+        try {
+          const r = await fetch('/.netlify/functions/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text_to_speak: text })
+          });
+          const data = await r.json();
+          if (data.audio_base64) {
+            const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+            audio.onended = () => setIsPlaying(false);
+            audio.onerror = () => setIsPlaying(false);
+            await audio.play();
+          } else {
+            setIsPlaying(false);
+          }
+        } catch (e) {
+          console.error('Audio error:', e);
+          setIsPlaying(false);
+        }
+      };
 
       const handleMatchClick = (type, index, taskIndex) => {
         if (matchPairs.matched.some(m => m.taskIndex === taskIndex && (m.isIndex === index || m.pilarIndex === index))) return;
@@ -396,10 +448,11 @@ Create the final quiz with 15 questions covering all chapters.`
             return (
               <div key={index} className="bg-white rounded-lg p-5 shadow-md">
                 <p className="font-medium mb-1 text-lg">{task.setning}</p>
-                <p className="text-gray-500 mb-3 text-sm italic">{task.pilar_translated}</p>
+                <p className="text-gray-500 mb-1 text-sm italic">{task.pilar_translated}</p>
+                {task.hint && <p className="text-blue-600 mb-3 text-sm">💡 {task.hint}</p>}
                 <div className="flex gap-2">
                   <input type="text" value={ans || ''} onChange={e => handleAnswer(index, e.target.value)}
-                    placeholder="..." className="flex-1 px-4 py-2 border-2 rounded-lg" disabled={isSub} />
+                    placeholder="Skrifaðu íslenska orðið..." className="flex-1 px-4 py-2 border-2 rounded-lg" disabled={isSub} />
                   {!isSub && ans && (
                     <button onClick={() => checkAnswer(index)} className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
                   )}
@@ -576,6 +629,76 @@ Create the final quiz with 15 questions covering all chapters.`
                   {ch.verkefni.map((task, i) => renderTask(task, i))}
                 </div>
               </div>
+
+              {/* Listening section */}
+              {ch.hlustun && (
+                <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
+                  <h3 className="text-lg font-medium mb-4 text-purple-800">🎧 Hlustun</h3>
+                  
+                  <div className="bg-white rounded-lg p-4 mb-4">
+                    <p className="text-gray-600 mb-3">Hlustaðu á textann og svaraðu spurningunum:</p>
+                    <button 
+                      onClick={() => playAudio(ch.hlustun.texti)}
+                      disabled={isPlaying}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition ${
+                        isPlaying 
+                          ? 'bg-purple-200 text-purple-700' 
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
+                    >
+                      {isPlaying ? (
+                        <>
+                          <span className="animate-pulse">🔊</span>
+                          <span>Spila...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🔊</span>
+                          <span>Spila hljóð</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {ch.hlustun.spurningar.map((q, i) => {
+                      const lAns = listenAnswers[i];
+                      const lSub = listenSubmitted[i];
+                      return (
+                        <div key={i} className="bg-white rounded-lg p-4">
+                          <p className="font-medium mb-3">{q.spurning}</p>
+                          <div className="space-y-2">
+                            {q.pilar.map((opt, j) => {
+                              let bg = 'bg-gray-50 hover:bg-gray-100';
+                              if (lSub) {
+                                if (j === q.rett) bg = 'bg-green-100 border-green-500';
+                                else if (lAns === j) bg = 'bg-red-100 border-red-500';
+                              } else if (lAns === j) bg = 'bg-purple-100 border-purple-500';
+                              return (
+                                <button key={j} onClick={() => !lSub && handleListenAnswer(i, j)}
+                                  className={`w-full text-left p-3 rounded-lg border-2 transition ${bg}`} disabled={lSub}>
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {!lSub && lAns !== undefined && (
+                            <button onClick={() => checkListenAnswer(i)} 
+                              className="mt-3 bg-purple-600 text-white px-5 py-2 rounded-lg hover:bg-purple-700">
+                              Athuga
+                            </button>
+                          )}
+                          {lSub && (
+                            <p className={`mt-3 font-medium ${lAns === q.rett ? 'text-green-600' : 'text-red-600'}`}>
+                              {lAns === q.rett ? '✓ Rétt!' : '✗ Rangt'}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-between pt-4">
                 {currentChapter > 1 && (
