@@ -87,9 +87,9 @@ OUTPUT FORMAT (valid JSON only, no markdown):
     },
     {
       "tegund": "fylla_i_eydu",
-      "setning": "[Sentence in Icelandic with ___ blank]",
+      "setning": "[Sentence in Icelandic with ___ blank - use correct grammar everywhere]",
       "pilar_translated": "[Full translation of sentence in student's language]",
-      "svar": "[correct Icelandic word]",
+      "svar": "[correct Icelandic word WITH CORRECT CONJUGATION/DECLENSION - e.g. 'heitir' not 'heiti' for 'hún ___']",
       "hint": "[translation of the missing word in student's language]"
     },
     {
@@ -104,10 +104,10 @@ OUTPUT FORMAT (valid JSON only, no markdown):
     }
   ],
   "hlustun": {
-    "texti": "[Short 2-3 sentence listening text in simple Icelandic, related to the chapter topic but slightly different from main text]",
+    "texti": "[SHORT 2-3 sentence listening text - MUST BE DIFFERENT from main text! Same topic and vocabulary but NEW information about the character. Example: if main text says 'María býr í Reykjavík', listening could say 'María á íbúð í miðbænum. Íbúðin er lítil en falleg.' - gives new details, tests comprehension differently]",
     "spurningar": [
       {
-        "spurning": "[Question about listening text in student's language]",
+        "spurning": "[Question about listening text in student's language - must require understanding the NEW information]",
         "pilar": ["[correct answer]", "[wrong1]", "[wrong2]"],
         "rett": 0
       },
@@ -124,7 +124,12 @@ IMPORTANT:
 - All instructions/translations in student's native language
 - Build on previous chapters naturally
 - Keep sentences short (5-10 words)
-- Use only present tense at this level`;
+- Use only present tense at this level
+- CRITICAL: Use correct Icelandic grammar! Pay attention to:
+  * Noun cases (eignarfall: "vinkona Jóns" not "vinkona Jón", "systir Maríu" not "systir María")
+  * Verb conjugations (hún heitir, hann heitir, ég heiti, við heitum)
+  * Adjective agreement (góður maður, góð kona, gott barn)
+- For "fylla_i_eydu" tasks: The "svar" field should contain the EXACT word that fits, properly conjugated`;
 
     const FINAL_QUIZ_PROMPT = `Create a final quiz covering ALL 10 chapters of the Icelandic course.
 The quiz should test vocabulary and comprehension from the entire course.
@@ -445,6 +450,18 @@ Create the final quiz with 15 questions covering all chapters.`
             );
 
           case 'fylla_i_eydu':
+            // Normalize both answer and expected for comparison
+            const normalizeAnswer = (str) => {
+              if (!str) return '';
+              return str.toLowerCase().trim()
+                .replace(/í/g, 'i').replace(/ý/g, 'y').replace(/ú/g, 'u')
+                .replace(/é/g, 'e').replace(/á/g, 'a').replace(/ó/g, 'o')
+                .replace(/ö/g, 'o').replace(/æ/g, 'ae').replace(/ð/g, 'd').replace(/þ/g, 'th');
+            };
+            const userAnswer = ans?.toLowerCase().trim() || '';
+            const correctAnswer = task.svar.toLowerCase().trim();
+            const isCorrect = userAnswer === correctAnswer;
+            
             return (
               <div key={index} className="bg-white rounded-lg p-5 shadow-md">
                 <p className="font-medium mb-1 text-lg">{task.setning}</p>
@@ -457,8 +474,8 @@ Create the final quiz with 15 questions covering all chapters.`
                     <button onClick={() => checkAnswer(index)} className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
                   )}
                 </div>
-                {isSub && <p className={`mt-3 font-medium ${ans?.toLowerCase().trim() === task.svar.toLowerCase() ? 'text-green-600' : 'text-red-600'}`}>
-                  {ans?.toLowerCase().trim() === task.svar.toLowerCase() ? '✓ Rétt!' : `✗ Rétt svar: ${task.svar}`}
+                {isSub && <p className={`mt-3 font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                  {isCorrect ? '✓ Rétt!' : `✗ Rétt svar: ${task.svar}`}
                 </p>}
               </div>
             );
@@ -607,7 +624,31 @@ Create the final quiz with 15 questions covering all chapters.`
             </header>
             <main className="max-w-3xl mx-auto px-6 mt-6 space-y-6">
               <div className="bg-white rounded-lg p-6 shadow-xl">
-                <h3 className="text-lg font-medium mb-3 text-gray-700">📖 Lestu textann</h3>
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-lg font-medium text-gray-700">📖 Lestu textann</h3>
+                  <button 
+                    onClick={() => playAudio(ch.texti)}
+                    disabled={isPlaying}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                      isPlaying 
+                        ? 'bg-blue-200 text-blue-700' 
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {isPlaying ? (
+                      <span className="animate-pulse">🔊 ...</span>
+                    ) : (
+                      <span>🔊 {parsedStudent?.modurmal?.toLowerCase().includes('dansk') ? 'Lyt' : 
+                            parsedStudent?.modurmal?.toLowerCase().includes('polish') || parsedStudent?.modurmal?.toLowerCase().includes('polsk') ? 'Słuchaj' :
+                            parsedStudent?.modurmal?.toLowerCase().includes('ukrain') ? 'Слухати' :
+                            parsedStudent?.modurmal?.toLowerCase().includes('span') || parsedStudent?.modurmal?.toLowerCase().includes('spænsk') ? 'Escuchar' :
+                            parsedStudent?.modurmal?.toLowerCase().includes('portug') ? 'Ouvir' :
+                            parsedStudent?.modurmal?.toLowerCase().includes('french') || parsedStudent?.modurmal?.toLowerCase().includes('fransk') ? 'Écouter' :
+                            parsedStudent?.modurmal?.toLowerCase().includes('german') || parsedStudent?.modurmal?.toLowerCase().includes('þýsk') ? 'Hören' :
+                            'Listen'}</span>
+                    )}
+                  </button>
+                </div>
                 <p className="text-xl leading-relaxed">{ch.texti}</p>
               </div>
 
