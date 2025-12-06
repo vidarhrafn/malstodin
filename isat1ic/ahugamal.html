@@ -8,7 +8,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/isat1ic/auth.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -212,8 +211,7 @@ Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir 
         const score = Math.round((correctCount / MULTIPLE_CHOICE.length) * 100);
         setQuizScore(score);
         setShowMcFeedback(true);
-        
-        saveProgress('ahugamal', false, null, score);
+
         console.log('📊 Krossaspurningar:', score + '%');
       };
 
@@ -238,13 +236,6 @@ Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir 
       const sendMessage = async (questionIndex) => {
         const userMessage = currentInputs[questionIndex].trim();
         if (!userMessage) return;
-
-        saveActivity('ahugamal', 'chat_response', {
-          question_index: questionIndex,
-          question: OPEN_QUESTIONS[questionIndex],
-          response: userMessage,
-          timestamp: new Date().toISOString()
-        });
 
         const newLoadingStates = [...loadingStates];
         newLoadingStates[questionIndex] = true;
@@ -328,8 +319,7 @@ MIKILVÆGT:
 
           const totalWritingScore = Math.round(newScores.reduce((a, b) => a + b, 0) / 3);
           const allAnswered = newScores.every(score => score >= 50);
-          
-          saveProgress('ahugamal', allAnswered, totalWritingScore, quizScore);
+
           console.log('📊 Skriflegt:', totalWritingScore + '%', '- Spurning', questionIndex + 1, ':', newScores[questionIndex] + '%');
 
           scrollToBottom(questionIndex);
@@ -617,57 +607,6 @@ MIKILVÆGT:
     };
 
     ReactDOM.createRoot(document.getElementById('root')).render(<Ahugamal />);
-
-    async function saveProgress(exerciseId, completed, score, quizScore) {
-      const user = getCurrentUser();
-      if (!user) return;
-
-      try {
-        const response = await fetch('/.netlify/functions/supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'saveProgress',
-            user_id: user.id,
-            exercise_id: exerciseId,
-            completed: completed,
-            score: score,
-            quiz_score: quizScore
-          })
-        });
-        
-        if (response.ok) {
-          console.log('✅ Framvinda vistuð:', exerciseId, '- Skriflegt:', score, '- Krossar:', quizScore);
-        }
-      } catch (error) {
-        console.error('❌ Villa við að vista framvindu:', error);
-      }
-    }
-
-    async function saveActivity(exerciseId, activityType, data) {
-      const user = getCurrentUser();
-      if (!user) return;
-
-      try {
-        const response = await fetch('/.netlify/functions/supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'saveActivity',
-            user_id: user.id,
-            exercise_id: exerciseId,
-            activity_type: activityType,
-            data: data
-          })
-        });
-        
-        if (response.ok) {
-          console.log('✅ Texti vistaður fyrir síðari greiningu');
-        }
-      } catch (error) {
-        console.error('❌ Villa við að vista texta:', error);
-      }
-    }
   </script>
 </body>
 </html>

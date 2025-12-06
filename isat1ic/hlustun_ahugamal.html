@@ -8,7 +8,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/isat1ic/auth.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -123,8 +122,6 @@
       const [openFeedback, setOpenFeedback] = useState(Array(OPEN_QUESTIONS.length).fill(null));
       const [openLoading, setOpenLoading] = useState(Array(OPEN_QUESTIONS.length).fill(false));
 
-      const [allCompleted, setAllCompleted] = useState(false);
-
       useEffect(() => {
         if (audioRef.current) {
           audioRef.current.playbackRate = playbackRate;
@@ -188,14 +185,6 @@
         newLoading[index] = true;
         setOpenLoading(newLoading);
 
-        // Save answer text
-        saveActivity('hlustun_ahugamal', 'open_answer', {
-          question_index: index,
-          question: OPEN_QUESTIONS[index],
-          answer: openAnswers[index],
-          timestamp: new Date().toISOString()
-        });
-
         try {
           const question = OPEN_QUESTIONS[index];
           const userAnswer = openAnswers[index];
@@ -239,13 +228,6 @@ SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
           newFeedback[index] = response.trim();
           setOpenFeedback(newFeedback);
 
-          // Check if this was the last question
-          if (newFeedback.every(f => f !== null)) {
-            setTimeout(() => {
-              saveAllProgressNow();
-            }, 500);
-          }
-
         } catch (e) {
           console.error('Error checking answer:', e);
           alert('Villa við að meta svar. Reyndu aftur.');
@@ -254,31 +236,6 @@ SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
           newLoading[index] = false;
           setOpenLoading(newLoading);
         }
-      };
-
-      const saveAllProgressNow = () => {
-        const tfScore = Math.round((tfAnswers.filter((a, i) => a === TRUE_FALSE[i].correct).length / TRUE_FALSE.length) * 100);
-        const mcScore = Math.round((mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length / MULTIPLE_CHOICE.length) * 100);
-        
-        // For open questions, we assume all are "correct" if they received feedback
-        const openScore = Math.round((openFeedback.filter(f => f !== null).length / OPEN_QUESTIONS.length) * 100);
-        
-        const quizScore = Math.round((tfScore + mcScore + openScore) / 3);
-
-        console.log('📊 Einkunnir:', {
-          'Rétt/Rangt': tfScore + '%',
-          'Krossaspurningar': mcScore + '%',
-          'Efnisspurningar': openScore + '%',
-          'Heildareinkunn': quizScore + '%'
-        });
-
-        saveProgress('hlustun_ahugamal', true, quizScore, {
-          tf_score: tfScore,
-          mc_score: mcScore,
-          open_score: openScore
-        });
-        
-        setAllCompleted(true);
       };
 
       return (
@@ -546,77 +503,12 @@ SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
               </div>
             </section>
 
-            {/* Completion */}
-            {allCompleted && (
-              <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
-                <div className="text-6xl mb-4">🎉</div>
-                <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
-                <p className="text-gray-600 font-light">
-                  Þú hefur klárað hlustunarverkefnið. Einkunnir þínar hafa verið vistaðar!
-                </p>
-              </div>
-            )}
-
           </main>
         </div>
       );
     };
 
     ReactDOM.createRoot(document.getElementById('root')).render(<HlustunAhugamal />);
-
-    // Save progress to Supabase
-    async function saveProgress(exerciseId, completed, quizScore, additionalScores) {
-      const user = getCurrentUser();
-      if (!user) return;
-
-      try {
-        const response = await fetch('/.netlify/functions/supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'saveProgress',
-            user_id: user.id,
-            exercise_id: exerciseId,
-            completed: completed,
-            score: quizScore,
-            quiz_score: quizScore,
-            ...additionalScores
-          })
-        });
-        
-        if (response.ok) {
-          console.log('✅ Framvinda vistuð:', exerciseId);
-        }
-      } catch (error) {
-        console.error('❌ Villa við að vista framvindu:', error);
-      }
-    }
-
-    // Save student text responses
-    async function saveActivity(exerciseId, activityType, data) {
-      const user = getCurrentUser();
-      if (!user) return;
-
-      try {
-        const response = await fetch('/.netlify/functions/supabase', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'saveActivity',
-            user_id: user.id,
-            exercise_id: exerciseId,
-            activity_type: activityType,
-            data: data
-          })
-        });
-        
-        if (response.ok) {
-          console.log('✅ Texti vistaður');
-        }
-      } catch (error) {
-        console.error('❌ Villa við að vista texta:', error);
-      }
-    }
   </script>
 </body>
 </html>
