@@ -405,18 +405,20 @@ Create the final quiz with 15 questions covering all chapters.`
                     if (isSub) {
                       if (i === task.rett) bg = 'bg-green-100 border-green-500';
                       else if (ans === i) bg = 'bg-red-100 border-red-500';
-                    } else if (ans === i) bg = 'bg-blue-100 border-blue-500';
+                    }
                     return (
-                      <button key={i} onClick={() => !isSub && handleAnswer(index, i)}
+                      <button key={i} onClick={() => {
+                        if (!isSub) {
+                          handleAnswer(index, i);
+                          checkAnswer(index);
+                        }
+                      }}
                         className={`w-full text-left p-3 rounded-lg border-2 transition ${bg}`} disabled={isSub}>
                         {opt}
                       </button>
                     );
                   })}
                 </div>
-                {!isSub && ans !== undefined && (
-                  <button onClick={() => checkAnswer(index)} className="mt-3 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
-                )}
                 {isSub && <p className={`mt-3 font-medium ${ans === task.rett ? 'text-green-600' : 'text-red-600'}`}>
                   {ans === task.rett ? '✓ Rétt!' : '✗ Rangt'}
                 </p>}
@@ -434,18 +436,23 @@ Create the final quiz with 15 questions covering all chapters.`
                     if (isSub) {
                       if (opt === task.rett) bg = 'bg-green-100 border-green-500';
                       else if (ans === opt) bg = 'bg-red-100 border-red-500';
-                    } else if (ans === opt) bg = 'bg-blue-100 border-blue-500';
+                    }
                     return (
-                      <button key={String(opt)} onClick={() => !isSub && handleAnswer(index, opt)}
+                      <button key={String(opt)} onClick={() => {
+                        if (!isSub) {
+                          handleAnswer(index, opt);
+                          checkAnswer(index);
+                        }
+                      }}
                         className={`flex-1 p-3 rounded-lg border-2 font-medium transition ${bg}`} disabled={isSub}>
                         {opt ? 'Rétt ✓' : 'Rangt ✗'}
                       </button>
                     );
                   })}
                 </div>
-                {!isSub && ans !== undefined && (
-                  <button onClick={() => checkAnswer(index)} className="mt-3 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
-                )}
+                {isSub && <p className={`mt-3 font-medium ${ans === task.rett ? 'text-green-600' : 'text-red-600'}`}>
+                  {ans === task.rett ? '✓ Rétt!' : '✗ Rangt'}
+                </p>}
               </div>
             );
 
@@ -462,17 +469,24 @@ Create the final quiz with 15 questions covering all chapters.`
             const correctAnswer = task.svar.toLowerCase().trim();
             const isCorrect = userAnswer === correctAnswer;
             
+            const handleFyllaSubmit = () => {
+              if (ans && !isSub) {
+                checkAnswer(index);
+              }
+            };
+            
             return (
               <div key={index} className="bg-white rounded-lg p-5 shadow-md">
                 <p className="font-medium mb-1 text-lg">{task.setning}</p>
                 <p className="text-gray-500 mb-1 text-sm italic">{task.pilar_translated}</p>
                 {task.hint && <p className="text-blue-600 mb-3 text-sm">💡 {task.hint}</p>}
                 <div className="flex gap-2">
-                  <input type="text" value={ans || ''} onChange={e => handleAnswer(index, e.target.value)}
-                    placeholder="Skrifaðu íslenska orðið..." className="flex-1 px-4 py-2 border-2 rounded-lg" disabled={isSub} />
-                  {!isSub && ans && (
-                    <button onClick={() => checkAnswer(index)} className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
-                  )}
+                  <input type="text" value={ans || ''} 
+                    onChange={e => handleAnswer(index, e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleFyllaSubmit()}
+                    placeholder="Skrifaðu íslenska orðið..." 
+                    className="flex-1 px-4 py-2 border-2 rounded-lg" 
+                    disabled={isSub} />
                 </div>
                 {isSub && <p className={`mt-3 font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                   {isCorrect ? '✓ Rétt!' : `✗ Rétt svar: ${task.svar}`}
@@ -714,21 +728,20 @@ Create the final quiz with 15 questions covering all chapters.`
                               if (lSub) {
                                 if (j === q.rett) bg = 'bg-green-100 border-green-500';
                                 else if (lAns === j) bg = 'bg-red-100 border-red-500';
-                              } else if (lAns === j) bg = 'bg-purple-100 border-purple-500';
+                              }
                               return (
-                                <button key={j} onClick={() => !lSub && handleListenAnswer(i, j)}
+                                <button key={j} onClick={() => {
+                                  if (!lSub) {
+                                    handleListenAnswer(i, j);
+                                    checkListenAnswer(i);
+                                  }
+                                }}
                                   className={`w-full text-left p-3 rounded-lg border-2 transition ${bg}`} disabled={lSub}>
                                   {opt}
                                 </button>
                               );
                             })}
                           </div>
-                          {!lSub && lAns !== undefined && (
-                            <button onClick={() => checkListenAnswer(i)} 
-                              className="mt-3 bg-purple-600 text-white px-5 py-2 rounded-lg hover:bg-purple-700">
-                              Athuga
-                            </button>
-                          )}
                           {lSub && (
                             <p className={`mt-3 font-medium ${lAns === q.rett ? 'text-green-600' : 'text-red-600'}`}>
                               {lAns === q.rett ? '✓ Rétt!' : '✗ Rangt'}
