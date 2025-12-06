@@ -3,17 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kafli 1 - Námsefni</title>
+  <title>Námsvefur - Íslensku námskeið</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(to bottom, #f0f9ff 0%, #e0f2fe 100%);
-      min-height: 100vh;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(to bottom, #f0f9ff 0%, #e0f2fe 100%); min-height: 100vh; }
   </style>
 </head>
 <body>
@@ -21,7 +17,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    async function callOpenAI(messages, max_tokens = 1500, model = 'gpt-4o', temperature = 0.7) {
+    async function callOpenAI(messages, max_tokens = 2000, model = 'gpt-4o', temperature = 0.7) {
       const r = await fetch('/.netlify/functions/openai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,20 +28,38 @@
       return data.content;
     }
 
-    const CHAPTER_PROMPT = `You are an Icelandic language teacher creating personalized A1-level learning content.
+    // Kaflauppbygging með orðaforða fókus
+    const CHAPTER_TOPICS = [
+      { id: 1, title: "Kynning", focus: "kveðjur, að kynna sig, ég heiti, ég er, ég bý, tölur 1-10", theme: "introduction" },
+      { id: 2, title: "Meira um mig", focus: "aldur, þjóðerni, tölur 11-20, ég er frá, ég tala", theme: "personal" },
+      { id: 3, title: "Fjölskyldan", focus: "mamma, pabbi, systir, bróðir, afi, amma, fjölskylda", theme: "family" },
+      { id: 4, title: "Lýsing á fólki", focus: "stór, lítill, ungur, gamall, fallegur, góður, eignarfornöfn minn/þinn", theme: "description" },
+      { id: 5, title: "Áhugamál", focus: "áhugamál nemandans, að elska, að hafa gaman af, frítími", theme: "hobbies" },
+      { id: 6, title: "Dagurinn minn", focus: "að vakna, að sofa, að borða, að vinna, vikudagar", theme: "daily" },
+      { id: 7, title: "Matur og drykkur", focus: "brauð, mjólk, kaffi, vatn, epli, matur, að borða, að drekka", theme: "food" },
+      { id: 8, title: "Á veitingastað", focus: "ég vil, má ég fá, góður, vondur, heitur, kaldur, takk", theme: "restaurant" },
+      { id: 9, title: "Bærinn minn", focus: "skóli, verslun, veitingastaður, heimili, hús, í, á, við", theme: "places" },
+      { id: 10, title: "Ferðalög", focus: "bíll, strætó, hjól, að fara, að koma, að ferðast", theme: "travel" }
+    ];
 
-Based on the student information provided, create a FIRST CHAPTER that introduces a character who shares the student's interests.
+    const SYSTEM_PROMPT = `You are creating Icelandic A1 learning content. You will receive:
+- Student info (name, native language, interests)
+- Character info (name, gender, established facts from previous chapters)
+- Chapter number and vocabulary focus
 
-## OUTPUT FORMAT (respond in valid JSON only, no markdown):
+Create content that:
+1. Continues the character's story naturally
+2. Focuses on the specified vocabulary
+3. References previous chapter events when relevant
+4. Connects to student's interests when possible
 
+OUTPUT FORMAT (valid JSON only, no markdown):
 {
-  "persona": {
-    "nafn": "[Icelandic name matching gender preference]",
-    "pilar": "[short description in student's native language]"
-  },
-  "texti": "[50-80 word Icelandic text about the character - SIMPLE sentences, present tense, basic vocabulary. Include: name, age, where they live, what they like/do (connected to student's interests). IMPORTANT: Start with 'Persónan okkar heitir [nafn].' or 'Hún/Hann heitir [nafn].' - NEVER write '[Name] heitir [Name]'. Example structure: 'Persónan okkar heitir [nafn]. Hún/Hann er [age] ára. Hún/Hann býr í [place]. Hún/Hann elskar [interest]...']",
+  "chapter_title": "[Title in Icelandic]",
+  "story_development": "[Brief note about what happens in this chapter - for continuity tracking]",
+  "texti": "[60-90 word Icelandic text - simple A1 sentences, present tense. Continue the character's story with focus vocabulary.]",
   "ordafordi": [
-    {"ord": "[Icelandic word from text]", "pilar": "[translation in student's language]"},
+    {"ord": "[word]", "pilar": "[translation in student's language]"},
     {"ord": "[word2]", "pilar": "[translation2]"},
     {"ord": "[word3]", "pilar": "[translation3]"},
     {"ord": "[word4]", "pilar": "[translation4]"},
@@ -55,85 +69,191 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
   "verkefni": [
     {
       "tegund": "multiple_choice",
-      "spurning": "[Question in student's native language about the text]",
-      "pilar": ["[correct answer]", "[wrong1]", "[wrong2]"],
+      "spurning": "[Question about text in student's language]",
+      "pilar": ["[correct]", "[wrong1]", "[wrong2]"],
       "rett": 0
     },
     {
       "tegund": "rett_rangt",
-      "pilar": "[Statement in Icelandic about the text]",
-      "pilar_translated": "[Same statement in student's language]",
+      "fullyrding": "[Statement in Icelandic]",
+      "pilar_translated": "[Translation]",
       "rett": true
     },
     {
-      "tegund": "rett_rangt",
-      "pilar": "[False statement in Icelandic about the text]",
-      "pilar_translated": "[Same statement in student's language]",
+      "tegund": "rett_rangt", 
+      "fullyrding": "[False statement in Icelandic]",
+      "pilar_translated": "[Translation]",
       "rett": false
     },
     {
-      "tegund": "flokka",
-      "pilar": "[Instruction in student's language: e.g. 'Which words describe [character name]?']",
-      "pilar_options": ["[word1 from text]", "[word2 from text]", "[unrelated word]", "[word3 from text]", "[unrelated word2]"],
-      "pilar_rett": [0, 1, 3]
-    },
-    {
       "tegund": "fylla_i_eydu",
-      "setning": "[Sentence from text with ___ for missing word]",
-      "pilar_translated": "[Translation of sentence]",
-      "svar": "[correct word]"
+      "setning": "[Sentence with ___ blank]",
+      "pilar_translated": "[Translation]",
+      "svar": "[answer]"
     },
     {
       "tegund": "para_saman",
-      "pilar": "[Instruction in student's native language: e.g. 'Match Icelandic words with their translations']",
+      "pilar": "[Match instruction in student's language]",
       "pilar_pilar": [
-        {"is": "[Icelandic word]", "pilar": "[translation]"},
-        {"is": "[Icelandic word2]", "pilar": "[translation2]"},
-        {"is": "[Icelandic word3]", "pilar": "[translation3]"},
-        {"is": "[Icelandic word4]", "pilar": "[translation4]"}
+        {"is": "[word1]", "pilar": "[trans1]"},
+        {"is": "[word2]", "pilar": "[trans2]"},
+        {"is": "[word3]", "pilar": "[trans3]"},
+        {"is": "[word4]", "pilar": "[trans4]"}
       ]
     }
   ]
 }
 
-## IMPORTANT RULES:
-- Text MUST be 50-80 words, simple A1 sentences
-- All translations AND instructions in the student's native language (NEVER in English unless English is their native language)
-- Character's interests MUST match student's interests
-- Use only present tense
-- Short sentences (5-10 words each)
-- Include common A1 vocabulary: heitir, er, ára, býr, elskar, vinnur, á, og, en, líka
-- NEVER start text with "[Name] heitir [Name]" - use "Persónan okkar heitir..." or "Hún/Hann heitir..."
-- The "para_saman" task: translations should NOT be in the same order as Icelandic words`;
+IMPORTANT:
+- All instructions/translations in student's native language
+- Build on previous chapters naturally
+- Keep sentences short (5-10 words)
+- Use only present tense at this level`;
 
-    const FyrstiKafli = () => {
+    const FINAL_QUIZ_PROMPT = `Create a final quiz covering ALL 10 chapters of the Icelandic course.
+The quiz should test vocabulary and comprehension from the entire course.
+
+Student info and character story will be provided.
+
+OUTPUT FORMAT (valid JSON only):
+{
+  "title": "[Quiz title in student's language]",
+  "pilar": "[Short intro in student's language]",
+  "verkefni": [
+    {
+      "tegund": "multiple_choice",
+      "spurning": "[Question in student's language]",
+      "pilar": ["[correct]", "[wrong1]", "[wrong2]", "[wrong3]"],
+      "rett": 0,
+      "kafli": 1
+    },
+    ... (15 questions total, covering chapters 1-10)
+  ]
+}
+
+Include questions about:
+- Character facts (name, age, family, hobbies)
+- Key vocabulary from each chapter
+- Mix of easy and medium difficulty
+- 15 questions total`;
+
+    const Namsvefur = () => {
+      // App states
+      const [view, setView] = useState('setup'); // setup, chapters, chapter, quiz
       const [studentInfo, setStudentInfo] = useState('');
+      const [parsedStudent, setParsedStudent] = useState(null);
+      const [character, setCharacter] = useState(null);
+      const [chapters, setChapters] = useState({});
+      const [currentChapter, setCurrentChapter] = useState(1);
       const [loading, setLoading] = useState(false);
-      const [chapter, setChapter] = useState(null);
+      const [storyHistory, setStoryHistory] = useState([]);
+      
+      // Exercise states
       const [answers, setAnswers] = useState({});
       const [submitted, setSubmitted] = useState({});
       const [matchPairs, setMatchPairs] = useState({ selected: null, matched: [] });
       const [shuffledOrders, setShuffledOrders] = useState({});
+      
+      // Quiz states
+      const [quiz, setQuiz] = useState(null);
+      const [quizAnswers, setQuizAnswers] = useState({});
+      const [quizSubmitted, setQuizSubmitted] = useState(false);
 
-      const generateChapter = async () => {
+      const parseStudentInfo = (text) => {
+        const data = {};
+        const lines = text.split('\n');
+        lines.forEach(line => {
+          const [key, ...vals] = line.split(':');
+          if (key && vals.length) {
+            const k = key.trim().toLowerCase();
+            const v = vals.join(':').trim();
+            if (k.includes('nafn')) data.nafn = v;
+            if (k.includes('móðurmál') || k.includes('modurmal')) data.modurmal = v;
+            if (k.includes('áhugamál') || k.includes('ahugamal')) data.ahugamal = v;
+            if (k.includes('stig')) data.stig = v;
+            if (k.includes('persóna') || k.includes('persona')) data.personuOskir = v;
+          }
+        });
+        return data;
+      };
+
+      const startCourse = async () => {
         if (!studentInfo.trim()) return;
         setLoading(true);
-        setChapter(null);
-        setAnswers({});
-        setSubmitted({});
-        setMatchPairs({ selected: null, matched: [] });
+        
+        const student = parseStudentInfo(studentInfo);
+        setParsedStudent(student);
+        
+        // Create character based on preferences
+        const isYoung = student.personuOskir?.toLowerCase().includes('ung') || student.personuOskir?.toLowerCase().includes('young');
+        const isMale = student.personuOskir?.toLowerCase().includes('karl') || student.personuOskir?.toLowerCase().includes('man') || student.personuOskir?.toLowerCase().includes('male');
+        
+        const charName = isMale ? 'Jón' : 'María';
+        const charAge = isYoung ? 19 : 28;
+        const charPronoun = isMale ? 'Hann' : 'Hún';
+        
+        setCharacter({
+          nafn: charName,
+          aldur: charAge,
+          kyn: isMale ? 'karlmaður' : 'kona',
+          pilar: charPronoun,
+          interests: student.ahugamal
+        });
+        
+        setLoading(false);
+        setView('chapters');
+      };
 
+      const generateChapter = async (chapterNum) => {
+        if (chapters[chapterNum]) {
+          setCurrentChapter(chapterNum);
+          setView('chapter');
+          setAnswers({});
+          setSubmitted({});
+          setMatchPairs({ selected: null, matched: [] });
+          return;
+        }
+        
+        setLoading(true);
+        const topic = CHAPTER_TOPICS[chapterNum - 1];
+        
+        const previousChapters = storyHistory.map((h, i) => 
+          `Chapter ${i + 1}: ${h}`
+        ).join('\n');
+        
         try {
           const response = await callOpenAI([
-            { role: 'system', content: CHAPTER_PROMPT },
-            { role: 'user', content: `Student information:\n${studentInfo}\n\nCreate the first chapter.` }
-          ], 2000, 'gpt-4o', 0.7);
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: `
+Student info:
+- Name: ${parsedStudent.nafn}
+- Native language: ${parsedStudent.modurmal}
+- Interests: ${parsedStudent.ahugamal}
 
-          // Parse JSON response
-          const cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          const parsed = JSON.parse(cleanResponse);
+Character info:
+- Name: ${character.nafn}
+- Age: ${character.aldur}
+- Gender: ${character.kyn}
+- Pronoun: ${character.pilar}
+
+Previous story developments:
+${previousChapters || 'This is chapter 1 - introduce the character'}
+
+Current chapter: ${chapterNum}
+Chapter title: ${topic.title}
+Vocabulary focus: ${topic.focus}
+Theme: ${topic.theme}
+
+${chapterNum === 5 ? `IMPORTANT: In this chapter about hobbies, make sure ${character.nafn} shares the student's interest in ${parsedStudent.ahugamal}!` : ''}
+
+Create chapter ${chapterNum} content.`
+            }
+          ], 2000, 'gpt-4o', 0.7);
           
-          // Create shuffled orders for para_saman tasks
+          const clean = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(clean);
+          
+          // Create shuffled orders for matching
           const orders = {};
           parsed.verkefni.forEach((task, index) => {
             if (task.tegund === 'para_saman') {
@@ -147,50 +267,66 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
           });
           setShuffledOrders(orders);
           
-          setChapter(parsed);
+          setChapters(prev => ({ ...prev, [chapterNum]: parsed }));
+          setStoryHistory(prev => [...prev, parsed.story_development]);
+          setCurrentChapter(chapterNum);
+          setView('chapter');
+          setAnswers({});
+          setSubmitted({});
+          setMatchPairs({ selected: null, matched: [] });
+          
         } catch (e) {
-          console.error('Villa:', e);
-          alert('Villa kom upp: ' + e.message);
+          console.error('Error:', e);
+          alert('Villa: ' + e.message);
         } finally {
           setLoading(false);
         }
       };
 
-      const handleAnswer = (taskIndex, answer) => {
-        setAnswers(prev => ({ ...prev, [taskIndex]: answer }));
+      const generateQuiz = async () => {
+        setLoading(true);
+        try {
+          const response = await callOpenAI([
+            { role: 'system', content: FINAL_QUIZ_PROMPT },
+            { role: 'user', content: `
+Student: ${parsedStudent.nafn}, speaks ${parsedStudent.modurmal}
+Character: ${character.nafn}, ${character.aldur} years old
+
+Story summary:
+${storyHistory.map((h, i) => `Ch${i+1}: ${h}`).join('\n')}
+
+Create the final quiz with 15 questions covering all chapters.`
+            }
+          ], 2500, 'gpt-4o', 0.7);
+          
+          const clean = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(clean);
+          setQuiz(parsed);
+          setView('quiz');
+          setQuizAnswers({});
+          setQuizSubmitted(false);
+        } catch (e) {
+          console.error('Error:', e);
+          alert('Villa: ' + e.message);
+        } finally {
+          setLoading(false);
+        }
       };
 
-      const checkAnswer = (taskIndex) => {
-        setSubmitted(prev => ({ ...prev, [taskIndex]: true }));
-      };
+      const handleAnswer = (idx, val) => setAnswers(prev => ({ ...prev, [idx]: val }));
+      const checkAnswer = (idx) => setSubmitted(prev => ({ ...prev, [idx]: true }));
 
       const handleMatchClick = (type, index, taskIndex) => {
-        if (matchPairs.matched.some(m => m.taskIndex === taskIndex && (m.isIndex === index || m.pilarIndex === index))) {
-          return; // Already matched
-        }
-
+        if (matchPairs.matched.some(m => m.taskIndex === taskIndex && (m.isIndex === index || m.pilarIndex === index))) return;
         if (matchPairs.selected === null) {
           setMatchPairs({ selected: { type, index, taskIndex }, matched: matchPairs.matched });
-        } else if (matchPairs.selected.taskIndex === taskIndex) {
-          if (matchPairs.selected.type !== type) {
-            // Check if correct match
-            const task = chapter.verkefni[taskIndex];
-            const isIndex = type === 'is' ? index : matchPairs.selected.index;
-            const pilarIndex = type === 'pilar' ? index : matchPairs.selected.index;
-            
-            if (isIndex === pilarIndex) {
-              // Correct match!
-              setMatchPairs({
-                selected: null,
-                matched: [...matchPairs.matched, { taskIndex, isIndex, pilarIndex }]
-              });
-            } else {
-              // Wrong match
-              setMatchPairs({ selected: null, matched: matchPairs.matched });
-            }
+        } else if (matchPairs.selected.taskIndex === taskIndex && matchPairs.selected.type !== type) {
+          const isIdx = type === 'is' ? index : matchPairs.selected.index;
+          const pilarIdx = type === 'pilar' ? index : matchPairs.selected.index;
+          if (isIdx === pilarIdx) {
+            setMatchPairs({ selected: null, matched: [...matchPairs.matched, { taskIndex, isIndex: isIdx, pilarIndex: pilarIdx }] });
           } else {
-            // Clicked same column, change selection
-            setMatchPairs({ selected: { type, index, taskIndex }, matched: matchPairs.matched });
+            setMatchPairs({ selected: null, matched: matchPairs.matched });
           }
         } else {
           setMatchPairs({ selected: { type, index, taskIndex }, matched: matchPairs.matched });
@@ -198,336 +334,326 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
       };
 
       const renderTask = (task, index) => {
-        const isSubmitted = submitted[index];
-        const answer = answers[index];
+        const isSub = submitted[index];
+        const ans = answers[index];
 
         switch (task.tegund) {
           case 'multiple_choice':
             return (
-              <div key={index} className="bg-white rounded-lg p-6 shadow-md">
-                <p className="font-medium mb-4">{task.spurning}</p>
+              <div key={index} className="bg-white rounded-lg p-5 shadow-md">
+                <p className="font-medium mb-3">{task.spurning}</p>
                 <div className="space-y-2">
-                  {task.pilar.map((option, optIndex) => {
-                    const isSelected = answer === optIndex;
-                    const isCorrect = optIndex === task.rett;
-                    let bgColor = 'bg-gray-50 hover:bg-gray-100';
-                    
-                    if (isSubmitted) {
-                      if (isCorrect) bgColor = 'bg-green-100 border-green-500';
-                      else if (isSelected && !isCorrect) bgColor = 'bg-red-100 border-red-500';
-                    } else if (isSelected) {
-                      bgColor = 'bg-blue-100 border-blue-500';
-                    }
-
+                  {task.pilar.map((opt, i) => {
+                    let bg = 'bg-gray-50 hover:bg-gray-100';
+                    if (isSub) {
+                      if (i === task.rett) bg = 'bg-green-100 border-green-500';
+                      else if (ans === i) bg = 'bg-red-100 border-red-500';
+                    } else if (ans === i) bg = 'bg-blue-100 border-blue-500';
                     return (
-                      <button
-                        key={optIndex}
-                        onClick={() => !isSubmitted && handleAnswer(index, optIndex)}
-                        className={`w-full text-left p-3 rounded-lg border-2 transition ${bgColor}`}
-                        disabled={isSubmitted}
-                      >
-                        {option}
+                      <button key={i} onClick={() => !isSub && handleAnswer(index, i)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition ${bg}`} disabled={isSub}>
+                        {opt}
                       </button>
                     );
                   })}
                 </div>
-                {!isSubmitted && answer !== undefined && (
-                  <button
-                    onClick={() => checkAnswer(index)}
-                    className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                  >
-                    Athuga
-                  </button>
+                {!isSub && ans !== undefined && (
+                  <button onClick={() => checkAnswer(index)} className="mt-3 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
                 )}
-                {isSubmitted && (
-                  <p className={`mt-4 font-medium ${answer === task.rett ? 'text-green-600' : 'text-red-600'}`}>
-                    {answer === task.rett ? '✓ Rétt!' : '✗ Rangt - rétt svar: ' + task.pilar[task.rett]}
-                  </p>
-                )}
+                {isSub && <p className={`mt-3 font-medium ${ans === task.rett ? 'text-green-600' : 'text-red-600'}`}>
+                  {ans === task.rett ? '✓ Rétt!' : '✗ Rangt'}
+                </p>}
               </div>
             );
 
           case 'rett_rangt':
             return (
-              <div key={index} className="bg-white rounded-lg p-6 shadow-md">
-                <p className="font-medium mb-2 text-lg">„{task.pilar}"</p>
-                <p className="text-gray-500 mb-4 text-sm italic">{task.pilar_translated}</p>
-                <div className="flex gap-4">
-                  {[true, false].map((option) => {
-                    const isSelected = answer === option;
-                    const isCorrect = option === task.rett;
-                    let bgColor = 'bg-gray-50 hover:bg-gray-100';
-                    
-                    if (isSubmitted) {
-                      if (isCorrect) bgColor = 'bg-green-100 border-green-500';
-                      else if (isSelected && !isCorrect) bgColor = 'bg-red-100 border-red-500';
-                    } else if (isSelected) {
-                      bgColor = 'bg-blue-100 border-blue-500';
-                    }
-
+              <div key={index} className="bg-white rounded-lg p-5 shadow-md">
+                <p className="font-medium mb-1 text-lg">„{task.fullyrding}"</p>
+                <p className="text-gray-500 mb-3 text-sm italic">{task.pilar_translated}</p>
+                <div className="flex gap-3">
+                  {[true, false].map(opt => {
+                    let bg = 'bg-gray-50 hover:bg-gray-100';
+                    if (isSub) {
+                      if (opt === task.rett) bg = 'bg-green-100 border-green-500';
+                      else if (ans === opt) bg = 'bg-red-100 border-red-500';
+                    } else if (ans === opt) bg = 'bg-blue-100 border-blue-500';
                     return (
-                      <button
-                        key={option.toString()}
-                        onClick={() => !isSubmitted && handleAnswer(index, option)}
-                        className={`flex-1 p-3 rounded-lg border-2 transition font-medium ${bgColor}`}
-                        disabled={isSubmitted}
-                      >
-                        {option ? 'Rétt ✓' : 'Rangt ✗'}
+                      <button key={String(opt)} onClick={() => !isSub && handleAnswer(index, opt)}
+                        className={`flex-1 p-3 rounded-lg border-2 font-medium transition ${bg}`} disabled={isSub}>
+                        {opt ? 'Rétt ✓' : 'Rangt ✗'}
                       </button>
                     );
                   })}
                 </div>
-                {!isSubmitted && answer !== undefined && (
-                  <button
-                    onClick={() => checkAnswer(index)}
-                    className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                  >
-                    Athuga
-                  </button>
-                )}
-              </div>
-            );
-
-          case 'flokka':
-            const selectedWords = answer || [];
-            return (
-              <div key={index} className="bg-white rounded-lg p-6 shadow-md">
-                <p className="font-medium mb-4">{task.pilar}</p>
-                <div className="flex flex-wrap gap-2">
-                  {task.pilar_options.map((word, wordIndex) => {
-                    const isSelected = selectedWords.includes(wordIndex);
-                    const isCorrect = task.pilar_rett.includes(wordIndex);
-                    let bgColor = 'bg-gray-100 hover:bg-gray-200';
-                    
-                    if (isSubmitted) {
-                      if (isCorrect && isSelected) bgColor = 'bg-green-100 border-green-500';
-                      else if (isCorrect && !isSelected) bgColor = 'bg-yellow-100 border-yellow-500';
-                      else if (!isCorrect && isSelected) bgColor = 'bg-red-100 border-red-500';
-                    } else if (isSelected) {
-                      bgColor = 'bg-blue-100 border-blue-500';
-                    }
-
-                    return (
-                      <button
-                        key={wordIndex}
-                        onClick={() => {
-                          if (isSubmitted) return;
-                          if (isSelected) {
-                            handleAnswer(index, selectedWords.filter(i => i !== wordIndex));
-                          } else {
-                            handleAnswer(index, [...selectedWords, wordIndex]);
-                          }
-                        }}
-                        className={`px-4 py-2 rounded-full border-2 transition ${bgColor}`}
-                        disabled={isSubmitted}
-                      >
-                        {word}
-                      </button>
-                    );
-                  })}
-                </div>
-                {!isSubmitted && selectedWords.length > 0 && (
-                  <button
-                    onClick={() => checkAnswer(index)}
-                    className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                  >
-                    Athuga
-                  </button>
-                )}
-                {isSubmitted && (
-                  <p className="mt-4 text-sm text-gray-600">
-                    Rétt orð: {task.pilar_rett.map(i => task.pilar_options[i]).join(', ')}
-                  </p>
+                {!isSub && ans !== undefined && (
+                  <button onClick={() => checkAnswer(index)} className="mt-3 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
                 )}
               </div>
             );
 
           case 'fylla_i_eydu':
             return (
-              <div key={index} className="bg-white rounded-lg p-6 shadow-md">
-                <p className="font-medium mb-2 text-lg">{task.setning}</p>
-                <p className="text-gray-500 mb-4 text-sm italic">{task.pilar_translated}</p>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={answer || ''}
-                    onChange={(e) => handleAnswer(index, e.target.value)}
-                    placeholder="Skrifaðu orðið..."
-                    className="flex-1 px-4 py-2 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={isSubmitted}
-                  />
-                  {!isSubmitted && answer && (
-                    <button
-                      onClick={() => checkAnswer(index)}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                    >
-                      Athuga
-                    </button>
+              <div key={index} className="bg-white rounded-lg p-5 shadow-md">
+                <p className="font-medium mb-1 text-lg">{task.setning}</p>
+                <p className="text-gray-500 mb-3 text-sm italic">{task.pilar_translated}</p>
+                <div className="flex gap-2">
+                  <input type="text" value={ans || ''} onChange={e => handleAnswer(index, e.target.value)}
+                    placeholder="..." className="flex-1 px-4 py-2 border-2 rounded-lg" disabled={isSub} />
+                  {!isSub && ans && (
+                    <button onClick={() => checkAnswer(index)} className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">Athuga</button>
                   )}
                 </div>
-                {isSubmitted && (
-                  <p className={`mt-4 font-medium ${answer?.toLowerCase().trim() === task.svar.toLowerCase() ? 'text-green-600' : 'text-red-600'}`}>
-                    {answer?.toLowerCase().trim() === task.svar.toLowerCase() 
-                      ? '✓ Rétt!' 
-                      : `✗ Rangt - rétt svar: ${task.svar}`}
-                  </p>
-                )}
+                {isSub && <p className={`mt-3 font-medium ${ans?.toLowerCase().trim() === task.svar.toLowerCase() ? 'text-green-600' : 'text-red-600'}`}>
+                  {ans?.toLowerCase().trim() === task.svar.toLowerCase() ? '✓ Rétt!' : `✗ Rétt svar: ${task.svar}`}
+                </p>}
               </div>
             );
 
           case 'para_saman':
             const taskMatches = matchPairs.matched.filter(m => m.taskIndex === index);
             const allMatched = taskMatches.length === task.pilar_pilar.length;
-            const shuffledOrder = shuffledOrders[index] || task.pilar_pilar.map((_, i) => i);
-            
+            const shuffled = shuffledOrders[index] || task.pilar_pilar.map((_, i) => i);
             return (
-              <div key={index} className="bg-white rounded-lg p-6 shadow-md">
-                <p className="font-medium mb-4">{task.pilar}</p>
+              <div key={index} className="bg-white rounded-lg p-5 shadow-md">
+                <p className="font-medium mb-3">{task.pilar}</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-500 mb-2">Íslenska</p>
-                    {task.pilar_pilar.map((item, itemIndex) => {
-                      const isMatched = taskMatches.some(m => m.isIndex === itemIndex);
-                      const isSelected = matchPairs.selected?.taskIndex === index && 
-                                        matchPairs.selected?.type === 'is' && 
-                                        matchPairs.selected?.index === itemIndex;
-                      
+                    <p className="text-sm text-gray-500">Íslenska</p>
+                    {task.pilar_pilar.map((item, i) => {
+                      const matched = taskMatches.some(m => m.isIndex === i);
+                      const selected = matchPairs.selected?.taskIndex === index && matchPairs.selected?.type === 'is' && matchPairs.selected?.index === i;
                       return (
-                        <button
-                          key={itemIndex}
-                          onClick={() => !isMatched && handleMatchClick('is', itemIndex, index)}
-                          className={`w-full text-left p-3 rounded-lg border-2 transition ${
-                            isMatched ? 'bg-green-100 border-green-500' :
-                            isSelected ? 'bg-blue-100 border-blue-500' :
-                            'bg-gray-50 hover:bg-gray-100'
-                          }`}
-                          disabled={isMatched}
-                        >
+                        <button key={i} onClick={() => !matched && handleMatchClick('is', i, index)}
+                          className={`w-full text-left p-3 rounded-lg border-2 transition ${matched ? 'bg-green-100 border-green-500' : selected ? 'bg-blue-100 border-blue-500' : 'bg-gray-50 hover:bg-gray-100'}`}>
                           {item.is}
                         </button>
                       );
                     })}
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-500 mb-2">Þýðing</p>
-                    {shuffledOrder.map((origIndex, displayIndex) => {
-                      const item = task.pilar_pilar[origIndex];
-                      const isMatched = taskMatches.some(m => m.pilarIndex === origIndex);
-                      const isSelected = matchPairs.selected?.taskIndex === index && 
-                                        matchPairs.selected?.type === 'pilar' && 
-                                        matchPairs.selected?.index === origIndex;
-                      
+                    <p className="text-sm text-gray-500">Þýðing</p>
+                    {shuffled.map((origIdx, dispIdx) => {
+                      const item = task.pilar_pilar[origIdx];
+                      const matched = taskMatches.some(m => m.pilarIndex === origIdx);
+                      const selected = matchPairs.selected?.taskIndex === index && matchPairs.selected?.type === 'pilar' && matchPairs.selected?.index === origIdx;
                       return (
-                        <button
-                          key={displayIndex}
-                          onClick={() => !isMatched && handleMatchClick('pilar', origIndex, index)}
-                          className={`w-full text-left p-3 rounded-lg border-2 transition ${
-                            isMatched ? 'bg-green-100 border-green-500' :
-                            isSelected ? 'bg-blue-100 border-blue-500' :
-                            'bg-gray-50 hover:bg-gray-100'
-                          }`}
-                          disabled={isMatched}
-                        >
+                        <button key={dispIdx} onClick={() => !matched && handleMatchClick('pilar', origIdx, index)}
+                          className={`w-full text-left p-3 rounded-lg border-2 transition ${matched ? 'bg-green-100 border-green-500' : selected ? 'bg-blue-100 border-blue-500' : 'bg-gray-50 hover:bg-gray-100'}`}>
                           {item.pilar}
                         </button>
                       );
                     })}
                   </div>
                 </div>
-                {allMatched && (
-                  <p className="mt-4 text-green-600 font-medium">✓ Allt rétt!</p>
-                )}
+                {allMatched && <p className="mt-3 text-green-600 font-medium">✓ Allt rétt!</p>}
               </div>
             );
 
-          default:
-            return null;
+          default: return null;
         }
       };
 
-      return (
-        <div className="min-h-screen pb-12">
-          <header className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-3xl mx-auto px-6 py-8">
-              <h1 className="text-3xl font-light text-gray-800 mb-2">Kafli 1 📖</h1>
-              <p className="text-gray-500 text-sm font-light">Kynning á persónunni þinni</p>
-            </div>
-          </header>
-
-          <main className="max-w-3xl mx-auto px-6 mt-8">
-            {!chapter ? (
+      // VIEWS
+      if (view === 'setup') {
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b">
+              <div className="max-w-2xl mx-auto px-6 py-8">
+                <h1 className="text-3xl font-light text-gray-800 mb-2">Velkomin í íslensku! 🇮🇸</h1>
+                <p className="text-gray-500">10 kafla námskeið með persónulegri sögu</p>
+              </div>
+            </header>
+            <main className="max-w-2xl mx-auto px-6 mt-8">
               <div className="bg-white rounded-lg shadow-xl p-6">
                 <h2 className="text-xl font-medium mb-4">Nemandaupplýsingar</h2>
-                <p className="text-gray-600 mb-4">Límdu upplýsingarnar úr viðtalinu hér:</p>
-                <textarea
-                  value={studentInfo}
-                  onChange={(e) => setStudentInfo(e.target.value)}
-                  placeholder="Nafn: ...&#10;Móðurmál: ...&#10;Áhugamál: ...&#10;Íslensku stig: ...&#10;Persóna óskir: ..."
-                  className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
-                <button
-                  onClick={generateChapter}
-                  disabled={!studentInfo.trim() || loading}
-                  className="mt-4 bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-lg"
-                >
-                  {loading ? 'Bý til kafla...' : 'Búa til kafla 1'}
+                <p className="text-gray-600 mb-4">Límdu upplýsingarnar úr viðtalinu:</p>
+                <textarea value={studentInfo} onChange={e => setStudentInfo(e.target.value)}
+                  placeholder="Nafn: ...&#10;Móðurmál: ...&#10;Áhugamál: ...&#10;Persóna óskir: ..."
+                  className="w-full h-40 px-4 py-3 border rounded-lg font-mono text-sm" />
+                <button onClick={startCourse} disabled={!studentInfo.trim() || loading}
+                  className="mt-4 bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 font-medium text-lg">
+                  {loading ? 'Hleð...' : 'Hefja námskeið'}
                 </button>
               </div>
-            ) : (
-              <div className="space-y-8">
-                {/* Persona intro */}
-                <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white shadow-xl">
-                  <h2 className="text-2xl font-medium mb-2">Kynntu þig fyrir {chapter.persona.nafn}!</h2>
-                  <p className="opacity-90">{chapter.persona.pilar}</p>
-                </div>
+            </main>
+          </div>
+        );
+      }
 
-                {/* Text */}
-                <div className="bg-white rounded-lg p-6 shadow-xl">
-                  <h3 className="text-lg font-medium mb-4 text-gray-700">📖 Lestu textann</h3>
-                  <p className="text-xl leading-relaxed text-gray-800">{chapter.texti}</p>
+      if (view === 'chapters') {
+        const completedCount = Object.keys(chapters).length;
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b">
+              <div className="max-w-3xl mx-auto px-6 py-6">
+                <h1 className="text-2xl font-light text-gray-800">Námskeiðið þitt</h1>
+                <p className="text-gray-500">Með {character?.nafn} - {completedCount}/10 kaflar kláraðir</p>
+              </div>
+            </header>
+            <main className="max-w-3xl mx-auto px-6 mt-6">
+              {loading && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-center">
+                  <p className="text-blue-700">Bý til kafla...</p>
                 </div>
-
-                {/* Vocabulary */}
-                <div className="bg-yellow-50 rounded-lg p-6 shadow-md border border-yellow-200">
-                  <h3 className="text-lg font-medium mb-4 text-yellow-800">📚 Orðaforði</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {chapter.ordafordi.map((item, i) => (
-                      <div key={i} className="bg-white rounded-lg p-3 shadow-sm">
-                        <p className="font-medium text-gray-800">{item.ord}</p>
-                        <p className="text-sm text-gray-500">{item.pilar}</p>
+              )}
+              
+              <div className="grid gap-4">
+                {CHAPTER_TOPICS.map((topic, i) => {
+                  const num = i + 1;
+                  const done = !!chapters[num];
+                  const available = num === 1 || chapters[num - 1];
+                  return (
+                    <button key={num} onClick={() => available && generateChapter(num)} disabled={!available || loading}
+                      className={`text-left p-5 rounded-lg border-2 transition ${
+                        done ? 'bg-green-50 border-green-300' : 
+                        available ? 'bg-white border-gray-200 hover:border-blue-400' : 
+                        'bg-gray-100 border-gray-200 opacity-60'
+                      }`}>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-sm text-gray-500">Kafli {num}</span>
+                          <h3 className="text-lg font-medium">{topic.title}</h3>
+                          <p className="text-sm text-gray-500">{topic.focus}</p>
+                        </div>
+                        {done && <span className="text-green-600 text-2xl">✓</span>}
+                        {!available && <span className="text-gray-400">🔒</span>}
                       </div>
-                    ))}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {completedCount === 10 && (
+                <div className="mt-8 text-center">
+                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-6 text-white">
+                    <h2 className="text-2xl font-medium mb-2">🎉 Til hamingju!</h2>
+                    <p className="mb-4">Þú hefur klárað alla kaflana. Ertu tilbúin/n í lokapróf?</p>
+                    <button onClick={generateQuiz} disabled={loading}
+                      className="bg-white text-purple-600 px-8 py-3 rounded-lg font-medium hover:bg-gray-100">
+                      {loading ? 'Bý til próf...' : 'Taka lokapróf'}
+                    </button>
                   </div>
                 </div>
+              )}
+            </main>
+          </div>
+        );
+      }
 
-                {/* Tasks */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4 text-gray-700">✏️ Verkefni</h3>
-                  <div className="space-y-6">
-                    {chapter.verkefni.map((task, index) => renderTask(task, index))}
-                  </div>
-                </div>
+      if (view === 'chapter' && chapters[currentChapter]) {
+        const ch = chapters[currentChapter];
+        const topic = CHAPTER_TOPICS[currentChapter - 1];
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b">
+              <div className="max-w-3xl mx-auto px-6 py-4">
+                <button onClick={() => setView('chapters')} className="text-blue-600 hover:underline mb-2">← Til baka</button>
+                <h1 className="text-2xl font-light">Kafli {currentChapter}: {topic.title}</h1>
+              </div>
+            </header>
+            <main className="max-w-3xl mx-auto px-6 mt-6 space-y-6">
+              <div className="bg-white rounded-lg p-6 shadow-xl">
+                <h3 className="text-lg font-medium mb-3 text-gray-700">📖 Lestu textann</h3>
+                <p className="text-xl leading-relaxed">{ch.texti}</p>
+              </div>
 
-                {/* Reset button */}
-                <div className="text-center pt-4">
-                  <button
-                    onClick={() => {
-                      setChapter(null);
-                      setStudentInfo('');
-                    }}
-                    className="text-gray-500 hover:text-gray-700 underline"
-                  >
-                    Byrja aftur með nýjum nemanda
-                  </button>
+              <div className="bg-yellow-50 rounded-lg p-5 border border-yellow-200">
+                <h3 className="text-lg font-medium mb-3 text-yellow-800">📚 Orðaforði</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {ch.ordafordi.map((item, i) => (
+                    <div key={i} className="bg-white rounded-lg p-3 shadow-sm">
+                      <p className="font-medium">{item.ord}</p>
+                      <p className="text-sm text-gray-500">{item.pilar}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-          </main>
-        </div>
-      );
+
+              <div>
+                <h3 className="text-lg font-medium mb-4">✏️ Verkefni</h3>
+                <div className="space-y-4">
+                  {ch.verkefni.map((task, i) => renderTask(task, i))}
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4">
+                {currentChapter > 1 && (
+                  <button onClick={() => generateChapter(currentChapter - 1)} className="text-blue-600 hover:underline">
+                    ← Kafli {currentChapter - 1}
+                  </button>
+                )}
+                <div className="flex-1" />
+                {currentChapter < 10 && (
+                  <button onClick={() => generateChapter(currentChapter + 1)}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                    Kafli {currentChapter + 1} →
+                  </button>
+                )}
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      if (view === 'quiz' && quiz) {
+        const score = quizSubmitted ? quiz.verkefni.filter((q, i) => quizAnswers[i] === q.rett).length : 0;
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+              <div className="max-w-3xl mx-auto px-6 py-8">
+                <button onClick={() => setView('chapters')} className="text-white/80 hover:text-white mb-2">← Til baka</button>
+                <h1 className="text-3xl font-light">{quiz.title}</h1>
+                <p className="text-white/80">{quiz.pilar}</p>
+              </div>
+            </header>
+            <main className="max-w-3xl mx-auto px-6 mt-6 space-y-4">
+              {quiz.verkefni.map((q, i) => (
+                <div key={i} className="bg-white rounded-lg p-5 shadow-md">
+                  <p className="text-sm text-gray-500 mb-1">Spurning {i + 1} {q.kafli && `(Kafli ${q.kafli})`}</p>
+                  <p className="font-medium mb-3">{q.spurning}</p>
+                  <div className="space-y-2">
+                    {q.pilar.map((opt, j) => {
+                      let bg = 'bg-gray-50 hover:bg-gray-100';
+                      if (quizSubmitted) {
+                        if (j === q.rett) bg = 'bg-green-100 border-green-500';
+                        else if (quizAnswers[i] === j) bg = 'bg-red-100 border-red-500';
+                      } else if (quizAnswers[i] === j) bg = 'bg-blue-100 border-blue-500';
+                      return (
+                        <button key={j} onClick={() => !quizSubmitted && setQuizAnswers(p => ({ ...p, [i]: j }))}
+                          className={`w-full text-left p-3 rounded-lg border-2 transition ${bg}`} disabled={quizSubmitted}>
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {!quizSubmitted ? (
+                <button onClick={() => setQuizSubmitted(true)}
+                  disabled={Object.keys(quizAnswers).length < quiz.verkefni.length}
+                  className="w-full bg-purple-600 text-white py-4 rounded-lg text-lg font-medium hover:bg-purple-700 disabled:bg-gray-300">
+                  Skila prófi
+                </button>
+              ) : (
+                <div className="bg-gradient-to-r from-green-500 to-teal-500 rounded-lg p-8 text-white text-center">
+                  <h2 className="text-3xl font-bold mb-2">{score} / {quiz.verkefni.length}</h2>
+                  <p className="text-xl">{score >= 12 ? '🎉 Frábært!' : score >= 8 ? '👍 Vel gert!' : '📚 Haltu áfram að æfa!'}</p>
+                  <button onClick={() => setView('chapters')} className="mt-4 bg-white text-green-600 px-6 py-2 rounded-lg font-medium">
+                    Til baka í kafla
+                  </button>
+                </div>
+              )}
+            </main>
+          </div>
+        );
+      }
+
+      return <div className="p-8 text-center">Hleð...</div>;
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<FyrstiKafli />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<Namsvefur />);
   </script>
 </body>
 </html>
