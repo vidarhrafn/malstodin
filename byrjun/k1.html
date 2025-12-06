@@ -43,7 +43,7 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
     "nafn": "[Icelandic name matching gender preference]",
     "pilar": "[short description in student's native language]"
   },
-  "texti": "[50-80 word Icelandic text about the character - SIMPLE sentences, present tense, basic vocabulary. Include: name, age, where they live, what they like/do (connected to student's interests). Example structure: 'X heitir [nafn]. Hún/Hann er [age] ára. Hún/Hann býr í [place]. Hún/Hann elskar [interest]...']",
+  "texti": "[50-80 word Icelandic text about the character - SIMPLE sentences, present tense, basic vocabulary. Include: name, age, where they live, what they like/do (connected to student's interests). IMPORTANT: Start with 'Persónan okkar heitir [nafn].' or 'Hún/Hann heitir [nafn].' - NEVER write '[Name] heitir [Name]'. Example structure: 'Persónan okkar heitir [nafn]. Hún/Hann er [age] ára. Hún/Hann býr í [place]. Hún/Hann elskar [interest]...']",
   "ordafordi": [
     {"ord": "[Icelandic word from text]", "pilar": "[translation in student's language]"},
     {"ord": "[word2]", "pilar": "[translation2]"},
@@ -85,7 +85,7 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
     },
     {
       "tegund": "para_saman",
-      "pilar": "[Instruction: Match Icelandic words with translations]",
+      "pilar": "[Instruction in student's native language: e.g. 'Match Icelandic words with their translations']",
       "pilar_pilar": [
         {"is": "[Icelandic word]", "pilar": "[translation]"},
         {"is": "[Icelandic word2]", "pilar": "[translation2]"},
@@ -98,11 +98,13 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
 
 ## IMPORTANT RULES:
 - Text MUST be 50-80 words, simple A1 sentences
-- All translations/instructions in the student's native language
+- All translations AND instructions in the student's native language (NEVER in English unless English is their native language)
 - Character's interests MUST match student's interests
 - Use only present tense
 - Short sentences (5-10 words each)
-- Include common A1 vocabulary: heitir, er, ára, býr, elskar, vinnur, á, og, en, líka`;
+- Include common A1 vocabulary: heitir, er, ára, býr, elskar, vinnur, á, og, en, líka
+- NEVER start text with "[Name] heitir [Name]" - use "Persónan okkar heitir..." or "Hún/Hann heitir..."
+- The "para_saman" task: translations should NOT be in the same order as Icelandic words`;
 
     const FyrstiKafli = () => {
       const [studentInfo, setStudentInfo] = useState('');
@@ -111,6 +113,7 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
       const [answers, setAnswers] = useState({});
       const [submitted, setSubmitted] = useState({});
       const [matchPairs, setMatchPairs] = useState({ selected: null, matched: [] });
+      const [shuffledOrders, setShuffledOrders] = useState({});
 
       const generateChapter = async () => {
         if (!studentInfo.trim()) return;
@@ -129,6 +132,21 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
           // Parse JSON response
           const cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
           const parsed = JSON.parse(cleanResponse);
+          
+          // Create shuffled orders for para_saman tasks
+          const orders = {};
+          parsed.verkefni.forEach((task, index) => {
+            if (task.tegund === 'para_saman') {
+              const indices = task.pilar_pilar.map((_, i) => i);
+              for (let i = indices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indices[i], indices[j]] = [indices[j], indices[i]];
+              }
+              orders[index] = indices;
+            }
+          });
+          setShuffledOrders(orders);
+          
           setChapter(parsed);
         } catch (e) {
           console.error('Villa:', e);
@@ -360,9 +378,7 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
           case 'para_saman':
             const taskMatches = matchPairs.matched.filter(m => m.taskIndex === index);
             const allMatched = taskMatches.length === task.pilar_pilar.length;
-            
-            // Shuffle translations for display
-            const shuffledPilar = [...task.pilar_pilar].map((item, i) => ({ ...item, origIndex: i }));
+            const shuffledOrder = shuffledOrders[index] || task.pilar_pilar.map((_, i) => i);
             
             return (
               <div key={index} className="bg-white rounded-lg p-6 shadow-md">
@@ -394,16 +410,17 @@ Based on the student information provided, create a FIRST CHAPTER that introduce
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm text-gray-500 mb-2">Þýðing</p>
-                    {task.pilar_pilar.map((item, itemIndex) => {
-                      const isMatched = taskMatches.some(m => m.pilarIndex === itemIndex);
+                    {shuffledOrder.map((origIndex, displayIndex) => {
+                      const item = task.pilar_pilar[origIndex];
+                      const isMatched = taskMatches.some(m => m.pilarIndex === origIndex);
                       const isSelected = matchPairs.selected?.taskIndex === index && 
                                         matchPairs.selected?.type === 'pilar' && 
-                                        matchPairs.selected?.index === itemIndex;
+                                        matchPairs.selected?.index === origIndex;
                       
                       return (
                         <button
-                          key={itemIndex}
-                          onClick={() => !isMatched && handleMatchClick('pilar', itemIndex, index)}
+                          key={displayIndex}
+                          onClick={() => !isMatched && handleMatchClick('pilar', origIndex, index)}
                           className={`w-full text-left p-3 rounded-lg border-2 transition ${
                             isMatched ? 'bg-green-100 border-green-500' :
                             isSelected ? 'bg-blue-100 border-blue-500' :
