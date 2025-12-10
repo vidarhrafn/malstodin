@@ -111,18 +111,6 @@
             }
         }
         
-        /* Fljúgandi orð animation */
-        .flying-word {
-            position: fixed;
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: 22px;
-            font-weight: 600;
-            color: #ffd700;
-            text-shadow: 0 0 20px rgba(255,215,0,0.8);
-            pointer-events: none;
-            z-index: 1000;
-        }
-        
         /* Ljóðasvæði */
         .poem-container {
             background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
@@ -134,21 +122,35 @@
         }
         .poem-word {
             display: inline-block;
-            transition: all 0.5s ease;
+            transition: all 0.6s ease;
             position: relative;
         }
         .poem-word.hidden {
-            color: rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.08);
+            text-shadow: none;
         }
         .poem-word.revealed {
             color: #f0e6d3;
+            text-shadow: 0 0 8px rgba(255,215,0,0.2);
         }
         .poem-word.just-revealed {
-            animation: word-glow 1s ease-out;
+            animation: word-reveal 1.2s ease-out;
         }
-        @keyframes word-glow {
-            0% { color: #ffd700; text-shadow: 0 0 30px rgba(255,215,0,1); transform: scale(1.3); }
-            100% { color: #f0e6d3; text-shadow: none; transform: scale(1); }
+        @keyframes word-reveal {
+            0% { 
+                color: #ffd700; 
+                text-shadow: 0 0 40px rgba(255,215,0,1), 0 0 80px rgba(255,215,0,0.5); 
+                transform: scale(1.4);
+            }
+            50% {
+                color: #ffd700;
+                text-shadow: 0 0 20px rgba(255,215,0,0.8);
+            }
+            100% { 
+                color: #f0e6d3; 
+                text-shadow: 0 0 8px rgba(255,215,0,0.2); 
+                transform: scale(1);
+            }
         }
         
         /* Sigurstíll */
@@ -273,7 +275,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
 
         // Ljóðið
         const POEM = {
@@ -402,12 +404,10 @@
             return pairs;
         };
 
-        // Athuga hvort leikur sé leysanlegur (einföld athugun)
         const isSolvable = (tiles) => {
             return findAvailablePairs(tiles).length > 0;
         };
 
-        // Stokka array
         const shuffleArray = (arr) => {
             const newArr = [...arr];
             for (let i = newArr.length - 1; i > 0; i--) {
@@ -417,7 +417,6 @@
             return newArr;
         };
 
-        // Búa til leik sem er tryggt leysanlegur
         const createTileLayout = (words) => {
             const positions = getTilePositions();
             const numPositions = Math.min(positions.length, words.length * 2);
@@ -453,7 +452,6 @@
                 attempts++;
             }
             
-            // Fallback - skila síðasta tilraun
             const pairs = [...neededWords, ...neededWords];
             const shuffledPairs = shuffleArray(pairs);
             
@@ -470,13 +468,11 @@
             }));
         };
 
-        // Stokka óleystar flísar
         const shuffleUnmatchedTiles = (tiles) => {
             const positions = getTilePositions();
             const unmatchedTiles = tiles.filter(t => !t.matched);
             const matchedTiles = tiles.filter(t => t.matched);
             
-            // Finna staði sem eru ekki teknir af matched flísum
             const usedPositionKeys = new Set(matchedTiles.map(t => `${t.x}-${t.y}-${t.z}`));
             const availablePositions = positions.filter(p => 
                 !usedPositionKeys.has(`${p.x}-${p.y}-${p.z}`)
@@ -506,7 +502,6 @@
                 attempts++;
             }
             
-            // Fallback
             const shuffledPositions = shuffleArray(availablePositions);
             const newUnmatched = unmatchedTiles.map((tile, idx) => ({
                 ...tile,
@@ -595,8 +590,8 @@
             );
         };
 
-        // Ljóðabirting
-        const PoemDisplay = ({ revealedWords, wordRefs }) => {
+        // Ljóðabirting - öll orð eru þegar á sínum stað, bara falinn/sýnileg
+        const PoemDisplay = ({ revealedWords }) => {
             const fullText = POEM.verses.join(' ');
             const words = fullText.split(/\s+/);
             
@@ -613,16 +608,11 @@
                             return (
                                 <span key={idx}>
                                     <span 
-                                        ref={el => {
-                                            if (!wordRefs.current[normalized]) {
-                                                wordRefs.current[normalized] = el;
-                                            }
-                                        }}
                                         className={`poem-word ${isRevealed ? 'revealed' : 'hidden'} ${justRevealed ? 'just-revealed' : ''}`}
                                     >
                                         {cleanWord}
                                     </span>
-                                    <span className={isRevealed ? 'text-amber-100/70' : 'text-white/10'}>{punctuation}</span>
+                                    <span className={isRevealed ? 'text-amber-100/70' : 'text-white/8'}>{punctuation}</span>
                                     {' '}
                                 </span>
                             );
@@ -695,53 +685,16 @@
             </div>
         );
 
-        // Fljúgandi orð
-        const FlyingWord = ({ word, startPos, endPos, onComplete }) => {
-            const ref = useRef(null);
-            
-            useEffect(() => {
-                const el = ref.current;
-                if (!el) return;
-                
-                el.style.left = `${startPos.x}px`;
-                el.style.top = `${startPos.y}px`;
-                el.style.opacity = '1';
-                el.style.transform = 'scale(1)';
-                el.style.transition = 'none';
-                
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        el.style.transition = 'all 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                        el.style.left = `${endPos.x}px`;
-                        el.style.top = `${endPos.y}px`;
-                        el.style.opacity = '0';
-                        el.style.transform = 'scale(0.3)';
-                    });
-                });
-                
-                const timer = setTimeout(onComplete, 700);
-                return () => clearTimeout(timer);
-            }, [startPos, endPos, onComplete]);
-            
-            return (
-                <div ref={ref} className="flying-word">
-                    {word}
-                </div>
-            );
-        };
-
         // Aðal component
         const MahjongGame = () => {
             const [tiles, setTiles] = useState([]);
             const [selectedTile, setSelectedTile] = useState(null);
             const [selectedRef, setSelectedRef] = useState(null);
             const [revealedWords, setRevealedWords] = useState(new Map());
-            const [flyingWords, setFlyingWords] = useState([]);
             const [gameWon, setGameWon] = useState(false);
             const [isReading, setIsReading] = useState(false);
             const [matchCount, setMatchCount] = useState(0);
             const [hintPair, setHintPair] = useState(null);
-            const wordRefs = useRef({});
             
             const uniqueWords = useMemo(() => getAllUniqueWords(), []);
             const totalPairs = Math.min(uniqueWords.length, Math.floor(getTilePositions().length / 2));
@@ -757,11 +710,9 @@
                 setSelectedTile(null);
                 setSelectedRef(null);
                 setRevealedWords(new Map());
-                setFlyingWords([]);
                 setGameWon(false);
                 setMatchCount(0);
                 setHintPair(null);
-                wordRefs.current = {};
             };
 
             const handleShuffle = () => {
@@ -777,13 +728,11 @@
                 if (pairs.length > 0) {
                     const randomPair = pairs[Math.floor(Math.random() * pairs.length)];
                     setHintPair(randomPair);
-                    
-                    // Slökkva á hint eftir 2 sekúndur
                     setTimeout(() => setHintPair(null), 2000);
                 }
             };
 
-            // Hreinsa just-revealed
+            // Hreinsa just-revealed eftir animation
             useEffect(() => {
                 const justRevealedWords = [...revealedWords.entries()].filter(([_, v]) => v === 'just');
                 if (justRevealedWords.length > 0) {
@@ -793,7 +742,7 @@
                             justRevealedWords.forEach(([word]) => next.set(word, true));
                             return next;
                         });
-                    }, 1000);
+                    }, 1200);
                     return () => clearTimeout(timer);
                 }
             }, [revealedWords]);
@@ -801,16 +750,15 @@
             // Athuga sigur
             useEffect(() => {
                 if (matchCount > 0 && matchCount === totalPairs) {
-                    setTimeout(() => setGameWon(true), 600);
+                    setTimeout(() => setGameWon(true), 800);
                 }
             }, [matchCount, totalPairs]);
 
-            // Athuga hvort leikur sé enn leysanlegur
+            // Sjálfvirk stokk ef ekkert par er til
             useEffect(() => {
                 if (tiles.length > 0 && !gameWon) {
                     const unmatchedCount = tiles.filter(t => !t.matched).length;
                     if (unmatchedCount > 0 && !isSolvable(tiles)) {
-                        // Sjálfvirk stokk ef ekkert par er til
                         setTimeout(() => {
                             handleShuffle();
                         }, 500);
@@ -837,45 +785,18 @@
                 const clickedWord = tile.word.toLowerCase().replace(/[.,!?]/g, '');
                 
                 if (selectedWord === clickedWord) {
+                    // Match fundinn!
                     const word = tile.word.replace(/[.,!?]/g, '');
                     const normalized = word.toLowerCase();
-                    
-                    const targetEl = wordRefs.current[normalized];
-                    const targetRect = targetEl?.getBoundingClientRect();
-                    
-                    const tile1Rect = selectedRef?.current?.getBoundingClientRect();
-                    const tile2Rect = tileRef?.current?.getBoundingClientRect();
-                    
-                    const endPos = targetRect ? {
-                        x: targetRect.left + targetRect.width / 2,
-                        y: targetRect.top + targetRect.height / 2
-                    } : { x: window.innerWidth / 2, y: 150 };
 
-                    const newFlyingWords = [];
-                    if (tile1Rect) {
-                        newFlyingWords.push({
-                            id: `${Date.now()}-1`,
-                            word,
-                            startPos: { x: tile1Rect.left + tile1Rect.width/2, y: tile1Rect.top + tile1Rect.height/2 },
-                            endPos
-                        });
-                    }
-                    if (tile2Rect) {
-                        newFlyingWords.push({
-                            id: `${Date.now()}-2`,
-                            word,
-                            startPos: { x: tile2Rect.left + tile2Rect.width/2, y: tile2Rect.top + tile2Rect.height/2 },
-                            endPos
-                        });
-                    }
-                    setFlyingWords(prev => [...prev, ...newFlyingWords]);
-
+                    // Uppfæra tiles - merkja sem matched
                     setTiles(prev => prev.map(t => 
                         (t.id === selectedTile.id || t.id === tile.id) 
                             ? { ...t, matched: true } 
                             : t
                     ));
 
+                    // Orðið birtist (lýsist upp) á sínum stað í ljóðinu
                     setRevealedWords(prev => {
                         const next = new Map(prev);
                         next.set(normalized, 'just');
@@ -887,10 +808,6 @@
 
                 setSelectedTile(null);
                 setSelectedRef(null);
-            };
-
-            const removeFlyingWord = (id) => {
-                setFlyingWords(prev => prev.filter(fw => fw.id !== id));
             };
 
             const handleReadPoem = () => {
@@ -922,9 +839,9 @@
                     </header>
 
                     <main className="max-w-6xl mx-auto px-6 mt-8 relative z-10">
-                        {/* Ljóðasvæði */}
+                        {/* Ljóðasvæði - öll orð eru þegar þar, bara falin */}
                         <div className="mb-8">
-                            <PoemDisplay revealedWords={revealedWords} wordRefs={wordRefs} />
+                            <PoemDisplay revealedWords={revealedWords} />
                             <div className="mt-4 text-center text-white/50 text-sm">
                                 Pör fundin: {matchCount} / {totalPairs} • Möguleg pör: {availablePairs.length}
                             </div>
@@ -968,17 +885,6 @@
                             </button>
                         </div>
                     </main>
-
-                    {/* Fljúgandi orð */}
-                    {flyingWords.map(fw => (
-                        <FlyingWord
-                            key={fw.id}
-                            word={fw.word}
-                            startPos={fw.startPos}
-                            endPos={fw.endPos}
-                            onComplete={() => removeFlyingWord(fw.id)}
-                        />
-                    ))}
 
                     {/* Sigurskjár */}
                     {gameWon && (
