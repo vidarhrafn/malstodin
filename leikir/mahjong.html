@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Mahjong Ljóðaleikur</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+        }
+        .poem-font {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+        }
+        
+        /* Mahjong flísar */
+        .mahjong-tile {
+            width: 52px;
+            height: 68px;
+            background: linear-gradient(145deg, #fefefe 0%, #e8e4dc 100%);
+            border-radius: 6px;
+            box-shadow: 
+                0 4px 0 #b8b4a8,
+                0 6px 8px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: absolute;
+            user-select: none;
+            font-size: 11px;
+            font-weight: 500;
+            color: #2d3748;
+            text-align: center;
+            padding: 4px;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+        .mahjong-tile:hover:not(.blocked):not(.matched) {
+            transform: translateY(-4px);
+            box-shadow: 
+                0 8px 0 #b8b4a8,
+                0 12px 16px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+        .mahjong-tile.selected {
+            background: linear-gradient(145deg, #ffd700 0%, #ffb347 100%);
+            box-shadow: 
+                0 4px 0 #c9a227,
+                0 6px 12px rgba(255,215,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+        .mahjong-tile.blocked {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .mahjong-tile.matched {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .mahjong-tile.hint {
+            animation: hint-pulse 0.8s ease-in-out infinite;
+        }
+        @keyframes hint-pulse {
+            0%, 100% { box-shadow: 0 4px 0 #b8b4a8, 0 6px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.8); }
+            50% { box-shadow: 0 4px 0 #b8b4a8, 0 6px 20px rgba(100,200,255,0.8), inset 0 1px 0 rgba(255,255,255,0.8); }
+        }
+        
+        /* Fljúgandi orð animation */
+        .flying-word {
+            position: fixed;
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 24px;
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255,215,0,0.8);
+            pointer-events: none;
+            z-index: 1000;
+            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        /* Ljóðasvæði */
+        .poem-container {
+            background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            padding: 32px;
+            min-height: 200px;
+        }
+        .poem-word {
+            display: inline;
+            transition: all 0.5s ease;
+        }
+        .poem-word.hidden {
+            color: rgba(255,255,255,0.15);
+        }
+        .poem-word.revealed {
+            color: #f0e6d3;
+            text-shadow: 0 0 10px rgba(255,215,0,0.3);
+        }
+        .poem-word.just-revealed {
+            animation: word-glow 1s ease-out;
+        }
+        @keyframes word-glow {
+            0% { color: #ffd700; text-shadow: 0 0 30px rgba(255,215,0,1); transform: scale(1.2); }
+            100% { color: #f0e6d3; text-shadow: 0 0 10px rgba(255,215,0,0.3); transform: scale(1); }
+        }
+        
+        /* Sigurstíll */
+        .victory-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fade-in 0.5s ease;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .victory-content {
+            text-align: center;
+            color: #f0e6d3;
+            max-width: 600px;
+            padding: 40px;
+            animation: scale-in 0.5s ease;
+        }
+        @keyframes scale-in {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        
+        /* Stjörnur bakgrunnur */
+        .stars {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
+        /* Spilahnappur */
+        .play-button {
+            background: linear-gradient(145deg, #4a9079 0%, #2d6a5a 100%);
+            border: none;
+            color: white;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .play-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        .play-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // Ljóðið
+        const POEM = {
+            title: "Tvær stjörnur",
+            author: "Megas",
+            verses: [
+                "Tíminn líður áfram og hann teymir mig á eftir sér og ekki fæ ég miklu ráðið um það hvert hann fer.",
+                "En ég vona bara hann hugsi soldið hlýlega til mín og leiði mig á endanum aftur til þín.",
+                "Ég gaf þér forðum keðju úr gulli um hálsinn þinn, svo gleymdir þú mér ekki í dagsins amstri nokkurt sinn.",
+                "Í augunum þínum svörtu horfi ég á sjálfan mig um hríð og ég vonaði að ég fengi bara að vera það alla tíð."
+            ]
+        };
+
+        // Finna öll einstök orð
+        const getAllUniqueWords = () => {
+            const fullText = POEM.verses.join(' ');
+            const words = fullText.split(/\s+/).filter(w => w.length > 0);
+            const seen = new Set();
+            const uniqueWords = [];
+            
+            words.forEach(word => {
+                const normalized = word.toLowerCase();
+                if (!seen.has(normalized)) {
+                    seen.add(normalized);
+                    uniqueWords.push(word);
+                }
+            });
+            
+            return uniqueWords;
+        };
+
+        // Búa til Mahjong skipulag (turtle/pyramid)
+        const createTileLayout = (words) => {
+            const tiles = [];
+            const pairs = [...words, ...words]; // Tvöfalda fyrir pör
+            
+            // Stokka
+            for (let i = pairs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+            }
+            
+            // Pyramid skipulag - 4 lög
+            const layouts = [
+                // Lag 0 (neðst) - 8x6 = 48 flísar
+                { cols: 8, rows: 6, offsetX: 0, offsetY: 0, z: 0 },
+                // Lag 1 - 6x4 = 24 flísar
+                { cols: 6, rows: 4, offsetX: 1, offsetY: 1, z: 1 },
+                // Lag 2 - 4x2 = 8 flísar
+                { cols: 4, rows: 2, offsetX: 2, offsetY: 2, z: 2 },
+                // Lag 3 (efst) - 2x1 = 2 flísar
+                { cols: 2, rows: 1, offsetX: 3, offsetY: 2.5, z: 3 },
+            ];
+            
+            let pairIndex = 0;
+            const tileWidth = 56;
+            const tileHeight = 72;
+            const layerOffset = 4;
+            
+            layouts.forEach(layer => {
+                for (let row = 0; row < layer.rows && pairIndex < pairs.length; row++) {
+                    for (let col = 0; col < layer.cols && pairIndex < pairs.length; col++) {
+                        tiles.push({
+                            id: pairIndex,
+                            word: pairs[pairIndex],
+                            x: (col + layer.offsetX) * tileWidth - layer.z * layerOffset,
+                            y: (row + layer.offsetY) * tileHeight - layer.z * layerOffset,
+                            z: layer.z,
+                            row: row + layer.offsetY,
+                            col: col + layer.offsetX,
+                            matched: false
+                        });
+                        pairIndex++;
+                    }
+                }
+            });
+            
+            return tiles;
+        };
+
+        // Athuga hvort flís sé opin (hægt að velja)
+        const isTileOpen = (tile, allTiles) => {
+            if (tile.matched) return false;
+            
+            const activeTiles = allTiles.filter(t => !t.matched);
+            
+            // Athuga hvort flís sé á sama stað eða hærra
+            const hasBlockingTileAbove = activeTiles.some(t => 
+                t.id !== tile.id &&
+                t.z > tile.z &&
+                Math.abs(t.col - tile.col) < 1 &&
+                Math.abs(t.row - tile.row) < 1
+            );
+            
+            if (hasBlockingTileAbove) return false;
+            
+            // Athuga hvort bæði hliðar séu lokaðar á sama lagi
+            const sameLevelTiles = activeTiles.filter(t => t.z === tile.z && t.id !== tile.id);
+            
+            const hasLeftNeighbor = sameLevelTiles.some(t => 
+                Math.abs(t.row - tile.row) < 0.6 && 
+                t.col >= tile.col - 1.1 && 
+                t.col < tile.col
+            );
+            
+            const hasRightNeighbor = sameLevelTiles.some(t => 
+                Math.abs(t.row - tile.row) < 0.6 && 
+                t.col <= tile.col + 1.1 && 
+                t.col > tile.col
+            );
+            
+            return !(hasLeftNeighbor && hasRightNeighbor);
+        };
+
+        // TTS fall
+        const playAudio = async (text, onEnd) => {
+            try {
+                const r = await fetch('/.netlify/functions/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text_to_speak: text }),
+                });
+                const data = await r.json();
+                
+                if (!r.ok || data.error || !data.audio_base64) {
+                    console.error("Villa í hljóðkalli:", data.error);
+                    onEnd && onEnd();
+                    return;
+                }
+                
+                const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+                audio.onended = () => onEnd && onEnd();
+                audio.onerror = () => onEnd && onEnd();
+                audio.play().catch(() => onEnd && onEnd());
+            } catch (e) {
+                console.error("TTS villa:", e);
+                onEnd && onEnd();
+            }
+        };
+
+        // Stjörnur
+        const Stars = () => {
+            const stars = Array.from({ length: 50 }, (_, i) => ({
+                id: i,
+                left: Math.random() * 100,
+                top: Math.random() * 100,
+                delay: Math.random() * 3,
+                size: Math.random() * 2 + 1
+            }));
+            
+            return (
+                <div className="stars">
+                    {stars.map(star => (
+                        <div
+                            key={star.id}
+                            className="star"
+                            style={{
+                                left: `${star.left}%`,
+                                top: `${star.top}%`,
+                                width: star.size,
+                                height: star.size,
+                                animationDelay: `${star.delay}s`
+                            }}
+                        />
+                    ))}
+                </div>
+            );
+        };
+
+        // Mahjong flís component
+        const MahjongTile = ({ tile, isOpen, isSelected, onClick }) => {
+            const tileRef = useRef(null);
+            
+            return (
+                <div
+                    ref={tileRef}
+                    className={`mahjong-tile ${tile.matched ? 'matched' : ''} ${!isOpen ? 'blocked' : ''} ${isSelected ? 'selected' : ''}`}
+                    style={{
+                        left: tile.x,
+                        top: tile.y,
+                        zIndex: tile.z * 100 + tile.row * 10 + tile.col
+                    }}
+                    onClick={() => isOpen && !tile.matched && onClick(tile, tileRef)}
+                    data-word={tile.word}
+                >
+                    {tile.word}
+                </div>
+            );
+        };
+
+        // Ljóðalína
+        const PoemDisplay = ({ revealedWords }) => {
+            const fullText = POEM.verses.join(' ');
+            const words = fullText.split(/\s+/);
+            
+            return (
+                <div className="poem-container">
+                    <div className="poem-font text-xl leading-relaxed">
+                        {words.map((word, idx) => {
+                            const normalized = word.toLowerCase();
+                            const isRevealed = revealedWords.has(normalized);
+                            const justRevealed = revealedWords.get(normalized) === 'just';
+                            
+                            return (
+                                <span key={idx}>
+                                    <span 
+                                        className={`poem-word ${isRevealed ? 'revealed' : 'hidden'} ${justRevealed ? 'just-revealed' : ''}`}
+                                    >
+                                        {word}
+                                    </span>
+                                    {' '}
+                                </span>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // Sigurgluggi
+        const VictoryScreen = ({ onPlayAgain, onReadPoem, isReading }) => (
+            <div className="victory-overlay">
+                <div className="victory-content">
+                    <h2 className="poem-font text-4xl mb-8 text-amber-300">✨ Til hamingju! ✨</h2>
+                    
+                    <div className="poem-container mb-8">
+                        <div className="poem-font text-lg leading-relaxed text-left">
+                            {POEM.verses.map((verse, idx) => (
+                                <p key={idx} className="mb-4">{verse}</p>
+                            ))}
+                        </div>
+                        <div className="mt-6 pt-4 border-t border-white/20">
+                            <p className="poem-font text-xl italic text-amber-200">„{POEM.title}"</p>
+                            <p className="poem-font text-lg text-white/70">— {POEM.author}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-4 justify-center">
+                        <button 
+                            onClick={onReadPoem}
+                            disabled={isReading}
+                            className="play-button"
+                        >
+                            {isReading ? '🔊 Les...' : '🔊 Hlusta á ljóðið'}
+                        </button>
+                        <button 
+                            onClick={onPlayAgain}
+                            className="play-button"
+                        >
+                            🔄 Spila aftur
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // Fljúgandi orð animation
+        const FlyingWord = ({ word, startPos, endPos, onComplete }) => {
+            const [style, setStyle] = useState({
+                left: startPos.x,
+                top: startPos.y,
+                opacity: 1,
+                transform: 'scale(1)'
+            });
+            
+            useEffect(() => {
+                requestAnimationFrame(() => {
+                    setStyle({
+                        left: endPos.x,
+                        top: endPos.y,
+                        opacity: 0,
+                        transform: 'scale(0.5)'
+                    });
+                });
+                
+                const timer = setTimeout(onComplete, 800);
+                return () => clearTimeout(timer);
+            }, []);
+            
+            return (
+                <div className="flying-word" style={style}>
+                    {word}
+                </div>
+            );
+        };
+
+        // Aðal component
+        const MahjongGame = () => {
+            const [tiles, setTiles] = useState([]);
+            const [selectedTile, setSelectedTile] = useState(null);
+            const [selectedRef, setSelectedRef] = useState(null);
+            const [revealedWords, setRevealedWords] = useState(new Map());
+            const [flyingWords, setFlyingWords] = useState([]);
+            const [gameWon, setGameWon] = useState(false);
+            const [isReading, setIsReading] = useState(false);
+            const [matchCount, setMatchCount] = useState(0);
+            const poemContainerRef = useRef(null);
+            
+            const uniqueWords = getAllUniqueWords();
+            const totalPairs = uniqueWords.length;
+
+            // Byrja leik
+            useEffect(() => {
+                startNewGame();
+            }, []);
+
+            const startNewGame = () => {
+                const words = getAllUniqueWords();
+                const newTiles = createTileLayout(words);
+                setTiles(newTiles);
+                setSelectedTile(null);
+                setSelectedRef(null);
+                setRevealedWords(new Map());
+                setFlyingWords([]);
+                setGameWon(false);
+                setMatchCount(0);
+            };
+
+            // Hreinsa "just-revealed" stöðu
+            useEffect(() => {
+                const justRevealedWords = [...revealedWords.entries()].filter(([_, v]) => v === 'just');
+                if (justRevealedWords.length > 0) {
+                    const timer = setTimeout(() => {
+                        setRevealedWords(prev => {
+                            const next = new Map(prev);
+                            justRevealedWords.forEach(([word]) => next.set(word, true));
+                            return next;
+                        });
+                    }, 1000);
+                    return () => clearTimeout(timer);
+                }
+            }, [revealedWords]);
+
+            // Athuga sigurstöðu
+            useEffect(() => {
+                if (matchCount > 0 && matchCount === totalPairs) {
+                    setTimeout(() => setGameWon(true), 500);
+                }
+            }, [matchCount, totalPairs]);
+
+            const handleTileClick = (tile, tileRef) => {
+                if (selectedTile && selectedTile.id === tile.id) {
+                    setSelectedTile(null);
+                    setSelectedRef(null);
+                    return;
+                }
+
+                if (!selectedTile) {
+                    setSelectedTile(tile);
+                    setSelectedRef(tileRef);
+                    return;
+                }
+
+                // Athuga hvort orð passa
+                if (selectedTile.word.toLowerCase() === tile.word.toLowerCase()) {
+                    // Match fundinn!
+                    const word = tile.word;
+                    
+                    // Finna staðsetningu í ljóðasvæði
+                    const poemRect = poemContainerRef.current?.getBoundingClientRect();
+                    const tile1Rect = selectedRef?.current?.getBoundingClientRect();
+                    const tile2Rect = tileRef?.current?.getBoundingClientRect();
+                    
+                    const endPos = poemRect ? {
+                        x: poemRect.left + poemRect.width / 2,
+                        y: poemRect.top + poemRect.height / 2
+                    } : { x: window.innerWidth / 2, y: 100 };
+
+                    // Bæta við fljúgandi orðum
+                    if (tile1Rect) {
+                        setFlyingWords(prev => [...prev, {
+                            id: `${tile.id}-1`,
+                            word,
+                            startPos: { x: tile1Rect.left, y: tile1Rect.top },
+                            endPos
+                        }]);
+                    }
+                    if (tile2Rect) {
+                        setFlyingWords(prev => [...prev, {
+                            id: `${tile.id}-2`,
+                            word,
+                            startPos: { x: tile2Rect.left, y: tile2Rect.top },
+                            endPos
+                        }]);
+                    }
+
+                    // Uppfæra tiles
+                    setTiles(prev => prev.map(t => 
+                        (t.id === selectedTile.id || t.id === tile.id) 
+                            ? { ...t, matched: true } 
+                            : t
+                    ));
+
+                    // Uppfæra revealed words
+                    setRevealedWords(prev => {
+                        const next = new Map(prev);
+                        next.set(word.toLowerCase(), 'just');
+                        return next;
+                    });
+
+                    setMatchCount(prev => prev + 1);
+                }
+
+                setSelectedTile(null);
+                setSelectedRef(null);
+            };
+
+            const removeFlyingWord = (id) => {
+                setFlyingWords(prev => prev.filter(fw => fw.id !== id));
+            };
+
+            const handleReadPoem = () => {
+                setIsReading(true);
+                const fullText = POEM.verses.join(' ');
+                playAudio(fullText, () => setIsReading(false));
+            };
+
+            // Reikna leiksvæði stærð
+            const gameAreaWidth = 8 * 56 + 100;
+            const gameAreaHeight = 6 * 72 + 100;
+
+            return (
+                <div className="min-h-screen pb-12 relative">
+                    <Stars />
+                    
+                    <header className="bg-white/5 backdrop-blur-sm border-b border-white/10 relative z-10">
+                        <div className="max-w-6xl mx-auto px-6 py-6">
+                            <button 
+                                onClick={() => window.history.back()} 
+                                className="text-sm text-white/50 hover:text-white/80 mb-2 inline-block font-light transition-colors"
+                            >
+                                ← Til baka
+                            </button>
+                            <h1 className="text-3xl font-light text-white/90 mb-1 poem-font">Mahjong Ljóðaleikur</h1>
+                            <p className="text-white/50 text-sm font-light">Finndu pörin og ljóðið birtist</p>
+                        </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto px-6 mt-8 relative z-10">
+                        {/* Ljóðasvæði */}
+                        <div ref={poemContainerRef} className="mb-8">
+                            <PoemDisplay revealedWords={revealedWords} />
+                            <div className="mt-4 text-center text-white/50 text-sm">
+                                Pör fundin: {matchCount} / {totalPairs}
+                            </div>
+                        </div>
+
+                        {/* Leiksvæði */}
+                        <div className="flex justify-center">
+                            <div 
+                                className="relative"
+                                style={{ 
+                                    width: gameAreaWidth, 
+                                    height: gameAreaHeight
+                                }}
+                            >
+                                {tiles.map(tile => (
+                                    <MahjongTile
+                                        key={tile.id}
+                                        tile={tile}
+                                        isOpen={isTileOpen(tile, tiles)}
+                                        isSelected={selectedTile?.id === tile.id}
+                                        onClick={handleTileClick}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Nýr leikur hnappur */}
+                        <div className="mt-8 text-center">
+                            <button onClick={startNewGame} className="play-button">
+                                🔄 Nýr leikur
+                            </button>
+                        </div>
+                    </main>
+
+                    {/* Fljúgandi orð */}
+                    {flyingWords.map(fw => (
+                        <FlyingWord
+                            key={fw.id}
+                            word={fw.word}
+                            startPos={fw.startPos}
+                            endPos={fw.endPos}
+                            onComplete={() => removeFlyingWord(fw.id)}
+                        />
+                    ))}
+
+                    {/* Sigurskjár */}
+                    {gameWon && (
+                        <VictoryScreen 
+                            onPlayAgain={startNewGame}
+                            onReadPoem={handleReadPoem}
+                            isReading={isReading}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<MahjongGame />);
+    </script>
+</body>
+</html>
