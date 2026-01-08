@@ -311,17 +311,19 @@ Gott svar: "Þrisvar í viku! Það er mjög gott! Hvað finnst þér best að g
 Nemandi: "Ég fer til að vera heilbrigður."
 Gott svar: "Frábært! Heilsan er mjög mikilvæg. Finnur þú mun á líðan þinni eftir að þú byrjaðir að æfa?"
 
-SVARAÐU MEÐ JSON Á ÞESSU FORMI:
+SVARAÐU ALLTAF MEÐ JSON Á ÞESSU FORMI (ENGIN MARKDOWN, BARA JSON):
 {
   "grammar": "Málfarsendurgjöf BARA ef það eru GRÓFAR villur (beygingarvillur, rangt orðval). Vertu mjög mild og hvetjandi (1 setning). Ef ekkert athugavert, settu null.",
   "response": "Aðal svarið þitt hér með comment og follow-up spurningu"
 }
 
 DÆMI á grammar:
-- Gott: "Frábært! *'Ég fer í sund' er réttara en 'ég fer á sund'.*"
+- Gott: "Frábært! 'Ég fer í sund' er réttara en 'ég fer á sund'."
 - Slæmt: "Rangur punktur", "Vantar kommu"
 - ALDREI pikka í greinarmerki eða smávillur
-- ALDREI ef setningin er eðlileg í samhengi`;
+- ALDREI ef setningin er eðlileg í samhengi
+
+MIKILVÆGT: Skilaðu BARA JSON - ekkert annað!`;
 
           const messages = [
             { role: 'system', content: systemPrompt },
@@ -337,15 +339,30 @@ DÆMI á grammar:
             model: 'gpt-4o',
             temperature: 0.7,
             max_tokens: 300,
-            messages: messages
+            messages: messages,
+            response_format: { type: "json_object" }
           });
 
           let cleanResult = response.trim();
+          
+          // Fjarlægja markdown code blocks ef þeir eru til staðar
           if (cleanResult.startsWith('```')) {
             cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
           }
           
-          const parsed = JSON.parse(cleanResult);
+          let parsed;
+          try {
+            parsed = JSON.parse(cleanResult);
+          } catch (parseError) {
+            console.error('JSON parse villa:', parseError, 'Svar:', cleanResult);
+            // Fallback - búa til einfalt svar ef parsing mistekst
+            parsed = {
+              grammar: null,
+              response: cleanResult.includes('{') ? 
+                "Frábært! Haltu áfram að æfa - það er mjög gott fyrir þig!" : 
+                cleanResult
+            };
+          }
 
           let currentConversations = [...newConversations];
           if (parsed.grammar) {
@@ -653,7 +670,7 @@ DÆMI á grammar:
                         disabled={loadingStates[index] || !currentInputs[index].trim()}
                         className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light self-end"
                       >
-                        {conversations[index].length === 0 ? 'Senda' : 'Senda'}
+                        Senda
                       </button>
                     </div>
                   </div>
