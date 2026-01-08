@@ -130,6 +130,8 @@ En mundu að þú getur líka stundað líkamsrækt með því að leika þér �
       'Er einhver hreyfing sem þig langar að prófa?'
     ];
 
+    const MAX_EXCHANGES_PER_QUESTION = 3; // Hámarksfjöldi skilaboðapara (user + assistant)
+
     const Likamsraekt = () => {
       const [stage, setStage] = useState('reading');
       const [mcAnswers, setMcAnswers] = useState([]);
@@ -142,6 +144,8 @@ En mundu að þú getur líka stundað líkamsrækt með því að leika þér �
       const [conversations, setConversations] = useState([[], [], [], []]);
       const [currentInputs, setCurrentInputs] = useState(['', '', '', '']);
       const [loadingStates, setLoadingStates] = useState([false, false, false, false]);
+      const [conversationClosed, setConversationClosed] = useState([false, false, false, false]);
+      const [showContinuePrompt, setShowContinuePrompt] = useState([false, false, false, false]);
       
       const chatRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
@@ -254,9 +258,26 @@ SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
         setCurrentInputs(newInputs);
       };
 
+      const countExchanges = (conv) => {
+        // Telja skilaboðapör (user + assistant)
+        return conv.filter(m => m.role === 'assistant').length;
+      };
+
+      const closeConversation = (questionIndex) => {
+        const newClosed = [...conversationClosed];
+        newClosed[questionIndex] = true;
+        setConversationClosed(newClosed);
+      };
+
+      const continueConversation = (questionIndex) => {
+        const newPrompt = [...showContinuePrompt];
+        newPrompt[questionIndex] = false;
+        setShowContinuePrompt(newPrompt);
+      };
+
       const sendMessage = async (questionIndex) => {
         const message = currentInputs[questionIndex].trim();
-        if (!message) return;
+        if (!message || conversationClosed[questionIndex]) return;
 
         const newConversations = [...conversations];
         newConversations[questionIndex] = [
@@ -277,7 +298,8 @@ SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
 
         try {
           const question = DISCUSSION_QUESTIONS[questionIndex];
-          const isFirstMessage = newConversations[questionIndex].length === 1;
+          const exchangeCount = countExchanges(newConversations[questionIndex]);
+          const isLastExchange = exchangeCount >= MAX_EXCHANGES_PER_QUESTION - 1;
 
           const systemPrompt = `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1-A2 nemanda um líkamsrækt.
 
@@ -287,13 +309,16 @@ TEXTINN SEM NEMANDINN LAS:
 UPPRUNALEGA SPURNINGIN:
 "${question}"
 
+${isLastExchange ? `MIKILVÆGT: Þetta er SÍÐASTA svar þitt í þessu spjalli. EKKI spyrja fleiri spurninga.` : ''}
+
 VERKEFNI:
-${isFirstMessage ? `1. Lestu fyrsta svar nemandans og commentaðu á efnið - hvað er áhugavert? Hvað líkar þér við það sem nemandinn segir?
+${isLastExchange ? `1. Gefðu hvetjandi og jákvæða endurgjöf á svari nemandans
+2. Commentaðu á efnið - hvað finnst þér áhugavert?
+3. Lokaðu með: "Frábært! Gott spjall."
+4. EKKI spyrja fleiri spurninga` : 
+`1. Lestu svar nemandans og commentaðu á efnið - hvað er áhugavert?
 2. Gefðu hvetjandi, jákvæða endurgjöf
-3. Spyrðu einfalda follow-up spurningu sem tengist svari nemandans` : `1. Haltu áfram samtali við nemandann
-2. Commentaðu á svari hans - hvað finnst þér áhugavert?
-3. Spyrðu eina einfalda follow-up spurningu
-4. Vertu hvetjandi og vinalegur`}
+3. Spyrðu einfalda follow-up spurningu sem tengist svari nemandans`}
 
 REGLUR:
 - Vertu ALLTAF jákvæður og hvetjandi
@@ -301,29 +326,22 @@ REGLUR:
 - Notaðu einfalda íslensku (A1-A2 stig)
 - Notaðu bara íslensku
 - ALDREI gefa einkunn
-- Commentaðu á efninu - sýndu áhuga!
-- Spyrðu follow-up spurningu
+${isLastExchange ? '- EKKI spyrja fleiri spurninga' : '- Spyrðu follow-up spurningu'}
 
 DÆMI:
-Nemandi: "Já, ég fer í ræktina þrisvar í viku."
-Gott svar: "Þrisvar í viku! Það er mjög gott! Hvað finnst þér best að gera í ræktinni?"
+${isLastExchange ? 
+`Nemandi: "Ég vil prófa jóga."
+Gott svar: "Jóga er mjög góð fyrir líkama og huga! Það er frábært að þú viljir prófa eitthvað nýtt. Frábært! Gott spjall."` :
+`Nemandi: "Já, ég fer í ræktina þrisvar í viku."
+Gott svar: "Þrisvar í viku! Það er mjög gott! Hvað finnst þér best að gera í ræktinni?"`}
 
-Nemandi: "Ég fer til að vera heilbrigður."
-Gott svar: "Frábært! Heilsan er mjög mikilvæg. Finnur þú mun á líðan þinni eftir að þú byrjaðir að æfa?"
-
-SVARAÐU ALLTAF MEÐ JSON Á ÞESSU FORMI (ENGIN MARKDOWN, BARA JSON):
+SVARAÐU ALLTAF MEÐ JSON (EKKERT ANNAÐ - BARA HREIN JSON):
 {
-  "grammar": "Málfarsendurgjöf BARA ef það eru GRÓFAR villur (beygingarvillur, rangt orðval). Vertu mjög mild og hvetjandi (1 setning). Ef ekkert athugavert, settu null.",
-  "response": "Aðal svarið þitt hér með comment og follow-up spurningu"
+  "grammar": "Málfarsendurgjöf BARA ef það eru GRÓFAR villur. Vertu mjög mild (1 setning). Ef ekkert athugavert: null",
+  "response": "Aðal svarið þitt hér"
 }
 
-DÆMI á grammar:
-- Gott: "Frábært! 'Ég fer í sund' er réttara en 'ég fer á sund'."
-- Slæmt: "Rangur punktur", "Vantar kommu"
-- ALDREI pikka í greinarmerki eða smávillur
-- ALDREI ef setningin er eðlileg í samhengi
-
-MIKILVÆGT: Skilaðu BARA JSON - ekkert annað!`;
+ALDREI nota markdown eða ```json``` - BARA hrein JSON!`;
 
           const messages = [
             { role: 'system', content: systemPrompt },
@@ -331,7 +349,7 @@ MIKILVÆGT: Skilaðu BARA JSON - ekkert annað!`;
               .filter(msg => msg.role === 'user' || msg.role === 'assistant')
               .map(msg => ({
                 role: msg.role,
-                content: msg.role === 'assistant' ? msg.content : msg.content
+                content: msg.content
               }))
           ];
 
@@ -345,22 +363,25 @@ MIKILVÆGT: Skilaðu BARA JSON - ekkert annað!`;
 
           let cleanResult = response.trim();
           
-          // Fjarlægja markdown code blocks ef þeir eru til staðar
-          if (cleanResult.startsWith('```')) {
-            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          // Fjarlægja markdown code blocks
+          cleanResult = cleanResult.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          
+          // Ef það er eitthvað fyrir framan JSON, fjarlægja það
+          const jsonStart = cleanResult.indexOf('{');
+          if (jsonStart > 0) {
+            cleanResult = cleanResult.substring(jsonStart);
           }
           
           let parsed;
           try {
             parsed = JSON.parse(cleanResult);
           } catch (parseError) {
-            console.error('JSON parse villa:', parseError, 'Svar:', cleanResult);
-            // Fallback - búa til einfalt svar ef parsing mistekst
+            console.error('JSON parse villa:', parseError);
+            console.error('Svar frá API:', cleanResult);
+            // Fallback
             parsed = {
               grammar: null,
-              response: cleanResult.includes('{') ? 
-                "Frábært! Haltu áfram að æfa - það er mjög gott fyrir þig!" : 
-                cleanResult
+              response: "Frábært! Þú svarar mjög vel."
             };
           }
 
@@ -384,6 +405,13 @@ MIKILVÆGT: Skilaðu BARA JSON - ekkert annað!`;
           setConversations(updatedConversations);
           
           scrollToBottom(questionIndex);
+
+          // Ef þetta var síðasta exchange, sýna "continue or close" prompt
+          if (isLastExchange) {
+            const newPrompt = [...showContinuePrompt];
+            newPrompt[questionIndex] = true;
+            setShowContinuePrompt(newPrompt);
+          }
 
         } catch (e) {
           console.error('Chat error:', e);
@@ -655,24 +683,52 @@ MIKILVÆGT: Skilaðu BARA JSON - ekkert annað!`;
                       )}
                     </div>
 
-                    <div className="flex gap-2">
-                      <textarea
-                        value={currentInputs[index]}
-                        onChange={(e) => handleInputChange(index, e.target.value)}
-                        onKeyPress={(e) => handleKeyPress(e, index)}
-                        disabled={loadingStates[index]}
-                        className="flex-1 p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base disabled:bg-gray-50"
-                        rows="2"
-                        placeholder={conversations[index].length === 0 ? "Skrifaðu svarið þitt hér..." : "Haltu áfram að spjalla..."}
-                      />
-                      <button
-                        onClick={() => sendMessage(index)}
-                        disabled={loadingStates[index] || !currentInputs[index].trim()}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light self-end"
-                      >
-                        Senda
-                      </button>
-                    </div>
+                    {showContinuePrompt[index] && !conversationClosed[index] ? (
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mt-4">
+                        <p className="text-gray-700 font-light mb-4 text-center">
+                          Viltu spjalla meira eða segja þetta gott?
+                        </p>
+                        <div className="flex gap-3 justify-center">
+                          <button
+                            onClick={() => continueConversation(index)}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-light"
+                          >
+                            Spjalla meira
+                          </button>
+                          <button
+                            onClick={() => closeConversation(index)}
+                            className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors font-light"
+                          >
+                            Þetta er gott
+                          </button>
+                        </div>
+                      </div>
+                    ) : !conversationClosed[index] ? (
+                      <div className="flex gap-2">
+                        <textarea
+                          value={currentInputs[index]}
+                          onChange={(e) => handleInputChange(index, e.target.value)}
+                          onKeyPress={(e) => handleKeyPress(e, index)}
+                          disabled={loadingStates[index]}
+                          className="flex-1 p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base disabled:bg-gray-50"
+                          rows="2"
+                          placeholder={conversations[index].length === 0 ? "Skrifaðu svarið þitt hér..." : "Haltu áfram að spjalla..."}
+                        />
+                        <button
+                          onClick={() => sendMessage(index)}
+                          disabled={loadingStates[index] || !currentInputs[index].trim()}
+                          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light self-end"
+                        >
+                          Senda
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mt-4">
+                        <p className="text-green-800 font-light text-center">
+                          ✓ Spjalli lokið
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
 
