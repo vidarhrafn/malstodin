@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💬 Spjall: Líkamsrækt – A2</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .sticky-image { 
+      position: sticky; 
+      top: 0; 
+      z-index: 50; 
+      background: white; 
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    const MAX_EXCHANGES = 6;
+
+    const IMAGE_DESCRIPTION = `Stór, björt líkamsræktarstöð með fólki að æfa. Í forgrunni er ungt fólk:
+- Stúlka í grænum íþróttafötum á hlaupabretti
+- Strákur við lóð að lyfta`;
+
+    const SYSTEM_PROMPT = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér mynd af ungu fólki í líkamsræktarstöð.
+
+Á myndinni:
+- Stúlka í grænum íþróttafötum er að hlaupa á hlaupabretti
+- Strákur er að lyfta lóðum til að byggja upp vöðva
+- Í bakgrunni sjást fleiri manneskjur að æfa
+- Björt og stór líkamsræktarstöð með mörgum tækjum
+
+MARKMIÐ: Fá nemanda til að nota þessi lykilorð:
+- líkamsrækt, rækt
+- þrek
+- að lyfta lóðum
+- vöðvar
+- hlaupabretti
+- tæki
+- að æfa
+- líkamsræktarstöð
+- þreyttur
+- að teygja
+
+SKILAÐU ALLTAF JSON á þessu formi:
+{
+  "response": "Þitt svar hér"
+}
+
+REGLUR:
+1. Skrifaðu AÐEINS EINA stutta spurningu á íslensku í hvert skipti
+2. Eftir svar nemanda: hrósaðu mjög stutt (t.d. "Flott!" eða "Já, nákvæmlega!") 
+3. Ef nemandi gerir málfræðivillu, leiðréttu hana á léttan og jákvæðan hátt BEINT í response textanum
+4. Dæmi um leiðréttingu: "Já, góð spurning! (Við segjum 'í ræktina' þegar við förum þangað). Hvað heldur þú..."
+5. Spurðu síðan NÝRRAR spurningar sem tengist svari nemandans eða reynir að fá hann til að nota fleiri lykilorð
+
+Hugmyndabanki að spurningum:
+- Hvað heldur þú að stúlkan sé að gera?
+- Á hvaða tæki er hún?
+- Hvað er strákurinn að gera?
+- Hvers vegna heldur þú að hann sé að lyfta lóðum?
+- Hvar eru þau?
+- Hvað sérðu í bakgrunninum?
+- Heldur þú að þau séu þreytt?
+- Hvað heldur þú að þau geri eftir æfinguna?
+- Ferð þú í ræktina?
+- Hvað finnst þér gaman að gera í ræktinni?
+- Hvers vegna heldur þú að fólk fari í ræktina?
+
+MIKILVÆGT: Vertu hvetjandi, jákvæð/ur og hjálplegur. Þetta á að vera skemmtilegt spjall!
+
+SVARAÐU ALLTAF MEÐ JSON (EKKERT ANNAÐ - BARA HREIN JSON)
+ALDREI nota markdown eða \`\`\`json\`\`\` - BARA hrein JSON!`;
+
+    const SpjallLikamsraekt = () => {
+      const [conversation, setConversation] = useState([]);
+      const [userInput, setUserInput] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+      const [conversationClosed, setConversationClosed] = useState(false);
+      const [showContinuePrompt, setShowContinuePrompt] = useState(false);
+      const chatRef = useRef(null);
+
+      const scrollToBottom = () => {
+        setTimeout(() => {
+          if (chatRef.current) {
+            chatRef.current.scrollTop = chatRef.current.scrollHeight;
+          }
+        }, 100);
+      };
+
+      const countExchanges = () => {
+        return conversation.filter(m => m.role === 'assistant').length;
+      };
+
+      const sendMessage = async (message) => {
+        if (!message.trim() || isLoading || conversationClosed) return;
+
+        const userMessage = { role: 'user', content: message };
+        const newConversation = [...conversation, userMessage];
+        setConversation(newConversation);
+        setUserInput('');
+        setIsLoading(true);
+        scrollToBottom();
+
+        const exchangeCount = countExchanges();
+        const isLastExchange = exchangeCount >= MAX_EXCHANGES - 1;
+
+        const systemMessage = isLastExchange 
+          ? SYSTEM_PROMPT + `\n\nMIKILVÆGT: Þetta er SÍÐASTA svar þitt í þessu spjalli. EKKI spyrja fleiri spurninga. Lokaðu með stuttu og jákvæðu svari eins og: "Frábært spjall! Þú ert að læra vel." eða "Mjög gott! Haltu svona áfram."`
+          : SYSTEM_PROMPT;
+
+        try {
+          const response = await fetch('/.netlify/functions/openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [
+                { role: 'system', content: systemMessage },
+                ...newConversation
+              ],
+              response_format: { type: "json_object" }
+            })
+          });
+
+          if (!response.ok) throw new Error('Network response was not ok');
+
+          const data = await response.json();
+          let aiResponse = data.choices[0].message.content;
+
+          // Parse JSON
+          let parsed;
+          try {
+            let cleanResult = aiResponse.trim();
+            cleanResult = cleanResult.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            const jsonStart = cleanResult.indexOf('{');
+            if (jsonStart > 0) {
+              cleanResult = cleanResult.substring(jsonStart);
+            }
+            parsed = JSON.parse(cleanResult);
+          } catch (parseError) {
+            console.error('JSON parse villa:', parseError);
+            parsed = { response: aiResponse };
+          }
+
+          const assistantMessage = {
+            role: 'assistant',
+            content: parsed.response || aiResponse
+          };
+
+          setConversation([...newConversation, assistantMessage]);
+          scrollToBottom();
+
+          if (isLastExchange) {
+            setShowContinuePrompt(true);
+          }
+
+        } catch (error) {
+          console.error('Villa við að senda skilaboð:', error);
+          const errorMessage = {
+            role: 'assistant',
+            content: 'Úps! Eitthvað fór úrskeiðis. Reyndu aftur.'
+          };
+          setConversation([...newConversation, errorMessage]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const startConversation = async () => {
+        setIsLoading(true);
+        try {
+          const response = await fetch('/.netlify/functions/openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [
+                { 
+                  role: 'system', 
+                  content: SYSTEM_PROMPT 
+                },
+                { 
+                  role: 'user', 
+                  content: 'Byrjaðu spjallið með fyrstu spurningunni þinni.' 
+                }
+              ],
+              response_format: { type: "json_object" }
+            })
+          });
+
+          if (!response.ok) throw new Error('Network response was not ok');
+
+          const data = await response.json();
+          let aiResponse = data.choices[0].message.content;
+
+          let parsed;
+          try {
+            let cleanResult = aiResponse.trim();
+            cleanResult = cleanResult.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            const jsonStart = cleanResult.indexOf('{');
+            if (jsonStart > 0) {
+              cleanResult = cleanResult.substring(jsonStart);
+            }
+            parsed = JSON.parse(cleanResult);
+          } catch (parseError) {
+            console.error('JSON parse villa:', parseError);
+            parsed = { response: "Hæ! Sjáðu myndina. Hvað heldur þú að þau séu að gera?" };
+          }
+
+          setConversation([{
+            role: 'assistant',
+            content: parsed.response || "Hæ! Sjáðu myndina. Hvað heldur þú að þau séu að gera?"
+          }]);
+          scrollToBottom();
+        } catch (error) {
+          console.error('Villa við að byrja spjall:', error);
+          setConversation([{
+            role: 'assistant',
+            content: "Hæ! Sjáðu myndina. Hvað heldur þú að þau séu að gera?"
+          }]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const continueConversation = () => {
+        setShowContinuePrompt(false);
+      };
+
+      const closeConversation = () => {
+        setConversationClosed(true);
+        setShowContinuePrompt(false);
+      };
+
+      const resetConversation = () => {
+        setConversation([]);
+        setUserInput('');
+        setConversationClosed(false);
+        setShowContinuePrompt(false);
+        startConversation();
+      };
+
+      useEffect(() => {
+        startConversation();
+      }, []);
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <div className="flex items-center gap-6">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-light text-gray-800 mb-2">💬 Spjall: Líkamsrækt</h1>
+                  <p className="text-gray-500 text-sm font-light">Samtalsæfing · A2</p>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-8">
+            {/* Sticky Image */}
+            <div className="sticky-image">
+              <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-6 border-2 border-purple-200">
+                <div className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center mb-4">
+                  <div className="text-center p-8">
+                    <div className="text-6xl mb-4">🏋️</div>
+                    <p className="text-gray-600 font-light text-sm max-w-md">
+                      {IMAGE_DESCRIPTION}
+                    </p>
+                    <p className="text-gray-500 text-xs mt-4 italic">
+                      (Mynd kemur hér)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">📋 Leiðbeiningar</h2>
+              <ul className="space-y-2 text-gray-700 font-light">
+                <li>• Skoðaðu myndina af fólkinu í ræktinni</li>
+                <li>• Svaraðu spurningum gervigreiningarinnar</li>
+                <li>• Reyndu að nota íslensk orð sem tengjast líkamsrækt</li>
+                <li>• Vertu ekki hrædd/ur við að gera mistök - það er hluti af náminu!</li>
+              </ul>
+            </div>
+
+            {/* Chat Container */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-2xl font-light text-gray-800 mb-6">Spjallið</h2>
+              
+              <div 
+                ref={chatRef}
+                className="space-y-4 mb-6 max-h-96 overflow-y-auto"
+              >
+                {conversation.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg p-4 ${
+                        msg.role === 'user'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      <p className="font-light whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-lg p-4">
+                      <p className="font-light text-gray-600">...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!conversationClosed && !showContinuePrompt && (
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage(userInput)}
+                    placeholder="Skrifaðu svarið þitt hér..."
+                    disabled={isLoading}
+                    className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
+                  />
+                  <button
+                    onClick={() => sendMessage(userInput)}
+                    disabled={isLoading || !userInput.trim()}
+                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors font-light disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Senda
+                  </button>
+                </div>
+              )}
+
+              {showContinuePrompt && !conversationClosed && (
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 text-center">
+                  <p className="text-gray-700 font-light mb-4">Viltu spjalla meira eða segja þetta gott?</p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={continueConversation}
+                      className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors font-light"
+                    >
+                      Spjalla meira
+                    </button>
+                    <button
+                      onClick={closeConversation}
+                      className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition-colors font-light"
+                    >
+                      Þetta er gott
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {conversationClosed && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                  <p className="text-green-800 font-light mb-4">✓ Spjalli lokið</p>
+                  <button
+                    onClick={resetConversation}
+                    className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors font-light"
+                  >
+                    Byrja aftur
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Completion Message */}
+            <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-lg p-8 text-center">
+              <div className="text-6xl mb-4">💪</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-3">Frábært!</h2>
+              <p className="text-gray-600 font-light">
+                Þú ert að æfa íslensku og læra um líkamsrækt á sama tíma!
+              </p>
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallLikamsraekt />);
+  </script>
+</body>
+</html>
