@@ -21,6 +21,20 @@
       background: white; 
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
     }
+    .mic-button {
+      transition: all 0.2s;
+    }
+    .mic-button:hover {
+      transform: scale(1.05);
+    }
+    .mic-button.recording {
+      background: #ef4444 !important;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
   </style>
 </head>
 <body>
@@ -91,7 +105,37 @@ ALDREI nota markdown eða \`\`\`json\`\`\` - BARA hrein JSON!`;
       const [isLoading, setIsLoading] = useState(false);
       const [conversationClosed, setConversationClosed] = useState(false);
       const [showContinuePrompt, setShowContinuePrompt] = useState(false);
+      const [isRecording, setIsRecording] = useState(false);
+      const [recognition, setRecognition] = useState(null);
       const chatRef = useRef(null);
+
+      useEffect(() => {
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          const recognitionInstance = new SpeechRecognition();
+          recognitionInstance.lang = 'is-IS';
+          recognitionInstance.continuous = false;
+          recognitionInstance.interimResults = false;
+
+          recognitionInstance.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            setUserInput(transcript);
+            setIsRecording(false);
+          };
+
+          recognitionInstance.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            setIsRecording(false);
+          };
+
+          recognitionInstance.onend = () => {
+            setIsRecording(false);
+          };
+
+          setRecognition(recognitionInstance);
+        }
+      }, []);
 
       const scrollToBottom = () => {
         setTimeout(() => {
@@ -103,6 +147,21 @@ ALDREI nota markdown eða \`\`\`json\`\`\` - BARA hrein JSON!`;
 
       const countExchanges = () => {
         return conversation.filter(m => m.role === 'assistant').length;
+      };
+
+      const toggleRecording = () => {
+        if (!recognition) {
+          alert('Rödd-upptaka er ekki studd í þínum vafra.');
+          return;
+        }
+
+        if (isRecording) {
+          recognition.stop();
+          setIsRecording(false);
+        } else {
+          setIsRecording(true);
+          recognition.start();
+        }
       };
 
       const sendMessage = async (message) => {
@@ -295,8 +354,9 @@ ALDREI nota markdown eða \`\`\`json\`\`\` - BARA hrein JSON!`;
               <h2 className="text-xl font-normal text-gray-800 mb-3">📋 Leiðbeiningar</h2>
               <ul className="space-y-2 text-gray-700 font-light">
                 <li>• Skoðaðu myndina af fólkinu í ræktinni</li>
-                <li>• Svaraðu spurningum gervigreindarinnar</li>
+                <li>• Svaraðu spurningum gervigreiningarinnar</li>
                 <li>• Reyndu að nota íslensk orð sem tengjast líkamsrækt</li>
+                <li>• Þú getur skrifað eða notað hljóðnemann 🎤</li>
                 <li>• Vertu ekki hrædd/ur við að gera mistök - það er hluti af náminu!</li>
               </ul>
             </div>
@@ -345,6 +405,18 @@ ALDREI nota markdown eða \`\`\`json\`\`\` - BARA hrein JSON!`;
                     disabled={isLoading}
                     className="flex-1 p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
                   />
+                  <button
+                    onClick={toggleRecording}
+                    disabled={isLoading}
+                    className={`mic-button p-3 rounded-lg transition-colors font-light ${
+                      isRecording 
+                        ? 'bg-red-500 text-white recording' 
+                        : 'bg-purple-500 text-white hover:bg-purple-600'
+                    } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                    title={isRecording ? 'Hætta upptöku' : 'Tala inn svar'}
+                  >
+                    🎤
+                  </button>
                   <button
                     onClick={() => sendMessage(userInput)}
                     disabled={isLoading || !userInput.trim()}
