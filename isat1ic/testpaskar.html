@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📖 Páskarnir á Íslandi - Interactive Reading (B1→A2)</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #fef3c7 0%, #fde68a 100%);
+    }
+    
+    .selectable-text {
+      user-select: text;
+      cursor: text;
+      line-height: 1.8;
+    }
+    
+    .selectable-text::selection {
+      background: #fde047;
+      color: #000;
+    }
+    
+    .translation-popup {
+      position: fixed;
+      background: white;
+      border: 3px solid #eab308;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      z-index: 1000;
+      max-width: 400px;
+      animation: slideUp 0.3s ease-out;
+    }
+    
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .loading-dots::after {
+      content: '...';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef } = React;
+
+    const LANGUAGES = {
+      en: { name: 'English', flag: '🇬🇧', nativeName: 'English' },
+      pl: { name: 'Polish', flag: '🇵🇱', nativeName: 'Polski' },
+      vi: { name: 'Vietnamese', flag: '🇻🇳', nativeName: 'Tiếng Việt' },
+      zh: { name: 'Chinese', flag: '🇨🇳', nativeName: '中文' },
+      es: { name: 'Spanish', flag: '🇪🇸', nativeName: 'Español' },
+      pt: { name: 'Portuguese', flag: '🇵🇹', nativeName: 'Português' },
+      ar: { name: 'Arabic', flag: '🇸🇦', nativeName: 'العربية' },
+      ru: { name: 'Russian', flag: '🇷🇺', nativeName: 'Русский' }
+    };
+
+    const TEXT = `Páskarnir eru spennandi tími á Íslandi. Þetta er tími þar sem við fáum frí frá skólanum og vinnu og við getum verið með fjölskyldunni okkar. Páskarnir eru kristin trúarhátíð. Þá minnumst við þess að Jesús var krossfestur á föstudaginn langa, sem er mjög sorglegur dagur í kristinni trú. Það er dagur þar sem fólk hugsar um fórnir og þjáningar. En páskarnir eru líka um von og nýtt líf, því á páskadag reis Jesús upp frá dauðum.
+
+Áður en páskarnir koma er dymbilvika, vikan á undan páskum. Á skírdag, fimmtudag í dymbilviku, borða margir góðan mat og margir hugsa um síðustu kvöldmáltíðina sem Jesú átti með lærisveinum sínum. Næsta dag er föstudagurinn langi. Þá minnumst við þess þegar Jesús var krossfestur. Á Íslandi er allt lokað á föstudaginn langa og flestir eru heima hjá sér að verja tíma með fjölskyldunni. Næsta sunnudag er svo páskadagur en þá reis Jesús upp frá dauðum. Mánudagurinn eftir páskadag er kallaður annar í páskum. Þá er frí í skóla og vinnu.
+
+Eitt af því sem börn eru spenntust fyrir er páskaeggið! Páskaegg eru stór súkkulaðiegg full af nammi. Inni í egginu er líka lítill miði með málshætti eða spakmæli. Einn málsháttur er til dæmis "Morgunstund gefur gull í mund" en það þýðir að sá sem vaknar snemma á auðveldara með að eignast peninga. Það er alltaf spennandi að sjá hvað stendur á miðanum!
+
+Fyrir marga er ferming líka mikilvægur hluti af páskunum. Ferming er þegar unglingar staðfesta trú sína í kristinni trú. Þeir læra um trú sína í fermingarfræðslu og halda svo stóra veislu með fjölskyldu og vinum. Þeir fá líka gjafir, oft peninga eða hluti sem þeir óska sér. Það er líka til borgaraleg ferming. Það er ekki trúarleg athöfn, heldur námskeið þar sem unglingar læra um lífið, siðferði og mannréttindi. Þeir læra um mikilvæg málefni eins og jafnrétti, umhverfisvernd og heimsspeki. Eftir námskeiðið er haldin veisla og þeir fá líka gjafir. Ferming er mikilvægur áfangi í lífi margra unglinga.
+
+Páskarnir eru tími til að vera saman, borða góðan mat og njóta frísins. Margar fjölskyldur fara í ferðalög um páskana, annað hvort innanlands eða utan. Aðrir kjósa að vera heima og njóta samverunnar. Hvort sem þú fagnar páskunum sem trúarhátíð eða bara sem tíma til að vera með fjölskyldunni, þá eru páskarnir alltaf sérstakir. Gleðilega páska!`;
+
+    const InteractiveReading = () => {
+      const [selectedLanguage, setSelectedLanguage] = useState('en');
+      const [showPopup, setShowPopup] = useState(false);
+      const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
+      const [selectedText, setSelectedText] = useState('');
+      const [translation, setTranslation] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+      const textRef = useRef(null);
+
+      const handleTextSelection = () => {
+        const selection = window.getSelection();
+        const text = selection.toString().trim();
+        
+        if (text.length > 0) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          setSelectedText(text);
+          setPopupPosition({
+            x: rect.left + (rect.width / 2),
+            y: rect.bottom + window.scrollY + 10
+          });
+          setShowPopup(true);
+          setTranslation('');
+        } else {
+          setShowPopup(false);
+        }
+      };
+
+      const translateText = () => {
+        setIsLoading(true);
+        
+        const languageInfo = LANGUAGES[selectedLanguage];
+        const prompt = `You are a helpful language tutor. A student learning Icelandic (A2-B1 level) has selected this text and needs help understanding it in ${languageInfo.name}.
+
+SELECTED TEXT (Icelandic):
+"${selectedText}"
+
+Please provide:
+1. Translation to ${languageInfo.name}
+2. A brief, simple explanation if needed (in ${languageInfo.name})
+
+Keep it concise and helpful for a language learner. If it's a single word, give the translation. If it's a phrase or sentence, translate it and optionally add a short note if there's cultural context.
+
+Respond ONLY in ${languageInfo.name} (not English, not Icelandic).`;
+
+        fetch('/.netlify/functions/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: 'You are a helpful language learning assistant.' },
+              { role: 'user', content: prompt }
+            ]
+          })
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          return response.json();
+        })
+        .then(data => {
+          const aiResponse = data.choices[0].message.content;
+          setTranslation(aiResponse);
+        })
+        .catch(error => {
+          console.error('Translation error:', error);
+          setTranslation('Úps! Villa kom upp. Reyndu aftur.');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+      };
+
+      const closePopup = () => {
+        setShowPopup(false);
+        setSelectedText('');
+        setTranslation('');
+        window.getSelection().removeAllRanges();
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          {/* Header */}
+          <header className="bg-white shadow-md border-b-4 border-yellow-400">
+            <div className="max-w-4xl mx-auto px-6 py-6">
+              <h1 className="text-3xl font-light text-gray-800 mb-2">📖 Páskarnir á Íslandi</h1>
+              <p className="text-gray-600 text-sm font-light">Interactive Reading · B1 → A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-6">
+            {/* Language Selector */}
+            <div className="bg-white rounded-xl shadow-sm border-2 border-yellow-300 p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-4">🌐 Veldu þitt móðurmál</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.entries(LANGUAGES).map(([code, lang]) => (
+                  <button
+                    key={code}
+                    onClick={() => setSelectedLanguage(code)}
+                    className={`p-3 rounded-lg border-2 transition-all font-light ${
+                      selectedLanguage === code
+                        ? 'border-yellow-500 bg-yellow-50 shadow-md'
+                        : 'border-gray-200 hover:border-yellow-300 hover:bg-yellow-50'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">{lang.flag}</div>
+                    <div className="text-sm text-gray-700">{lang.nativeName}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">💡 Hvernig virkar þetta?</h2>
+              <ol className="space-y-2 text-gray-700 font-light">
+                <li>1️⃣ Veldu þitt móðurmál hér að ofan</li>
+                <li>2️⃣ Lestu textann að neðan</li>
+                <li>3️⃣ <strong>Merktu</strong> orð eða setningu sem þú skilur ekki</li>
+                <li>4️⃣ Smelltu á <strong>"Þýða"</strong> hnappinn</li>
+                <li>5️⃣ Fáðu þýðingu á þínu máli! 🎉</li>
+              </ol>
+            </div>
+
+            {/* Text Content */}
+            <div className="bg-white rounded-xl shadow-sm border-2 border-yellow-300 p-8">
+              <div
+                ref={textRef}
+                className="selectable-text text-gray-800 font-light text-lg leading-relaxed space-y-4"
+                onMouseUp={handleTextSelection}
+                onTouchEnd={handleTextSelection}
+              >
+                {TEXT.split('\n\n').map((paragraph, i) => (
+                  <p key={i}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+
+            {/* Completion */}
+            <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-xl p-8 text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
+              <p className="text-gray-600 font-light">
+                Þú getur lesið B1 texta með hjálp AI þýðinganna!
+              </p>
+            </div>
+          </main>
+
+          {/* Translation Popup */}
+          {showPopup && (
+            <>
+              <div 
+                className="fixed inset-0 bg-black bg-opacity-20 z-50"
+                onClick={closePopup}
+              />
+              <div
+                className="translation-popup"
+                style={{
+                  left: `${Math.min(popupPosition.x, window.innerWidth - 220)}px`,
+                  top: `${popupPosition.y}px`,
+                  transform: 'translateX(-50%)'
+                }}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-500 mb-1">Valið texti:</div>
+                    <div className="font-normal text-gray-800 text-sm mb-3 italic">
+                      "{selectedText}"
+                    </div>
+                  </div>
+                  <button
+                    onClick={closePopup}
+                    className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-2"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {!translation ? (
+                  <button
+                    onClick={translateText}
+                    disabled={isLoading}
+                    className="w-full bg-yellow-500 text-white px-6 py-3 rounded-lg hover:bg-yellow-600 transition-colors font-light disabled:bg-gray-400"
+                  >
+                    {isLoading ? (
+                      <span className="loading-dots">Þýði</span>
+                    ) : (
+                      `🌐 Þýða á ${LANGUAGES[selectedLanguage].nativeName}`
+                    )}
+                  </button>
+                ) : (
+                  <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                    <div className="text-xs text-gray-500 mb-2">
+                      {LANGUAGES[selectedLanguage].flag} Þýðing:
+                    </div>
+                    <div className="font-light text-gray-800 whitespace-pre-wrap">
+                      {translation}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<InteractiveReading />);
+  </script>
+</body>
+</html>
