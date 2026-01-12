@@ -105,10 +105,8 @@
           const rect = range.getBoundingClientRect();
           
           setSelectedText(text);
-          setPopupPosition({
-            x: rect.left + (rect.width / 2),
-            y: rect.bottom + window.scrollY + 10
-          });
+          const newPos = { x: rect.left + (rect.width / 2), y: rect.bottom + window.scrollY + 10 };
+          setPopupPosition(newPos);
           setShowPopup(true);
           setTranslation('');
         } else {
@@ -126,22 +124,26 @@
         
         const prompt = 'You are a helpful language tutor. A student learning Icelandic (A2-B1 level) has selected this text and needs help understanding it in ' + userLanguage + '.\n\nSELECTED TEXT (Icelandic):\n"' + selectedText + '"\n\nPlease provide:\n1. Translation to ' + userLanguage + '\n2. A brief, simple explanation if needed (in ' + userLanguage + ')\n\nKeep it concise and helpful for a language learner. If it is a single word, give the translation. If it is a phrase or sentence, translate it and optionally add a short note if there is cultural context.\n\nRespond ONLY in ' + userLanguage + ' (not English, not Icelandic).';
 
-        fetch('/.netlify/functions/openai', {
+        const requestBody = {
+          messages: [
+            { role: 'system', content: 'You are a helpful language learning assistant.' },
+            { role: 'user', content: prompt }
+          ]
+        };
+
+        fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: 'You are a helpful language learning assistant.' },
-              { role: 'user', content: prompt }
-            ]
-          })
+          body: JSON.stringify(requestBody)
         })
         .then(function(response) {
-          if (!response.ok) throw new Error('Network response was not ok');
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
           return response.json();
         })
         .then(function(data) {
-          const aiResponse = data.choices[0].message.content;
+          const aiResponse = data.content && data.content[0] && data.content[0].text ? data.content[0].text : 'Villa kom upp';
           setTranslation(aiResponse);
           setIsLoading(false);
         })
@@ -161,106 +163,122 @@
 
       const paragraphs = TEXT.split('\n\n');
 
-      return React.createElement('div', { className: 'min-h-screen pb-12' },
-        React.createElement('header', { className: 'bg-white shadow-md border-b-4 border-yellow-400' },
-          React.createElement('div', { className: 'max-w-4xl mx-auto px-6 py-6' },
-            React.createElement('h1', { className: 'text-3xl font-light text-gray-800 mb-2' }, '📖 Páskarnir á Íslandi'),
-            React.createElement('p', { className: 'text-gray-600 text-sm font-light' }, 'Interactive Reading · B1 → A2')
-          )
-        ),
-        React.createElement('main', { className: 'max-w-4xl mx-auto px-6 mt-8 space-y-6' },
-          React.createElement('div', { className: 'bg-white rounded-xl shadow-sm border-2 border-yellow-300 p-6' },
-            React.createElement('h2', { className: 'text-xl font-normal text-gray-800 mb-4' }, '🌐 Skrifaðu móðurmál þitt'),
-            React.createElement('input', {
-              type: 'text',
-              value: userLanguage,
-              onChange: function(e) { setUserLanguage(e.target.value); },
-              placeholder: 'T.d. English, Polski, Tiếng Việt, 中文, Español...',
-              className: 'w-full p-4 border-2 border-yellow-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 font-light text-lg'
-            }),
-            React.createElement('p', { className: 'text-sm text-gray-600 mt-2 font-light' }, 
-              'Skrifaðu nafn tungumálsins þíns (á ensku eða móðurmálinu)'
-            )
-          ),
-          React.createElement('div', { className: 'bg-blue-50 border-2 border-blue-200 rounded-xl p-6' },
-            React.createElement('h2', { className: 'text-xl font-normal text-gray-800 mb-3' }, '💡 Hvernig virkar þetta?'),
-            React.createElement('ol', { className: 'space-y-2 text-gray-700 font-light' },
-              React.createElement('li', null, '1️⃣ Skrifaðu móðurmál þitt hér að ofan'),
-              React.createElement('li', null, '2️⃣ Lestu textann að neðan'),
-              React.createElement('li', null, '3️⃣ ', React.createElement('strong', null, 'Merktu'), ' orð eða setningu sem þú skilur ekki'),
-              React.createElement('li', null, '4️⃣ Smelltu á ', React.createElement('strong', null, '"Þýða"'), ' hnappinn'),
-              React.createElement('li', null, '5️⃣ Fáðu þýðingu á þínu máli! 🎉')
-            )
-          ),
-          React.createElement('div', { className: 'bg-white rounded-xl shadow-sm border-2 border-yellow-300 p-8' },
-            React.createElement('div', {
-              ref: textRef,
-              className: 'selectable-text text-gray-800 font-light text-lg leading-relaxed space-y-4',
-              onMouseUp: handleTextSelection,
-              onTouchEnd: handleTextSelection
-            },
-              paragraphs.map(function(paragraph, i) {
-                return React.createElement('p', { key: i }, paragraph);
-              })
-            )
-          ),
-          React.createElement('div', { className: 'bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-xl p-8 text-center' },
-            React.createElement('div', { className: 'text-6xl mb-4' }, '🎉'),
-            React.createElement('h2', { className: 'text-2xl font-light text-gray-800 mb-3' }, 'Vel gert!'),
-            React.createElement('p', { className: 'text-gray-600 font-light' }, 
-              'Þú getur lesið B1 texta með hjálp AI þýðinganna!'
-            )
-          )
-        ),
-        showPopup && React.createElement(React.Fragment, null,
-          React.createElement('div', {
-            className: 'fixed inset-0 bg-black bg-opacity-20 z-50',
-            onClick: closePopup
-          }),
-          React.createElement('div', {
-            className: 'translation-popup',
-            style: {
-              left: Math.min(popupPosition.x, window.innerWidth - 220) + 'px',
-              top: popupPosition.y + 'px',
-              transform: 'translateX(-50%)'
-            }
-          },
-            React.createElement('div', { className: 'flex items-start justify-between mb-3' },
-              React.createElement('div', { className: 'flex-1' },
-                React.createElement('div', { className: 'text-xs text-gray-500 mb-1' }, 'Valið texti:'),
-                React.createElement('div', { className: 'font-normal text-gray-800 text-sm mb-3 italic' },
-                  '"' + selectedText + '"'
-                )
-              ),
-              React.createElement('button', {
-                onClick: closePopup,
-                className: 'text-gray-400 hover:text-gray-600 text-2xl leading-none ml-2'
-              }, '×')
-            ),
-            !translation ? 
-              React.createElement('button', {
-                onClick: translateText,
-                disabled: isLoading,
-                className: 'w-full bg-yellow-500 text-white px-6 py-3 rounded-lg hover:bg-yellow-600 transition-colors font-light disabled:bg-gray-400'
-              }, 
-                isLoading ? 
-                  React.createElement('span', { className: 'loading-dots' }, 'Þýði') :
-                  '🌐 Þýða á ' + (userLanguage || 'þitt mál')
-              ) :
-              React.createElement('div', { className: 'bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4' },
-                React.createElement('div', { className: 'text-xs text-gray-500 mb-2' }, 
-                  '🌐 Þýðing:'
-                ),
-                React.createElement('div', { className: 'font-light text-gray-800 whitespace-pre-wrap' },
-                  translation
-                )
-              )
-          )
-        )
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-md border-b-4 border-yellow-400">
+            <div className="max-w-4xl mx-auto px-6 py-6">
+              <h1 className="text-3xl font-light text-gray-800 mb-2">📖 Páskarnir á Íslandi</h1>
+              <p className="text-gray-600 text-sm font-light">Interactive Reading · B1 → A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border-2 border-yellow-300 p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-4">🌐 Skrifaðu móðurmál þitt</h2>
+              <input
+                type="text"
+                value={userLanguage}
+                onChange={(e) => setUserLanguage(e.target.value)}
+                placeholder="T.d. English, Polski, Tiếng Việt, 中文, Español..."
+                className="w-full p-4 border-2 border-yellow-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 font-light text-lg"
+              />
+              <p className="text-sm text-gray-600 mt-2 font-light">
+                Skrifaðu nafn tungumálsins þíns (á ensku eða móðurmálinu)
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+              <h2 className="text-xl font-normal text-gray-800 mb-3">💡 Hvernig virkar þetta?</h2>
+              <ol className="space-y-2 text-gray-700 font-light">
+                <li>1️⃣ Skrifaðu móðurmál þitt hér að ofan</li>
+                <li>2️⃣ Lestu textann að neðan</li>
+                <li>3️⃣ <strong>Merktu</strong> orð eða setningu sem þú skilur ekki</li>
+                <li>4️⃣ Smelltu á <strong>"Þýða"</strong> hnappinn</li>
+                <li>5️⃣ Fáðu þýðingu á þínu máli! 🎉</li>
+              </ol>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border-2 border-yellow-300 p-8">
+              <div
+                ref={textRef}
+                className="selectable-text text-gray-800 font-light text-lg leading-relaxed space-y-4"
+                onMouseUp={handleTextSelection}
+                onTouchEnd={handleTextSelection}
+              >
+                {paragraphs.map((paragraph, i) => (
+                  <p key={i}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-xl p-8 text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
+              <p className="text-gray-600 font-light">
+                Þú getur lesið B1 texta með hjálp AI þýðinganna!
+              </p>
+            </div>
+          </main>
+
+          {showPopup && (
+            <>
+              <div 
+                className="fixed inset-0 bg-black bg-opacity-20 z-50"
+                onClick={closePopup}
+              />
+              <div
+                className="translation-popup"
+                style={{
+                  left: Math.min(popupPosition.x, window.innerWidth - 220) + 'px',
+                  top: popupPosition.y + 'px',
+                  transform: 'translateX(-50%)'
+                }}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-500 mb-1">Valið texti:</div>
+                    <div className="font-normal text-gray-800 text-sm mb-3 italic">
+                      "{selectedText}"
+                    </div>
+                  </div>
+                  <button
+                    onClick={closePopup}
+                    className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-2"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {!translation ? (
+                  <button
+                    onClick={translateText}
+                    disabled={isLoading}
+                    className="w-full bg-yellow-500 text-white px-6 py-3 rounded-lg hover:bg-yellow-600 transition-colors font-light disabled:bg-gray-400"
+                  >
+                    {isLoading ? (
+                      <span className="loading-dots">Þýði</span>
+                    ) : (
+                      '🌐 Þýða á ' + (userLanguage || 'þitt mál')
+                    )}
+                  </button>
+                ) : (
+                  <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                    <div className="text-xs text-gray-500 mb-2">
+                      🌐 Þýðing:
+                    </div>
+                    <div className="font-light text-gray-800 whitespace-pre-wrap">
+                      {translation}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(InteractiveReading));
+    ReactDOM.createRoot(document.getElementById('root')).render(<InteractiveReading />);
   </script>
 </body>
 </html>
