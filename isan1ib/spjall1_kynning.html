@@ -738,7 +738,28 @@ MIKILVÆGT: Þetta eru ÓBREYTANLEGAR staðreyndir. Svaraðu ALLTAF í samræmi 
 
             try {
                 const feedback = await getAIFeedback(answerText, questionNum);
-                feedbackDiv.innerHTML = `<p>${feedback}</p>`;
+                
+                // Show written feedback
+                feedbackDiv.innerHTML = `<p>${feedback.written}</p>`;
+                
+                // Play spoken feedback with Azure TTS
+                try {
+                    const r = await fetch('/.netlify/functions/speak', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text_to_speak: feedback.spoken }),
+                    });
+
+                    const data = await r.json();
+                    
+                    if (r.ok && !data.error && data.audio_base64) {
+                        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+                        const audio = new Audio(audioUrl);
+                        await audio.play();
+                    }
+                } catch (audioError) {
+                    console.error("Villa við hljóð:", audioError);
+                }
                 
                 // Activate next question
                 setTimeout(() => {
@@ -767,40 +788,54 @@ MIKILVÆGT: Þetta eru ÓBREYTANLEGAR staðreyndir. Svaraðu ALLTAF í samræmi 
                 userContext.name = userAnswer;
             }
             
+            // Get current day of week for question 7
+            const daysOfWeek = ['sunnudagur', 'mánudagur', 'þriðjudagur', 'miðvikudagur', 'fimmtudagur', 'föstudagur', 'laugardagur'];
+            const today = new Date();
+            const todayName = daysOfWeek[today.getDay()];
+            
             const systemPrompt = `Þú ert Sari, 18 ára stelpa frá Indónesíu sem er að læra íslensku. Þú ert vingjarnleg og feimin en mjög hlý í hugsun.
 
-Gefðu stutta, náttúrulega og hvetjandi endurgjöf á íslensku (2-3 setningar):
-- Viðurkenndu svar nemandans
-- Commentaðu á það sem hann/hún sagði (ekki bara "rétt" eða "rangt")
-- Vertu vingjarnleg og hvetjandi
-- Ef málfræðivilla er, benda á það á mjúkan hátt
-- Ef svarið er mjög stutt, hvettu til að segja meira
+${questionNum === 7 ? `MIKILVÆGT: Í dag er ${todayName}. Ef nemandinn segir annan dag, leiðréttu hann vinalega.` : ''}
 
+Þú þarft að gefa TVÆR gerðir af endurgjöf:
+
+1. STUTT TALAÐ SVAR (1 setning, 5-10 orð): Þetta verður lesið upphátt fyrir nemandann
+   - Einfalt og hvetjandi
+   - Bara hrósamessa eða staðfesting
+   - Dæmi: "Frábært!", "Mjög gott!", "Vel gert!", "Ágætt!"
+
+2. ÍTARLEG SKRIFLEG ENDURGJÖF (2-3 setningar): Þetta birtist á skjánum
+   - Viðurkenndu svar nemandans
+   - Commentaðu á það sem hann/hún sagði
+   - Benda á málfræðivillur ef einhverjar
+   - Vertu vingjarnleg og hvetjandi
+   
 MIKILVÆGT: 
 - EKKI spyrja spurninga í endurgjöfinni
 - AÐEINS commenta og hrósa
-- Nemandinn getur ekki svarað spurningum í endurgjöfinni
+- Svaraðu á þessu formi NÁKVÆMLEGA:
+  TALAÐ: [stutt hrósamessa]
+  SKRIFAÐ: [ítarleg endurgjöf]
 
 ${questionNum === 1 ? `
 MIKILVÆGT fyrir spurning um nafn: 
 - Reyndu að greina hvort nafnið er karlmannsnafn eða kvennafn
-- Ef þú heldur að það sé karlmannsnafn, segðu "gamall" í næstu spurningu
-- Ef þú heldur að það sé kvennafn, segðu "gömul" í næstu spurningu
-- Ef óvíst, notaðu "gamall eða gömul"
 ` : ''}
 
-Dæmi um góða endurgjöf (ATH: ENGAR SPURNINGAR):
-- "Frábært! Þú heitir [nafn]. Það er fallegt nafn! Mér finnst gaman að kynnast þér."
-- "Gott! Þú ert [aldur] ára, við erum næstum því jafngamlar! Ég er 18 ára."
-- "Áhugavert! Þú ert frá [land]. Ég er frá Indónesíu. Það er langt að ferðast!"
+Dæmi á réttum formati:
+TALAÐ: Frábært!
+SKRIFAÐ: Þú heitir Jón. Það er fallegt nafn! Mér finnst gaman að kynnast þér.
 
-MIKILVÆGT: Svaraðu AÐEINS með endurgjöfinni á íslensku. Engin útskýring, meta-commentary, eða spurningar.`;
+TALAÐ: Mjög gott!
+SKRIFAÐ: Þú ert 17 ára, við erum næstum því jafngamlar! Ég er 18 ára.`;
 
             const userPrompt = `Þú spurðir: "${questionText}"
 
 Nemandinn svaraði: "${userAnswer}"
 
-${questionNum === 1 ? 'Greindu hvort nafnið virðist karlmannsnafn eða kvennafn og gefðu viðeigandi endurgjöf ÁN þess að spyrja spurninga.' : 'Gefðu endurgjöf ÁN þess að spyrja spurninga:'}`;
+Gefðu endurgjöf á forminu:
+TALAÐ: [stutt]
+SKRIFAÐ: [ítarlegt]`;
 
             const messages = [
                 { role: 'system', content: systemPrompt },
@@ -815,7 +850,7 @@ ${questionNum === 1 ? 'Greindu hvort nafnið virðist karlmannsnafn eða kvennaf
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
                     messages: messages,
-                    max_tokens: 200,
+                    max_tokens: 250,
                     temperature: 0.7
                 })
             });
@@ -825,14 +860,18 @@ ${questionNum === 1 ? 'Greindu hvort nafnið virðist karlmannsnafn eða kvennaf
                 throw new Error(data.error || 'API villa');
             }
             
-            // Try to detect gender from AI response for question 1
-            if (questionNum === 1) {
-                const feedback = data.content;
-                // Store feedback to potentially parse gender hint
-                userContext.lastFeedback = feedback;
-            }
+            // Parse the response to separate spoken and written feedback
+            const fullResponse = data.content;
+            const spokenMatch = fullResponse.match(/TALAÐ:\s*(.+?)(?:\n|$)/i);
+            const writtenMatch = fullResponse.match(/SKRIFAÐ:\s*(.+?)$/is);
             
-            return data.content;
+            const spokenFeedback = spokenMatch ? spokenMatch[1].trim() : 'Frábært!';
+            const writtenFeedback = writtenMatch ? writtenMatch[1].trim() : fullResponse;
+            
+            return {
+                spoken: spokenFeedback,
+                written: writtenFeedback
+            };
         }
 
         // Activate next question
