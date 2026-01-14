@@ -417,17 +417,41 @@
 
             <!-- Student questions to Sari -->
             <div id="flipQuestions" class="hidden space-y-6">
-                <p class="text-lg text-gray-700 text-center mb-6">Spyrðu Sari sömu spurninga og hún spurði þig. Hún mun svara þér! 😊</p>
+                <p class="text-lg text-gray-700 text-center mb-6">Spyrðu Sari spurningar. Hún mun svara þér! 😊</p>
                 
-                <!-- Placeholder for student questions - will be dynamic -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                    <p class="text-gray-600 italic text-center">Notaðu raddupptöku til að spyrja Sari spurningar...</p>
-                    <div class="mt-4 text-center">
-                        <button onclick="startStudentQuestion()" class="bg-purple-500 hover:bg-purple-600 text-white py-3 px-8 rounded-lg font-semibold">
-                            🎤 Spyrja Sari
+                    <p class="text-gray-600 mb-4 text-center">Notaðu raddupptöku eða skrifaðu spurninguna þína:</p>
+                    
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="startFlipRecording()" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold">
+                            🎤 Tala
+                        </button>
+                        <button onclick="showFlipTextInput()" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-6 rounded-lg font-semibold">
+                            ⌨️ Skrifa
                         </button>
                     </div>
+                    
+                    <div id="flipRecording" class="hidden text-center py-4 mb-4">
+                        <p class="text-red-600 font-semibold mb-2">🔴 Upptaka í gangi... Spurðu Sari!</p>
+                        <button onclick="stopFlipRecording()" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-6 rounded-lg">
+                            ⏹️ Stöðva upptöku
+                        </button>
+                    </div>
+                    
+                    <div id="flipTextInput" class="hidden mb-4">
+                        <input type="text" id="flipQuestionText" class="w-full p-3 border-2 border-gray-300 rounded-lg mb-2" placeholder="Skrifaðu spurningu þína hér...">
+                        <button onclick="submitFlipQuestion()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-semibold">
+                            Senda spurningu
+                        </button>
+                    </div>
+                    
                     <div id="studentQuestionFeedback" class="feedback ai-feedback hidden mt-4"></div>
+                    
+                    <div class="mt-4 text-center">
+                        <button onclick="askAnotherQuestion()" class="hidden bg-purple-500 hover:bg-purple-600 text-white py-2 px-6 rounded-lg font-semibold" id="askAnotherBtn">
+                            Spyrja aftur
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -483,6 +507,26 @@
             gender: 'unknown', // 'male', 'female', or 'unknown'
             answers: []
         };
+
+        // Sari's consistent facts - AI always reads this
+        const SARI_FACTS = `
+STAÐREYNDIR UM SARI (Mundu þetta alltaf):
+- Nafn: Sari
+- Aldur: 18 ára
+- Frá: Indónesíu (höfuðborg: Jakarta)
+- Búseta: Völlum í Hafnarfirði, Ísland
+- Tími á Íslandi: 8 mánuði
+- Foreldrar: Mamma heitir Dewi (45 ára), Pabbi heitir Budi (47 ára)
+- Systkini: ENGIN systkini - Sari er einbirni
+- Afmælismánuður: Júlí (15. júlí)
+- Áhugamál: Hlusta á tónlist (K-pop og íslenska tónlist), lesa bækur (fantasy), fara í sund
+- Skóli: Í MH (Menntaskólinn við Hamrahlíð), að læra íslensku
+- Uppáhaldsmatur: Nasi Goreng (indónesískur réttur) og íslenskar pönnukökur
+- Uppáhaldslitir: Blár og fjólublár
+- Gæludýr: Engin gæludýr núna, en hafði kött á Indónesíu sem hét Kiki
+
+MIKILVÆGT: Þetta eru ÓBREYTANLEGAR staðreyndir. Svaraðu ALLTAF í samræmi við þetta.
+        `.trim();
 
         // Speech recognition setup
         let recognition;
@@ -634,7 +678,15 @@
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 document.getElementById(`recording${questionNum}`).classList.add('hidden');
-                submitAnswerText(questionNum, transcript);
+                
+                // Show text input with recognized text so user can edit
+                const textInput = document.getElementById(`textInput${questionNum}`);
+                const answerInput = document.getElementById(`answer${questionNum}`);
+                textInput.classList.remove('hidden');
+                answerInput.value = transcript;
+                answerInput.focus();
+                
+                // Don't submit automatically - let user review and edit
             };
 
             recognition.onerror = (event) => {
@@ -799,72 +851,115 @@ ${questionNum === 1 ? 'Greindu hvort nafnið virðist karlmannsnafn eða kvennaf
             document.getElementById('part2').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        // Student asks Sari
-        function startStudentQuestion() {
+        // Student asks Sari - FLIP section functions
+        function showFlipTextInput() {
+            document.getElementById('flipTextInput').classList.remove('hidden');
+            document.getElementById('flipQuestionText').focus();
+        }
+
+        function startFlipRecording() {
             if (!recognition) {
                 alert('Raddupptaka er ekki studd í þessum vafra. Notaðu Chrome eða Edge.');
                 return;
             }
 
             const feedbackDiv = document.getElementById('studentQuestionFeedback');
-            feedbackDiv.innerHTML = '<p class="text-red-600">🔴 Upptaka í gangi... Spurðu Sari!</p>';
-            feedbackDiv.classList.remove('hidden');
+            document.getElementById('flipRecording').classList.remove('hidden');
+            feedbackDiv.classList.add('hidden');
 
-            recognition.onresult = async (event) => {
+            recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
-                feedbackDiv.innerHTML = '<p class="text-gray-600">⏳ Sari er að svara...</p>';
+                document.getElementById('flipRecording').classList.add('hidden');
                 
-                try {
-                    const response = await getSariResponse(transcript);
-                    feedbackDiv.innerHTML = `<p><strong>Þú spurðir:</strong> "${transcript}"</p><p class="mt-2"><strong>Sari svarar:</strong> ${response}</p>`;
-                    
-                    // Read Sari's response aloud with Azure TTS
-                    try {
-                        const r = await fetch('/.netlify/functions/speak', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ text_to_speak: response }),
-                        });
-
-                        const data = await r.json();
-                        
-                        if (r.ok && !data.error && data.audio_base64) {
-                            const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-                            const audio = new Audio(audioUrl);
-                            await audio.play();
-                        }
-                    } catch (audioError) {
-                        console.error("Villa við hljóð:", audioError);
-                    }
-                    
-                } catch (error) {
-                    console.error('Error:', error);
-                    feedbackDiv.innerHTML = '<p>Sari gat ekki svarað. Reyndu aftur!</p>';
-                }
+                // Show recognized text in text input for editing
+                document.getElementById('flipTextInput').classList.remove('hidden');
+                document.getElementById('flipQuestionText').value = transcript;
+                document.getElementById('flipQuestionText').focus();
             };
 
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
+                document.getElementById('flipRecording').classList.add('hidden');
                 feedbackDiv.innerHTML = '<p class="text-red-600">Villa í upptöku. Reyndu aftur!</p>';
+                feedbackDiv.classList.remove('hidden');
             };
 
             recognition.start();
         }
 
+        function stopFlipRecording() {
+            if (recognition) {
+                recognition.stop();
+            }
+            document.getElementById('flipRecording').classList.add('hidden');
+        }
+
+        async function submitFlipQuestion() {
+            const questionText = document.getElementById('flipQuestionText').value.trim();
+            if (!questionText) {
+                alert('Vinsamlegast skrifaðu spurningu!');
+                return;
+            }
+
+            const feedbackDiv = document.getElementById('studentQuestionFeedback');
+            feedbackDiv.innerHTML = '<p class="text-gray-600">⏳ Sari er að svara...</p>';
+            feedbackDiv.classList.remove('hidden');
+
+            try {
+                const response = await getSariResponse(questionText);
+                feedbackDiv.innerHTML = `<p><strong>Þú spurðir:</strong> "${questionText}"</p><p class="mt-2"><strong>Sari svarar:</strong> ${response}</p>`;
+                
+                // Show "ask another" button
+                document.getElementById('askAnotherBtn').classList.remove('hidden');
+                
+                // Read Sari's response aloud with Azure TTS
+                try {
+                    const r = await fetch('/.netlify/functions/speak', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text_to_speak: response }),
+                    });
+
+                    const data = await r.json();
+                    
+                    if (r.ok && !data.error && data.audio_base64) {
+                        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+                        const audio = new Audio(audioUrl);
+                        await audio.play();
+                    }
+                } catch (audioError) {
+                    console.error("Villa við hljóð:", audioError);
+                }
+                
+                // Clear input
+                document.getElementById('flipQuestionText').value = '';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                feedbackDiv.innerHTML = '<p>Sari gat ekki svarað. Reyndu aftur!</p>';
+            }
+        }
+
+        function askAnotherQuestion() {
+            // Hide feedback and ask another button
+            document.getElementById('studentQuestionFeedback').classList.add('hidden');
+            document.getElementById('askAnotherBtn').classList.add('hidden');
+            document.getElementById('flipTextInput').classList.add('hidden');
+            document.getElementById('flipQuestionText').value = '';
+        }
+
+        // Legacy function - keep for compatibility
+        function startStudentQuestion() {
+            startFlipRecording();
+        }
+
         // Get Sari's response to student question
         async function getSariResponse(studentQuestion) {
-            const systemPrompt = `Þú ert Sari, 18 ára stelpa frá Indónesíu. Þú býrð á Völlum í Hafnarfirði og hefur búið þar í 8 mánuði. Þú ert að læra íslensku.
+            const systemPrompt = `Þú ert Sari, 18 ára stelpa frá Indónesíu. 
 
-Svaraðu spurningunni á íslensku eins og Sari myndi gera:
-- Ef spurningin er um nafn þitt: "Ég heiti Sari."
-- Ef um aldur: "Ég er átján ára."
-- Ef um hvaðan þú ert: "Ég er frá Indónesíu."
-- Ef um búsetu: "Ég bý á Völlum í Hafnarfirði."
-- Ef um hvenær komst til Íslands: "Ég kom til Íslands fyrir átta mánuðum."
-- Ef um foreldra: "Mamma mín heitir Dewi og pabbi minn heitir Budi."
-- Ef um daginn í dag: Svaraðu með réttum vikudegi
-- Ef um afmæli: "Ég á afmæli í júlí."
-- Ef um áhugamál: "Já, mér finnst mjög gaman að hlusta á tónlist. Ég elska líka að lesa og fara í sund."
+${SARI_FACTS}
+
+Svaraðu spurningunni á íslensku eins og Sari myndi gera. Notaðu upplýsingarnar að ofan og vertu náttúruleg og vingjarnleg.
 
 Svaraðu náttúrulega og stuttlega (1-2 setningar). AÐEINS svarið, ekkert annað.`;
 
