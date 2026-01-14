@@ -64,7 +64,7 @@
                 <img src="media/sari.png" alt="Sari" class="w-48 h-48 rounded-full mx-auto object-cover border-4 border-blue-500 shadow-lg">
             </div>
             <p class="text-xl text-gray-700 mb-4">Ég er líka að læra íslensku</p>
-            <p class="text-md text-gray-500 italic">🎧 Hlustaðu á spurningarnar og svaraðu með rödd eða texta</p>
+            <p class="text-md text-gray-500 italic">🎧 Svaraðu með að tala eða skrifa</p>
         </div>
 
         <!-- Part 1: Sari asks questions -->
@@ -476,6 +476,13 @@
 
         const flipIntroText = "Frábært! Núna vilt þú spyrja mig?";
 
+        // Store user context for adaptive questioning
+        let userContext = {
+            name: '',
+            gender: 'unknown', // 'male', 'female', or 'unknown'
+            answers: []
+        };
+
         // Speech recognition setup
         let recognition;
         if ('webkitSpeechRecognition' in window) {
@@ -490,6 +497,44 @@
         // Play Azure TTS audio
         async function playQuestion(questionNum) {
             const question = questions[questionNum];
+            let textToSpeak = question.azureText;
+            
+            // Adapt question 2 based on context from question 1
+            if (questionNum === 2 && userContext.answers[1]) {
+                // Ask AI to determine appropriate form
+                try {
+                    const genderCheckMessages = [
+                        { 
+                            role: 'system', 
+                            content: 'Þú ert íslenskukennari. Svaraðu AÐEINS með "gamall" eða "gömul" byggt á nafninu.' 
+                        },
+                        { 
+                            role: 'user', 
+                            content: `Nemandinn sagði: "${userContext.answers[1]}". Er þetta karlmannsnafn (svaraðu "gamall") eða kvennafn (svaraðu "gömul")?` 
+                        }
+                    ];
+                    
+                    const genderResponse = await fetch('/.netlify/functions/openai', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'gpt-4o-mini',
+                            messages: genderCheckMessages,
+                            max_tokens: 10,
+                            temperature: 0.3
+                        })
+                    });
+                    
+                    const genderData = await genderResponse.json();
+                    if (genderData.content) {
+                        const form = genderData.content.toLowerCase().includes('gömul') ? 'gömul' : 'gamall';
+                        textToSpeak = `Hvað ert þú ${form}?`;
+                    }
+                } catch (e) {
+                    console.log('Could not adapt question, using default');
+                }
+            }
+            
             const playBtn = event.target;
             playBtn.disabled = true;
             
@@ -497,7 +542,7 @@
                 const r = await fetch('/.netlify/functions/speak', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text_to_speak: question.azureText }),
+                    body: JSON.stringify({ text_to_speak: textToSpeak }),
                 });
 
                 const data = await r.json();
@@ -615,6 +660,20 @@
 
         // Submit answer text (from either typing or speech)
         async function submitAnswerText(questionNum, answerText) {
+            // Show what user said/wrote in the input field
+            const textInput = document.getElementById(`textInput${questionNum}`);
+            const answerInput = document.getElementById(`answer${questionNum}`);
+            if (answerInput) {
+                answerInput.value = answerText;
+            }
+            if (!textInput.classList.contains('hidden')) {
+                // Input was already visible, keep it
+            } else {
+                // Show it so user can see what they said
+                textInput.classList.remove('hidden');
+                answerInput.value = answerText;
+            }
+            
             const feedbackDiv = document.getElementById(`feedback${questionNum}`);
             feedbackDiv.innerHTML = '<p class="text-gray-600">⏳ Sari er að hugsa...</p>';
             feedbackDiv.classList.remove('hidden');
@@ -642,6 +701,14 @@
         async function getAIFeedback(userAnswer, questionNum) {
             const questionText = questions[questionNum].text;
             
+            // Store answer
+            userContext.answers[questionNum] = userAnswer;
+            
+            // For question 1 (name), try to infer gender
+            if (questionNum === 1) {
+                userContext.name = userAnswer;
+            }
+            
             const systemPrompt = `Þú ert Sari, 18 ára stelpa frá Indónesíu sem er að læra íslensku. Þú ert vingjarnleg og feimin en mjög hlý í hugsun.
 
 Gefðu stutta, náttúrulega og hvetjandi endurgjöf á íslensku (2-3 setningar):
@@ -650,6 +717,14 @@ Gefðu stutta, náttúrulega og hvetjandi endurgjöf á íslensku (2-3 setningar
 - Vertu vingjarnleg og hvetjandi
 - Ef málfræðivilla er, benda á það á mjúkan hátt
 - Ef svarið er mjög stutt, hvettu til að segja meira
+
+${questionNum === 1 ? `
+MIKILVÆGT fyrir spurning um nafn: 
+- Reyndu að greina hvort nafnið er karlmannsnafn eða kvennafn
+- Ef þú heldur að það sé karlmannsnafn, segðu "gamall" í næstu spurningu
+- Ef þú heldur að það sé kvennafn, segðu "gömul" í næstu spurningu
+- Ef óvíst, notaðu "gamall eða gömul"
+` : ''}
 
 Dæmi um góða endurgjöf:
 - "Frábært! Þú heitir [nafn]. Það er fallegt nafn! Mér finnst gaman að kynnast þér."
@@ -662,7 +737,7 @@ MIKILVÆGT: Svaraðu AÐEINS með endurgjöfinni á íslensku. Engin útskýring
 
 Nemandinn svaraði: "${userAnswer}"
 
-Gefðu endurgjöf:`;
+${questionNum === 1 ? 'Greindu hvort nafnið virðist karlmannsnafn eða kvennafn og gefðu viðeigandi endurgjöf.' : 'Gefðu endurgjöf:'}`;
 
             const messages = [
                 { role: 'system', content: systemPrompt },
@@ -686,6 +761,14 @@ Gefðu endurgjöf:`;
             if (!response.ok || data.error) {
                 throw new Error(data.error || 'API villa');
             }
+            
+            // Try to detect gender from AI response for question 1
+            if (questionNum === 1) {
+                const feedback = data.content;
+                // Store feedback to potentially parse gender hint
+                userContext.lastFeedback = feedback;
+            }
+            
             return data.content;
         }
 
