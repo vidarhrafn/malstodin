@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framburðar- og ritunaræfing - Verkefni 14</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+
+        .score-excellent {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .score-good {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+
+        .score-needs-practice {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .correct-answer {
+            background-color: #d4edda;
+            border: 2px solid #28a745;
+        }
+
+        .incorrect-answer {
+            background-color: #f8d7da;
+            border: 2px solid #dc3545;
+        }
+
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+
+        .word-card {
+            transition: all 0.3s ease;
+        }
+
+        .word-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn {
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .recording-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto max-w-5xl px-4 py-8">
+        
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">📖 Verkefni 14: Framburðar- og ritunaræfing</h1>
+            <p class="text-gray-600">Æfðu framburð og stafsetningar með kr- orðum</p>
+        </div>
+
+        <!-- Part 1: Pronunciation Practice -->
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                🎤 Hluti 1: Framburðaræfing
+            </h2>
+            <p class="text-gray-600 mb-6">Hlustaðu á orðið og endurtaktu það. Azure metur framburð þinn.</p>
+            
+            <!-- Progress Bar -->
+            <div class="mb-6">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>Framvinda</span>
+                    <span id="pronunciationProgress">0/13</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div id="pronunciationProgressBar" class="progress-bar bg-blue-500 h-3 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Current Word Display -->
+            <div id="pronunciationCard" class="word-card bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-8 mb-6 text-center">
+                <div class="text-6xl font-bold text-blue-700 mb-4" id="currentWord">kra</div>
+                <div class="flex justify-center gap-4">
+                    <button onclick="playWord()" id="playBtn" class="btn bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                        ▶️ Hlusta
+                    </button>
+                    <button onclick="recordPronunciation()" id="recordBtn" class="btn bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                        🎤 Endurtaka
+                    </button>
+                </div>
+                
+                <!-- Recording Indicator -->
+                <div id="recordingIndicator" class="hidden mt-4">
+                    <p class="text-red-600 font-semibold text-lg recording-pulse">🔴 Upptaka í gangi...</p>
+                    <button onclick="stopRecording()" class="btn bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg mt-2">
+                        ⏹️ Stöðva
+                    </button>
+                </div>
+            </div>
+
+            <!-- Feedback -->
+            <div id="pronunciationFeedback" class="hidden rounded-lg p-4 mb-4"></div>
+
+            <!-- Next Button -->
+            <div class="text-center">
+                <button onclick="nextWord()" id="nextWordBtn" class="hidden btn bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                    Næsta orð →
+                </button>
+            </div>
+        </div>
+
+        <!-- Part 2: Spelling Practice -->
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                ✍️ Hluti 2: Ritunaræfing
+            </h2>
+            <p class="text-gray-600 mb-6">Hlustaðu á orðið og skrifa það rétt.</p>
+            
+            <!-- Progress Bar -->
+            <div class="mb-6">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>Framvinda</span>
+                    <span id="spellingProgress">0/13</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div id="spellingProgressBar" class="progress-bar bg-green-500 h-3 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Spelling Exercise -->
+            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-8 mb-6">
+                <div class="flex justify-center mb-6">
+                    <button onclick="playSpellingWord()" id="playSpellingBtn" class="btn bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                        ▶️ Hlusta á orðið
+                    </button>
+                </div>
+
+                <div class="max-w-md mx-auto">
+                    <input 
+                        type="text" 
+                        id="spellingInput" 
+                        class="w-full p-4 text-2xl border-2 border-gray-300 rounded-lg text-center focus:border-green-500 focus:outline-none" 
+                        placeholder="Skrifa orðið hér..."
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    
+                    <button onclick="checkSpelling()" id="checkSpellingBtn" class="btn w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold text-lg mt-4">
+                        Athuga svar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Spelling Feedback -->
+            <div id="spellingFeedback" class="hidden rounded-lg p-4 mb-4"></div>
+
+            <!-- Next Spelling Button -->
+            <div class="text-center">
+                <button onclick="nextSpellingWord()" id="nextSpellingBtn" class="hidden btn bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                    Næsta orð →
+                </button>
+            </div>
+        </div>
+
+        <!-- Completion Message -->
+        <div id="completionMessage" class="hidden bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg shadow-lg p-8 mt-8 text-center">
+            <h2 class="text-3xl font-bold mb-4">🎉 Frábært! Þú kláraðir æfinguna!</h2>
+            <p class="text-xl mb-6">Þú æfðir 13 orð í framburði og 13 orð í ritun.</p>
+            <button onclick="resetExercise()" class="btn bg-white text-purple-600 px-8 py-3 rounded-lg font-semibold text-lg hover:bg-gray-100">
+                🔄 Byrja aftur
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Word lists
+        const pronunciationWords = [
+            'kra', 'kre', 'kri', 'krí', 'kro', 'kró', 'kru', 'krú', 
+            'krau', 'kræ', 'krei', 'krö', 'krá'
+        ];
+
+        const spellingWords = [
+            'þær', 'ykkar', 'okkar', 'vera', 'mikið', 'án', 'kryppa',
+            'krydd', 'kröpp', 'krútt', 'krummi', 'krjúpa', 'krýndur'
+        ];
+
+        // State
+        let currentPronunciationIndex = 0;
+        let currentSpellingIndex = 0;
+        let spellingAttempts = 0;
+        let recognition = null;
+        let isRecording = false;
+
+        // Initialize Speech Recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'is-IS';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+        }
+
+        // Play word with Azure TTS
+        async function playWord() {
+            const word = pronunciationWords[currentPronunciationIndex];
+            const playBtn = document.getElementById('playBtn');
+            playBtn.disabled = true;
+            playBtn.textContent = '⏳ Hleður...';
+
+            try {
+                const response = await fetch('/.netlify/functions/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text_to_speak: word }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && !data.error && data.audio_base64) {
+                    const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+                    const audio = new Audio(audioUrl);
+                    await audio.play();
+                } else {
+                    throw new Error(data.error || 'Gat ekki sótt hljóð');
+                }
+            } catch (error) {
+                console.error('Villa við hljóð:', error);
+                alert('Gat ekki spilað orðið. Reyndu aftur!');
+            } finally {
+                playBtn.disabled = false;
+                playBtn.textContent = '▶️ Hlusta';
+            }
+        }
+
+        // Record pronunciation
+        function recordPronunciation() {
+            if (!recognition) {
+                alert('Raddupptaka er ekki studd í þessum vafra. Notaðu Chrome eða Edge.');
+                return;
+            }
+
+            if (isRecording) return;
+
+            isRecording = true;
+            document.getElementById('recordingIndicator').classList.remove('hidden');
+            document.getElementById('pronunciationFeedback').classList.add('hidden');
+            document.getElementById('recordBtn').disabled = true;
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.toLowerCase().trim();
+                const confidence = event.results[0][0].confidence;
+                
+                isRecording = false;
+                document.getElementById('recordingIndicator').classList.add('hidden');
+                document.getElementById('recordBtn').disabled = false;
+                
+                evaluatePronunciation(transcript, confidence);
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                isRecording = false;
+                document.getElementById('recordingIndicator').classList.add('hidden');
+                document.getElementById('recordBtn').disabled = false;
+                
+                const feedbackDiv = document.getElementById('pronunciationFeedback');
+                feedbackDiv.className = 'rounded-lg p-4 mb-4 bg-red-100 border border-red-300 text-red-800';
+                feedbackDiv.innerHTML = '<p><strong>Villa í upptöku.</strong> Reyndu aftur!</p>';
+                feedbackDiv.classList.remove('hidden');
+            };
+
+            recognition.start();
+        }
+
+        // Stop recording
+        function stopRecording() {
+            if (recognition && isRecording) {
+                recognition.stop();
+                isRecording = false;
+                document.getElementById('recordingIndicator').classList.add('hidden');
+                document.getElementById('recordBtn').disabled = false;
+            }
+        }
+
+        // Evaluate pronunciation
+        function evaluatePronunciation(transcript, confidence) {
+            const expectedWord = pronunciationWords[currentPronunciationIndex];
+            const feedbackDiv = document.getElementById('pronunciationFeedback');
+            
+            let scoreClass = '';
+            let emoji = '';
+            let message = '';
+            
+            // Determine score based on confidence
+            if (confidence >= 0.85) {
+                scoreClass = 'score-excellent';
+                emoji = '🌟';
+                message = 'Mjög gott!';
+            } else if (confidence >= 0.70) {
+                scoreClass = 'score-good';
+                emoji = '👍';
+                message = 'Ásættanlegt!';
+            } else {
+                scoreClass = 'score-needs-practice';
+                emoji = '💪';
+                message = 'Þarfnast æfingar!';
+            }
+
+            feedbackDiv.className = `rounded-lg p-4 mb-4 ${scoreClass}`;
+            feedbackDiv.innerHTML = `
+                <p class="text-lg font-semibold mb-2">${emoji} ${message}</p>
+                <p><strong>Þú sagðir:</strong> "${transcript}"</p>
+                <p><strong>Væntanlegt:</strong> "${expectedWord}"</p>
+                <p><strong>Öryggi:</strong> ${(confidence * 100).toFixed(0)}%</p>
+            `;
+            feedbackDiv.classList.remove('hidden');
+            
+            document.getElementById('nextWordBtn').classList.remove('hidden');
+        }
+
+        // Next word
+        function nextWord() {
+            currentPronunciationIndex++;
+            
+            if (currentPronunciationIndex >= pronunciationWords.length) {
+                // Pronunciation section complete
+                document.getElementById('pronunciationCard').innerHTML = `
+                    <p class="text-2xl font-semibold text-green-600 mb-4">✅ Framburðaræfing lokið!</p>
+                    <p class="text-gray-600">Haltu áfram með ritunaræfingu að neðan.</p>
+                `;
+                document.getElementById('pronunciationFeedback').classList.add('hidden');
+            } else {
+                document.getElementById('currentWord').textContent = pronunciationWords[currentPronunciationIndex];
+                document.getElementById('pronunciationFeedback').classList.add('hidden');
+                document.getElementById('nextWordBtn').classList.add('hidden');
+            }
+            
+            updatePronunciationProgress();
+        }
+
+        // Update pronunciation progress
+        function updatePronunciationProgress() {
+            const progress = Math.min(currentPronunciationIndex, pronunciationWords.length);
+            const percentage = (progress / pronunciationWords.length) * 100;
+            document.getElementById('pronunciationProgress').textContent = `${progress}/${pronunciationWords.length}`;
+            document.getElementById('pronunciationProgressBar').style.width = `${percentage}%`;
+        }
+
+        // Play spelling word
+        async function playSpellingWord() {
+            const word = spellingWords[currentSpellingIndex];
+            const playBtn = document.getElementById('playSpellingBtn');
+            playBtn.disabled = true;
+            playBtn.textContent = '⏳ Hleður...';
+
+            try {
+                const response = await fetch('/.netlify/functions/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text_to_speak: word }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && !data.error && data.audio_base64) {
+                    const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+                    const audio = new Audio(audioUrl);
+                    await audio.play();
+                } else {
+                    throw new Error(data.error || 'Gat ekki sótt hljóð');
+                }
+            } catch (error) {
+                console.error('Villa við hljóð:', error);
+                alert('Gat ekki spilað orðið. Reyndu aftur!');
+            } finally {
+                playBtn.disabled = false;
+                playBtn.textContent = '▶️ Hlusta á orðið';
+            }
+        }
+
+        // Check spelling
+        function checkSpelling() {
+            const userAnswer = document.getElementById('spellingInput').value.trim().toLowerCase();
+            const correctAnswer = spellingWords[currentSpellingIndex].toLowerCase();
+            const feedbackDiv = document.getElementById('spellingFeedback');
+            
+            spellingAttempts++;
+
+            if (userAnswer === correctAnswer) {
+                // Correct answer
+                document.getElementById('spellingInput').className = 'w-full p-4 text-2xl border-2 rounded-lg text-center focus:outline-none correct-answer';
+                feedbackDiv.className = 'rounded-lg p-4 mb-4 bg-green-100 border border-green-300 text-green-800';
+                feedbackDiv.innerHTML = `
+                    <p class="text-lg font-semibold">✅ Rétt svar!</p>
+                    <p class="text-xl font-bold mt-2">${correctAnswer}</p>
+                `;
+                feedbackDiv.classList.remove('hidden');
+                
+                document.getElementById('checkSpellingBtn').classList.add('hidden');
+                document.getElementById('nextSpellingBtn').classList.remove('hidden');
+                spellingAttempts = 0;
+            } else if (spellingAttempts >= 2) {
+                // Two wrong attempts - show correct answer
+                document.getElementById('spellingInput').className = 'w-full p-4 text-2xl border-2 rounded-lg text-center focus:outline-none incorrect-answer';
+                feedbackDiv.className = 'rounded-lg p-4 mb-4 bg-yellow-100 border border-yellow-300 text-yellow-800';
+                feedbackDiv.innerHTML = `
+                    <p class="text-lg font-semibold">Rétta svarið er:</p>
+                    <p class="text-2xl font-bold mt-2">${correctAnswer}</p>
+                `;
+                feedbackDiv.classList.remove('hidden');
+                
+                document.getElementById('checkSpellingBtn').classList.add('hidden');
+                document.getElementById('nextSpellingBtn').classList.remove('hidden');
+                spellingAttempts = 0;
+            } else {
+                // First wrong attempt - allow retry
+                document.getElementById('spellingInput').className = 'w-full p-4 text-2xl border-2 rounded-lg text-center focus:outline-none incorrect-answer';
+                feedbackDiv.className = 'rounded-lg p-4 mb-4 bg-red-100 border border-red-300 text-red-800';
+                feedbackDiv.innerHTML = `
+                    <p class="text-lg font-semibold">❌ Ekki alveg rétt</p>
+                    <p>Reyndu aftur! (${2 - spellingAttempts} tilraun eftir)</p>
+                `;
+                feedbackDiv.classList.remove('hidden');
+            }
+        }
+
+        // Next spelling word
+        function nextSpellingWord() {
+            currentSpellingIndex++;
+            
+            if (currentSpellingIndex >= spellingWords.length) {
+                // All exercises complete
+                document.getElementById('completionMessage').classList.remove('hidden');
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            } else {
+                document.getElementById('spellingInput').value = '';
+                document.getElementById('spellingInput').className = 'w-full p-4 text-2xl border-2 border-gray-300 rounded-lg text-center focus:border-green-500 focus:outline-none';
+                document.getElementById('spellingFeedback').classList.add('hidden');
+                document.getElementById('checkSpellingBtn').classList.remove('hidden');
+                document.getElementById('nextSpellingBtn').classList.add('hidden');
+                spellingAttempts = 0;
+            }
+            
+            updateSpellingProgress();
+        }
+
+        // Update spelling progress
+        function updateSpellingProgress() {
+            const progress = Math.min(currentSpellingIndex, spellingWords.length);
+            const percentage = (progress / spellingWords.length) * 100;
+            document.getElementById('spellingProgress').textContent = `${progress}/${spellingWords.length}`;
+            document.getElementById('spellingProgressBar').style.width = `${percentage}%`;
+        }
+
+        // Reset exercise
+        function resetExercise() {
+            currentPronunciationIndex = 0;
+            currentSpellingIndex = 0;
+            spellingAttempts = 0;
+            
+            document.getElementById('currentWord').textContent = pronunciationWords[0];
+            document.getElementById('pronunciationCard').innerHTML = `
+                <div class="text-6xl font-bold text-blue-700 mb-4" id="currentWord">kra</div>
+                <div class="flex justify-center gap-4">
+                    <button onclick="playWord()" id="playBtn" class="btn bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                        ▶️ Hlusta
+                    </button>
+                    <button onclick="recordPronunciation()" id="recordBtn" class="btn bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-lg font-semibold text-lg">
+                        🎤 Endurtaka
+                    </button>
+                </div>
+                
+                <div id="recordingIndicator" class="hidden mt-4">
+                    <p class="text-red-600 font-semibold text-lg recording-pulse">🔴 Upptaka í gangi...</p>
+                    <button onclick="stopRecording()" class="btn bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg mt-2">
+                        ⏹️ Stöðva
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('pronunciationFeedback').classList.add('hidden');
+            document.getElementById('nextWordBtn').classList.add('hidden');
+            document.getElementById('spellingInput').value = '';
+            document.getElementById('spellingInput').className = 'w-full p-4 text-2xl border-2 border-gray-300 rounded-lg text-center focus:border-green-500 focus:outline-none';
+            document.getElementById('spellingFeedback').classList.add('hidden');
+            document.getElementById('checkSpellingBtn').classList.remove('hidden');
+            document.getElementById('nextSpellingBtn').classList.add('hidden');
+            document.getElementById('completionMessage').classList.add('hidden');
+            
+            updatePronunciationProgress();
+            updateSpellingProgress();
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Allow Enter key to submit spelling
+        document.getElementById('spellingInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const checkBtn = document.getElementById('checkSpellingBtn');
+                if (!checkBtn.classList.contains('hidden')) {
+                    checkSpelling();
+                }
+            }
+        });
+
+        // Initialize progress
+        updatePronunciationProgress();
+        updateSpellingProgress();
+    </script>
+</body>
+</html>
