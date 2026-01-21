@@ -147,7 +147,7 @@ Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
 
 ### 1. BYRJUN (fyrsta skilaboð)
 - Heilsaðu: "Góðan daginn! Velkomin á veitingahúsið okkar!"
-- Spyrðu hvort nemandi hafi pantað borð "Áttu pantað borð"
+- Spyrðu hvort nemandi hafi pantað borð
 
 ### 2. BORÐPÖNTUN
 - Ef ekki pantað: "Ekkert mál! Fyrir hve marga?"
@@ -166,22 +166,26 @@ Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
 - Spyrðu: "Ert þú með ofnæmi fyrir einhverju?"
 - Ef já: "Ég skal athuga hjá kokknum til öryggis"
 
-### 6. BÍÐ OG MATUR
-- Segðu að maturinn komi eftir 15 mínútur
-- Þegar kemur að því: "Gjörið svo vel! Njótið vel!"
-- Spyrðu hvort maturinn bragðist vel
+### 6. BÍÐ EFTIR MAT
+- Þegar pöntun er móttekin, segðu: "Frábært! Maturinn kemur eftir 15 mínútur."
+- Bættu síðan NÁKVÆMLEGA við í LOK skilaboðanna: [BÍÐ EFTIR MAT]
+- EKKI segja meira í þeim skilaboðum
 
-### 7. REIKNINGUR
+### 7. MATUR KEMUR
+- Þegar þú færð skilaboðin "[Maturinn er tilbúinn]", segðu: "Gjörið svo vel, hér er maturinn. Verði ykkur að góðu!"
+- Spyrðu síðar hvort maturinn bragðist vel
+
+### 8. REIKNINGUR
 - Reiknaðu heildarverð
 - Spyrðu hvort borga saman eða sitt í hvoru lagi
 - Bjóddu kvittun
 - Þakkaðu fyrir komuna
 
 ## VERÐLISTI
-FORRÉTTUR: Súpa 1.400kr, Salat 1.600kr
-AÐALRÉTTUR: Fiskur 3.200kr, Lambahryggur 3.800kr, Kjúklingavefja 2.800kr, Hamborgari 2.400kr, Grænmetisréttur 2.600kr
-EFTIRRÉTTUR: Súkkulaðikaka 1.300kr, Ís 900kr, Ávextir 1.000kr
-DRYKKIR: Vatn 0kr, Gos 500kr, Kaffi/Te 400kr, Safi 600kr
+FORRÉTTUR: Súpa 1.400 krónur, Salat 1.600 krónur
+AÐALRÉTTUR: Fiskur 3.200 krónur, Lambahryggur 3.800 krónur, Kjúklingavefja 2.800 krónur, Hamborgari 2.400 krónur, Grænmetisréttur 2.600 krónur
+EFTIRRÉTTUR: Súkkulaðikaka 1.300 krónur, Ís 900 krónur, Ávextir 1.000 krónur
+DRYKKIR: Vatn 0 krónur, Gos 500 krónur, Kaffi eða Te 400 krónur, Safi 600 krónur
 
 ## ÞEGAR SAMTALI LÝKUR
 Eftir að nemandi hefur borgað og þú hefur þakkað, bættu við NÁKVÆMLEGA:
@@ -222,6 +226,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
             const [finished, setFinished] = useState(false);
             const [feedback, setFeedback] = useState('');
             const [started, setStarted] = useState(false);
+            const [waitingForFood, setWaitingForFood] = useState(false);
             const messagesEndRef = useRef(null);
             const currentAudioRef = useRef(null);
 
@@ -344,9 +349,46 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         const feedbackText = await callOpenAI(feedbackMsgs, 500);
                         setFeedback(feedbackText);
                         setFinished(true);
+                    } 
+                    // Check if waiting for food
+                    else if (response.includes('[BÍÐ EFTIR MAT]')) {
+                        const cleanResponse = response.replace('[BÍÐ EFTIR MAT]', '').trim();
+                        setMessages([...newMessages, { role: 'assistant', content: cleanResponse }]);
+                        setWaitingForFood(true);
+                        setLoading(false);
                     } else {
                         setMessages([...newMessages, { role: 'assistant', content: response }]);
                     }
+
+                } catch (error) {
+                    console.error('Error:', error);
+                } finally {
+                    if (!waitingForFood) {
+                        setLoading(false);
+                    }
+                }
+            };
+
+            // Food is ready - continue conversation
+            const foodIsReady = async () => {
+                setWaitingForFood(false);
+                setLoading(true);
+
+                // Add the waiting message to display
+                const waitMessage = { role: 'system', content: '⏳ 15 mínútum síðar...', isWaitMessage: true };
+                const newMessages = [...messages, waitMessage];
+                setMessages(newMessages);
+
+                try {
+                    const apiMessages = [
+                        { role: 'system', content: WAITER_SYSTEM_PROMPT },
+                        { role: 'user', content: '[Viðskiptavinur kemur inn]' },
+                        ...messages.filter(m => !m.isWaitMessage).map(m => ({ role: m.role, content: m.content })),
+                        { role: 'user', content: '[Maturinn er tilbúinn]' }
+                    ];
+
+                    const response = await callOpenAI(apiMessages);
+                    setMessages([...newMessages, { role: 'assistant', content: response }]);
 
                 } catch (error) {
                     console.error('Error:', error);
@@ -401,11 +443,11 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Get assistant message number
+            // Get assistant message number (ignore wait messages)
             const getAssistantNumber = (index) => {
                 let count = 0;
                 for (let i = 0; i <= index; i++) {
-                    if (messages[i].role === 'assistant') count++;
+                    if (messages[i].role === 'assistant' && !messages[i].isWaitMessage) count++;
                 }
                 return count;
             };
@@ -448,8 +490,12 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                                 <div className="flex-1 overflow-y-auto bg-white rounded-2xl shadow-sm p-5 mb-4">
                                     <div className="space-y-5">
                                         {messages.map((msg, idx) => (
-                                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                {msg.role === 'assistant' ? (
+                                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : msg.isWaitMessage ? 'justify-center' : 'justify-start'}`}>
+                                                {msg.isWaitMessage ? (
+                                                    <div className="px-6 py-3 rounded-full bg-amber-100 text-amber-800 text-lg font-medium">
+                                                        {msg.content}
+                                                    </div>
+                                                ) : msg.role === 'assistant' ? (
                                                     <button
                                                         onClick={() => playAudio(idx, msg.content)}
                                                         disabled={playingIndex !== null && playingIndex !== idx}
@@ -488,7 +534,21 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                                     </div>
                                 </div>
 
-                                {/* Input */}
+                                {/* Waiting for food button */}
+                                {waitingForFood && (
+                                    <div className="bg-amber-50 rounded-2xl shadow-sm p-5 mb-4 text-center">
+                                        <p className="text-lg text-amber-800 mb-4">🍳 Maturinn er að eldast...</p>
+                                        <button
+                                            onClick={foodIsReady}
+                                            className="px-8 py-4 bg-amber-500 text-white text-xl rounded-2xl hover:bg-amber-600 transition-colors font-light"
+                                        >
+                                            ⏭️ 15 mínútum síðar...
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Input - hide when waiting for food */}
+                                {!waitingForFood && (
                                 <div className="bg-white rounded-2xl shadow-sm p-4">
                                     <div className="flex gap-3 mb-3">
                                         <button
@@ -558,6 +618,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                                         </div>
                                     )}
                                 </div>
+                                )}
                             </>
                         )}
 
