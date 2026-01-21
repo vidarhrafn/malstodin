@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>🍽️ Veitingastaðurinn - Hlutverkaleikur</title>
+    <title>🍽️ Veitingastaðurinn</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -13,42 +13,21 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
             min-height: 100vh;
+            margin: 0;
         }
         .recording {
             animation: pulse 1.5s ease-in-out infinite;
-        }
-        .speaking {
-            animation: speakPulse 0.8s ease-in-out infinite;
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.7; transform: scale(1.05); }
         }
-        @keyframes speakPulse {
+        .playing {
+            animation: playPulse 0.6s ease-in-out infinite;
+        }
+        @keyframes playPulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
-        }
-        .sound-wave {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            height: 40px;
-        }
-        .sound-bar {
-            width: 4px;
-            background: #3b82f6;
-            border-radius: 2px;
-            animation: soundWave 0.8s ease-in-out infinite;
-        }
-        .sound-bar:nth-child(1) { animation-delay: 0s; height: 20px; }
-        .sound-bar:nth-child(2) { animation-delay: 0.1s; height: 30px; }
-        .sound-bar:nth-child(3) { animation-delay: 0.2s; height: 40px; }
-        .sound-bar:nth-child(4) { animation-delay: 0.3s; height: 30px; }
-        .sound-bar:nth-child(5) { animation-delay: 0.4s; height: 20px; }
-        @keyframes soundWave {
-            0%, 100% { transform: scaleY(0.5); }
-            50% { transform: scaleY(1); }
         }
     </style>
 </head>
@@ -60,7 +39,7 @@
 
         // ===== ICONS =====
         const SendIcon = () => (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>
@@ -75,7 +54,7 @@
                 strokeWidth="2" 
                 strokeLinecap="round" 
                 strokeLinejoin="round" 
-                className={`w-6 h-6 ${isRecording ? 'recording text-red-500' : ''}`}
+                className={`w-5 h-5 ${isRecording ? 'recording text-red-500' : ''}`}
             >
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
@@ -84,15 +63,7 @@
             </svg>
         );
 
-        const HelpIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-            </svg>
-        );
-
-        const SpeakerIcon = ({ isSpeaking }) => (
+        const SpeakerIcon = ({ isPlaying }) => (
             <svg 
                 xmlns="http://www.w3.org/2000/svg" 
                 viewBox="0 0 24 24" 
@@ -101,27 +72,20 @@
                 strokeWidth="2" 
                 strokeLinecap="round" 
                 strokeLinejoin="round" 
-                className={`w-16 h-16 ${isSpeaking ? 'speaking text-blue-500' : 'text-gray-400'}`}
+                className={`w-5 h-5 ${isPlaying ? 'playing text-blue-600' : 'text-blue-500'}`}
             >
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                {isSpeaking && (
-                    <>
-                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-                    </>
-                )}
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
             </svg>
         );
 
-        // ===== SOUND WAVE COMPONENT =====
-        const SoundWave = () => (
-            <div className="sound-wave">
-                <div className="sound-bar"></div>
-                <div className="sound-bar"></div>
-                <div className="sound-bar"></div>
-                <div className="sound-bar"></div>
-                <div className="sound-bar"></div>
-            </div>
+        const HelpIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
         );
 
         // ===== API FUNCTIONS =====
@@ -141,36 +105,20 @@
             return data.content;
         }
 
-        async function playAudio(text) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const r = await fetch('/.netlify/functions/speak', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text_to_speak: text }),
-                    });
-
-                    const data = await r.json();
-                    
-                    if (!r.ok || data.error || !data.audio_base64) {
-                        console.error("Villa í hljóðkalli:", data.error);
-                        reject(new Error(data.error || 'Audio error'));
-                        return;
-                    }
-
-                    const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-                    const audio = new Audio(audioUrl);
-                    
-                    audio.onended = () => resolve();
-                    audio.onerror = (e) => reject(e);
-                    
-                    audio.play().catch(e => reject(e));
-                    
-                } catch (e) {
-                    console.error("Tenging mistókst:", e);
-                    reject(e);
-                }
+        async function fetchAudio(text) {
+            const r = await fetch('/.netlify/functions/speak', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text_to_speak: text }),
             });
+
+            const data = await r.json();
+            
+            if (!r.ok || data.error || !data.audio_base64) {
+                throw new Error(data.error || 'Audio error');
+            }
+
+            return `data:audio/mp3;base64,${data.audio_base64}`;
         }
 
         // ===== SYSTEM PROMPT =====
@@ -178,26 +126,27 @@
 Þú ert vingjarnlegur og þolinmóður þjónn á veitingastað á Íslandi. Þú talar við nemendur sem eru að læra íslensku á A1-A2 stigi.
 
 ## TUNGUMÁL
-- Talaðu EINUNGIS íslensku (nema þegar nemandi biður um hjálp - sjá neðar)
+- Talaðu EINUNGIS íslensku (nema þegar nemandi biður um hjálp)
 - Notaðu stuttar og skýrar setningar
 - Vertu þolinmóður ef nemandi gerir málfræðivillur
 - Leiðréttu óbeint með því að endurtaka rétt (t.d. ef nemandi segir "Ég vil fiska" svaraðu "Frábært, þú pantar fiskinn")
+- MIKILVÆGT: Segðu "Góðan daginn" í stað "Halló"
 
 ## EF NEMANDI TALAR ANNAÐ TUNGUMÁL
 Ef nemandi skrifar á öðru tungumáli en íslensku (og biður EKKI um hjálp), svaraðu:
 "Afsakið, ég skil ekki. Geturðu sagt þetta á íslensku?"
-Og hjálpaðu með að gefa dæmi um hvernig á að segja það.
+Og hjálpaðu með dæmi.
 
 ## HJÁLP
-Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć...", "Comment dire..."):
+Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
 1. Svaraðu á SAMA tungumáli og nemandinn spurði á
 2. Gefðu íslenska setninguna/orðið
-3. Haltu síðan áfram með samtalið á íslensku
+3. Haltu síðan áfram á íslensku
 
 ## SAMTALSFERLIÐ
 
 ### 1. BYRJUN (fyrsta skilaboð)
-- Heilsaðu og bjóddu velkominn
+- Heilsaðu: "Góðan daginn! Velkomin á veitingahúsið okkar!"
 - Spyrðu hvort nemandi hafi pantað borð
 
 ### 2. BORÐPÖNTUN
@@ -214,72 +163,67 @@ Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć...", "Comm
 - Spyrðu um forrétt/eftirrétt
 
 ### 5. OFNÆMI
-- Spyrðu alltaf: "Ert þú með ofnæmi fyrir einhverju?"
+- Spyrðu: "Ert þú með ofnæmi fyrir einhverju?"
 - Ef já: "Ég skal athuga hjá kokknum til öryggis"
 
 ### 6. BÍÐ OG MATUR
 - Segðu að maturinn komi eftir 15 mínútur
-- Þegar "maturinn er kominn": "Gjörið svo vel! Njótið vel!"
+- Þegar kemur að því: "Gjörið svo vel! Njótið vel!"
 - Spyrðu hvort maturinn bragðist vel
 
 ### 7. REIKNINGUR
-- Reiknaðu heildarverð miðað við pöntun
+- Reiknaðu heildarverð
 - Spyrðu hvort borga saman eða sitt í hvoru lagi
 - Bjóddu kvittun
 - Þakkaðu fyrir komuna
 
 ## VERÐLISTI
-FORRÉTTUR: Súpa og brauð 1.400kr, Salat 1.600kr
-AÐALRÉTTUR: Fiskur dagsins 3.200kr, Lambahryggur 3.800kr, Kjúklingavefja 2.800kr, Hamborgari og franskar 2.400kr, Grænmetisréttur (fyllt paprika) 2.600kr
+FORRÉTTUR: Súpa 1.400kr, Salat 1.600kr
+AÐALRÉTTUR: Fiskur 3.200kr, Lambahryggur 3.800kr, Kjúklingavefja 2.800kr, Hamborgari 2.400kr, Grænmetisréttur 2.600kr
 EFTIRRÉTTUR: Súkkulaðikaka 1.300kr, Ís 900kr, Ávextir 1.000kr
-DRYKKIR: Vatn 0kr, Gos 500kr, Kaffi/Te 400kr, Ávaxtasafi 600kr
+DRYKKIR: Vatn 0kr, Gos 500kr, Kaffi/Te 400kr, Safi 600kr
 
 ## ÞEGAR SAMTALI LÝKUR
-Eftir að nemandi hefur borgað og þú hefur þakkað fyrir komuna, bættu við NÁKVÆMLEGA þessu í lok skilaboðanna:
+Eftir að nemandi hefur borgað og þú hefur þakkað, bættu við NÁKVÆMLEGA:
 [SAMTALI LOKIÐ]
-
-Þá mun kerfið sýna hrós til nemandans.
 
 ## MIKILVÆGT
 - Haltu svörum STUTTUM (1-3 setningar)
 - Vertu náttúrulegur og vingjarnlegur
-- Leiðbeindu samtalinu ef nemandi er óviss
 `.trim();
 
         const FEEDBACK_SYSTEM_PROMPT = `
-Þú ert íslenskukennari sem gefur nemanda hrós eftir hlutverkaleik á veitingastað.
+Þú ert íslenskukennari. Gefðu nemanda hrós eftir hlutverkaleik á veitingastað.
 
-Þú færð samtal milli nemanda og þjóns. Gefðu ítarlegt hrós:
+1. FYRST á íslensku (3-4 setningar):
+- Hrósaðu
+- Nefndu 2-3 setningar/orð sem nemandinn notaði vel
 
-1. FYRST á íslensku:
-- Hrósaðu almennt
-- Nefndu 2-3 setningar eða orð sem nemandinn notaði vel
-- Vertu hvetjandi
-
-2. SÍÐAN á móðurmáli nemandans (þú þarft að greina það úr samtalinu):
+2. SÍÐAN á móðurmáli nemandans (greindu það úr samtalinu):
 - Þýddu hrósið
-- Nefndu sömu dæmi
-- Gefðu 1-2 ráð til að bæta sig
+- Gefðu 1-2 ráð
 
-Hafðu hrósið hlýlegt og hvetjandi. Nemandinn er á A1-A2 stigi.
+Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
 `.trim();
 
         // ===== MAIN COMPONENT =====
         const Veitingastadur = () => {
-            const [conversationHistory, setConversationHistory] = useState([]);
+            const [messages, setMessages] = useState([]);
             const [input, setInput] = useState('');
             const [loading, setLoading] = useState(false);
-            const [isSpeaking, setIsSpeaking] = useState(false);
             const [isRecording, setIsRecording] = useState(false);
             const [recognition, setRecognition] = useState(null);
-            const [status, setStatus] = useState('starting'); // starting, listening, thinking, speaking, waiting, finished
+            const [playingIndex, setPlayingIndex] = useState(null);
+            const [audioCache, setAudioCache] = useState({});
             const [showHelp, setShowHelp] = useState(false);
             const [helpInput, setHelpInput] = useState('');
             const [helpResponse, setHelpResponse] = useState('');
             const [helpLoading, setHelpLoading] = useState(false);
+            const [finished, setFinished] = useState(false);
             const [feedback, setFeedback] = useState('');
-            const [conversationStarted, setConversationStarted] = useState(false);
-            const inputRef = useRef(null);
+            const [started, setStarted] = useState(false);
+            const messagesEndRef = useRef(null);
+            const currentAudioRef = useRef(null);
 
             // Initialize speech recognition
             useEffect(() => {
@@ -293,53 +237,73 @@ Hafðu hrósið hlýlegt og hvetjandi. Nemandinn er á A1-A2 stigi.
                         const transcript = event.results[0][0].transcript;
                         setInput(transcript);
                         setIsRecording(false);
-                        setStatus('waiting');
                     };
 
-                    recognitionInstance.onerror = (event) => {
-                        console.error('Speech recognition error:', event.error);
-                        setIsRecording(false);
-                        setStatus('waiting');
-                    };
-
-                    recognitionInstance.onend = () => {
-                        setIsRecording(false);
-                    };
+                    recognitionInstance.onerror = () => setIsRecording(false);
+                    recognitionInstance.onend = () => setIsRecording(false);
 
                     setRecognition(recognitionInstance);
                 }
             }, []);
 
+            // Scroll to bottom
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            // Play audio
+            const playAudio = async (index, text) => {
+                // Stop current audio if playing
+                if (currentAudioRef.current) {
+                    currentAudioRef.current.pause();
+                    currentAudioRef.current = null;
+                }
+
+                setPlayingIndex(index);
+
+                try {
+                    let audioUrl = audioCache[index];
+                    
+                    if (!audioUrl) {
+                        audioUrl = await fetchAudio(text);
+                        setAudioCache(prev => ({ ...prev, [index]: audioUrl }));
+                    }
+
+                    const audio = new Audio(audioUrl);
+                    currentAudioRef.current = audio;
+                    
+                    audio.onended = () => {
+                        setPlayingIndex(null);
+                        currentAudioRef.current = null;
+                    };
+                    audio.onerror = () => {
+                        setPlayingIndex(null);
+                        currentAudioRef.current = null;
+                    };
+                    
+                    await audio.play();
+                } catch (e) {
+                    console.error('Audio error:', e);
+                    setPlayingIndex(null);
+                }
+            };
+
             // Start conversation
             const startConversation = async () => {
-                setConversationStarted(true);
-                setStatus('thinking');
+                setStarted(true);
                 setLoading(true);
 
                 try {
-                    const messages = [
+                    const apiMessages = [
                         { role: 'system', content: WAITER_SYSTEM_PROMPT },
-                        { role: 'user', content: '[Nemandi kemur inn á veitingastaðinn]' }
+                        { role: 'user', content: '[Viðskiptavinur kemur inn á veitingastaðinn]' }
                     ];
 
-                    const response = await callOpenAI(messages);
-                    
-                    setConversationHistory([
-                        { role: 'user', content: '[Kemur inn]', hidden: true },
-                        { role: 'assistant', content: response }
-                    ]);
-
-                    setStatus('speaking');
-                    setIsSpeaking(true);
-                    
-                    await playAudio(response);
-                    
-                    setIsSpeaking(false);
-                    setStatus('waiting');
+                    const response = await callOpenAI(apiMessages);
+                    setMessages([{ role: 'assistant', content: response }]);
 
                 } catch (error) {
-                    console.error('Error starting conversation:', error);
-                    setStatus('waiting');
+                    console.error('Error:', error);
                 } finally {
                     setLoading(false);
                 }
@@ -351,59 +315,41 @@ Hafðu hrósið hlýlegt og hvetjandi. Nemandinn er á A1-A2 stigi.
 
                 const userMessage = input.trim();
                 setInput('');
-                setStatus('thinking');
+                
+                const newMessages = [...messages, { role: 'user', content: userMessage }];
+                setMessages(newMessages);
                 setLoading(true);
 
-                const newHistory = [...conversationHistory, { role: 'user', content: userMessage }];
-                setConversationHistory(newHistory);
-
                 try {
-                    const messagesForAPI = [
+                    const apiMessages = [
                         { role: 'system', content: WAITER_SYSTEM_PROMPT },
-                        ...newHistory.filter(m => !m.hidden).map(m => ({ role: m.role, content: m.content }))
+                        { role: 'user', content: '[Viðskiptavinur kemur inn]' },
+                        ...newMessages.map(m => ({ role: m.role, content: m.content }))
                     ];
 
-                    const response = await callOpenAI(messagesForAPI);
+                    const response = await callOpenAI(apiMessages);
                     
-                    const updatedHistory = [...newHistory, { role: 'assistant', content: response }];
-                    setConversationHistory(updatedHistory);
-
-                    // Check if conversation ended
+                    // Check if finished
                     if (response.includes('[SAMTALI LOKIÐ]')) {
                         const cleanResponse = response.replace('[SAMTALI LOKIÐ]', '').trim();
+                        setMessages([...newMessages, { role: 'assistant', content: cleanResponse }]);
                         
-                        setStatus('speaking');
-                        setIsSpeaking(true);
-                        await playAudio(cleanResponse);
-                        setIsSpeaking(false);
-                        
-                        // Generate feedback
-                        setStatus('thinking');
-                        const feedbackMessages = [
+                        // Get feedback
+                        const allMessages = [...newMessages, { role: 'assistant', content: cleanResponse }];
+                        const feedbackMsgs = [
                             { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
-                            { role: 'user', content: `Hér er samtalið:\n\n${updatedHistory.filter(m => !m.hidden).map(m => `${m.role === 'user' ? 'Nemandi' : 'Þjónn'}: ${m.content}`).join('\n\n')}` }
+                            { role: 'user', content: `Samtalið:\n${allMessages.map(m => `${m.role === 'user' ? 'Nemandi' : 'Þjónn'}: ${m.content}`).join('\n')}` }
                         ];
                         
-                        const feedbackResponse = await callOpenAI(feedbackMessages, 600);
-                        setFeedback(feedbackResponse);
-                        
-                        setStatus('speaking');
-                        setIsSpeaking(true);
-                        await playAudio(feedbackResponse);
-                        setIsSpeaking(false);
-                        
-                        setStatus('finished');
+                        const feedbackText = await callOpenAI(feedbackMsgs, 500);
+                        setFeedback(feedbackText);
+                        setFinished(true);
                     } else {
-                        setStatus('speaking');
-                        setIsSpeaking(true);
-                        await playAudio(response);
-                        setIsSpeaking(false);
-                        setStatus('waiting');
+                        setMessages([...newMessages, { role: 'assistant', content: response }]);
                     }
 
                 } catch (error) {
                     console.error('Error:', error);
-                    setStatus('waiting');
                 } finally {
                     setLoading(false);
                 }
@@ -418,54 +364,36 @@ Hafðu hrósið hlýlegt og hvetjandi. Nemandinn er á A1-A2 stigi.
 
                 if (isRecording) {
                     recognition.stop();
-                    setIsRecording(false);
-                    setStatus('waiting');
                 } else {
                     setInput('');
                     recognition.start();
                     setIsRecording(true);
-                    setStatus('listening');
                 }
             };
 
-            // Handle help request
+            // Help
             const askForHelp = async () => {
                 if (!helpInput.trim() || helpLoading) return;
-
                 setHelpLoading(true);
                 
                 try {
                     const helpMessages = [
                         { 
                             role: 'system', 
-                            content: `Þú ert hjálpari fyrir íslenskunema. Nemandinn er í hlutverkaleik á veitingastað og þarf hjálp.
-                            
-Svaraðu á SAMA tungumáli og nemandinn skrifar á.
-Gefðu stutta og skýra hjálp - íslenska setninguna/orðið sem nemandinn þarf.
-Gefðu líka dæmi um hvernig á að nota það í samhengi.
-
-Orðaforði sem gæti hjálpað:
-- Panta borð, matseðill, réttur dagsins
-- Forréttur, aðalréttur, eftirréttur  
-- Ofnæmi, sleppa (einhverju)
-- Reikningur, kvittun, borga
-- "Hvað má bjóða þér?", "Hverju mælir þú með?", "Má ég fá reikninginn?"` 
+                            content: `Hjálpaðu nemanda í veitingastaðar-hlutverkaleik. Svaraðu á SAMA tungumáli og nemandinn skrifar. Gefðu íslenska setninguna sem hann þarf.`
                         },
                         { role: 'user', content: helpInput }
                     ];
 
-                    const response = await callOpenAI(helpMessages, 300);
+                    const response = await callOpenAI(helpMessages, 200);
                     setHelpResponse(response);
-                    
-                } catch (error) {
-                    console.error('Help error:', error);
-                    setHelpResponse('Villa kom upp. Reyndu aftur.');
+                } catch (e) {
+                    setHelpResponse('Villa. Reyndu aftur.');
                 } finally {
                     setHelpLoading(false);
                 }
             };
 
-            // Handle key press
             const handleKeyPress = (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -473,91 +401,99 @@ Orðaforði sem gæti hjálpað:
                 }
             };
 
-            const handleHelpKeyPress = (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    askForHelp();
+            // Get assistant message number
+            const getAssistantNumber = (index) => {
+                let count = 0;
+                for (let i = 0; i <= index; i++) {
+                    if (messages[i].role === 'assistant') count++;
                 }
-            };
-
-            // Get status text
-            const getStatusText = () => {
-                switch (status) {
-                    case 'starting': return 'Smelltu á hnappinn til að byrja';
-                    case 'listening': return '🎤 Hlustar... talaðu núna!';
-                    case 'thinking': return '🤔 Þjónninn hugsar...';
-                    case 'speaking': return '🔊 Þjónninn talar...';
-                    case 'waiting': return '💬 Þú átt að svara';
-                    case 'finished': return '🎉 Vel gert!';
-                    default: return '';
-                }
+                return count;
             };
 
             return (
-                <div className="min-h-screen flex flex-col">
-                    {/* Header */}
-                    <header className="bg-white shadow-sm py-4 px-6">
-                        <div className="max-w-2xl mx-auto">
-                            <button 
-                                onClick={() => window.history.back()} 
-                                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
-                            >
-                                ← Til baka
-                            </button>
-                            <h1 className="text-2xl font-light text-gray-800">🍽️ Veitingastaðurinn</h1>
-                            <p className="text-sm text-gray-600 font-light mt-1">Hlutverkaleikur · A1-A2</p>
+                <div className="min-h-screen flex flex-col" style={{ maxHeight: '100vh' }}>
+                    {/* Compact Header */}
+                    <header className="bg-white shadow-sm py-2 px-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xl">🍽️</span>
+                            <div>
+                                <h1 className="text-base font-medium text-gray-800">Veitingastaðurinn</h1>
+                                <p className="text-xs text-gray-500">Hlutverkaleikur · A1-A2</p>
+                            </div>
                         </div>
                     </header>
 
-                    {/* Main content */}
-                    <main className="flex-1 max-w-2xl w-full mx-auto p-4 flex flex-col">
+                    {/* Main */}
+                    <main className="flex-1 flex flex-col overflow-hidden p-2">
                         
-                        {/* Start button (before conversation starts) */}
-                        {!conversationStarted && (
-                            <div className="flex-1 flex flex-col items-center justify-center">
-                                <div className="text-center mb-8">
-                                    <div className="text-6xl mb-4">🍽️</div>
-                                    <h2 className="text-xl font-light text-gray-800 mb-2">Velkomin á veitingastaðinn!</h2>
-                                    <p className="text-gray-600 font-light">Þú ert viðskiptavinur og ætlar að borða á veitingastað.</p>
-                                    <p className="text-gray-600 font-light">Þjónninn mun tala við þig á íslensku.</p>
-                                </div>
+                        {/* Start screen */}
+                        {!started && (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                                <div className="text-4xl mb-3">🍽️</div>
+                                <h2 className="text-lg font-light text-gray-800 mb-1">Velkomin á veitingastaðinn!</h2>
+                                <p className="text-sm text-gray-600 font-light mb-4">Þú ætlar að panta mat. Talaðu við þjóninn.</p>
                                 <button
                                     onClick={startConversation}
-                                    className="px-8 py-4 bg-blue-500 text-white text-lg rounded-xl hover:bg-blue-600 transition-colors font-light shadow-lg"
+                                    className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-light"
                                 >
-                                    Byrja samtal
+                                    Byrja
                                 </button>
                             </div>
                         )}
 
-                        {/* Conversation area */}
-                        {conversationStarted && status !== 'finished' && (
+                        {/* Conversation */}
+                        {started && !finished && (
                             <>
-                                {/* Speaker area */}
-                                <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-2xl shadow-sm p-8 mb-4">
-                                    <div className="mb-6">
-                                        <SpeakerIcon isSpeaking={isSpeaking} />
+                                {/* Messages */}
+                                <div className="flex-1 overflow-y-auto bg-white rounded-lg shadow-sm p-3 mb-2">
+                                    <div className="space-y-3">
+                                        {messages.map((msg, idx) => (
+                                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                {msg.role === 'assistant' ? (
+                                                    <button
+                                                        onClick={() => playAudio(idx, msg.content)}
+                                                        disabled={playingIndex !== null && playingIndex !== idx}
+                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+                                                            playingIndex === idx 
+                                                                ? 'bg-blue-100 border-2 border-blue-400' 
+                                                                : 'bg-gray-100 hover:bg-blue-50 border-2 border-transparent'
+                                                        } disabled:opacity-50`}
+                                                    >
+                                                        <SpeakerIcon isPlaying={playingIndex === idx} />
+                                                        <span className="text-sm font-medium text-gray-700">
+                                                            {getAssistantNumber(idx)}
+                                                        </span>
+                                                    </button>
+                                                ) : (
+                                                    <div className="px-4 py-2 rounded-2xl bg-blue-500 text-white text-sm font-light max-w-[80%]">
+                                                        {msg.content}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        
+                                        {loading && (
+                                            <div className="flex justify-start">
+                                                <div className="px-4 py-2 rounded-full bg-gray-100">
+                                                    <div className="flex gap-1">
+                                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div ref={messagesEndRef} />
                                     </div>
-                                    
-                                    {isSpeaking && <SoundWave />}
-                                    
-                                    <p className={`text-lg font-light mt-4 ${
-                                        status === 'waiting' ? 'text-green-600' : 
-                                        status === 'speaking' ? 'text-blue-600' :
-                                        status === 'listening' ? 'text-red-500' :
-                                        'text-gray-600'
-                                    }`}>
-                                        {getStatusText()}
-                                    </p>
                                 </div>
 
-                                {/* Input area */}
-                                <div className="bg-white rounded-xl shadow-sm p-4">
-                                    <div className="flex gap-2 mb-3">
+                                {/* Input */}
+                                <div className="bg-white rounded-lg shadow-sm p-2">
+                                    <div className="flex gap-2 mb-2">
                                         <button
                                             onClick={toggleRecording}
-                                            disabled={loading || isSpeaking}
-                                            className={`p-4 rounded-xl transition-colors ${
+                                            disabled={loading}
+                                            className={`p-2 rounded-lg transition-colors ${
                                                 isRecording 
                                                     ? 'bg-red-500 text-white' 
                                                     : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
@@ -566,60 +502,57 @@ Orðaforði sem gæti hjálpað:
                                             <MicIcon isRecording={isRecording} />
                                         </button>
                                         <input
-                                            ref={inputRef}
                                             type="text"
                                             value={input}
                                             onChange={(e) => setInput(e.target.value)}
                                             onKeyPress={handleKeyPress}
-                                            disabled={loading || isSpeaking}
-                                            placeholder={isRecording ? "Hlustar..." : "Eða skrifaðu hér..."}
-                                            className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-light disabled:bg-gray-50"
+                                            disabled={loading}
+                                            placeholder={isRecording ? "Hlustar..." : "Skrifaðu hér..."}
+                                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm font-light"
                                         />
                                         <button
                                             onClick={sendMessage}
-                                            disabled={!input.trim() || loading || isSpeaking}
-                                            className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                            disabled={!input.trim() || loading}
+                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 transition-colors"
                                         >
                                             <SendIcon />
                                         </button>
                                     </div>
                                     
-                                    {/* Help button */}
+                                    {isRecording && (
+                                        <p className="text-xs text-red-500 mb-2">🔴 Talaðu núna...</p>
+                                    )}
+
+                                    {/* Help */}
                                     <button
                                         onClick={() => setShowHelp(!showHelp)}
-                                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 font-light"
+                                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
                                     >
                                         <HelpIcon />
-                                        <span>Þarftu hjálp? Spurðu á þínu máli</span>
+                                        <span>Hjálp</span>
                                     </button>
 
-                                    {/* Help panel */}
                                     {showHelp && (
-                                        <div className="mt-4 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-                                            <p className="text-sm text-gray-700 font-light mb-3">
-                                                Skrifaðu spurningu á þínu móðurmáli (t.d. "How do I say I want fish?")
-                                            </p>
+                                        <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200">
                                             <div className="flex gap-2">
                                                 <input
                                                     type="text"
                                                     value={helpInput}
                                                     onChange={(e) => setHelpInput(e.target.value)}
-                                                    onKeyPress={handleHelpKeyPress}
-                                                    placeholder="Ask in your language..."
-                                                    className="flex-1 px-3 py-2 border border-yellow-300 rounded-lg focus:outline-none focus:border-yellow-500 font-light text-sm"
+                                                    onKeyPress={(e) => e.key === 'Enter' && askForHelp()}
+                                                    placeholder="How do I say...?"
+                                                    className="flex-1 px-2 py-1 border border-yellow-300 rounded text-xs"
                                                 />
                                                 <button
                                                     onClick={askForHelp}
-                                                    disabled={!helpInput.trim() || helpLoading}
-                                                    className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-300 text-sm"
+                                                    disabled={helpLoading}
+                                                    className="px-3 py-1 bg-yellow-500 text-white rounded text-xs"
                                                 >
                                                     {helpLoading ? '...' : '?'}
                                                 </button>
                                             </div>
                                             {helpResponse && (
-                                                <div className="mt-3 p-3 bg-white rounded-lg text-sm font-light text-gray-700">
-                                                    {helpResponse}
-                                                </div>
+                                                <p className="mt-2 text-xs text-gray-700 bg-white p-2 rounded">{helpResponse}</p>
                                             )}
                                         </div>
                                     )}
@@ -627,22 +560,22 @@ Orðaforði sem gæti hjálpað:
                             </>
                         )}
 
-                        {/* Finished state */}
-                        {status === 'finished' && (
-                            <div className="flex-1 flex flex-col items-center justify-center">
-                                <div className="bg-white rounded-2xl shadow-sm p-8 text-center max-w-lg">
-                                    <div className="text-6xl mb-4">🎉</div>
-                                    <h2 className="text-2xl font-light text-gray-800 mb-4">Vel gert!</h2>
-                                    <div className="text-left bg-green-50 rounded-xl p-4 mb-6">
-                                        <p className="text-gray-700 font-light whitespace-pre-wrap">{feedback}</p>
-                                    </div>
-                                    <button
-                                        onClick={() => window.location.reload()}
-                                        className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-light"
-                                    >
-                                        Reyna aftur
-                                    </button>
+                        {/* Finished */}
+                        {finished && (
+                            <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm p-4 overflow-y-auto">
+                                <div className="text-center mb-3">
+                                    <div className="text-3xl mb-1">🎉</div>
+                                    <h2 className="text-lg font-light text-gray-800">Vel gert!</h2>
                                 </div>
+                                <div className="flex-1 bg-green-50 rounded-lg p-3 mb-3 overflow-y-auto">
+                                    <p className="text-sm text-gray-700 font-light whitespace-pre-wrap">{feedback}</p>
+                                </div>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                                >
+                                    Reyna aftur
+                                </button>
                             </div>
                         )}
                     </main>
