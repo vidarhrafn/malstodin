@@ -88,6 +88,19 @@
             </svg>
         );
 
+        const CopyIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+        );
+
+        const CheckIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        );
+
         // ===== API FUNCTIONS =====
         async function callOpenAI(messages, max_tokens = 500, model = 'gpt-4o-mini', temperature = 0.4) {
             const r = await fetch('/.netlify/functions/openai', {
@@ -131,6 +144,7 @@
 - Vertu þolinmóður ef nemandi gerir málfræðivillur
 - Leiðréttu óbeint með því að endurtaka rétt (t.d. ef nemandi segir "Ég vil fiska" svaraðu "Frábært, þú pantar fiskinn")
 - MIKILVÆGT: Segðu "Góðan daginn" í stað "Halló"
+- MIKILVÆGT: Þegar nemandi segir "takk", svaraðu með "ekkert að þakka" eða "gjörðu svo vel" (aldrei "þú ert velkomin/n")
 
 ## EF NEMANDI TALAR ANNAÐ TUNGUMÁL
 Ef nemandi skrifar á öðru tungumáli en íslensku (og biður EKKI um hjálp), svaraðu:
@@ -227,6 +241,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
             const [feedback, setFeedback] = useState('');
             const [started, setStarted] = useState(false);
             const [waitingForFood, setWaitingForFood] = useState(false);
+            const [copied, setCopied] = useState(false);
             const messagesEndRef = useRef(null);
             const currentAudioRef = useRef(null);
 
@@ -290,6 +305,17 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 } catch (e) {
                     console.error('Audio error:', e);
                     setPlayingIndex(null);
+                }
+            };
+
+            // Copy feedback
+            const copyFeedback = async () => {
+                try {
+                    await navigator.clipboard.writeText(feedback);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                } catch (e) {
+                    console.error('Copy error:', e);
                 }
             };
 
@@ -632,12 +658,21 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                                 <div className="flex-1 bg-green-50 rounded-2xl p-5 mb-5 overflow-y-auto">
                                     <p className="text-lg text-gray-700 font-light whitespace-pre-wrap leading-relaxed">{feedback}</p>
                                 </div>
-                                <button
-                                    onClick={() => window.location.reload()}
-                                    className="w-full py-5 bg-blue-500 text-white rounded-2xl hover:bg-blue-600 text-xl font-light"
-                                >
-                                    Reyna aftur
-                                </button>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={copyFeedback}
+                                        className="flex-1 py-5 bg-green-500 text-white rounded-2xl hover:bg-green-600 text-xl font-light flex items-center justify-center gap-3 transition-colors"
+                                    >
+                                        {copied ? <CheckIcon /> : <CopyIcon />}
+                                        {copied ? 'Afritað!' : 'Afrita'}
+                                    </button>
+                                    <button
+                                        onClick={() => window.location.reload()}
+                                        className="flex-1 py-5 bg-blue-500 text-white rounded-2xl hover:bg-blue-600 text-xl font-light transition-colors"
+                                    >
+                                        Reyna aftur
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </main>
