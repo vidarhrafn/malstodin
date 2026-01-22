@@ -20,7 +20,7 @@
       -webkit-user-select: text;
       cursor: text;
       line-height: 1.8;
-      -webkit-touch-callout: none; /* Kemur í veg fyrir context menu á iOS */
+      -webkit-touch-callout: none;
     }
     
     .selectable-text::selection {
@@ -36,7 +36,8 @@
       padding: 1.5rem;
       box-shadow: 0 20px 40px rgba(0,0,0,0.2);
       z-index: 1000;
-      max-width: 400px;
+      max-width: 90vw;
+      width: 400px;
       animation: slideUp 0.3s ease-out;
     }
     
@@ -109,8 +110,40 @@
         }
       };
 
+      const calculatePopupPosition = function(rect) {
+        const popupWidth = 400;
+        const popupHeight = 200; // Áætluð hæð
+        const padding = 20;
+        
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const scrollY = window.scrollY;
+        
+        // Reikna lárétta staðsetningu
+        let x = rect.left + (rect.width / 2);
+        
+        // Passa að popup fari ekki út fyrir hægri brún
+        if (x + (popupWidth / 2) > viewportWidth - padding) {
+          x = viewportWidth - (popupWidth / 2) - padding;
+        }
+        
+        // Passa að popup fari ekki út fyrir vinstri brún
+        if (x - (popupWidth / 2) < padding) {
+          x = (popupWidth / 2) + padding;
+        }
+        
+        // Reikna lóðrétta staðsetningu
+        let y = rect.bottom + scrollY + 10;
+        
+        // Ef popup fer út fyrir neðri brún, setja það fyrir ofan textann
+        if (rect.bottom + popupHeight > viewportHeight + scrollY) {
+          y = rect.top + scrollY - popupHeight - 10;
+        }
+        
+        return { x: x, y: y };
+      };
+
       const handleTextSelection = function() {
-        // Bíða smá til að selection sé tilbúið (sérstaklega á mobile)
         setTimeout(function() {
           const selection = window.getSelection();
           const text = selection.toString().trim();
@@ -120,10 +153,7 @@
             const rect = range.getBoundingClientRect();
             
             setSelectedText(text);
-            const newPos = {
-              x: rect.left + (rect.width / 2),
-              y: rect.bottom + window.scrollY + 10
-            };
+            const newPos = calculatePopupPosition(rect);
             setPopupPosition(newPos);
             setShowPopup(true);
             setTranslation('');
@@ -271,7 +301,7 @@
               React.createElement('div', {
                 className: 'translation-popup',
                 style: {
-                  left: Math.min(popupPosition.x, window.innerWidth - 220) + 'px',
+                  left: popupPosition.x + 'px',
                   top: popupPosition.y + 'px',
                   transform: 'translateX(-50%)'
                 }
