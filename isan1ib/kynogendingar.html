@@ -30,6 +30,7 @@
       const [score, setScore] = useState(0);
       const [selectedAnswer, setSelectedAnswer] = useState(null);
       const [showFeedback, setShowFeedback] = useState(false);
+      const [firstAttempt, setFirstAttempt] = useState(true);
       const [userAnswer, setUserAnswer] = useState('');
       const [isComplete, setIsComplete] = useState(false);
 
@@ -64,22 +65,50 @@
         setShowFeedback(true);
         
         const isCorrect = gender === genderQuestions[currentQuestion].gender;
+        
         if (isCorrect) {
-          setScore(score + 1);
-        }
-
-        setTimeout(() => {
-          if (currentQuestion < genderQuestions.length - 1) {
-            setCurrentQuestion(currentQuestion + 1);
-            setSelectedAnswer(null);
-            setShowFeedback(false);
-          } else {
-            setCurrentPart(2);
-            setCurrentQuestion(0);
-            setSelectedAnswer(null);
-            setShowFeedback(false);
+          if (firstAttempt) {
+            setScore(score + 1);
           }
-        }, 1000);
+          
+          setTimeout(() => {
+            if (currentQuestion < genderQuestions.length - 1) {
+              setCurrentQuestion(currentQuestion + 1);
+              setSelectedAnswer(null);
+              setShowFeedback(false);
+              setFirstAttempt(true);
+            } else {
+              setCurrentPart(2);
+              setCurrentQuestion(0);
+              setSelectedAnswer(null);
+              setShowFeedback(false);
+              setFirstAttempt(true);
+            }
+          }, 1500);
+        } else {
+          if (firstAttempt) {
+            setFirstAttempt(false);
+            setTimeout(() => {
+              setSelectedAnswer(null);
+              setShowFeedback(false);
+            }, 2000);
+          } else {
+            setTimeout(() => {
+              if (currentQuestion < genderQuestions.length - 1) {
+                setCurrentQuestion(currentQuestion + 1);
+                setSelectedAnswer(null);
+                setShowFeedback(false);
+                setFirstAttempt(true);
+              } else {
+                setCurrentPart(2);
+                setCurrentQuestion(0);
+                setSelectedAnswer(null);
+                setShowFeedback(false);
+                setFirstAttempt(true);
+              }
+            }, 2000);
+          }
+        }
       };
 
       const handleDeclensionSubmit = () => {
@@ -89,18 +118,40 @@
         const isCorrect = userAnswer.toLowerCase().trim() === declensionQuestions[currentQuestion].acc.toLowerCase();
         
         if (isCorrect) {
-          setScore(score + 1);
-        }
-
-        setTimeout(() => {
-          if (currentQuestion < declensionQuestions.length - 1) {
-            setCurrentQuestion(currentQuestion + 1);
-            setUserAnswer('');
-            setShowFeedback(false);
-          } else {
-            setIsComplete(true);
+          if (firstAttempt) {
+            setScore(score + 1);
           }
-        }, 1500);
+          
+          setTimeout(() => {
+            if (currentQuestion < declensionQuestions.length - 1) {
+              setCurrentQuestion(currentQuestion + 1);
+              setUserAnswer('');
+              setShowFeedback(false);
+              setFirstAttempt(true);
+            } else {
+              setIsComplete(true);
+            }
+          }, 1500);
+        } else {
+          if (firstAttempt) {
+            setFirstAttempt(false);
+            setTimeout(() => {
+              setUserAnswer('');
+              setShowFeedback(false);
+            }, 2000);
+          } else {
+            setTimeout(() => {
+              if (currentQuestion < declensionQuestions.length - 1) {
+                setCurrentQuestion(currentQuestion + 1);
+                setUserAnswer('');
+                setShowFeedback(false);
+                setFirstAttempt(true);
+              } else {
+                setIsComplete(true);
+              }
+            }, 2000);
+          }
+        }
       };
 
       const handleKeyPress = (e) => {
@@ -115,6 +166,7 @@
         setScore(0);
         setSelectedAnswer(null);
         setShowFeedback(false);
+        setFirstAttempt(true);
         setUserAnswer('');
         setIsComplete(false);
       };
@@ -197,6 +249,20 @@
                   </div>
                 </div>
 
+                {showFeedback && (
+                  <div className={`mb-8 p-6 rounded-lg text-center text-xl font-normal border-2 ${
+                    selectedAnswer === currentQ.gender
+                      ? 'bg-green-100 text-green-800 border-green-300'
+                      : 'bg-red-100 text-red-800 border-red-300'
+                  }`}>
+                    {selectedAnswer === currentQ.gender ? (
+                      <span>✅ Rétt!</span>
+                    ) : (
+                      <span>❌ Rangt - rétt svar: {currentQ.gender}</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-6 max-w-2xl mx-auto">
                   {['kk', 'kvk', 'hk'].map((gender) => {
                     const isSelected = selectedAnswer === gender;
@@ -269,9 +335,7 @@
                   </p>
                   <p className="text-2xl text-gray-500 mb-6">↓</p>
                   <p className="text-3xl text-gray-700 font-light">
-                    Ég á <span className="font-normal text-gray-900">
-                      {showFeedback ? currentQ.acc : '________'}
-                    </span>
+                    Ég á <span className="font-normal text-gray-900">________</span>
                   </p>
                 </div>
 
