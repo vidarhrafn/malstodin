@@ -22,9 +22,10 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     const VocabularyQuiz = () => {
+      const [questions, setQuestions] = useState([]);
       const [currentQuestion, setCurrentQuestion] = useState(0);
       const [score, setScore] = useState(0);
       const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -32,58 +33,75 @@
       const [firstAttempt, setFirstAttempt] = useState(true);
       const [isComplete, setIsComplete] = useState(false);
 
-      const questions = [
+      const originalQuestions = [
         {
           word: 'vaskur',
-          correct: 'til að þvo hendur',
-          options: ['til að þvo hendur', 'til að elda mat', 'til að geyma mat', 'til að sofa í']
+          correct: 'þvo hendur',
+          options: ['þvo hendur', 'elda mat', 'geyma mat', 'sofa í']
         },
         {
           word: 'ísskápur',
-          correct: 'til að geyma mat',
-          options: ['til að geyma mat', 'til að elda mat', 'til að þvo sig', 'til að horfa á sjónvarp']
+          correct: 'geyma mat',
+          options: ['geyma mat', 'elda mat', 'þvo sig', 'horfa á sjónvarp']
         },
         {
           word: 'eldavél',
-          correct: 'til að elda mat',
-          options: ['til að elda mat', 'til að þvo föt', 'til að geyma mat', 'til að sofa']
+          correct: 'elda mat',
+          options: ['elda mat', 'þvo föt', 'geyma mat', 'sofa']
         },
         {
           word: 'sturta',
-          correct: 'til að þvo sig',
-          options: ['til að þvo sig', 'til að elda mat', 'til að sofa í', 'til að lesa bækur']
+          correct: 'þvo sig',
+          options: ['þvo sig', 'elda mat', 'sofa í', 'lesa bækur']
         },
         {
           word: 'rúm',
-          correct: 'til að sofa í',
-          options: ['til að sofa í', 'til að elda mat', 'til að þvo sig', 'til að geyma mat']
+          correct: 'sofa í',
+          options: ['sofa í', 'elda mat', 'þvo sig', 'geyma mat']
         },
         {
           word: 'lampi',
-          correct: 'til að gefa ljós',
-          options: ['til að gefa ljós', 'til að elda mat', 'til að geyma mat', 'til að sofa í']
+          correct: 'gefa ljós',
+          options: ['gefa ljós', 'elda mat', 'geyma mat', 'sofa í']
         },
         {
           word: 'spegill',
-          correct: 'til að sjá sig í',
-          options: ['til að sjá sig í', 'til að elda mat', 'til að geyma bækur', 'til að sofa í']
+          correct: 'sjá sig í',
+          options: ['sjá sig í', 'elda mat', 'geyma bækur', 'sofa í']
         },
         {
           word: 'borð',
-          correct: 'til að borða við',
-          options: ['til að borða við', 'til að sofa í', 'til að þvo sig', 'til að geyma föt']
+          correct: 'borða við',
+          options: ['borða við', 'sofa í', 'þvo sig', 'geyma föt']
         },
         {
           word: 'klósett',
-          correct: 'til að fara á salerni',
-          options: ['til að fara á salerni', 'til að elda mat', 'til að sofa í', 'til að lesa bækur']
+          correct: 'fara á salerni',
+          options: ['fara á salerni', 'elda mat', 'sofa í', 'lesa bækur']
         },
         {
           word: 'sófi',
-          correct: 'til að sitja í',
-          options: ['til að sitja í', 'til að elda mat', 'til að geyma mat', 'til að þvo sig']
+          correct: 'sitja í',
+          options: ['sitja í', 'elda mat', 'geyma mat', 'þvo sig']
         }
       ];
+
+      const shuffleArray = (array) => {
+        const newArray = [...array];
+        for (let i = newArray.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+        }
+        return newArray;
+      };
+
+      useEffect(() => {
+        const shuffledQuestions = shuffleArray(originalQuestions).map(q => ({
+          ...q,
+          options: shuffleArray(q.options)
+        }));
+        setQuestions(shuffledQuestions);
+      }, []);
 
       const handleAnswerSelect = (answer) => {
         setSelectedAnswer(answer);
@@ -129,6 +147,11 @@
       };
 
       const resetQuiz = () => {
+        const shuffledQuestions = shuffleArray(originalQuestions).map(q => ({
+          ...q,
+          options: shuffleArray(q.options)
+        }));
+        setQuestions(shuffledQuestions);
         setCurrentQuestion(0);
         setScore(0);
         setSelectedAnswer(null);
@@ -136,6 +159,12 @@
         setFirstAttempt(true);
         setIsComplete(false);
       };
+
+      if (questions.length === 0) {
+        return <div className="min-h-screen flex items-center justify-center">
+          <div className="text-2xl text-gray-600">Hleð...</div>
+        </div>;
+      }
 
       const percentage = Math.round((score / questions.length) * 100);
 
@@ -208,12 +237,12 @@
                 </div>
               </div>
 
-              <div className="text-center mb-8">
-                <div className="text-6xl font-bold text-gray-800 mb-8">
+              <div className="text-center mb-12">
+                <div className="text-5xl font-bold text-gray-800 mb-6">
                   {currentQ.word}
                 </div>
-                <p className="text-2xl text-gray-600 font-light mb-8">
-                  Hvað er þetta notað fyrir?
+                <p className="text-3xl text-gray-600 font-light">
+                  ... til að
                 </p>
               </div>
 
@@ -239,7 +268,7 @@
                   const isCorrectOption = option === currentQ.correct;
                   const showResult = showFeedback && isSelected;
                   
-                  let buttonClass = "p-6 text-lg font-light text-left rounded-lg transition-all border-2 ";
+                  let buttonClass = "p-6 text-xl font-light text-center rounded-lg transition-all border-2 ";
                   
                   if (showResult) {
                     buttonClass += isCorrectOption 
@@ -256,7 +285,6 @@
                       disabled={showFeedback}
                       className={buttonClass}
                     >
-                      <span className="font-normal mr-3">{index + 1}.</span>
                       {option}
                     </button>
                   );
