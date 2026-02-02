@@ -1,0 +1,271 @@
+import React, { useState } from 'react';
+import { Check, X } from 'lucide-react';
+
+const GenderEndingsExercise = () => {
+  const [currentPart, setCurrentPart] = useState(1); // 1 = gender, 2 = declension
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [score, setScore] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+
+  // Part 1: Gender identification
+  const genderQuestions = [
+    { word: 'kona', gender: 'kvk', ending: '-a' },
+    { word: 'penni', gender: 'kk', ending: '-i' },
+    { word: 'dúkur', gender: 'kk', ending: '-ur' },
+    { word: 'gaffall', gender: 'kk', ending: '-ll' },
+    { word: 'taska', gender: 'kvk', ending: '-a' },
+    { word: 'kennari', gender: 'kk', ending: '-i' },
+    { word: 'hestur', gender: 'kk', ending: '-ur' },
+    { word: 'stóll', gender: 'kk', ending: '-ll' },
+    { word: 'peysa', gender: 'kvk', ending: '-a' },
+    { word: 'lampi', gender: 'kk', ending: '-i' }
+  ];
+
+  // Part 2: Declension (nominative → accusative)
+  const declensionQuestions = [
+    { nom: 'penni', acc: 'penna', gender: 'kk' },
+    { nom: 'hestur', acc: 'hest', gender: 'kk' },
+    { nom: 'gaffall', acc: 'gaffal', gender: 'kk' },
+    { nom: 'stelpa', acc: 'stelpu', gender: 'kvk' },
+    { nom: 'skóli', acc: 'skóla', gender: 'kk' },
+    { nom: 'strákur', acc: 'strák', gender: 'kk' },
+    { nom: 'bíll', acc: 'bíl', gender: 'kk' },
+    { nom: 'kona', acc: 'konu', gender: 'kvk' },
+    { nom: 'kennari', acc: 'kennara', gender: 'kk' },
+    { nom: 'stóll', acc: 'stól', gender: 'kk' }
+  ];
+
+  const handleGenderSelect = (gender) => {
+    setSelectedAnswer(gender);
+    setShowFeedback(true);
+    
+    const isCorrect = gender === genderQuestions[currentQuestion].gender;
+    if (isCorrect) {
+      setScore(score + 1);
+    }
+
+    setTimeout(() => {
+      if (currentQuestion < genderQuestions.length - 1) {
+        setCurrentQuestion(currentQuestion + 1);
+        setSelectedAnswer(null);
+        setShowFeedback(false);
+      } else {
+        // Move to part 2
+        setCurrentPart(2);
+        setCurrentQuestion(0);
+        setSelectedAnswer(null);
+        setShowFeedback(false);
+      }
+    }, 1000);
+  };
+
+  const handleDeclensionSubmit = () => {
+    if (!userAnswer.trim()) return;
+
+    setShowFeedback(true);
+    const isCorrect = userAnswer.toLowerCase().trim() === declensionQuestions[currentQuestion].acc.toLowerCase();
+    
+    if (isCorrect) {
+      setScore(score + 1);
+    }
+
+    setTimeout(() => {
+      if (currentQuestion < declensionQuestions.length - 1) {
+        setCurrentQuestion(currentQuestion + 1);
+        setUserAnswer('');
+        setShowFeedback(false);
+      } else {
+        setIsComplete(true);
+      }
+    }, 1500);
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !showFeedback) {
+      handleDeclensionSubmit();
+    }
+  };
+
+  const resetExercise = () => {
+    setCurrentPart(1);
+    setCurrentQuestion(0);
+    setScore(0);
+    setSelectedAnswer(null);
+    setShowFeedback(false);
+    setUserAnswer('');
+    setIsComplete(false);
+  };
+
+  // Results screen
+  if (isComplete) {
+    const totalQuestions = genderQuestions.length + declensionQuestions.length;
+    const percentage = Math.round((score / totalQuestions) * 100);
+    
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <h2 className="text-3xl font-bold mb-4 text-gray-800">Vel gert!</h2>
+          <div className="text-6xl font-bold text-blue-600 mb-4">
+            {percentage}%
+          </div>
+          <p className="text-xl text-gray-700 mb-6">
+            Þú fékkst {score} af {totalQuestions} rétt
+          </p>
+          <button
+            onClick={resetExercise}
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
+          >
+            Prófa aftur
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Part 1: Gender identification
+  if (currentPart === 1) {
+    const currentQ = genderQuestions[currentQuestion];
+    
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Hvað er kynið?</h2>
+              <span className="text-gray-600 font-medium">
+                {currentQuestion + 1} / {genderQuestions.length}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${((currentQuestion + 1) / genderQuestions.length) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="text-center mb-8">
+            <div className="text-5xl font-bold text-gray-800 mb-8">
+              {currentQ.word}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            {['kk', 'kvk', 'hk'].map((gender) => {
+              const isSelected = selectedAnswer === gender;
+              const isCorrect = gender === currentQ.gender;
+              const showResult = showFeedback && isSelected;
+              
+              let buttonClass = "p-6 text-xl font-semibold rounded-lg transition-all ";
+              
+              if (showResult) {
+                buttonClass += isCorrect 
+                  ? "bg-green-500 text-white" 
+                  : "bg-red-500 text-white";
+              } else {
+                buttonClass += "bg-gray-100 hover:bg-gray-200 text-gray-800";
+              }
+
+              return (
+                <button
+                  key={gender}
+                  onClick={() => !showFeedback && handleGenderSelect(gender)}
+                  disabled={showFeedback}
+                  className={buttonClass}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    {gender}
+                    {showResult && (isCorrect ? <Check size={24} /> : <X size={24} />)}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Part 2: Declension
+  const currentQ = declensionQuestions[currentQuestion];
+  const isCorrect = userAnswer.toLowerCase().trim() === currentQ.acc.toLowerCase();
+  
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">Fallbeygðu orðið</h2>
+            <span className="text-gray-600 font-medium">
+              {currentQuestion + 1} / {declensionQuestions.length}
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentQuestion + 1) / declensionQuestions.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <div className="text-center mb-6">
+            <p className="text-2xl text-gray-700 mb-4">
+              Þetta er <span className="font-bold text-gray-900">{currentQ.nom}</span>
+            </p>
+            <p className="text-xl text-gray-600">↓</p>
+            <p className="text-2xl text-gray-700 mt-4">
+              Ég á <span className="border-b-2 border-blue-600 inline-block min-w-[120px]">
+                {showFeedback ? currentQ.acc : '________'}
+              </span>
+            </p>
+          </div>
+
+          {!showFeedback ? (
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={userAnswer}
+                onChange={(e) => setUserAnswer(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Skrifaðu svarið hér..."
+                className="flex-1 p-4 text-xl border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none"
+                autoFocus
+              />
+              <button
+                onClick={handleDeclensionSubmit}
+                disabled={!userAnswer.trim()}
+                className="px-8 py-4 bg-blue-600 text-white text-xl font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                Athuga
+              </button>
+            </div>
+          ) : (
+            <div className={`p-6 rounded-lg text-center text-xl font-semibold ${
+              isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              <div className="flex items-center justify-center gap-3">
+                {isCorrect ? (
+                  <>
+                    <Check size={28} />
+                    <span>Rétt!</span>
+                  </>
+                ) : (
+                  <>
+                    <X size={28} />
+                    <span>Rangt - rétt svar: {currentQ.acc}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default GenderEndingsExercise;
