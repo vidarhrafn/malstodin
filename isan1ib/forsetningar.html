@@ -22,7 +22,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     const PrepositionsExercise = () => {
       const [currentPart, setCurrentPart] = useState(1);
@@ -33,8 +33,9 @@
       const [firstAttempt, setFirstAttempt] = useState(true);
       const [userAnswer, setUserAnswer] = useState('');
       const [isComplete, setIsComplete] = useState(false);
+      const [shuffledPart1, setShuffledPart1] = useState([]);
 
-      const part1Questions = [
+      const part1QuestionsOriginal = [
         // Stofa - 6 spurningar
         { 
           sentence: 'Taska er ______ borð', 
@@ -112,11 +113,28 @@
         }
       ];
 
+      const shuffleArray = (array) => {
+        const newArray = [...array];
+        for (let i = newArray.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+        }
+        return newArray;
+      };
+
+      useEffect(() => {
+        const shuffled = part1QuestionsOriginal.map(q => ({
+          ...q,
+          options: shuffleArray(q.options)
+        }));
+        setShuffledPart1(shuffled);
+      }, []);
+
       const handleAnswerSelect = (answer) => {
         setSelectedAnswer(answer);
         setShowFeedback(true);
         
-        const isCorrect = answer === part1Questions[currentQuestion].correct;
+        const isCorrect = answer === shuffledPart1[currentQuestion].correct;
         
         if (isCorrect) {
           if (firstAttempt) {
@@ -124,7 +142,7 @@
           }
           
           setTimeout(() => {
-            if (currentQuestion < part1Questions.length - 1) {
+            if (currentQuestion < shuffledPart1.length - 1) {
               setCurrentQuestion(currentQuestion + 1);
               setSelectedAnswer(null);
               setShowFeedback(false);
@@ -146,7 +164,7 @@
             }, 1500);
           } else {
             setTimeout(() => {
-              if (currentQuestion < part1Questions.length - 1) {
+              if (currentQuestion < shuffledPart1.length - 1) {
                 setCurrentQuestion(currentQuestion + 1);
                 setSelectedAnswer(null);
                 setShowFeedback(false);
@@ -213,6 +231,11 @@
       };
 
       const resetExercise = () => {
+        const shuffled = part1QuestionsOriginal.map(q => ({
+          ...q,
+          options: shuffleArray(q.options)
+        }));
+        setShuffledPart1(shuffled);
         setCurrentPart(1);
         setCurrentQuestion(0);
         setScore(0);
@@ -223,7 +246,13 @@
         setIsComplete(false);
       };
 
-      const totalQuestions = part1Questions.length + part2Questions.length;
+      if (shuffledPart1.length === 0) {
+        return <div className="min-h-screen flex items-center justify-center">
+          <div className="text-2xl text-gray-600">Hleð...</div>
+        </div>;
+      }
+
+      const totalQuestions = shuffledPart1.length + part2Questions.length;
       const percentage = Math.round((score / totalQuestions) * 100);
 
       if (isComplete) {
@@ -265,8 +294,8 @@
       }
 
       if (currentPart === 1) {
-        const currentQ = part1Questions[currentQuestion];
-        const progress = ((currentQuestion + 1) / part1Questions.length) * 100;
+        const currentQ = shuffledPart1[currentQuestion];
+        const progress = ((currentQuestion + 1) / shuffledPart1.length) * 100;
         const isCorrect = selectedAnswer === currentQ.correct;
         
         return (
@@ -280,7 +309,7 @@
                   ← Til baka
                 </button>
                 <h1 className="text-3xl font-light text-gray-800 mb-2">Staðarforsetningar</h1>
-                <p className="text-gray-500 text-sm font-light">Hluti 1: Veldu rétta forsetninguna · {currentQuestion + 1} / {part1Questions.length}</p>
+                <p className="text-gray-500 text-sm font-light">Hluti 1: Veldu rétta forsetninguna · {currentQuestion + 1} / {shuffledPart1.length}</p>
               </div>
             </header>
 
