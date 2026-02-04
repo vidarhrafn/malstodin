@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎒 Pakkaðu töskuna</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .item-card {
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: grab;
+      user-select: none;
+    }
+    
+    .item-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .item-card:active {
+      cursor: grabbing;
+    }
+    
+    .item-card.correct {
+      background: #dcfce7 !important;
+      border-color: #22c55e !important;
+    }
+    
+    .item-card.wrong {
+      background: #fee2e2 !important;
+      border-color: #ef4444 !important;
+      animation: shake 0.5s;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    
+    .backpack {
+      min-height: 200px;
+      transition: background-color 0.3s;
+    }
+    
+    .backpack.drag-over {
+      background-color: #dbeafe !important;
+      border-color: #3b82f6 !important;
+    }
+    
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="module">
+    import React, { useState, useEffect } from 'https://esm.sh/react@18';
+    import ReactDOM from 'https://esm.sh/react-dom@18';
+
+    const SCENARIOS = [
+      {
+        id: 1,
+        title: '☀️ Sumardagur í fjallgöngu',
+        description: 'Þú ætlar í 4 tíma göngu á Esju. Það er sólskin og 15 gráður.',
+        weather: '☀️ Sólskin, 15°C',
+        correctItems: ['bakpoki', 'gönguskór', 'vatnsflaska', 'nesti', 'sól'],
+        wrongItems: ['tjald', 'snjór', 'rigning', 'þoka', 'göngustafir', 'hlaupahjól', 'ferja'],
+        explanation: 'Í stutta fjallgöngu í góðu veðri þarftu: bakpoka, gönguskó, vatnsflösku og nesti. Sólin er líka í veðrinu!'
+      },
+      {
+        id: 2,
+        title: '🌧️ Rigningardagur við fossinn',
+        description: 'Þú ætlar að heimsækja Gullfoss. Það er rigning og rok.',
+        weather: '🌧️ Rigning og rok',
+        correctItems: ['rigning', 'rok', 'foss', 'vatnsflaska', 'bakpoki'],
+        wrongItems: ['sól', 'logn', 'tjald', 'gönguskór', 'nesti', 'snjór'],
+        explanation: 'Þegar það rignir og rokkar við foss þarftu að vera meðvituð um rigninguna og rokið!'
+      },
+      {
+        id: 3,
+        title: '⛺ Tjaldað í Þórsmörk',
+        description: 'Þú ætlar að tjalda í 2 nætur í Þórsmörk. Gott veður er spáð.',
+        weather: '☀️ Gott veður, 12°C',
+        correctItems: ['tjald', 'bakpoki', 'nesti', 'vatnsflaska', 'gönguskór', 'göngustafir'],
+        wrongItems: ['ferja', 'bátur', 'rúta', 'bíll', 'hlaupahjól', 'rigning'],
+        explanation: 'Í útilegu þarftu tjald, bakpoka, nesti, vatnsflösku, gönguskó og kannski göngustafi!'
+      },
+      {
+        id: 4,
+        title: '⛴️ Ferðalag til Vestmannaeyja',
+        description: 'Þú tekur ferju til eyju. Þú ætlar að sjá selina.',
+        weather: '🌤️ Léttskýjað, logn',
+        correctItems: ['ferja', 'eyja', 'selur', 'logn', 'bátur'],
+        wrongItems: ['tjald', 'fjall', 'foss', 'skógur', 'göngustafir', 'rúta'],
+        explanation: 'Til að fara til eyju þarftu ferju eða bát. Þar gætir þú séð seli!'
+      },
+      {
+        id: 5,
+        title: '❄️ Vetrarferð um hálendið',
+        description: 'Þú keyrir um hálendið í desember. Mikill snjór og frost.',
+        weather: '❄️ Snjókoma og frost',
+        correctItems: ['snjór', 'snjókoma', 'bíll', 'bakpoki', 'vatnsflaska'],
+        wrongItems: ['sól', 'rigning', 'gönguskór', 'tjald', 'ferja', 'rúta'],
+        explanation: 'Á vetrarferð um hálendið er mikill snjór og snjókoma. Þú þarft bíl!'
+      },
+      {
+        id: 6,
+        title: '🏞️ Dagsferð í skóginn',
+        description: 'Þú ætlar í gönguferð í Kjarnaskóg. Veður er gott.',
+        weather: '☀️ Sólskin og logn',
+        correctItems: ['skógur', 'tré', 'gras', 'gönguskór', 'nesti', 'sól', 'logn'],
+        wrongItems: ['fjall', 'foss', 'eyja', 'ferja', 'tjald', 'snjór'],
+        explanation: 'Í skógi sérðu tré og gras. Þú þarft gönguskó og nesti!'
+      },
+      {
+        id: 7,
+        title: '🌈 Sólskin eftir rigningu',
+        description: 'Það var að rigna en núna er komið sólskin. Þú gengur að fossi.',
+        weather: '🌈 Sólskin eftir rigningu',
+        correctItems: ['sól', 'regnbogi', 'foss', 'vatn', 'gönguskór'],
+        wrongItems: ['snjór', 'þoka', 'rok', 'tjald', 'ferja', 'bíll'],
+        explanation: 'Eftir rigningu í sólskini sérðu oft regnboga! Sérstaklega við fossa með vatni.'
+      },
+      {
+        id: 8,
+        title: '🌫️ Þokukenndur morgunn við fjörðinn',
+        description: 'Þú ert við fallegan fjörð. Mikil þoka er um morguninn.',
+        weather: '🌫️ Þoka og logn',
+        correctItems: ['þoka', 'fjörður', 'vatn', 'logn', 'bátur'],
+        wrongItems: ['sól', 'rigning', 'vindur', 'rok', 'fjall', 'tjald'],
+        explanation: 'Við fjörð getur verið þoka. Þegar það er logn er vatnið róað.'
+      }
+    ];
+
+    const ALL_ITEMS = [
+      { id: 'fjall', name: 'fjall', emoji: '⛰️' },
+      { id: 'foss', name: 'foss', emoji: '💧' },
+      { id: 'vatn', name: 'vatn', emoji: '💦' },
+      { id: 'skógur', name: 'skógur', emoji: '🌲' },
+      { id: 'tré', name: 'tré', emoji: '🌳' },
+      { id: 'gras', name: 'gras', emoji: '🌱' },
+      { id: 'steinn', name: 'steinn', emoji: '🪨' },
+      { id: 'snjór', name: 'snjór', emoji: '❄️' },
+      { id: 'sól', name: 'sól', emoji: '☀️' },
+      { id: 'vindur', name: 'vindur', emoji: '💨' },
+      { id: 'rigning', name: 'rigning', emoji: '🌧️' },
+      { id: 'snjókoma', name: 'snjókoma', emoji: '🌨️' },
+      { id: 'tjald', name: 'tjald', emoji: '⛺' },
+      { id: 'bakpoki', name: 'bakpoki', emoji: '🎒' },
+      { id: 'rúta', name: 'rúta', emoji: '🚌' },
+      { id: 'bíll', name: 'bíll', emoji: '🚗' },
+      { id: 'bátur', name: 'bátur', emoji: '⛵' },
+      { id: 'ferja', name: 'ferja', emoji: '⛴️' },
+      { id: 'gönguskór', name: 'gönguskór', emoji: '👟' },
+      { id: 'vatnsflaska', name: 'vatnsflaska', emoji: '🧃' },
+      { id: 'nesti', name: 'nesti', emoji: '🥪' },
+      { id: 'rok', name: 'rok', emoji: '🌬️' },
+      { id: 'þoka', name: 'þoka', emoji: '🌫️' },
+      { id: 'logn', name: 'logn', emoji: '😌' },
+      { id: 'regnbogi', name: 'regnbogi', emoji: '🌈' },
+      { id: 'eyja', name: 'eyja', emoji: '🏝️' },
+      { id: 'fjörður', name: 'fjörður', emoji: '🌊' },
+      { id: 'höfn', name: 'höfn', emoji: '⚓' },
+      { id: 'göngustafir', name: 'göngustafir', emoji: '🥢' },
+      { id: 'hlaupahjól', name: 'hlaupahjól', emoji: '🛴' },
+      { id: 'þrumur', name: 'þrumur', emoji: '⚡' },
+      { id: 'eldingar', name: 'eldingar', emoji: '🌩️' },
+      { id: 'selur', name: 'selur', emoji: '🦭' }
+    ];
+
+    const PackingGame = () => {
+      const [currentScenario, setCurrentScenario] = useState(0);
+      const [selectedItems, setSelectedItems] = useState([]);
+      const [availableItems, setAvailableItems] = useState([]);
+      const [showResult, setShowResult] = useState(false);
+      const [score, setScore] = useState(0);
+      const [feedback, setFeedback] = useState({ correct: [], wrong: [], missing: [] });
+      const [gameFinished, setGameFinished] = useState(false);
+
+      useEffect(() => {
+        loadScenario();
+      }, [currentScenario]);
+
+      const loadScenario = () => {
+        const scenario = SCENARIOS[currentScenario];
+        const scenarioItems = [...scenario.correctItems, ...scenario.wrongItems];
+        const shuffled = scenarioItems
+          .map(itemId => ALL_ITEMS.find(item => item.id === itemId))
+          .filter(Boolean)
+          .sort(() => Math.random() - 0.5);
+        
+        setAvailableItems(shuffled);
+        setSelectedItems([]);
+        setShowResult(false);
+        setFeedback({ correct: [], wrong: [], missing: [] });
+      };
+
+      const handleDragStart = (e, item) => {
+        e.dataTransfer.setData('itemId', item.id);
+      };
+
+      const handleDrop = (e) => {
+        e.preventDefault();
+        const itemId = e.dataTransfer.getData('itemId');
+        const item = availableItems.find(i => i.id === itemId);
+        
+        if (item && !selectedItems.find(i => i.id === itemId)) {
+          setSelectedItems([...selectedItems, item]);
+        }
+        
+        e.currentTarget.classList.remove('drag-over');
+      };
+
+      const handleDragOver = (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+      };
+
+      const handleDragLeave = (e) => {
+        e.currentTarget.classList.remove('drag-over');
+      };
+
+      const removeItem = (itemId) => {
+        setSelectedItems(selectedItems.filter(i => i.id !== itemId));
+      };
+
+      const checkAnswer = () => {
+        const scenario = SCENARIOS[currentScenario];
+        const selectedIds = selectedItems.map(i => i.id);
+        
+        const correct = selectedIds.filter(id => scenario.correctItems.includes(id));
+        const wrong = selectedIds.filter(id => scenario.wrongItems.includes(id));
+        const missing = scenario.correctItems.filter(id => !selectedIds.includes(id));
+        
+        setFeedback({ correct, wrong, missing });
+        setShowResult(true);
+        
+        if (wrong.length === 0 && missing.length === 0) {
+          setScore(score + 1);
+        }
+      };
+
+      const nextScenario = () => {
+        if (currentScenario < SCENARIOS.length - 1) {
+          setCurrentScenario(currentScenario + 1);
+        } else {
+          setGameFinished(true);
+        }
+      };
+
+      const resetGame = () => {
+        setCurrentScenario(0);
+        setScore(0);
+        setGameFinished(false);
+        loadScenario();
+      };
+
+      const scenario = SCENARIOS[currentScenario];
+
+      if (gameFinished) {
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <h1 className="text-3xl font-light text-gray-800 mb-2">🎒 Pakkaðu töskuna</h1>
+                <p className="text-gray-500 text-sm font-light">Kafli 5 - Esjan er falleg · A1-A2</p>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-6 mt-8">
+              <div className="bg-white rounded-lg shadow-xl p-12 text-center">
+                <div className="text-6xl mb-6">🎉</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">Til hamingju!</h2>
+                <p className="text-xl text-gray-600 font-light mb-8">
+                  Þú kláraðir allar {SCENARIOS.length} aðstæðurnar!
+                </p>
+                <div className="text-5xl font-bold text-blue-600 mb-8">
+                  {score} / {SCENARIOS.length}
+                </div>
+                <button
+                  onClick={resetGame}
+                  className="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-normal hover:bg-blue-700 transition-colors"
+                >
+                  🔄 Spila aftur
+                </button>
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">🎒 Pakkaðu töskuna</h1>
+              <p className="text-gray-500 text-sm font-light">Kafli 5 - Esjan er falleg · A1-A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-6xl mx-auto px-6 mt-8">
+            
+            {/* Progress */}
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 font-light">
+                  Aðstaða {currentScenario + 1} af {SCENARIOS.length}
+                </span>
+                <span className="text-gray-600 font-light">
+                  Stig: <span className="font-normal text-blue-600">{score}</span> / {SCENARIOS.length}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${((currentScenario + 1) / SCENARIOS.length) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Leiðbeiningar */}
+            {currentScenario === 0 && !showResult && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Hvernig á að spila</h2>
+                <ul className="space-y-2 text-gray-700 font-light">
+                  <li>• Lestu aðstæðurnar og veðrið</li>
+                  <li>• Dragðu orðin sem passa við ferðalagið í bakpokann</li>
+                  <li>• Smelltu á "Athuga svar" þegar þú ert tilbúinn</li>
+                  <li>• Reyndu að velja öll réttu orðin!</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Vinstri hlið - Aðstæður og bakpoki */}
+              <div>
+                {/* Scenario Card */}
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                  <h2 className="text-2xl font-normal text-gray-800 mb-3">{scenario.title}</h2>
+                  <p className="text-gray-700 font-light mb-4">{scenario.description}</p>
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                    <p className="text-lg font-normal text-gray-800">{scenario.weather}</p>
+                  </div>
+                </div>
+
+                {/* Backpack */}
+                <div 
+                  className="backpack bg-gradient-to-br from-amber-50 to-orange-50 border-4 border-amber-300 rounded-2xl p-6"
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                >
+                  <h3 className="text-xl font-normal text-gray-800 mb-4 text-center">
+                    🎒 Bakpokinn þinn
+                  </h3>
+                  
+                  {selectedItems.length === 0 && !showResult && (
+                    <div className="text-center py-8 text-gray-400 font-light pulse">
+                      Dragðu hlutina hingað →
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedItems.map(item => {
+                      let className = "item-card bg-white border-2 border-gray-300 rounded-lg p-4 text-center";
+                      
+                      if (showResult) {
+                        if (feedback.correct.includes(item.id)) {
+                          className += " correct";
+                        } else if (feedback.wrong.includes(item.id)) {
+                          className += " wrong";
+                        }
+                      }
+                      
+                      return (
+                        <div key={item.id} className={className}>
+                          <div className="text-3xl mb-2">{item.emoji}</div>
+                          <div className="text-sm font-normal text-gray-800">{item.name}</div>
+                          {!showResult && (
+                            <button
+                              onClick={() => removeItem(item.id)}
+                              className="mt-2 text-xs text-red-600 hover:text-red-700"
+                            >
+                              ✕ Fjarlægja
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <div className="mt-6">
+                  {!showResult ? (
+                    <button
+                      onClick={checkAnswer}
+                      disabled={selectedItems.length === 0}
+                      className={`w-full py-4 rounded-lg text-lg font-normal transition-colors ${
+                        selectedItems.length === 0
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      ✓ Athuga svar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={nextScenario}
+                      className="w-full bg-blue-600 text-white py-4 rounded-lg text-lg font-normal hover:bg-blue-700 transition-colors"
+                    >
+                      → Næsta aðstaða
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Hægri hlið - Tiltæk orð */}
+              <div>
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="text-xl font-normal text-gray-800 mb-4">📦 Tiltæk orð</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {availableItems.map(item => {
+                      const isSelected = selectedItems.find(i => i.id === item.id);
+                      
+                      return (
+                        <div
+                          key={item.id}
+                          draggable={!isSelected && !showResult}
+                          onDragStart={(e) => handleDragStart(e, item)}
+                          className={`item-card border-2 rounded-lg p-4 text-center ${
+                            isSelected 
+                              ? 'bg-gray-100 border-gray-200 opacity-50' 
+                              : 'bg-white border-gray-300'
+                          }`}
+                          style={{ cursor: isSelected || showResult ? 'not-allowed' : 'grab' }}
+                        >
+                          <div className="text-3xl mb-2">{item.emoji}</div>
+                          <div className="text-sm font-normal text-gray-800">{item.name}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Feedback */}
+                {showResult && (
+                  <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+                    <h3 className="text-xl font-normal text-gray-800 mb-4">📊 Niðurstaða</h3>
+                    
+                    {feedback.wrong.length === 0 && feedback.missing.length === 0 ? (
+                      <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 mb-4">
+                        <p className="text-green-800 font-normal text-center text-lg">
+                          🎉 Frábært! Allt rétt!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                        <p className="text-yellow-800 font-normal text-center">
+                          💪 Þú getur gert þetta betur!
+                        </p>
+                      </div>
+                    )}
+
+                    {feedback.correct.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-sm font-normal text-green-700 mb-2">✓ Rétt orð:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {feedback.correct.map(id => {
+                            const item = ALL_ITEMS.find(i => i.id === id);
+                            return (
+                              <span key={id} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                                {item.emoji} {item.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {feedback.wrong.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-sm font-normal text-red-700 mb-2">✗ Rangt orð:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {feedback.wrong.map(id => {
+                            const item = ALL_ITEMS.find(i => i.id === id);
+                            return (
+                              <span key={id} className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm">
+                                {item.emoji} {item.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {feedback.missing.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-sm font-normal text-orange-700 mb-2">⚠ Orð sem vantar:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {feedback.missing.map(id => {
+                            const item = ALL_ITEMS.find(i => i.id === id);
+                            return (
+                              <span key={id} className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
+                                {item.emoji} {item.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm text-gray-600 font-light italic">
+                        💡 {scenario.explanation}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<PackingGame />);
+  </script>
+</body>
+</html>
