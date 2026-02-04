@@ -87,6 +87,27 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
+
+    .audio-button {
+      transition: all 0.2s;
+    }
+
+    .audio-button:hover {
+      transform: scale(1.1);
+    }
+
+    .audio-button.playing {
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
   </style>
 </head>
 <body>
@@ -157,6 +178,17 @@
       const [gamePhase, setGamePhase] = useState('intro'); // intro, chatting, finished
       const [score, setScore] = useState(0);
       const [questionsAsked, setQuestionsAsked] = useState(0);
+      const [playingAudio, setPlayingAudio] = useState(null);
+      const [conversationState, setConversationState] = useState({
+        userSharedName: false,
+        userSharedAge: false,
+        userSharedFrom: false,
+        userSharedLiveIn: false,
+        aiAskedName: false,
+        aiAskedAge: false,
+        aiAskedFrom: false,
+        aiAskedLiveIn: false
+      });
       const chatEndRef = useRef(null);
 
       const person = PEOPLE[currentPerson];
@@ -167,10 +199,39 @@
 
       const startChat = () => {
         setGamePhase('chatting');
+        setConversationState({
+          userSharedName: false,
+          userSharedAge: false,
+          userSharedFrom: false,
+          userSharedLiveIn: false,
+          aiAskedName: false,
+          aiAskedAge: false,
+          aiAskedFrom: false,
+          aiAskedLiveIn: false
+        });
         // AI byrjar samtalið
         setTimeout(() => {
           addAIMessage(`Hæ! Ég heiti ${person.name}. Hvað heitir þú?`);
+          setConversationState(prev => ({ ...prev, aiAskedName: true }));
         }, 500);
+      };
+
+      const playAudio = async (text) => {
+        setPlayingAudio(text);
+        try {
+          const response = await fetch('/.netlify/functions/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text_to_speak: text })
+          });
+          const data = await response.json();
+          const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+          audio.onended = () => setPlayingAudio(null);
+          await audio.play();
+        } catch (error) {
+          console.error('Audio error:', error);
+          setPlayingAudio(null);
+        }
       };
 
       const addAIMessage = (message) => {
@@ -191,6 +252,7 @@
 
       const analyzeAndRespond = (userMessage) => {
         const responses = [];
+        const newState = { ...conversationState };
 
         // Kanna hvort notandi spurði spurningu
         const isQuestion = userMessage.includes('hvað') || 
@@ -203,23 +265,53 @@
           setScore(prev => prev + 10);
         }
 
-        // Greina um hvað var spurt
-        if (userMessage.includes('heiti')) {
-          responses.push(`Ég heiti ${person.name}.`);
-          if (Math.random() > 0.5) responses.push('En þú?');
-        } 
-        else if (userMessage.includes('gömul') || userMessage.includes('gamall') || userMessage.includes('ára')) {
-          responses.push(`Ég er ${person.age} ára.`);
-          if (Math.random() > 0.5) responses.push('Hvað ert þú gamall/gömul?');
+        // GREINA HVAÐ NOTANDI SAGÐI UM SIG
+        if (userMessage.includes('heiti') && !userMessage.includes('hvað')) {
+          newState.userSharedName = true;
         }
-        else if (userMessage.includes('hvaðan') || userMessage.includes('frá')) {
+        if ((userMessage.includes('ára') || userMessage.includes('gamall') || userMessage.includes('gömul')) && 
+            (userMessage.includes('ég er') || userMessage.match(/\d+/))) {
+          newState.userSharedAge = true;
+        }
+        if (userMessage.includes('frá') && userMessage.includes('ég')) {
+          newState.userSharedFrom = true;
+        }
+        if (userMessage.includes('bý') && (userMessage.includes('ég') || userMessage.includes('í'))) {
+          newState.userSharedLiveIn = true;
+        }
+
+        // GREINA SPURNINGAR FRÁ NOTANDA
+        if (userMessage.includes('hvað') && userMessage.includes('heiti')) {
+          responses.push(`Ég heiti ${person.name}.`);
+          if (!newState.userSharedName) {
+            responses.push('En þú, hvað heitir þú?');
+            newState.aiAskedName = true;
+          }
+        } 
+        else if (userMessage.includes('gömul') || userMessage.includes('gamall') || 
+                (userMessage.includes('hvað') && userMessage.includes('ára'))) {
+          responses.push(`Ég er ${person.age} ára.`);
+          if (!newState.userSharedAge && !newState.aiAskedAge) {
+            responses.push('Hvað ert þú gamall/gömul?');
+            newState.aiAskedAge = true;
+          }
+        }
+        else if (userMessage.includes('hvaðan') || (userMessage.includes('hvað') && userMessage.includes('frá'))) {
           responses.push(`Ég er frá ${person.from}.`);
-          if (Math.random() > 0.4) responses.push(`Ég kom til Íslands fyrir ${Math.floor(Math.random() * 5) + 1} árum.`);
-          if (Math.random() > 0.5) responses.push('Hvaðan ert þú?');
+          if (Math.random() > 0.4) {
+            responses.push(`Ég kom til Íslands fyrir ${Math.floor(Math.random() * 5) + 1} árum.`);
+          }
+          if (!newState.userSharedFrom && !newState.aiAskedFrom) {
+            responses.push('Hvaðan ert þú?');
+            newState.aiAskedFrom = true;
+          }
         }
         else if (userMessage.includes('hvar') && (userMessage.includes('bý') || userMessage.includes('býr'))) {
           responses.push(`Ég bý í ${person.liveIn}.`);
-          if (Math.random() > 0.5) responses.push('Hvar býrð þú?');
+          if (!newState.userSharedLiveIn && !newState.aiAskedLiveIn) {
+            responses.push('Hvar býrð þú?');
+            newState.aiAskedLiveIn = true;
+          }
         }
         else if (userMessage.includes('gaman') || userMessage.includes('áhugamál')) {
           const interest = person.interests[Math.floor(Math.random() * person.interests.length)];
@@ -240,7 +332,7 @@
           }, 2000);
         }
         // Ef notandi sagði bara "Ég heiti X" eða svaraði
-        else if (userMessage.startsWith('ég er') || userMessage.startsWith('ég heiti')) {
+        else if (userMessage.startsWith('ég er') || userMessage.startsWith('ég heiti') || userMessage.startsWith('ég bý')) {
           const encouragements = [
             'Gaman að kynnast þér!',
             'Skemmtilegt!',
@@ -249,23 +341,58 @@
           ];
           responses.push(encouragements[Math.floor(Math.random() * encouragements.length)]);
           
-          // Spyrja næstu spurningu
-          const nextQuestions = [
-            `Hvaðan ert þú?`,
-            `Hvar býrð þú?`,
-            `Hvað finnst þér gaman?`,
-            `Átt þú marga vini?`
-          ];
-          responses.push(nextQuestions[Math.floor(Math.random() * nextQuestions.length)]);
+          // Spyrja næstu spurningu sem AI hefur EKKI spurt enn
+          const possibleQuestions = [];
+          if (!newState.aiAskedAge && !newState.userSharedAge) {
+            possibleQuestions.push('Hvað ert þú gamall/gömul?');
+          }
+          if (!newState.aiAskedFrom && !newState.userSharedFrom) {
+            possibleQuestions.push('Hvaðan ert þú?');
+          }
+          if (!newState.aiAskedLiveIn && !newState.userSharedLiveIn) {
+            possibleQuestions.push('Hvar býrð þú?');
+          }
+          if (possibleQuestions.length === 0) {
+            possibleQuestions.push('Hvað finnst þér gaman?');
+            possibleQuestions.push('Átt þú marga vini?');
+          }
+          
+          const nextQ = possibleQuestions[Math.floor(Math.random() * possibleQuestions.length)];
+          responses.push(nextQ);
+          
+          if (nextQ.includes('gamall') || nextQ.includes('gömul')) newState.aiAskedAge = true;
+          if (nextQ.includes('Hvaðan')) newState.aiAskedFrom = true;
+          if (nextQ.includes('Hvar')) newState.aiAskedLiveIn = true;
         }
         else {
           // Default svar
           responses.push('Já, einmitt!');
-          if (Math.random() > 0.6) {
-            const randomQ = ['Hvaðan ert þú?', 'Hvað finnst þér gaman?', 'Hvar býrð þú?'][Math.floor(Math.random() * 3)];
-            responses.push(randomQ);
+          
+          // Spyrja spurningu stundum
+          if (Math.random() > 0.5) {
+            const possibleQuestions = [];
+            if (!newState.aiAskedAge && !newState.userSharedAge) {
+              possibleQuestions.push('Hvað ert þú gamall/gömul?');
+            }
+            if (!newState.aiAskedFrom && !newState.userSharedFrom) {
+              possibleQuestions.push('Hvaðan ert þú?');
+            }
+            if (!newState.aiAskedLiveIn && !newState.userSharedLiveIn) {
+              possibleQuestions.push('Hvar býrð þú?');
+            }
+            if (possibleQuestions.length > 0) {
+              const nextQ = possibleQuestions[Math.floor(Math.random() * possibleQuestions.length)];
+              responses.push(nextQ);
+              
+              if (nextQ.includes('gamall') || nextQ.includes('gömul')) newState.aiAskedAge = true;
+              if (nextQ.includes('Hvaðan')) newState.aiAskedFrom = true;
+              if (nextQ.includes('Hvar')) newState.aiAskedLiveIn = true;
+            }
           }
         }
+
+        // Uppfæra state
+        setConversationState(newState);
 
         // Senda svar
         responses.forEach((response, index) => {
@@ -334,6 +461,7 @@
                   <li>• Spjalla saman á íslensku!</li>
                   <li>• Spurðu spurningar: Hvað heitir þú? Hvaðan ert þú? Hvar býrð þú?</li>
                   <li>• Segðu frá þér líka!</li>
+                  <li>• 🔊 Þú getur hlustað á hvað þeir segja!</li>
                 </ul>
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
                   <p className="text-sm text-yellow-800 font-light">
@@ -447,14 +575,26 @@
                     key={index}
                     className={`chat-bubble flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div
-                      className={`max-w-xs md:max-w-md px-4 py-3 rounded-2xl ${
-                        msg.type === 'user'
-                          ? 'bg-pink-600 text-white'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      <p className="font-light">{msg.text}</p>
+                    <div className="flex items-start gap-2">
+                      {msg.type === 'ai' && (
+                        <button
+                          onClick={() => playAudio(msg.text)}
+                          disabled={playingAudio === msg.text}
+                          className={`audio-button mt-1 text-2xl ${playingAudio === msg.text ? 'playing' : ''}`}
+                          title="Hlusta"
+                        >
+                          🔊
+                        </button>
+                      )}
+                      <div
+                        className={`max-w-xs md:max-w-md px-4 py-3 rounded-2xl ${
+                          msg.type === 'user'
+                            ? 'bg-pink-600 text-white'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        <p className="font-light">{msg.text}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
