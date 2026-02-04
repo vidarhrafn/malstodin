@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💬 Speed Dating - Kynning</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #fef3f3 0%, #fee5e5 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .person-card {
+      transition: all 0.3s;
+      animation: slideIn 0.5s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .chat-bubble {
+      animation: bubbleIn 0.3s ease-out;
+    }
+    
+    @keyframes bubbleIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 12px;
+    }
+    
+    .typing-dot {
+      width: 8px;
+      height: 8px;
+      background: #9ca3af;
+      border-radius: 50%;
+      animation: typingDot 1.4s infinite;
+    }
+    
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    
+    @keyframes typingDot {
+      0%, 60%, 100% {
+        transform: translateY(0);
+      }
+      30% {
+        transform: translateY(-10px);
+      }
+    }
+
+    .quick-reply {
+      transition: all 0.2s;
+    }
+
+    .quick-reply:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // AI Persónur sem nemendur hitta
+    const PEOPLE = [
+      {
+        id: 1,
+        name: 'María',
+        age: 28,
+        from: 'Spáni',
+        liveIn: 'Reykjavík',
+        emoji: '👩‍🦰',
+        personality: 'Hún er mjög vingjarnleg og pratar mikið',
+        interests: ['dans', 'bíómyndir', 'mat']
+      },
+      {
+        id: 2,
+        name: 'Kenji',
+        age: 24,
+        from: 'Japan',
+        liveIn: 'Kópavogi',
+        emoji: '👨',
+        personality: 'Hann er rólegur og hugsar vel áður en hann svarar',
+        interests: ['tölvuleikir', 'manga', 'gönguferðir']
+      },
+      {
+        id: 3,
+        name: 'Amara',
+        age: 31,
+        from: 'Nígeríu',
+        liveIn: 'Hafnarfirði',
+        emoji: '👩🏾',
+        personality: 'Hún er mjög kát og spurir margar spurningar',
+        interests: ['tónlist', 'eldamatur', 'ferðalög']
+      },
+      {
+        id: 4,
+        name: 'Lars',
+        age: 22,
+        from: 'Danmörku',
+        liveIn: 'Breiðholti',
+        emoji: '👨‍🦱',
+        personality: 'Hann er mjög vingjarnlegur og grínast oft',
+        interests: ['fótbolti', 'músík', 'þjóðbraut']
+      },
+      {
+        id: 5,
+        name: 'Sofia',
+        age: 26,
+        from: 'Brasilíu',
+        liveIn: 'Reykjavík',
+        emoji: '👩🏽',
+        personality: 'Hún er mjög ákveðin og talar hratt',
+        interests: ['jóga', 'náttúra', 'bækur']
+      }
+    ];
+
+    const SpeedDatingGame = () => {
+      const [currentPerson, setCurrentPerson] = useState(0);
+      const [conversation, setConversation] = useState([]);
+      const [userInput, setUserInput] = useState('');
+      const [isTyping, setIsTyping] = useState(false);
+      const [gamePhase, setGamePhase] = useState('intro'); // intro, chatting, finished
+      const [score, setScore] = useState(0);
+      const [questionsAsked, setQuestionsAsked] = useState(0);
+      const chatEndRef = useRef(null);
+
+      const person = PEOPLE[currentPerson];
+
+      useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [conversation]);
+
+      const startChat = () => {
+        setGamePhase('chatting');
+        // AI byrjar samtalið
+        setTimeout(() => {
+          addAIMessage(`Hæ! Ég heiti ${person.name}. Hvað heitir þú?`);
+        }, 500);
+      };
+
+      const addAIMessage = (message) => {
+        setIsTyping(true);
+        setTimeout(() => {
+          setIsTyping(false);
+          setConversation(prev => [...prev, { type: 'ai', text: message }]);
+        }, 1000 + Math.random() * 1000);
+      };
+
+      const addUserMessage = (message) => {
+        setConversation(prev => [...prev, { type: 'user', text: message }]);
+        setUserInput('');
+        
+        // Greina hvað notandi sagði og svara
+        analyzeAndRespond(message.toLowerCase());
+      };
+
+      const analyzeAndRespond = (userMessage) => {
+        const responses = [];
+
+        // Kanna hvort notandi spurði spurningu
+        const isQuestion = userMessage.includes('hvað') || 
+                          userMessage.includes('hvaðan') || 
+                          userMessage.includes('hvar') ||
+                          userMessage.includes('?');
+
+        if (isQuestion) {
+          setQuestionsAsked(prev => prev + 1);
+          setScore(prev => prev + 10);
+        }
+
+        // Greina um hvað var spurt
+        if (userMessage.includes('heiti')) {
+          responses.push(`Ég heiti ${person.name}.`);
+          if (Math.random() > 0.5) responses.push('En þú?');
+        } 
+        else if (userMessage.includes('gömul') || userMessage.includes('gamall') || userMessage.includes('ára')) {
+          responses.push(`Ég er ${person.age} ára.`);
+          if (Math.random() > 0.5) responses.push('Hvað ert þú gamall/gömul?');
+        }
+        else if (userMessage.includes('hvaðan') || userMessage.includes('frá')) {
+          responses.push(`Ég er frá ${person.from}.`);
+          if (Math.random() > 0.4) responses.push(`Ég kom til Íslands fyrir ${Math.floor(Math.random() * 5) + 1} árum.`);
+          if (Math.random() > 0.5) responses.push('Hvaðan ert þú?');
+        }
+        else if (userMessage.includes('hvar') && (userMessage.includes('bý') || userMessage.includes('býr'))) {
+          responses.push(`Ég bý í ${person.liveIn}.`);
+          if (Math.random() > 0.5) responses.push('Hvar býrð þú?');
+        }
+        else if (userMessage.includes('gaman') || userMessage.includes('áhugamál')) {
+          const interest = person.interests[Math.floor(Math.random() * person.interests.length)];
+          responses.push(`Mér finnst gaman að ${interest}.`);
+          if (Math.random() > 0.5) responses.push('Hvað finnst þér gaman að gera?');
+        }
+        else if (userMessage.includes('vinur') || userMessage.includes('vinkona')) {
+          responses.push(`Já, ég á marga vini hér á Íslandi!`);
+        }
+        else if (userMessage.includes('skóli') || userMessage.includes('vinna')) {
+          responses.push(`Ég er í skóla. Ég læri íslensku!`);
+        }
+        // Kveðjur
+        else if (userMessage.includes('bless') || userMessage.includes('sjáumst') || userMessage.includes('bæ')) {
+          responses.push(`Það var gaman að hitta þig! Sjáumst!`);
+          setTimeout(() => {
+            nextPerson();
+          }, 2000);
+        }
+        // Ef notandi sagði bara "Ég heiti X" eða svaraði
+        else if (userMessage.startsWith('ég er') || userMessage.startsWith('ég heiti')) {
+          const encouragements = [
+            'Gaman að kynnast þér!',
+            'Skemmtilegt!',
+            'Frábært!',
+            'Já, mjög gaman!'
+          ];
+          responses.push(encouragements[Math.floor(Math.random() * encouragements.length)]);
+          
+          // Spyrja næstu spurningu
+          const nextQuestions = [
+            `Hvaðan ert þú?`,
+            `Hvar býrð þú?`,
+            `Hvað finnst þér gaman?`,
+            `Átt þú marga vini?`
+          ];
+          responses.push(nextQuestions[Math.floor(Math.random() * nextQuestions.length)]);
+        }
+        else {
+          // Default svar
+          responses.push('Já, einmitt!');
+          if (Math.random() > 0.6) {
+            const randomQ = ['Hvaðan ert þú?', 'Hvað finnst þér gaman?', 'Hvar býrð þú?'][Math.floor(Math.random() * 3)];
+            responses.push(randomQ);
+          }
+        }
+
+        // Senda svar
+        responses.forEach((response, index) => {
+          setTimeout(() => {
+            addAIMessage(response);
+          }, (index + 1) * 1500);
+        });
+      };
+
+      const nextPerson = () => {
+        if (currentPerson < PEOPLE.length - 1) {
+          setCurrentPerson(currentPerson + 1);
+          setConversation([]);
+          setQuestionsAsked(0);
+          setGamePhase('intro');
+        } else {
+          setGamePhase('finished');
+        }
+      };
+
+      const resetGame = () => {
+        setCurrentPerson(0);
+        setConversation([]);
+        setScore(0);
+        setQuestionsAsked(0);
+        setGamePhase('intro');
+      };
+
+      const quickReplies = [
+        'Ég heiti [nafn]',
+        'Ég er [aldur] ára',
+        'Ég er frá [land]',
+        'Ég bý í [staður]',
+        'Hvað heitir þú?',
+        'Hvað ert þú gamall/gömul?',
+        'Hvaðan ert þú?',
+        'Hvar býrð þú?',
+        'Bless! Sjáumst!'
+      ];
+
+      // Intro skjár
+      if (gamePhase === 'intro') {
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <button 
+                  onClick={() => window.history.back()} 
+                  className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+                >
+                  ← Til baka
+                </button>
+                <h1 className="text-3xl font-light text-gray-800 mb-2">💬 Speed Dating - Kynning</h1>
+                <p className="text-gray-500 text-sm font-light">Kafli 1 - Komdu sæll og blessaður · A1</p>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-6 mt-8">
+              
+              {/* Instructions */}
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Hvað er þetta?</h2>
+                <ul className="space-y-2 text-gray-700 font-light mb-4">
+                  <li>• Þú munt hitta {PEOPLE.length} manneskjur</li>
+                  <li>• Þú átt 2-3 mínútur með hverri manneskju</li>
+                  <li>• Spjalla saman á íslensku!</li>
+                  <li>• Spurðu spurningar: Hvað heitir þú? Hvaðan ert þú? Hvar býrð þú?</li>
+                  <li>• Segðu frá þér líka!</li>
+                </ul>
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                  <p className="text-sm text-yellow-800 font-light">
+                    💡 <strong>Ábending:</strong> Því fleiri spurningar sem þú spyrð, því fleiri stig færðu!
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress */}
+              <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-light">
+                    Manneskja {currentPerson + 1} af {PEOPLE.length}
+                  </span>
+                  <span className="text-gray-600 font-light">
+                    Stig: <span className="font-normal text-pink-600">{score}</span>
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                  <div 
+                    className="bg-pink-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${((currentPerson + 1) / PEOPLE.length) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Person Card */}
+              <div className="person-card bg-white rounded-lg shadow-xl p-8 text-center">
+                <div className="text-8xl mb-6">{person.emoji}</div>
+                <h2 className="text-3xl font-normal text-gray-800 mb-2">{person.name}</h2>
+                <p className="text-gray-600 font-light mb-6">{person.age} ára · {person.from}</p>
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <p className="text-gray-700 font-light italic">"{person.personality}"</p>
+                </div>
+                <button
+                  onClick={startChat}
+                  className="bg-pink-600 text-white px-8 py-4 rounded-lg text-xl font-normal hover:bg-pink-700 transition-colors"
+                >
+                  🎤 Byrja að spjalla
+                </button>
+              </div>
+
+            </main>
+          </div>
+        );
+      }
+
+      // Finished skjár
+      if (gamePhase === 'finished') {
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <h1 className="text-3xl font-light text-gray-800 mb-2">💬 Speed Dating - Kynning</h1>
+                <p className="text-gray-500 text-sm font-light">Kafli 1 - Komdu sæll og blessaður · A1</p>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-6 mt-8">
+              <div className="bg-white rounded-lg shadow-xl p-12 text-center">
+                <div className="text-6xl mb-6">🎉</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">
+                  Þú kláraðir!
+                </h2>
+                <p className="text-xl text-gray-600 font-light mb-8">
+                  Þú hittir {PEOPLE.length} manneskjur og æftir íslensku kynningaspjall!
+                </p>
+                <div className="text-5xl font-bold text-pink-600 mb-8">
+                  {score} stig
+                </div>
+                <button
+                  onClick={resetGame}
+                  className="bg-pink-600 text-white px-8 py-4 rounded-lg text-lg font-normal hover:bg-pink-700 transition-colors"
+                >
+                  🔄 Spila aftur
+                </button>
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      // Chat skjár
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="text-4xl">{person.emoji}</div>
+                  <div>
+                    <h2 className="text-xl font-normal text-gray-800">{person.name}</h2>
+                    <p className="text-sm text-gray-500 font-light">{person.age} ára · {person.from}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500 font-light">Stig</div>
+                  <div className="text-2xl font-bold text-pink-600">{score}</div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-4">
+            
+            {/* Chat area */}
+            <div className="bg-white rounded-lg shadow-xl mb-4" style={{ height: '500px', overflow: 'auto' }}>
+              <div className="p-6 space-y-4">
+                {conversation.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`chat-bubble flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-xs md:max-w-md px-4 py-3 rounded-2xl ${
+                        msg.type === 'user'
+                          ? 'bg-pink-600 text-white'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      <p className="font-light">{msg.text}</p>
+                    </div>
+                  </div>
+                ))}
+                
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-2xl">
+                      <div className="typing-indicator">
+                        <div className="typing-dot"></div>
+                        <div className="typing-dot"></div>
+                        <div className="typing-dot"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={chatEndRef} />
+              </div>
+            </div>
+
+            {/* Quick replies */}
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+              <p className="text-sm text-gray-600 font-light mb-3">💡 Snögg svör (smelltu til að nota):</p>
+              <div className="flex flex-wrap gap-2">
+                {quickReplies.map((reply, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setUserInput(reply)}
+                    className="quick-reply bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-light"
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="bg-white rounded-lg shadow-xl p-4">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && userInput.trim()) {
+                      addUserMessage(userInput);
+                    }
+                  }}
+                  placeholder="Skrifaðu skilaboð..."
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500 font-light"
+                  disabled={isTyping}
+                />
+                <button
+                  onClick={() => {
+                    if (userInput.trim()) {
+                      addUserMessage(userInput);
+                    }
+                  }}
+                  disabled={!userInput.trim() || isTyping}
+                  className="bg-pink-600 text-white px-6 py-3 rounded-lg font-normal hover:bg-pink-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  📤
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 font-light mt-2">
+                ⌨️ Ýttu á Enter til að senda
+              </p>
+            </div>
+
+            {/* Skip button */}
+            <div className="text-center mt-4">
+              <button
+                onClick={nextPerson}
+                className="text-gray-500 hover:text-gray-700 text-sm font-light"
+              >
+                ⏭️ Næsta manneskja
+              </button>
+            </div>
+
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpeedDatingGame />);
+  </script>
+</body>
+</html>
