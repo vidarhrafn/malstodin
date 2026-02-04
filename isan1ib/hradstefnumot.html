@@ -108,6 +108,24 @@
         opacity: 0.5;
       }
     }
+
+    .hint-bubble {
+      animation: bounceIn 0.5s ease-out;
+    }
+
+    @keyframes bounceIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.3);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
   </style>
 </head>
 <body>
@@ -175,10 +193,12 @@
       const [conversation, setConversation] = useState([]);
       const [userInput, setUserInput] = useState('');
       const [isTyping, setIsTyping] = useState(false);
-      const [gamePhase, setGamePhase] = useState('intro'); // intro, chatting, finished
+      const [gamePhase, setGamePhase] = useState('intro');
       const [score, setScore] = useState(0);
       const [questionsAsked, setQuestionsAsked] = useState(0);
       const [playingAudio, setPlayingAudio] = useState(null);
+      const [showHint, setShowHint] = useState(false);
+      const [lastAIMessageTime, setLastAIMessageTime] = useState(Date.now());
       const [conversationState, setConversationState] = useState({
         userSharedName: false,
         userSharedAge: false,
@@ -190,6 +210,7 @@
         aiAskedLiveIn: false
       });
       const chatEndRef = useRef(null);
+      const hintTimerRef = useRef(null);
 
       const person = PEOPLE[currentPerson];
 
@@ -197,8 +218,30 @@
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, [conversation]);
 
+      // Hint timer - sýna ábendingu ef notandi er lengi að svara
+      useEffect(() => {
+        if (gamePhase === 'chatting' && !isTyping) {
+          hintTimerRef.current = setTimeout(() => {
+            // Athuga hvort AI hefur spurt allt
+            const { aiAskedName, aiAskedAge, aiAskedFrom, aiAskedLiveIn } = conversationState;
+            const aiAskedEverything = aiAskedName && aiAskedAge && aiAskedFrom && aiAskedLiveIn;
+            
+            if (aiAskedEverything && Date.now() - lastAIMessageTime > 8000) {
+              setShowHint(true);
+            }
+          }, 8000);
+        }
+
+        return () => {
+          if (hintTimerRef.current) {
+            clearTimeout(hintTimerRef.current);
+          }
+        };
+      }, [gamePhase, isTyping, conversationState, lastAIMessageTime]);
+
       const startChat = () => {
         setGamePhase('chatting');
+        setShowHint(false);
         setConversationState({
           userSharedName: false,
           userSharedAge: false,
@@ -209,7 +252,6 @@
           aiAskedFrom: false,
           aiAskedLiveIn: false
         });
-        // AI byrjar samtalið
         setTimeout(() => {
           addAIMessage(`Hæ! Ég heiti ${person.name}. Hvað heitir þú?`);
           setConversationState(prev => ({ ...prev, aiAskedName: true }));
@@ -239,14 +281,15 @@
         setTimeout(() => {
           setIsTyping(false);
           setConversation(prev => [...prev, { type: 'ai', text: message }]);
+          setLastAIMessageTime(Date.now());
+          setShowHint(false);
         }, 1000 + Math.random() * 1000);
       };
 
       const addUserMessage = (message) => {
         setConversation(prev => [...prev, { type: 'user', text: message }]);
         setUserInput('');
-        
-        // Greina hvað notandi sagði og svara
+        setShowHint(false);
         analyzeAndRespond(message.toLowerCase());
       };
 
@@ -254,7 +297,6 @@
         const responses = [];
         const newState = { ...conversationState };
 
-        // Kanna hvort notandi spurði spurningu
         const isQuestion = userMessage.includes('hvað') || 
                           userMessage.includes('hvaðan') || 
                           userMessage.includes('hvar') ||
@@ -324,14 +366,12 @@
         else if (userMessage.includes('skóli') || userMessage.includes('vinna')) {
           responses.push(`Ég er í skóla. Ég læri íslensku!`);
         }
-        // Kveðjur
         else if (userMessage.includes('bless') || userMessage.includes('sjáumst') || userMessage.includes('bæ')) {
           responses.push(`Það var gaman að hitta þig! Sjáumst!`);
           setTimeout(() => {
             nextPerson();
           }, 2000);
         }
-        // Ef notandi sagði bara "Ég heiti X" eða svaraði
         else if (userMessage.startsWith('ég er') || userMessage.startsWith('ég heiti') || userMessage.startsWith('ég bý')) {
           const encouragements = [
             'Gaman að kynnast þér!',
@@ -341,7 +381,6 @@
           ];
           responses.push(encouragements[Math.floor(Math.random() * encouragements.length)]);
           
-          // Spyrja næstu spurningu sem AI hefur EKKI spurt enn
           const possibleQuestions = [];
           if (!newState.aiAskedAge && !newState.userSharedAge) {
             possibleQuestions.push('Hvað ert þú gamall/gömul?');
@@ -365,10 +404,8 @@
           if (nextQ.includes('Hvar')) newState.aiAskedLiveIn = true;
         }
         else {
-          // Default svar
           responses.push('Já, einmitt!');
           
-          // Spyrja spurningu stundum
           if (Math.random() > 0.5) {
             const possibleQuestions = [];
             if (!newState.aiAskedAge && !newState.userSharedAge) {
@@ -391,10 +428,8 @@
           }
         }
 
-        // Uppfæra state
         setConversationState(newState);
 
-        // Senda svar
         responses.forEach((response, index) => {
           setTimeout(() => {
             addAIMessage(response);
@@ -407,6 +442,7 @@
           setCurrentPerson(currentPerson + 1);
           setConversation([]);
           setQuestionsAsked(0);
+          setShowHint(false);
           setGamePhase('intro');
         } else {
           setGamePhase('finished');
@@ -418,18 +454,23 @@
         setConversation([]);
         setScore(0);
         setQuestionsAsked(0);
+        setShowHint(false);
         setGamePhase('intro');
       };
 
-      const quickReplies = [
+      const answerTemplates = [
         'Ég heiti [nafn]',
         'Ég er [aldur] ára',
         'Ég er frá [land]',
-        'Ég bý í [staður]',
+        'Ég bý í [staður]'
+      ];
+
+      const questionTemplates = [
         'Hvað heitir þú?',
         'Hvað ert þú gamall/gömul?',
         'Hvaðan ert þú?',
         'Hvar býrð þú?',
+        'Hvað finnst þér gaman?',
         'Bless! Sjáumst!'
       ];
 
@@ -452,7 +493,6 @@
 
             <main className="max-w-4xl mx-auto px-6 mt-8">
               
-              {/* Instructions */}
               <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
                 <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Hvað er þetta?</h2>
                 <ul className="space-y-2 text-gray-700 font-light mb-4">
@@ -470,7 +510,6 @@
                 </div>
               </div>
 
-              {/* Progress */}
               <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 font-light">
@@ -488,7 +527,6 @@
                 </div>
               </div>
 
-              {/* Person Card */}
               <div className="person-card bg-white rounded-lg shadow-xl p-8 text-center">
                 <div className="text-8xl mb-6">{person.emoji}</div>
                 <h2 className="text-3xl font-normal text-gray-800 mb-2">{person.name}</h2>
@@ -509,7 +547,6 @@
         );
       }
 
-      // Finished skjár
       if (gamePhase === 'finished') {
         return (
           <div className="min-h-screen pb-12">
@@ -568,7 +605,7 @@
           <main className="max-w-4xl mx-auto px-6 mt-4">
             
             {/* Chat area */}
-            <div className="bg-white rounded-lg shadow-xl mb-4" style={{ height: '500px', overflow: 'auto' }}>
+            <div className="bg-white rounded-lg shadow-xl mb-4" style={{ height: '450px', overflow: 'auto' }}>
               <div className="p-6 space-y-4">
                 {conversation.map((msg, index) => (
                   <div
@@ -610,24 +647,58 @@
                     </div>
                   </div>
                 )}
+
+                {/* Hint bubble */}
+                {showHint && !isTyping && (
+                  <div className="hint-bubble flex justify-center">
+                    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl px-4 py-3 max-w-md">
+                      <p className="text-yellow-800 font-light text-center">
+                        💡 Viltu ekki spyrja mig eitthvað? Notaðu spurningahnappana hér fyrir neðan! →
+                      </p>
+                    </div>
+                  </div>
+                )}
                 
                 <div ref={chatEndRef} />
               </div>
             </div>
 
-            {/* Quick replies */}
+            {/* Quick replies - SPLIT INTO TWO COLUMNS */}
             <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-              <p className="text-sm text-gray-600 font-light mb-3">💡 Snögg svör (smelltu til að nota):</p>
-              <div className="flex flex-wrap gap-2">
-                {quickReplies.map((reply, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setUserInput(reply)}
-                    className="quick-reply bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-light"
-                  >
-                    {reply}
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Svör (til vinstri) */}
+                <div>
+                  <p className="text-sm text-blue-600 font-normal mb-3">💬 Svör (segðu frá þér):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {answerTemplates.map((reply, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setUserInput(reply)}
+                        className="quick-reply bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm font-light border border-blue-200"
+                      >
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Spurningar (til hægri) */}
+                <div>
+                  <p className="text-sm text-pink-600 font-normal mb-3">❓ Spurningar (spurðu þá):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {questionTemplates.map((reply, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setUserInput(reply)}
+                        className="quick-reply bg-pink-50 hover:bg-pink-100 text-pink-700 px-3 py-2 rounded-lg text-sm font-light border border-pink-200"
+                      >
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
               </div>
             </div>
 
