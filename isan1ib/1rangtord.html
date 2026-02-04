@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>❌ Hvað passar ekki saman?</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .word-card {
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    
+    .word-card:hover:not(.selected):not(.correct):not(.wrong) {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    
+    .word-card.selected {
+      border-color: #3b82f6;
+      background: #dbeafe;
+      transform: scale(1.05);
+    }
+    
+    .word-card.correct {
+      background: #dcfce7;
+      border-color: #22c55e;
+      animation: celebrate 0.6s ease-out;
+    }
+    
+    .word-card.wrong {
+      background: #fee2e2;
+      border-color: #ef4444;
+      animation: shake 0.5s;
+    }
+    
+    @keyframes celebrate {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1) rotate(5deg); }
+      100% { transform: scale(1); }
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const QUESTIONS = [
+      // Auðveld - Náttúra
+      {
+        id: 1,
+        words: ['foss', 'vatn', 'eyja', 'gönguskór'],
+        wrongWord: 'gönguskór',
+        category: 'Vatn í náttúrunni',
+        explanation: 'Foss, vatn og eyja eru allt vatn í náttúrunni. Gönguskór eru ekki.',
+        difficulty: 'easy'
+      },
+      {
+        id: 2,
+        words: ['fjörður', 'vatn', 'bátur', 'tjald'],
+        wrongWord: 'tjald',
+        category: 'Vatn og sjór',
+        explanation: 'Fjörður, vatn og bátur tengjast sjónum. Tjald er fyrir útilegu á landi.',
+        difficulty: 'easy'
+      },
+      {
+        id: 3,
+        words: ['fjall', 'steinn', 'gras', 'ferja'],
+        wrongWord: 'ferja',
+        category: 'Á landi',
+        explanation: 'Fjall, steinn og gras eru á landi. Ferja er á sjónum.',
+        difficulty: 'easy'
+      },
+      {
+        id: 4,
+        words: ['skógur', 'tré', 'gras', 'höfn'],
+        wrongWord: 'höfn',
+        category: 'Í skógi',
+        explanation: 'Skógur, tré og gras tengjast náttúrunni á landi. Höfn er við sjóinn.',
+        difficulty: 'easy'
+      },
+      {
+        id: 5,
+        words: ['selur', 'eyja', 'höfn', 'snjór'],
+        wrongWord: 'snjór',
+        category: 'Við sjóinn',
+        explanation: 'Selur, eyja og höfn eru við sjóinn. Snjór er veður.',
+        difficulty: 'easy'
+      },
+
+      // Auðveld - Veður
+      {
+        id: 6,
+        words: ['sól', 'sólskin', 'logn', 'rok'],
+        wrongWord: 'rok',
+        category: 'Gott veður',
+        explanation: 'Sól, sólskin og logn er gott veður. Rok er lélegt veður.',
+        difficulty: 'easy'
+      },
+      {
+        id: 7,
+        words: ['sól', 'regnbogi', 'sólskin', 'þoka'],
+        wrongWord: 'þoka',
+        category: 'Bjart veður',
+        explanation: 'Sól, regnbogi og sólskin er bjart veður. Þoka er þegar maður sér ekki vel.',
+        difficulty: 'easy'
+      },
+      {
+        id: 8,
+        words: ['rigning', 'rok', 'vindur', 'logn'],
+        wrongWord: 'logn',
+        category: 'Lélegt veður',
+        explanation: 'Rigning, rok og vindur er lélegt veður. Logn er gott veður.',
+        difficulty: 'easy'
+      },
+      {
+        id: 9,
+        words: ['þoka', 'rigning', 'rok', 'sól'],
+        wrongWord: 'sól',
+        category: 'Þegar maður sér ekki vel',
+        explanation: 'Í þoku, rigningu og roki sér maður ekki vel. Í sól sér maður vel!',
+        difficulty: 'easy'
+      },
+      {
+        id: 10,
+        words: ['snjór', 'snjókoma', 'steinn', 'regnbogi'],
+        wrongWord: 'regnbogi',
+        category: 'Vetraveður',
+        explanation: 'Snjór, snjókoma og steinn getur verið á vetri. Regnbogi er á sumri eftir rigningu.',
+        difficulty: 'easy'
+      },
+
+      // Auðveld - Farartæki
+      {
+        id: 11,
+        words: ['bíll', 'rúta', 'hlaupahjól', 'bátur'],
+        wrongWord: 'bátur',
+        category: 'Farartæki á landi',
+        explanation: 'Bíll, rúta og hlaupahjól eru á landi. Bátur er á sjónum.',
+        difficulty: 'easy'
+      },
+      {
+        id: 12,
+        words: ['rúta', 'bíll', 'hlaupahjól', 'ferja'],
+        wrongWord: 'ferja',
+        category: 'Farartæki á götum',
+        explanation: 'Rúta, bíll og hlaupahjól keyra á götum. Ferja siglir á sjónum.',
+        difficulty: 'easy'
+      },
+      {
+        id: 13,
+        words: ['bátur', 'ferja', 'eyja', 'bíll'],
+        wrongWord: 'bíll',
+        category: 'Á sjónum',
+        explanation: 'Bátur, ferja og eyja tengjast sjónum. Bíll er á landi.',
+        difficulty: 'easy'
+      },
+      {
+        id: 14,
+        words: ['bátur', 'ferja', 'höfn', 'rúta'],
+        wrongWord: 'rúta',
+        category: 'Við höfnina',
+        explanation: 'Bátur og ferja eru í höfn. Rúta keyrir á götum.',
+        difficulty: 'easy'
+      },
+
+      // Miðlungs - Útbúnaður
+      {
+        id: 15,
+        words: ['bakpoki', 'gönguskór', 'göngustafir', 'ferja'],
+        wrongWord: 'ferja',
+        category: 'Í fjallgöngu',
+        explanation: 'Bakpoki, gönguskór og göngustafir eru fyrir fjallgöngu. Ferja er farartæki.',
+        difficulty: 'medium'
+      },
+      {
+        id: 16,
+        words: ['gönguskór', 'bakpoki', 'nesti', 'bíll'],
+        wrongWord: 'bíll',
+        category: 'Hlutir sem maður ber',
+        explanation: 'Gönguskór, bakpoki og nesti ber maður. Bíll er farartæki.',
+        difficulty: 'medium'
+      },
+      {
+        id: 17,
+        words: ['vatnsflaska', 'nesti', 'bakpoki', 'bátur'],
+        wrongWord: 'bátur',
+        category: 'Í bakpokanum',
+        explanation: 'Vatnsflaska, nesti og bakpoki eru hlutir sem maður tekur með. Bátur er farartæki.',
+        difficulty: 'medium'
+      },
+      {
+        id: 18,
+        words: ['tjald', 'bakpoki', 'nesti', 'ferja'],
+        wrongWord: 'ferja',
+        category: 'Í útilegu',
+        explanation: 'Tjald, bakpoki og nesti eru fyrir útilegu. Ferja er farartæki.',
+        difficulty: 'medium'
+      },
+      {
+        id: 19,
+        words: ['tjald', 'gönguskór', 'vatnsflaska', 'höfn'],
+        wrongWord: 'höfn',
+        category: 'Ferðalagsbúnaður',
+        explanation: 'Tjald, gönguskór og vatnsflaska eru búnaður. Höfn er staður.',
+        difficulty: 'medium'
+      },
+
+      // Miðlungs - Flokkar
+      {
+        id: 20,
+        words: ['snjór', 'vatn', 'rigning', 'gras'],
+        wrongWord: 'gras',
+        category: 'Blautt',
+        explanation: 'Snjór (þegar hann bráðnar), vatn og rigning eru blaut. Gras er ekki alltaf blautt.',
+        difficulty: 'medium'
+      },
+      {
+        id: 21,
+        words: ['vatn', 'foss', 'fjörður', 'gras'],
+        wrongWord: 'gras',
+        category: 'Vatn',
+        explanation: 'Vatn, foss og fjörður eru vatn. Gras vex á landi.',
+        difficulty: 'medium'
+      },
+      {
+        id: 22,
+        words: ['foss', 'fjörður', 'eyja', 'fjall'],
+        wrongWord: 'fjall',
+        category: 'Þar sem er vatn',
+        explanation: 'Við foss, fjörð og eyju er vatn. Fjall er land.',
+        difficulty: 'medium'
+      },
+      {
+        id: 23,
+        words: ['vatn', 'foss', 'höfn', 'skógur'],
+        wrongWord: 'skógur',
+        category: 'Staðir með vatn',
+        explanation: 'Vatn, foss og höfn hafa vatn. Skógur hefur tré.',
+        difficulty: 'medium'
+      },
+      {
+        id: 24,
+        words: ['bakpoki', 'nesti', 'vatnsflaska', 'foss'],
+        wrongWord: 'foss',
+        category: 'Hlutir sem maður tekur með',
+        explanation: 'Bakpoki, nesti og vatnsflösku tekur maður með. Foss er í náttúrunni.',
+        difficulty: 'medium'
+      },
+      {
+        id: 25,
+        words: ['gönguskór', 'tjald', 'göngustafir', 'regnbogi'],
+        wrongWord: 'regnbogi',
+        category: 'Ferðalagsbúnaður',
+        explanation: 'Gönguskór, tjald og göngustafir eru búnaður. Regnbogi er í himni.',
+        difficulty: 'medium'
+      },
+      {
+        id: 26,
+        words: ['fjall', 'foss', 'eyja', 'gönguskór'],
+        wrongWord: 'gönguskór',
+        category: 'Staðir í náttúrunni',
+        explanation: 'Fjall, foss og eyja eru staðir. Gönguskór eru búnaður.',
+        difficulty: 'medium'
+      },
+      {
+        id: 27,
+        words: ['skógur', 'fjörður', 'höfn', 'nesti'],
+        wrongWord: 'nesti',
+        category: 'Staðir',
+        explanation: 'Skógur, fjörður og höfn eru staðir. Nesti er matur.',
+        difficulty: 'medium'
+      },
+
+      // Erfitt
+      {
+        id: 28,
+        words: ['rigning', 'vindur', 'rok', 'eyja'],
+        wrongWord: 'eyja',
+        category: 'Veðurorð',
+        explanation: 'Rigning, vindur og rok eru veðurorð. Eyja er staður.',
+        difficulty: 'hard'
+      },
+      {
+        id: 29,
+        words: ['sól', 'regnbogi', 'sólskin', 'steinn'],
+        wrongWord: 'steinn',
+        category: 'Á himninum',
+        explanation: 'Sól, regnbogi og sólskin sjáum við á himni. Steinn er á jörðinni.',
+        difficulty: 'hard'
+      },
+      {
+        id: 30,
+        words: ['fjall', 'fjörður', 'eyja', 'rigning'],
+        wrongWord: 'rigning',
+        category: 'Landslagsform',
+        explanation: 'Fjall, fjörður og eyja eru landslagsform. Rigning er veður.',
+        difficulty: 'hard'
+      },
+      {
+        id: 31,
+        words: ['foss', 'vatn', 'fjörður', 'vindur'],
+        wrongWord: 'vindur',
+        category: 'Vatn',
+        explanation: 'Foss, vatn og fjörður eru vatn. Vindur er í loftinu.',
+        difficulty: 'hard'
+      },
+      {
+        id: 32,
+        words: ['selur', 'eyja', 'bátur', 'tjald'],
+        wrongWord: 'tjald',
+        category: 'Við sjóinn',
+        explanation: 'Selur er í sjónum, eyja er í sjónum, bátur siglir á sjónum. Tjald er fyrir útilegu á landi.',
+        difficulty: 'hard'
+      },
+      {
+        id: 33,
+        words: ['snjór', 'fjall', 'gönguskór', 'höfn'],
+        wrongWord: 'höfn',
+        category: 'Fjallganga',
+        explanation: 'Snjór getur verið á fjalli, maður gengur á fjall með gönguskóm. Höfn er við sjóinn.',
+        difficulty: 'hard'
+      }
+    ];
+
+    const ALL_ITEMS = [
+      { id: 'fjall', name: 'fjall', emoji: '⛰️' },
+      { id: 'foss', name: 'foss', emoji: '💧' },
+      { id: 'vatn', name: 'vatn', emoji: '💦' },
+      { id: 'skógur', name: 'skógur', emoji: '🌲' },
+      { id: 'tré', name: 'tré', emoji: '🌳' },
+      { id: 'gras', name: 'gras', emoji: '🌱' },
+      { id: 'steinn', name: 'steinn', emoji: '🪨' },
+      { id: 'snjór', name: 'snjór', emoji: '❄️' },
+      { id: 'sól', name: 'sól', emoji: '☀️' },
+      { id: 'vindur', name: 'vindur', emoji: '💨' },
+      { id: 'rigning', name: 'rigning', emoji: '🌧️' },
+      { id: 'snjókoma', name: 'snjókoma', emoji: '🌨️' },
+      { id: 'tjald', name: 'tjald', emoji: '⛺' },
+      { id: 'bakpoki', name: 'bakpoki', emoji: '🎒' },
+      { id: 'rúta', name: 'rúta', emoji: '🚌' },
+      { id: 'bíll', name: 'bíll', emoji: '🚗' },
+      { id: 'bátur', name: 'bátur', emoji: '⛵' },
+      { id: 'ferja', name: 'ferja', emoji: '⛴️' },
+      { id: 'gönguskór', name: 'gönguskór', emoji: '👟' },
+      { id: 'vatnsflaska', name: 'vatnsflaska', emoji: '🧃' },
+      { id: 'nesti', name: 'nesti', emoji: '🥪' },
+      { id: 'rok', name: 'rok', emoji: '🌬️' },
+      { id: 'þoka', name: 'þoka', emoji: '🌫️' },
+      { id: 'logn', name: 'logn', emoji: '😌' },
+      { id: 'regnbogi', name: 'regnbogi', emoji: '🌈' },
+      { id: 'eyja', name: 'eyja', emoji: '🏝️' },
+      { id: 'fjörður', name: 'fjörður', emoji: '🌊' },
+      { id: 'höfn', name: 'höfn', emoji: '⚓' },
+      { id: 'göngustafir', name: 'göngustafir', emoji: '🥢' },
+      { id: 'selur', name: 'selur', emoji: '🦭' },
+      { id: 'hlaupahjól', name: 'hlaupahjól', emoji: '🛴' },
+      { id: 'sólskin', name: 'sólskin', emoji: '🌞' }
+    ];
+
+    const OddOneOutGame = () => {
+      const [currentQuestion, setCurrentQuestion] = useState(0);
+      const [selectedWord, setSelectedWord] = useState(null);
+      const [showResult, setShowResult] = useState(false);
+      const [isCorrect, setIsCorrect] = useState(false);
+      const [score, setScore] = useState(0);
+      const [gameFinished, setGameFinished] = useState(false);
+      const [shuffledQuestions, setShuffledQuestions] = useState([]);
+
+      useEffect(() => {
+        // Shuffle questions on load
+        const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5);
+        setShuffledQuestions(shuffled);
+      }, []);
+
+      const question = shuffledQuestions[currentQuestion];
+
+      const getItemEmoji = (word) => {
+        const item = ALL_ITEMS.find(i => i.id === word);
+        return item ? item.emoji : '📦';
+      };
+
+      const handleWordClick = (word) => {
+        if (showResult) return;
+        setSelectedWord(word);
+      };
+
+      const checkAnswer = () => {
+        if (!selectedWord) return;
+        
+        const correct = selectedWord === question.wrongWord;
+        setIsCorrect(correct);
+        setShowResult(true);
+        
+        if (correct) {
+          setScore(score + 1);
+        }
+      };
+
+      const nextQuestion = () => {
+        if (currentQuestion < shuffledQuestions.length - 1) {
+          setCurrentQuestion(currentQuestion + 1);
+          setSelectedWord(null);
+          setShowResult(false);
+          setIsCorrect(false);
+        } else {
+          setGameFinished(true);
+        }
+      };
+
+      const resetGame = () => {
+        const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5);
+        setShuffledQuestions(shuffled);
+        setCurrentQuestion(0);
+        setScore(0);
+        setSelectedWord(null);
+        setShowResult(false);
+        setIsCorrect(false);
+        setGameFinished(false);
+      };
+
+      const getDifficultyColor = (difficulty) => {
+        switch(difficulty) {
+          case 'easy': return 'bg-green-100 text-green-800 border-green-300';
+          case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+          case 'hard': return 'bg-red-100 text-red-800 border-red-300';
+          default: return 'bg-gray-100 text-gray-800 border-gray-300';
+        }
+      };
+
+      const getDifficultyText = (difficulty) => {
+        switch(difficulty) {
+          case 'easy': return 'Auðvelt';
+          case 'medium': return 'Miðlungs';
+          case 'hard': return 'Erfitt';
+          default: return '';
+        }
+      };
+
+      if (!question) {
+        return (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-2xl text-gray-600">Hleð...</div>
+          </div>
+        );
+      }
+
+      if (gameFinished) {
+        const percentage = Math.round((score / shuffledQuestions.length) * 100);
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <h1 className="text-3xl font-light text-gray-800 mb-2">❌ Hvað passar ekki saman?</h1>
+                <p className="text-gray-500 text-sm font-light">Kafli 5 - Esjan er falleg · A1-A2</p>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-6 mt-8">
+              <div className="bg-white rounded-lg shadow-xl p-12 text-center">
+                <div className="text-6xl mb-6">
+                  {percentage >= 80 ? '🎉' : percentage >= 60 ? '👍' : '💪'}
+                </div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">
+                  {percentage >= 80 ? 'Frábært!' : percentage >= 60 ? 'Vel gert!' : 'Góð tilraun!'}
+                </h2>
+                <p className="text-xl text-gray-600 font-light mb-8">
+                  Þú svaraðir {score} rétt af {shuffledQuestions.length} spurningum
+                </p>
+                <div className="text-5xl font-bold text-blue-600 mb-8">
+                  {percentage}%
+                </div>
+                <button
+                  onClick={resetGame}
+                  className="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-normal hover:bg-blue-700 transition-colors"
+                >
+                  🔄 Spila aftur
+                </button>
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">❌ Hvað passar ekki saman?</h1>
+              <p className="text-gray-500 text-sm font-light">Kafli 5 - Esjan er falleg · A1-A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            
+            {/* Progress */}
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 font-light">
+                  Spurning {currentQuestion + 1} af {shuffledQuestions.length}
+                </span>
+                <span className="text-gray-600 font-light">
+                  Stig: <span className="font-normal text-blue-600">{score}</span>
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${((currentQuestion + 1) / shuffledQuestions.length) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            {currentQuestion === 0 && !showResult && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Leiðbeiningar</h2>
+                <ul className="space-y-2 text-gray-700 font-light">
+                  <li>• Lestu orðin fjögur</li>
+                  <li>• Þrjú orð passa saman</li>
+                  <li>• Eitt orð passar EKKI</li>
+                  <li>• Smelltu á orðið sem passar ekki!</li>
+                </ul>
+              </div>
+            )}
+
+            {/* Question Card */}
+            <div className="bg-white rounded-lg shadow-xl p-8 mb-6">
+              
+              {/* Difficulty Badge */}
+              <div className="flex justify-center mb-6">
+                <span className={`inline-block px-4 py-2 rounded-full text-sm font-normal border-2 ${getDifficultyColor(question.difficulty)}`}>
+                  {getDifficultyText(question.difficulty)}
+                </span>
+              </div>
+
+              {/* Question */}
+              <h2 className="text-2xl font-normal text-gray-800 text-center mb-8">
+                Hvaða orð passar <span className="text-red-600 font-bold">EKKI</span> við hin?
+              </h2>
+
+              {/* Category hint (after first attempt) */}
+              {showResult && (
+                <div className="text-center mb-6">
+                  <p className="text-gray-600 font-light">
+                    <span className="font-normal">Flokkur:</span> {question.category}
+                  </p>
+                </div>
+              )}
+
+              {/* Words */}
+              <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
+                {question.words.map((word, index) => {
+                  let className = "word-card bg-white border-4 border-gray-300 rounded-2xl p-8 text-center";
+                  
+                  if (selectedWord === word && !showResult) {
+                    className = "word-card selected border-4 rounded-2xl p-8 text-center";
+                  }
+                  
+                  if (showResult) {
+                    if (word === question.wrongWord) {
+                      className = "word-card correct border-4 rounded-2xl p-8 text-center";
+                    } else if (selectedWord === word && word !== question.wrongWord) {
+                      className = "word-card wrong border-4 rounded-2xl p-8 text-center";
+                    } else {
+                      className = "word-card bg-gray-50 border-4 border-gray-200 rounded-2xl p-8 text-center opacity-60";
+                    }
+                  }
+                  
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => handleWordClick(word)}
+                      className={className}
+                    >
+                      <div className="text-6xl mb-4">{getItemEmoji(word)}</div>
+                      <div className="text-2xl font-normal text-gray-800">{word}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Result */}
+              {showResult && (
+                <div className={`${isCorrect ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'} border-2 rounded-lg p-6 mb-6`}>
+                  <p className={`${isCorrect ? 'text-green-800' : 'text-red-800'} font-normal text-center text-xl mb-4`}>
+                    {isCorrect ? '✓ Rétt svar!' : '✗ Rangt svar'}
+                  </p>
+                  <p className="text-gray-700 font-light text-center">
+                    💡 {question.explanation}
+                  </p>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="flex justify-center">
+                {!showResult ? (
+                  <button
+                    onClick={checkAnswer}
+                    disabled={!selectedWord}
+                    className={`px-8 py-4 rounded-lg text-xl font-normal transition-colors ${
+                      selectedWord
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    ✓ Athuga svar
+                  </button>
+                ) : (
+                  <button
+                    onClick={nextQuestion}
+                    className="bg-blue-600 text-white px-8 py-4 rounded-lg text-xl font-normal hover:bg-blue-700 transition-colors"
+                  >
+                    → Næsta spurning
+                  </button>
+                )}
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<OddOneOutGame />);
+  </script>
+</body>
+</html>
