@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🃏 Flashcards - Kafli 5</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f0f9ff 0%, #e0f2fe 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .flashcard {
+      perspective: 1000px;
+      cursor: pointer;
+    }
+    
+    .flashcard-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+    }
+    
+    .flashcard.flipped .flashcard-inner {
+      transform: rotateY(180deg);
+    }
+    
+    .flashcard-front, .flashcard-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 2rem;
+    }
+    
+    .flashcard-front {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .flashcard-back {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      transform: rotateY(180deg);
+    }
+
+    .card-enter {
+      animation: cardEnter 0.5s ease-out;
+    }
+
+    @keyframes cardEnter {
+      from {
+        opacity: 0;
+        transform: scale(0.8) translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .progress-bar {
+      transition: width 0.5s ease-out;
+    }
+
+    .name-input {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Orð úr kafla 5
+    const VOCABULARY = [
+      'fjall', 'foss', 'vatn', 'skógur', 'tré', 'gras', 'steinn', 'snjór',
+      'sól', 'vindur', 'rigning', 'snjókoma', 'rok', 'þoka', 'logn', 'regnbogi',
+      'tjald', 'bakpoki', 'gönguskór', 'vatnsflaska', 'nesti', 'göngustafir',
+      'rúta', 'bíll', 'bátur', 'ferja', 'eyja', 'fjörður', 'höfn', 'selur',
+      'hlaupahjól', 'sólskin', 'fallegur', 'falleg', 'fallegt'
+    ];
+
+    const FlashcardsGame = () => {
+      const [userName, setUserName] = useState('');
+      const [userNameInput, setUserNameInput] = useState('');
+      const [gameStarted, setGameStarted] = useState(false);
+      const [currentCardIndex, setCurrentCardIndex] = useState(0);
+      const [isFlipped, setIsFlipped] = useState(false);
+      const [translation, setTranslation] = useState('');
+      const [isLoadingTranslation, setIsLoadingTranslation] = useState(false);
+      const [cardsLearned, setCardsLearned] = useState([]);
+      const [shuffledVocab, setShuffledVocab] = useState([]);
+      const [userLanguage, setUserLanguage] = useState('');
+
+      useEffect(() => {
+        // Stokka orð þegar leikur byrjar
+        if (gameStarted && shuffledVocab.length === 0) {
+          const shuffled = [...VOCABULARY].sort(() => Math.random() - 0.5);
+          setShuffledVocab(shuffled);
+        }
+      }, [gameStarted]);
+
+      const detectLanguage = async (name) => {
+        // Reyna að greina tungumál út frá nafni
+        // Þetta er einfaldað - í raunveruleika myndum við nota betri greiningu
+        const commonLanguages = {
+          // Arabísk nöfn
+          'mohammed': 'ar',
+          'ali': 'ar',
+          'fatima': 'ar',
+          'ahmad': 'ar',
+          // Pólsk nöfn
+          'wojciech': 'pl',
+          'kasia': 'pl',
+          'marcin': 'pl',
+          'agnieszka': 'pl',
+          // Spænsk nöfn
+          'jose': 'es',
+          'maria': 'es',
+          'carlos': 'es',
+          'ana': 'es',
+          // Portúgölsk nöfn
+          'joão': 'pt',
+          'pedro': 'pt',
+          // Thailensk nöfn
+          'somchai': 'th',
+          'niran': 'th',
+          // Kínversk nöfn
+          'wei': 'zh',
+          'li': 'zh',
+          'wang': 'zh',
+          // Japönsk nöfn
+          'yuki': 'ja',
+          'kenji': 'ja',
+          'akira': 'ja'
+        };
+
+        const lowerName = name.toLowerCase().trim();
+        
+        // Athuga hvort nafnið passar við þekkt nöfn
+        for (const [knownName, lang] of Object.entries(commonLanguages)) {
+          if (lowerName.includes(knownName)) {
+            return lang;
+          }
+        }
+
+        // Default: spyrja OpenAI
+        try {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'sk-proj-...'}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4',
+              messages: [{
+                role: 'user',
+                content: `Based on this name: "${name}", what is the most likely native language? Reply with ONLY the ISO 639-1 language code (2 letters). For example: "en", "es", "ar", "pl", "th", "zh", "ja", etc.`
+              }],
+              temperature: 0.3,
+              max_tokens: 10
+            })
+          });
+
+          const data = await response.json();
+          const detectedLang = data.choices[0].message.content.trim().toLowerCase();
+          return detectedLang;
+        } catch (error) {
+          console.error('Language detection error:', error);
+          return 'en'; // Default til ensku
+        }
+      };
+
+      const startGame = async () => {
+        if (userNameInput.trim().length < 2) {
+          alert('Vinsamlegast skrifaðu nafnið þitt!');
+          return;
+        }
+        
+        setUserName(userNameInput);
+        
+        // Greina tungumál
+        const lang = await detectLanguage(userNameInput);
+        setUserLanguage(lang);
+        
+        setGameStarted(true);
+      };
+
+      const getTranslation = async (icelandicWord, targetLang) => {
+        setIsLoadingTranslation(true);
+        try {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'sk-proj-...'}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4',
+              messages: [{
+                role: 'user',
+                content: `Translate this Icelandic word to ${getLanguageName(targetLang)}: "${icelandicWord}". Reply with ONLY the translation, nothing else. If it's an adjective, give the most common form.`
+              }],
+              temperature: 0.3,
+              max_tokens: 20
+            })
+          });
+
+          const data = await response.json();
+          const translatedWord = data.choices[0].message.content.trim();
+          setTranslation(translatedWord);
+        } catch (error) {
+          console.error('Translation error:', error);
+          setTranslation('(þýðing mistókst)');
+        } finally {
+          setIsLoadingTranslation(false);
+        }
+      };
+
+      const getLanguageName = (code) => {
+        const languages = {
+          'en': 'English',
+          'es': 'Spanish',
+          'ar': 'Arabic',
+          'pl': 'Polish',
+          'th': 'Thai',
+          'zh': 'Chinese',
+          'ja': 'Japanese',
+          'pt': 'Portuguese',
+          'fr': 'French',
+          'de': 'German',
+          'ru': 'Russian',
+          'vi': 'Vietnamese'
+        };
+        return languages[code] || 'English';
+      };
+
+      const handleCardClick = async () => {
+        if (!isFlipped) {
+          // Snúa spjaldi og sækja þýðingu
+          setIsFlipped(true);
+          if (!translation) {
+            await getTranslation(shuffledVocab[currentCardIndex], userLanguage);
+          }
+        } else {
+          // Snúa til baka
+          setIsFlipped(false);
+        }
+      };
+
+      const markAsLearned = () => {
+        const currentWord = shuffledVocab[currentCardIndex];
+        if (!cardsLearned.includes(currentWord)) {
+          setCardsLearned([...cardsLearned, currentWord]);
+        }
+        nextCard();
+      };
+
+      const nextCard = () => {
+        if (currentCardIndex < shuffledVocab.length - 1) {
+          setCurrentCardIndex(currentCardIndex + 1);
+          setIsFlipped(false);
+          setTranslation('');
+        }
+      };
+
+      const previousCard = () => {
+        if (currentCardIndex > 0) {
+          setCurrentCardIndex(currentCardIndex - 1);
+          setIsFlipped(false);
+          setTranslation('');
+        }
+      };
+
+      const resetGame = () => {
+        setCurrentCardIndex(0);
+        setIsFlipped(false);
+        setTranslation('');
+        setCardsLearned([]);
+        const shuffled = [...VOCABULARY].sort(() => Math.random() - 0.5);
+        setShuffledVocab(shuffled);
+      };
+
+      // Name input skjár
+      if (!gameStarted) {
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <button 
+                  onClick={() => window.history.back()} 
+                  className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+                >
+                  ← Til baka
+                </button>
+                <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flashcards</h1>
+                <p className="text-gray-500 text-sm font-light">Kafli 5 - Esjan er falleg · A1-A2</p>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-6 mt-8">
+              
+              {/* Instructions */}
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                <h2 className="text-xl font-normal text-gray-800 mb-3">📝 Hvað er þetta?</h2>
+                <ul className="space-y-2 text-gray-700 font-light mb-4">
+                  <li>• Þú munt sjá {VOCABULARY.length} orð úr kafla 5</li>
+                  <li>• Orðin eru á íslensku</li>
+                  <li>• Smelltu á spjaldið til að sjá þýðingu á þínu tungumáli</li>
+                  <li>• Við greinumh tungumálið þitt út frá nafninu þínu</li>
+                  <li>• Merktu við orð sem þú hefur lært!</li>
+                </ul>
+              </div>
+
+              {/* Name input */}
+              <div className="name-input bg-white rounded-lg shadow-xl p-12 text-center">
+                <div className="text-6xl mb-6">👋</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">
+                  Hvað heitir þú?
+                </h2>
+                <p className="text-gray-600 font-light mb-8">
+                  Við notum nafnið þitt til að greina tungumálið þitt og þýða orðin fyrir þig.
+                </p>
+                <input
+                  type="text"
+                  value={userNameInput}
+                  onChange={(e) => setUserNameInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      startGame();
+                    }
+                  }}
+                  placeholder="Skrifaðu nafnið þitt hér..."
+                  className="w-full max-w-md px-6 py-4 text-xl border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 mb-6 text-center"
+                  autoFocus
+                />
+                <button
+                  onClick={startGame}
+                  className="bg-blue-600 text-white px-8 py-4 rounded-lg text-xl font-normal hover:bg-blue-700 transition-colors"
+                >
+                  ✨ Byrja að læra
+                </button>
+              </div>
+
+            </main>
+          </div>
+        );
+      }
+
+      // Finished skjár
+      if (currentCardIndex >= shuffledVocab.length) {
+        return (
+          <div className="min-h-screen pb-12">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flashcards</h1>
+                <p className="text-gray-500 text-sm font-light">Kafli 5 - Esjan er falleg · A1-A2</p>
+              </div>
+            </header>
+
+            <main className="max-w-4xl mx-auto px-6 mt-8">
+              <div className="bg-white rounded-lg shadow-xl p-12 text-center">
+                <div className="text-6xl mb-6">🎉</div>
+                <h2 className="text-3xl font-light text-gray-800 mb-4">
+                  Til hamingju, {userName}!
+                </h2>
+                <p className="text-xl text-gray-600 font-light mb-8">
+                  Þú hefur séð öll {shuffledVocab.length} orðin!
+                </p>
+                <div className="text-5xl font-bold text-blue-600 mb-8">
+                  {cardsLearned.length} / {shuffledVocab.length} lærð
+                </div>
+                <button
+                  onClick={resetGame}
+                  className="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-normal hover:bg-blue-700 transition-colors"
+                >
+                  🔄 Byrja aftur
+                </button>
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      const currentWord = shuffledVocab[currentCardIndex];
+      const progress = ((currentCardIndex + 1) / shuffledVocab.length) * 100;
+      const isLearned = cardsLearned.includes(currentWord);
+
+      // Flashcard skjár
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h1 className="text-2xl font-light text-gray-800">🃏 Flashcards</h1>
+                  <p className="text-gray-500 text-sm font-light">Hæ, {userName}! 👋</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500 font-light">Lærð orð</div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {cardsLearned.length} / {shuffledVocab.length}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div 
+                  className="progress-bar bg-blue-600 h-3 rounded-full"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-gray-500 font-light mt-2 text-center">
+                Orð {currentCardIndex + 1} af {shuffledVocab.length}
+              </p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8">
+            
+            {/* Instructions */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-center">
+              <p className="text-blue-800 font-light">
+                💡 <strong>Smelltu á spjaldið</strong> til að snúa því og sjá þýðingu
+              </p>
+            </div>
+
+            {/* Flashcard */}
+            <div 
+              className={`flashcard card-enter mb-6 ${isFlipped ? 'flipped' : ''}`}
+              onClick={handleCardClick}
+              style={{ height: '400px' }}
+            >
+              <div className="flashcard-inner">
+                
+                {/* Front - Icelandic */}
+                <div className="flashcard-front shadow-2xl">
+                  <div className="text-7xl font-bold mb-4">{currentWord}</div>
+                  <div className="text-xl font-light opacity-80">íslenska</div>
+                  {isLearned && (
+                    <div className="absolute top-4 right-4 text-4xl">✅</div>
+                  )}
+                </div>
+
+                {/* Back - Translation */}
+                <div className="flashcard-back shadow-2xl">
+                  {isLoadingTranslation ? (
+                    <div>
+                      <div className="text-4xl mb-4">⏳</div>
+                      <div className="text-xl font-light">Þýði...</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-7xl font-bold mb-4">{translation}</div>
+                      <div className="text-xl font-light opacity-80">
+                        {getLanguageName(userLanguage)}
+                      </div>
+                    </div>
+                  )}
+                  {isLearned && (
+                    <div className="absolute top-4 right-4 text-4xl">✅</div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex gap-4 justify-center mb-6">
+              <button
+                onClick={previousCard}
+                disabled={currentCardIndex === 0}
+                className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-normal hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ← Fyrra orð
+              </button>
+              
+              <button
+                onClick={markAsLearned}
+                className={`px-8 py-3 rounded-lg font-normal transition-colors ${
+                  isLearned
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {isLearned ? '✅ Lært!' : '✓ Merkja sem lært'}
+              </button>
+
+              <button
+                onClick={nextCard}
+                disabled={currentCardIndex === shuffledVocab.length - 1}
+                className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-normal hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Næsta orð →
+              </button>
+            </div>
+
+            {/* Hint */}
+            <div className="text-center">
+              <p className="text-sm text-gray-500 font-light">
+                ⌨️ Þú getur líka notað örvatakkana til að fara á milli orða
+              </p>
+            </div>
+
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<FlashcardsGame />);
+  </script>
+</body>
+</html>
