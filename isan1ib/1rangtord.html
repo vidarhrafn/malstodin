@@ -385,12 +385,24 @@
       const [score, setScore] = useState(0);
       const [gameFinished, setGameFinished] = useState(false);
       const [shuffledQuestions, setShuffledQuestions] = useState([]);
+      const [shuffledWords, setShuffledWords] = useState([]);
 
       useEffect(() => {
         // Shuffle questions on load
         const shuffled = [...QUESTIONS].sort(() => Math.random() - 0.5);
         setShuffledQuestions(shuffled);
+        // Shuffle words for first question
+        if (shuffled.length > 0) {
+          setShuffledWords([...shuffled[0].words].sort(() => Math.random() - 0.5));
+        }
       }, []);
+
+      useEffect(() => {
+        // Shuffle words whenever question changes
+        if (shuffledQuestions[currentQuestion]) {
+          setShuffledWords([...shuffledQuestions[currentQuestion].words].sort(() => Math.random() - 0.5));
+        }
+      }, [currentQuestion, shuffledQuestions]);
 
       const question = shuffledQuestions[currentQuestion];
 
@@ -436,6 +448,9 @@
         setShowResult(false);
         setIsCorrect(false);
         setGameFinished(false);
+        if (shuffled.length > 0) {
+          setShuffledWords([...shuffled[0].words].sort(() => Math.random() - 0.5));
+        }
       };
 
       const getDifficultyColor = (difficulty) => {
@@ -456,7 +471,7 @@
         }
       };
 
-      if (!question) {
+      if (!question || shuffledWords.length === 0) {
         return (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-2xl text-gray-600">Hleð...</div>
@@ -573,9 +588,9 @@
                 </div>
               )}
 
-              {/* Words */}
+              {/* Words - NOW SHUFFLED */}
               <div className="grid grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
-                {question.words.map((word, index) => {
+                {shuffledWords.map((word, index) => {
                   let className = "word-card bg-white border-4 border-gray-300 rounded-2xl p-8 text-center";
                   
                   if (selectedWord === word && !showResult) {
