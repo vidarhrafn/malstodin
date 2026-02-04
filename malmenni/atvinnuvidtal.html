@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>💼 Atvinnuviðtalið</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(to bottom, #f0f4f8 0%, #d9e2ec 100%);
+            min-height: 100vh;
+            margin: 0;
+        }
+        .recording {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        .playing {
+            animation: playPulse 0.6s ease-in-out infinite;
+        }
+        @keyframes playPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ===== ICONS =====
+        const SendIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        );
+
+        const MicIcon = ({ isRecording }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill={isRecording ? "currentColor" : "none"}
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={`w-8 h-8 ${isRecording ? 'recording text-red-500' : ''}`}
+            >
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+        );
+
+        const SpeakerIcon = ({ isPlaying }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={`w-8 h-8 ${isPlaying ? 'playing text-blue-600' : 'text-blue-500'}`}
+            >
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            </svg>
+        );
+
+        const HelpIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        );
+
+        const CopyIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+        );
+
+        const CheckIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        );
+
+        // ===== API FUNCTIONS =====
+        async function callOpenAI(messages, max_tokens = 500, model = 'gpt-4o-mini', temperature = 0.4) {
+            const r = await fetch('/.netlify/functions/openai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    messages: messages,
+                    max_tokens: max_tokens,
+                    temperature: temperature
+                }),
+            });
+            const data = await r.json();
+            if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+            return data.content;
+        }
+
+        async function fetchAudio(text) {
+            const r = await fetch('/.netlify/functions/speak', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text_to_speak: text }),
+            });
+
+            const data = await r.json();
+            
+            if (!r.ok || data.error || !data.audio_base64) {
+                throw new Error(data.error || 'Audio error');
+            }
+
+            return `data:audio/mp3;base64,${data.audio_base64}`;
+        }
+
+        // ===== SYSTEM PROMPT =====
+        const INTERVIEWER_SYSTEM_PROMPT = `
+Þú ert vingjarnlegur og faglegur yfirmaður sem tekur atvinnuviðtal á Íslandi. Þú talar við nemendur sem eru að læra íslensku á A1-A2 stigi.
+
+## TUNGUMÁL
+- Talaðu EINUNGIS íslensku (nema þegar nemandi biður um hjálp)
+- Notaðu stuttar og skýrar setningar
+- Vertu þolinmóður ef nemandi gerir málfræðivillur
+- Leiðréttu óbeint með því að endurtaka rétt (t.d. ef nemandi segir "Ég vinn í búð" svaraðu "Frábært, þú vinnur í búð")
+
+## EF NEMANDI TALAR ANNAÐ TUNGUMÁL
+Ef nemandi skrifar á öðru tungumáli en íslensku (og biður EKKI um hjálp), svaraðu:
+"Afsakið, ég skil ekki. Geturðu sagt þetta á íslensku?"
+Og hjálpaðu með dæmi.
+
+## HJÁLP
+Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
+1. Svaraðu á SAMA tungumáli og nemandinn spurði á
+2. Gefðu íslenska setninguna/orðið
+3. Haltu síðan áfram á íslensku
+
+## VIÐTALSFERLIÐ
+
+### 1. BYRJUN (fyrsta skilaboð)
+- Heilsaðu: "Góðan daginn! Velkomin í viðtalið."
+- Kynna þig: "Ég heiti [nafn] og ég er [staða] hjá fyrirtækinu."
+- Spyrðu: "Viltu byrja á því að segja mér aðeins frá þér?"
+
+### 2. GRUNNUPPLÝSINGAR
+- Hvað heitir þú?
+- Segðu mér aðeins frá þér
+- Hvað ertu að gera núna? (skóli/vinna)
+
+### 3. REYNSLA OG HÆFILEIKAR
+- Hvaða reynslu hefur þú?
+- Hvað ert þú góður/góð í?
+- Hvað hefur þú lært í skólanum/vinnunni?
+- Getur þú gefið mér dæmi um...?
+
+### 4. HVATNING
+- Af hverju langar þig að vinna hjá okkur?
+- Hvað gerir þig að góðum starfsmanni?
+- Hvað finnst þér áhugavert við þessa vinnu?
+
+### 5. FRAMTÍÐARSÝN
+- Hvar sérðu þig eftir 5 ár?
+- Hvað vilt þú læra meira um?
+
+### 6. SPURNINGAR FRÁ NEMANDA
+- Áttu einhverjar spurningar?
+- Viltu vita eitthvað um fyrirtækið?
+
+### 7. LOK VIÐTALS
+Þegar búið er að spyrja um allt efnið, segðu:
+"Takk fyrir að koma. Við heyrumst fljótlega!"
+Bættu síðan NÁKVÆMLEGA við í LOK skilaboðanna: [VIÐTALI LOKIÐ]
+
+## MIKILVÆGT
+- Haltu spurningum STUTTUM (1-2 setningar)
+- Vertu hvetjandi og jákvæður
+- Spurðu EINA spurningu í einu
+- Gefðu nemanda tíma til að svara
+- Vertu náttúrulegur og faglegur
+`.trim();
+
+        const FEEDBACK_SYSTEM_PROMPT = `
+Þú ert íslenskukennari. Gefðu nemanda hrós eftir æfingu í atvinnuviðtali.
+
+1. FYRST á íslensku (3-4 setningar):
+- Hrósaðu
+- Nefndu 2-3 setningar/orð sem nemandinn notaði vel
+
+2. SÍÐAN á móðurmáli nemandans (greindu það úr samtalinu):
+- Þýddu hrósið
+- Gefðu 1-2 ráð til að bæta sig
+
+Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
+`.trim();
+
+        // ===== MAIN COMPONENT =====
+        const Atvinnuvidstal = () => {
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [isRecording, setIsRecording] = useState(false);
+            const [recognition, setRecognition] = useState(null);
+            const [playingIndex, setPlayingIndex] = useState(null);
+            const [audioCache, setAudioCache] = useState({});
+            const [showHelp, setShowHelp] = useState(false);
+            const [helpInput, setHelpInput] = useState('');
+            const [helpResponse, setHelpResponse] = useState('');
+            const [helpLoading, setHelpLoading] = useState(false);
+            const [finished, setFinished] = useState(false);
+            const [feedback, setFeedback] = useState('');
+            const [started, setStarted] = useState(false);
+            const [copied, setCopied] = useState(false);
+            const messagesEndRef = useRef(null);
+            const currentAudioRef = useRef(null);
+
+            // Initialize speech recognition
+            useEffect(() => {
+                if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+                    const recognitionInstance = new window.webkitSpeechRecognition();
+                    recognitionInstance.lang = 'is-IS';
+                    recognitionInstance.continuous = false;
+                    recognitionInstance.interimResults = false;
+
+                    recognitionInstance.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        setInput(transcript);
+                        setIsRecording(false);
+                    };
+
+                    recognitionInstance.onerror = () => setIsRecording(false);
+                    recognitionInstance.onend = () => setIsRecording(false);
+
+                    setRecognition(recognitionInstance);
+                }
+            }, []);
+
+            // Scroll to bottom
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            // Play audio
+            const playAudio = async (index, text) => {
+                if (currentAudioRef.current) {
+                    currentAudioRef.current.pause();
+                    currentAudioRef.current = null;
+                }
+
+                setPlayingIndex(index);
+
+                try {
+                    let audioUrl = audioCache[index];
+                    
+                    if (!audioUrl) {
+                        audioUrl = await fetchAudio(text);
+                        setAudioCache(prev => ({ ...prev, [index]: audioUrl }));
+                    }
+
+                    const audio = new Audio(audioUrl);
+                    currentAudioRef.current = audio;
+                    
+                    audio.onended = () => {
+                        setPlayingIndex(null);
+                        currentAudioRef.current = null;
+                    };
+                    audio.onerror = () => {
+                        setPlayingIndex(null);
+                        currentAudioRef.current = null;
+                    };
+                    
+                    await audio.play();
+                } catch (e) {
+                    console.error('Audio error:', e);
+                    setPlayingIndex(null);
+                }
+            };
+
+            // Copy feedback
+            const copyFeedback = async () => {
+                try {
+                    await navigator.clipboard.writeText(feedback);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                } catch (e) {
+                    console.error('Copy error:', e);
+                }
+            };
+
+            // Start conversation
+            const startConversation = async () => {
+                setStarted(true);
+                setLoading(true);
+
+                try {
+                    const apiMessages = [
+                        { role: 'system', content: INTERVIEWER_SYSTEM_PROMPT },
+                        { role: 'user', content: '[Umsækjandi kemur inn í viðtalið]' }
+                    ];
+
+                    const response = await callOpenAI(apiMessages);
+                    setMessages([{ role: 'assistant', content: response }]);
+
+                } catch (error) {
+                    console.error('Error:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Send message
+            const sendMessage = async () => {
+                if (!input.trim() || loading) return;
+
+                const userMessage = input.trim();
+                setInput('');
+                
+                const newMessages = [...messages, { role: 'user', content: userMessage }];
+                setMessages(newMessages);
+                setLoading(true);
+
+                try {
+                    const apiMessages = [
+                        { role: 'system', content: INTERVIEWER_SYSTEM_PROMPT },
+                        { role: 'user', content: '[Umsækjandi kemur inn]' },
+                        ...newMessages.map(m => ({ role: m.role, content: m.content }))
+                    ];
+
+                    const response = await callOpenAI(apiMessages);
+                    
+                    // Check if finished
+                    if (response.includes('[VIÐTALI LOKIÐ]')) {
+                        const cleanResponse = response.replace('[VIÐTALI LOKIÐ]', '').trim();
+                        setMessages([...newMessages, { role: 'assistant', content: cleanResponse }]);
+                        
+                        // Get feedback
+                        const allMessages = [...newMessages, { role: 'assistant', content: cleanResponse }];
+                        const feedbackMsgs = [
+                            { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
+                            { role: 'user', content: `Viðtalið:\n${allMessages.map(m => `${m.role === 'user' ? 'Nemandi' : 'Yfirmaður'}: ${m.content}`).join('\n')}` }
+                        ];
+                        
+                        const feedbackText = await callOpenAI(feedbackMsgs, 500);
+                        setFeedback(feedbackText);
+                        setFinished(true);
+                    } else {
+                        setMessages([...newMessages, { role: 'assistant', content: response }]);
+                    }
+
+                } catch (error) {
+                    console.error('Error:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Toggle recording
+            const toggleRecording = () => {
+                if (!recognition) {
+                    alert('Talgreining er ekki studd í þessum vafra. Prófaðu Chrome.');
+                    return;
+                }
+
+                if (isRecording) {
+                    recognition.stop();
+                } else {
+                    setInput('');
+                    recognition.start();
+                    setIsRecording(true);
+                }
+            };
+
+            // Help
+            const askForHelp = async () => {
+                if (!helpInput.trim() || helpLoading) return;
+                setHelpLoading(true);
+                
+                try {
+                    const helpMessages = [
+                        { 
+                            role: 'system', 
+                            content: `Hjálpaðu nemanda í atvinnuviðtali. Svaraðu á SAMA tungumáli og nemandinn skrifar. Gefðu íslenska setninguna sem hann þarf.`
+                        },
+                        { role: 'user', content: helpInput }
+                    ];
+
+                    const response = await callOpenAI(helpMessages, 200);
+                    setHelpResponse(response);
+                } catch (e) {
+                    setHelpResponse('Villa. Reyndu aftur.');
+                } finally {
+                    setHelpLoading(false);
+                }
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            };
+
+            // Get assistant message number
+            const getAssistantNumber = (index) => {
+                let count = 0;
+                for (let i = 0; i <= index; i++) {
+                    if (messages[i].role === 'assistant') count++;
+                }
+                return count;
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col" style={{ maxHeight: '100vh' }}>
+                    {/* Header */}
+                    <header className="bg-white shadow-sm py-4 px-5">
+                        <div className="flex items-center gap-4">
+                            <span className="text-4xl">💼</span>
+                            <div>
+                                <h1 className="text-2xl font-medium text-gray-800">Atvinnuviðtalið</h1>
+                                <p className="text-base text-gray-500">Hlutverkaleikur · A1-A2</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main */}
+                    <main className="flex-1 flex flex-col overflow-hidden p-4">
+                        
+                        {/* Start screen */}
+                        {!started && (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                                <div className="text-8xl mb-6">💼</div>
+                                <h2 className="text-3xl font-light text-gray-800 mb-3">Velkomin í atvinnuviðtalið!</h2>
+                                <p className="text-xl text-gray-600 font-light mb-8">Þú ert að fara í viðtal. Svaraðu spurningum yfirmannsins.</p>
+                                <button
+                                    onClick={startConversation}
+                                    className="px-10 py-5 bg-blue-500 text-white text-2xl rounded-2xl hover:bg-blue-600 transition-colors font-light"
+                                >
+                                    Byrja viðtal
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Conversation */}
+                        {started && !finished && (
+                            <>
+                                {/* Messages */}
+                                <div className="flex-1 overflow-y-auto bg-white rounded-2xl shadow-sm p-5 mb-4">
+                                    <div className="space-y-5">
+                                        {messages.map((msg, idx) => (
+                                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                {msg.role === 'assistant' ? (
+                                                    <button
+                                                        onClick={() => playAudio(idx, msg.content)}
+                                                        disabled={playingIndex !== null && playingIndex !== idx}
+                                                        className={`flex items-center gap-4 px-6 py-4 rounded-full transition-colors ${
+                                                            playingIndex === idx 
+                                                                ? 'bg-blue-100 border-3 border-blue-400' 
+                                                                : 'bg-gray-100 hover:bg-blue-50 border-3 border-transparent'
+                                                        } disabled:opacity-50`}
+                                                        style={{ borderWidth: '3px' }}
+                                                    >
+                                                        <SpeakerIcon isPlaying={playingIndex === idx} />
+                                                        <span className="text-2xl font-medium text-gray-700">
+                                                            {getAssistantNumber(idx)}
+                                                        </span>
+                                                    </button>
+                                                ) : (
+                                                    <div className="px-6 py-4 rounded-2xl bg-blue-500 text-white text-lg font-light max-w-[85%]">
+                                                        {msg.content}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        
+                                        {loading && (
+                                            <div className="flex justify-start">
+                                                <div className="px-6 py-4 rounded-full bg-gray-100">
+                                                    <div className="flex gap-2">
+                                                        <div className="w-4 h-4 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                                        <div className="w-4 h-4 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                                        <div className="w-4 h-4 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div ref={messagesEndRef} />
+                                    </div>
+                                </div>
+
+                                {/* Input */}
+                                <div className="bg-white rounded-2xl shadow-sm p-4">
+                                    <div className="flex gap-3 mb-3">
+                                        <button
+                                            onClick={toggleRecording}
+                                            disabled={loading}
+                                            className={`p-5 rounded-2xl transition-colors ${
+                                                isRecording 
+                                                    ? 'bg-red-500 text-white' 
+                                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                            } disabled:opacity-50`}
+                                        >
+                                            <MicIcon isRecording={isRecording} />
+                                        </button>
+                                        <input
+                                            type="text"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            onKeyPress={handleKeyPress}
+                                            disabled={loading}
+                                            placeholder={isRecording ? "Hlustar..." : "Skrifaðu hér..."}
+                                            className="flex-1 px-5 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-blue-500 text-lg font-light"
+                                        />
+                                        <button
+                                            onClick={sendMessage}
+                                            disabled={!input.trim() || loading}
+                                            className="px-6 py-4 bg-blue-500 text-white rounded-2xl hover:bg-blue-600 disabled:bg-gray-300 transition-colors"
+                                        >
+                                            <SendIcon />
+                                        </button>
+                                    </div>
+                                    
+                                    {isRecording && (
+                                        <p className="text-base text-red-500 mb-3 font-medium">🔴 Talaðu núna...</p>
+                                    )}
+
+                                    {/* Help */}
+                                    <button
+                                        onClick={() => setShowHelp(!showHelp)}
+                                        className="flex items-center gap-2 text-base text-gray-500 hover:text-gray-700 py-2"
+                                    >
+                                        <HelpIcon />
+                                        <span>Hjálp á þínu máli</span>
+                                    </button>
+
+                                    {showHelp && (
+                                        <div className="mt-4 p-4 bg-yellow-50 rounded-2xl border-2 border-yellow-200">
+                                            <div className="flex gap-3">
+                                                <input
+                                                    type="text"
+                                                    value={helpInput}
+                                                    onChange={(e) => setHelpInput(e.target.value)}
+                                                    onKeyPress={(e) => e.key === 'Enter' && askForHelp()}
+                                                    placeholder="How do I say...?"
+                                                    className="flex-1 px-4 py-3 border-2 border-yellow-300 rounded-xl text-base"
+                                                />
+                                                <button
+                                                    onClick={askForHelp}
+                                                    disabled={helpLoading}
+                                                    className="px-5 py-3 bg-yellow-500 text-white rounded-xl text-lg font-medium"
+                                                >
+                                                    {helpLoading ? '...' : '?'}
+                                                </button>
+                                            </div>
+                                            {helpResponse && (
+                                                <p className="mt-4 text-base text-gray-700 bg-white p-4 rounded-xl">{helpResponse}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Finished */}
+                        {finished && (
+                            <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm p-6 overflow-y-auto">
+                                <div className="text-center mb-5">
+                                    <div className="text-7xl mb-3">🎉</div>
+                                    <h2 className="text-3xl font-light text-gray-800">Vel gert!</h2>
+                                </div>
+                                <div className="flex-1 bg-green-50 rounded-2xl p-5 mb-5 overflow-y-auto">
+                                    <p className="text-lg text-gray-700 font-light whitespace-pre-wrap leading-relaxed">{feedback}</p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={copyFeedback}
+                                        className="flex-1 py-5 bg-green-500 text-white rounded-2xl hover:bg-green-600 text-xl font-light flex items-center justify-center gap-3 transition-colors"
+                                    >
+                                        {copied ? <CheckIcon /> : <CopyIcon />}
+                                        {copied ? 'Afritað!' : 'Afrita'}
+                                    </button>
+                                    <button
+                                        onClick={() => window.location.reload()}
+                                        className="flex-1 py-5 bg-blue-500 text-white rounded-2xl hover:bg-blue-600 text-xl font-light transition-colors"
+                                    >
+                                        Reyna aftur
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<Atvinnuvidstal />);
+    </script>
+</body>
+</html>
