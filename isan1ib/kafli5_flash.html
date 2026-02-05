@@ -148,7 +148,8 @@
 
     const FlashcardsGame = () => {
       const [gameStarted, setGameStarted] = useState(false);
-      const [selectedLanguage, setSelectedLanguage] = useState(null);
+      const [userLanguage, setUserLanguage] = useState('');
+      const [languageInput, setLanguageInput] = useState('');
       const [currentCardIndex, setCurrentCardIndex] = useState(0);
       const [isFlipped, setIsFlipped] = useState(false);
       const [translation, setTranslation] = useState('');
@@ -163,20 +164,22 @@
         }
       }, [gameStarted]);
 
-      const startGame = (language) => {
-        setSelectedLanguage(language);
+      const startGame = () => {
+        if (languageInput.trim().length < 2) {
+          alert('Vinsamlegast skrifaðu móðurmálið þitt!');
+          return;
+        }
+        setUserLanguage(languageInput.trim());
         setGameStarted(true);
       };
 
       const getTranslation = async (icelandicWord, targetLang) => {
         setIsLoadingTranslation(true);
         try {
-          const languageName = LANGUAGES.find(l => l.code === targetLang)?.name || 'English';
-          
           const translatedWord = await callOpenAI([
             {
               role: 'user',
-              content: `Translate this Icelandic word to ${languageName}: "${icelandicWord}". Reply with ONLY the translation, nothing else. No explanations, no extra text. If it's an adjective, give the most common form.`
+              content: `Translate this Icelandic word to ${targetLang}: "${icelandicWord}". Reply with ONLY the translation, nothing else. No explanations, no extra text. If it's an adjective, give the most common form.`
             }
           ], 30, 'gpt-4o-mini', 0.3);
           
@@ -193,7 +196,7 @@
         if (!isFlipped) {
           setIsFlipped(true);
           if (!translation) {
-            await getTranslation(shuffledVocab[currentCardIndex], selectedLanguage.code);
+            await getTranslation(shuffledVocab[currentCardIndex], userLanguage);
           }
         } else {
           setIsFlipped(false);
@@ -263,27 +266,53 @@
                 </ul>
               </div>
 
-              {/* Language selection */}
+              {/* Language input */}
               <div className="name-input bg-white rounded-lg shadow-xl p-12">
                 <div className="text-6xl mb-6 text-center">🌍</div>
                 <h2 className="text-3xl font-light text-gray-800 mb-4 text-center">
-                  Veldu tungumál
+                  Hvert er móðurmál þitt?
                 </h2>
                 <p className="text-gray-600 font-light mb-8 text-center">
-                  Hvaða tungumál viltu sjá þýðingarnar á?
+                  Skrifaðu nafn tungumálsins þíns (t.d. English, Polski, العربية, ไทย, 中文)
                 </p>
                 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
-                  {LANGUAGES.map((lang) => (
-                    <button
-                      key={lang.code}
-                      onClick={() => startGame(lang)}
-                      className="language-button bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border-2 border-blue-200 rounded-lg p-6 text-center"
-                    >
-                      <div className="text-4xl mb-2">{lang.emoji}</div>
-                      <div className="text-lg font-normal text-gray-800">{lang.name}</div>
-                    </button>
-                  ))}
+                <input
+                  type="text"
+                  value={languageInput}
+                  onChange={(e) => setLanguageInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      startGame();
+                    }
+                  }}
+                  placeholder="Móðurmál þitt..."
+                  className="w-full max-w-md mx-auto block px-6 py-4 text-xl border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 mb-6 text-center"
+                  autoFocus
+                />
+                
+                <div className="text-center">
+                  <button
+                    onClick={startGame}
+                    className="bg-blue-600 text-white px-8 py-4 rounded-lg text-xl font-normal hover:bg-blue-700 transition-colors"
+                  >
+                    ✨ Byrja að læra
+                  </button>
+                </div>
+
+                {/* Dæmi */}
+                <div className="mt-8 text-center">
+                  <p className="text-sm text-gray-500 font-light mb-2">💡 Dæmi:</p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {['English', 'Español', 'Polski', 'العربية', 'ไทย', '中文', 'Português'].map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => setLanguageInput(lang)}
+                        className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm transition-colors"
+                      >
+                        {lang}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -325,7 +354,8 @@
                   <button
                     onClick={() => {
                       setGameStarted(false);
-                      setSelectedLanguage(null);
+                      setUserLanguage('');
+                      setLanguageInput('');
                       setCurrentCardIndex(0);
                       setCardsLearned([]);
                       setShuffledVocab([]);
@@ -354,7 +384,7 @@
                 <div>
                   <h1 className="text-2xl font-light text-gray-800">🃏 Flashcards</h1>
                   <p className="text-gray-500 text-sm font-light">
-                    {selectedLanguage.emoji} {selectedLanguage.name}
+                    🌍 {userLanguage}
                   </p>
                 </div>
                 <div className="text-right">
@@ -415,7 +445,7 @@
                     <div>
                       <div className="text-7xl font-bold mb-4">{translation}</div>
                       <div className="text-xl font-light opacity-80">
-                        {selectedLanguage.name}
+                        {userLanguage}
                       </div>
                     </div>
                   )}
