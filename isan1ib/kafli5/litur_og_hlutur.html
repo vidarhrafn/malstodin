@@ -48,14 +48,61 @@
       ];
 
       const writingQuestions = [
-        { emoji: '🍳', noun: 'panna', gender: 'kvk', genderName: 'kvenkyn', correct: 'svört' },
-        { emoji: '👕', noun: 'bolur', gender: 'kk', genderName: 'karlkyn', correct: 'grænn' },
-        { emoji: '🚽', noun: 'klósett', gender: 'hk', genderName: 'hvorugkyn', correct: 'hvítt' },
-        { emoji: '🔪', noun: 'hnífur', gender: 'kk', genderName: 'karlkyn', correct: 'grár' },
-        { emoji: '👗', noun: 'kjóll', gender: 'kk', genderName: 'karlkyn', correct: 'blár' },
-        { emoji: '🧥', noun: 'úlpa', gender: 'kvk', genderName: 'kvenkyn', correct: 'brún' },
-        { emoji: '🪑', noun: 'stóll', gender: 'kk', genderName: 'karlkyn', correct: 'brúnn' },
-        { emoji: '🧼', noun: 'sápa', gender: 'kvk', genderName: 'kvenkyn', correct: 'bleik' }
+        { 
+          emoji: '🍳', 
+          acceptedAnswers: [{ noun: 'panna', gender: 'kvk', adjective: 'svört' }],
+          colorBase: 'svartur',
+          colorForms: { kk: 'svartur', kvk: 'svört', hk: 'svart' }
+        },
+        { 
+          emoji: '👕', 
+          acceptedAnswers: [{ noun: 'bolur', gender: 'kk', adjective: 'grænn' }],
+          colorBase: 'grænn',
+          colorForms: { kk: 'grænn', kvk: 'græn', hk: 'grænt' }
+        },
+        { 
+          emoji: '🚽', 
+          acceptedAnswers: [{ noun: 'klósett', gender: 'hk', adjective: 'hvítt' }],
+          colorBase: 'hvítur',
+          colorForms: { kk: 'hvítur', kvk: 'hvít', hk: 'hvítt' }
+        },
+        { 
+          emoji: '🔪', 
+          acceptedAnswers: [
+            { noun: 'hnífur', gender: 'kk', adjective: 'grár' },
+            { noun: 'hnífur', gender: 'kk', adjective: 'blár' }
+          ],
+          colorBase: 'grár eða blár',
+          colorForms: { kk: ['grár', 'blár'], kvk: ['grá', 'blá'], hk: ['grátt', 'blátt'] }
+        },
+        { 
+          emoji: '👗', 
+          acceptedAnswers: [{ noun: 'kjóll', gender: 'kk', adjective: 'blár' }],
+          colorBase: 'blár',
+          colorForms: { kk: 'blár', kvk: 'blá', hk: 'blátt' }
+        },
+        { 
+          emoji: '🧥', 
+          acceptedAnswers: [
+            { noun: 'úlpa', gender: 'kvk', adjective: 'brún' },
+            { noun: 'jakki', gender: 'kk', adjective: 'brúnn' },
+            { noun: 'frakki', gender: 'kk', adjective: 'brúnn' }
+          ],
+          colorBase: 'brúnn',
+          colorForms: { kk: 'brúnn', kvk: 'brún', hk: 'brúnt' }
+        },
+        { 
+          emoji: '🪑', 
+          acceptedAnswers: [{ noun: 'stóll', gender: 'kk', adjective: 'brúnn' }],
+          colorBase: 'brúnn',
+          colorForms: { kk: 'brúnn', kvk: 'brún', hk: 'brúnt' }
+        },
+        { 
+          emoji: '🧼', 
+          acceptedAnswers: [{ noun: 'sápa', gender: 'kvk', adjective: 'bleik' }],
+          colorBase: 'bleikur',
+          colorForms: { kk: 'bleikur', kvk: 'bleik', hk: 'bleikt' }
+        }
       ];
 
       const getGenderName = (gender) => {
@@ -117,13 +164,47 @@
         }
       };
 
+      const [feedbackMessage, setFeedbackMessage] = useState('');
+
+      const checkWritingAnswer = (answer, question) => {
+        const parts = answer.toLowerCase().trim().split(/\s+/);
+        if (parts.length !== 2) {
+          return { correct: false, message: 'Skrifaðu bæði lýsingarorð og nafnorð (t.d. "svört panna").' };
+        }
+        const [adj, noun] = parts;
+        const matchedNoun = question.acceptedAnswers.find(a => a.noun.toLowerCase() === noun);
+        if (!matchedNoun) {
+          const validNouns = question.acceptedAnswers.map(a => a.noun).join(' / ');
+          return { correct: false, message: `Nafnorðið er ekki rétt. Prófaðu: ${validNouns}` };
+        }
+        const correctAdj = question.acceptedAnswers.find(a => a.noun.toLowerCase() === noun && a.adjective.toLowerCase() === adj);
+        if (correctAdj) {
+          return { correct: true, message: '' };
+        }
+        const colorForms = question.colorForms[matchedNoun.gender];
+        const validColors = Array.isArray(colorForms) ? colorForms : [colorForms];
+        const isValidColor = validColors.some(c => c.toLowerCase() === adj);
+        if (isValidColor) {
+          return { correct: true, message: '' };
+        }
+        const allColorForms = Object.values(question.colorForms).flat();
+        const usedWrongForm = allColorForms.some(c => c.toLowerCase() === adj);
+        if (usedWrongForm) {
+          const genderName = matchedNoun.gender === 'kk' ? 'karlkyn' : matchedNoun.gender === 'kvk' ? 'kvenkyn' : 'hvorugkyn';
+          const correctForm = validColors[0];
+          return { correct: false, message: `Athugaðu að orðið "${matchedNoun.noun}" er ${genderName}. Rétt form er "${correctForm}".` };
+        }
+        return { correct: false, message: `Liturinn er ${question.colorBase}. Reyndu aftur!` };
+      };
+
       const handleWritingSubmit = () => {
         if (!userAnswer.trim()) return;
-        setShowFeedback(true);
         const currentQ = writingQuestions[currentQuestion];
-        const isCorrect = userAnswer.toLowerCase().trim() === currentQ.correct.toLowerCase();
+        const result = checkWritingAnswer(userAnswer, currentQ);
+        setFeedbackMessage(result.message);
+        setShowFeedback(true);
 
-        if (isCorrect) {
+        if (result.correct) {
           if (firstAttempt) setScore(score + 1);
           setTimeout(() => {
             if (currentQuestion < writingQuestions.length - 1) {
@@ -131,6 +212,7 @@
               setUserAnswer('');
               setShowFeedback(false);
               setFirstAttempt(true);
+              setFeedbackMessage('');
             } else {
               setIsComplete(true);
             }
@@ -141,18 +223,21 @@
             setTimeout(() => {
               setUserAnswer('');
               setShowFeedback(false);
-            }, 3000);
+            }, 3500);
           } else {
+            const correctExample = currentQ.acceptedAnswers[0];
+            setFeedbackMessage(`Rétt svar: ${correctExample.adjective} ${correctExample.noun}`);
             setTimeout(() => {
               if (currentQuestion < writingQuestions.length - 1) {
                 setCurrentQuestion(currentQuestion + 1);
                 setUserAnswer('');
                 setShowFeedback(false);
                 setFirstAttempt(true);
+                setFeedbackMessage('');
               } else {
                 setIsComplete(true);
               }
-            }, 3000);
+            }, 3500);
           }
         }
       };
@@ -172,6 +257,7 @@
         setFirstAttempt(true);
         setUserAnswer('');
         setIsComplete(false);
+        setFeedbackMessage('');
       };
 
       const totalQuestions = dropdownQuestions.length + writingQuestions.length;
@@ -268,7 +354,6 @@
 
       const currentQ = writingQuestions[currentQuestion];
       const progress = ((currentQuestion + 1) / writingQuestions.length) * 100;
-      const isCorrect = userAnswer.toLowerCase().trim() === currentQ.correct.toLowerCase();
 
       return (
         <div className="min-h-screen pb-12">
@@ -288,27 +373,27 @@
               </div>
               <div className="text-center mb-8">
                 <div className="text-9xl mb-6">{currentQ.emoji}</div>
-                <p className="text-3xl text-gray-800 font-light">
-                  Þetta er <input
+                <p className="text-3xl text-gray-800 font-light mb-4">
+                  Þetta er{' '}
+                  <input
                     type="text"
                     value={userAnswer}
                     onChange={(e) => setUserAnswer(e.target.value)}
                     onKeyPress={handleKeyPress}
                     disabled={showFeedback}
-                    placeholder="..."
-                    className="text-3xl font-normal border-b-4 border-blue-400 bg-blue-50 px-4 py-2 w-48 text-center rounded focus:outline-none focus:border-blue-600"
+                    placeholder="_____ _____"
+                    className="text-3xl font-normal border-b-4 border-blue-400 bg-blue-50 px-4 py-2 w-64 text-center rounded focus:outline-none focus:border-blue-600"
                     autoFocus
-                  /> <span className="font-normal">{currentQ.noun}</span>.
+                  />.
                 </p>
+                <p className="text-gray-500 font-light text-lg">Skrifaðu lýsingarorð + nafnorð (t.d. „svört panna")</p>
               </div>
               {showFeedback && (
-                <div className={`mb-6 p-6 rounded-lg text-center text-xl font-normal border-2 ${isCorrect ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                  {isCorrect ? (
+                <div className={`mb-6 p-6 rounded-lg text-center text-xl font-normal border-2 ${!feedbackMessage ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
+                  {!feedbackMessage ? (
                     <span>✅ Rétt!</span>
-                  ) : firstAttempt ? (
-                    <span>❌ Ekki rétt. Athugaðu að orðið <strong>{currentQ.noun}</strong> er <strong>{currentQ.genderName}</strong>. Reyndu aftur!</span>
                   ) : (
-                    <span>❌ Ekki rétt. Rétt svar: <strong>{currentQ.correct}</strong></span>
+                    <span>❌ {feedbackMessage}</span>
                   )}
                 </div>
               )}
