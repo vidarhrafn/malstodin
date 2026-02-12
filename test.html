@@ -1,321 +1,99 @@
-<!DOCTYPE html>
-<html lang="is">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>💬 Íslensku Aðstoðarmaðurinn (Azure TTS)</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
-            min-height: 100vh;
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+import { useState } from "react";
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+const wordPairs = [
+  { word: "ungur", answers: ["gamall"] },
+  { word: "súr", answers: ["sætur"] },
+  { word: "kaldur", answers: ["heitur"] },
+  { word: "saddur", answers: ["svangur"] },
+  { word: "dimmur", answers: ["bjartur"] },
+  { word: "góður", answers: ["vondur"] },
+  { word: "hreinn", answers: ["óhreinn", "skítugur"] },
+  { word: "feitur", answers: ["mjór", "grannur"] },
+  { word: "stór", answers: ["lítill"] },
+  { word: "svartur", answers: ["hvítur"] },
+  { word: "glaður", answers: ["leiður"] },
+  { word: "stuttur", answers: ["langur"] },
+  { word: "heilbrigður", answers: ["veikur"] },
+  { word: "duglegur", answers: ["latur"] },
+  { word: "flottur", answers: ["ljótur"] }
+];
 
-        const SendIcon = () => (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-        );
+export default function AndheitiAefing() {
+  const [index, setIndex] = useState(0);
+  const [input, setInput] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [score, setScore] = useState(0);
 
-        const SpeakerIcon = ({ onClick, isSpeaking }) => (
-            <svg 
-                onClick={onClick}
-                xmlns="http://www.w3.org/2000/svg" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className={`w-5 h-5 cursor-pointer transition-colors ${
-                    isSpeaking ? 'text-red-500 animate-pulse' : 'text-green-600 hover:text-green-800'
-                }`}
-            >
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-            </svg>
-        );
+  const current = wordPairs[index];
 
-        async function callOpenAI(messages, max_tokens = 220, model = 'gpt-4o-mini', temperature = 0.3) {
-            const r = await fetch('/.netlify/functions/openai', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    messages: messages,
-                    max_tokens: max_tokens,
-                    model: model,
-                    temperature: temperature,
-                }),
-            });
-            const data = await r.json();
-            if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
-            return data.content; 
-        }
+  const checkAnswer = () => {
+    const cleanInput = input.trim().toLowerCase();
+    const correct = current.answers.includes(cleanInput);
 
-        async function playAudio(text, setSpeakingCallback) {
-            setSpeakingCallback(true);
+    if (correct) {
+      setFeedback("✅ Rétt!");
+      setScore(score + 1);
+    } else {
+      setFeedback("❌ Reyndu aftur.");
+    }
+  };
 
-            try {
-                const r = await fetch('/.netlify/functions/speak', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text_to_speak: text }),
-                });
+  const nextWord = () => {
+    setInput("");
+    setFeedback("");
+    setIndex(index + 1);
+  };
 
-                const data = await r.json();
-                
-                if (!r.ok || data.error || !data.audio_base64) {
-                    console.error("Villa í hljóðkalli:", data.error || 'Engin hljóðgögn skiluð.');
-                    console.error("Response status:", r.status);
-                    console.error("Response data:", data);
-                    alert('Hljóðvilla: Tenging við Azure TTS mistókst. Athugaðu API lykil.');
-                    setSpeakingCallback(false);
-                    return;
-                }
+  if (index >= wordPairs.length) {
+    return (
+      <div className="p-6 text-center">
+        <h2 className="text-2xl font-bold mb-4">🎉 Vel gert!</h2>
+        <p>Þú fékkst {score} af {wordPairs.length} rétt.</p>
+      </div>
+    );
+  }
 
-                const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-                const audio = new Audio(audioUrl);
-                
-                audio.onended = () => setSpeakingCallback(false);
-                audio.onerror = () => {
-                    console.error("Villa við spilun hljóðs");
-                    setSpeakingCallback(false);
-                };
-                
-                audio.play().catch(e => {
-                    console.error("Villa við spilun hljóðs:", e);
-                    setSpeakingCallback(false);
-                });
-                
-            } catch (e) {
-                console.error("Tenging við hljóðþjónustu mistókst:", e);
-                alert('Tenging við hljóðþjónustu mistókst (Azure TTS villa).');
-                setSpeakingCallback(false);
-            }
-        }
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white rounded-2xl shadow-xl">
+      <h2 className="text-xl font-semibold mb-4 text-center">
+        Skrifaðu andheiti:
+      </h2>
 
-        const IslenskuAdstodarmaðurinn = () => {
-            const initialMessage = { 
-                role: 'assistant', 
-                content: 'Hæ! Ég er íslensku aðstoðarmaðurinn þinn. Við skulum æfa okkur saman. Smelltu á 🔊 til að heyra! 😊',
-                feedback: null
-            };
-            
-            const [messages, setMessages] = useState([initialMessage]);
-            const [input, setInput] = useState('');
-            const [loading, setLoading] = useState(false);
-            const [speakingIndex, setSpeakingIndex] = useState(null);
-            const messagesEndRef = useRef(null);
-            const inputRef = useRef(null);
-            
-            const ASSISTANT_SYSTEM_PROMPT = `
-                Þú ert vinalegur íslenskukennari á A1-A2 stigi. Þú átt að svara öllum spurningum nemandans á íslensku. 
-                Svaraðu alltaf stutt (2-4 setningar) og notaðu hvetjandi og einfalda íslensku. 
-                Þetta er samtal, svo svaraðu náttúrulega. 
-            `.trim();
+      <p className="text-3xl text-center font-bold mb-6">
+        {current.word}
+      </p>
 
-            const FEEDBACK_SYSTEM_PROMPT = `
-                Þú ert íslenskukennari sem gefur örstutta, hlýja og hvetjandi endurgjöf á íslensku (A2–B1).
-                REGLUR:
-                - 1–2 stuttar setningar, aldrei lengra.
-                - Leiðréttu aðeins þegar þú ert >80% viss.
-                - Gefðu aðeins endurgjöfarlínuna, ekkert annað.
-            `.trim();
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        className="w-full border rounded-lg p-2 mb-4"
+        placeholder="Skrifaðu svar..."
+      />
 
-            useEffect(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                if (!loading && inputRef.current) {
-                    inputRef.current.focus();
-                }
-            }, [messages, loading]);
+      <button
+        onClick={checkAnswer}
+        className="w-full bg-blue-600 text-white py-2 rounded-lg mb-2"
+      >
+        Athuga
+      </button>
 
-            const handleManualSpeak = (text, index) => {
-                if (speakingIndex === index) {
-                    setSpeakingIndex(null);
-                } else {
-                    setSpeakingIndex(index);
-                    playAudio(text, (isSpeaking) => {
-                        if (!isSpeaking) setSpeakingIndex(null);
-                    });
-                }
-            };
+      {feedback && (
+        <p className="text-center mb-2">{feedback}</p>
+      )}
 
-            const sendMessage = async () => {
-                const trimmed = input.trim();
-                if (!trimmed || loading) return;
+      {feedback === "✅ Rétt!" && (
+        <button
+          onClick={nextWord}
+          className="w-full bg-green-600 text-white py-2 rounded-lg"
+        >
+          Næsta orð
+        </button>
+      )}
 
-                const userMessage = { role: 'user', content: trimmed };
-                
-                setInput('');
-                setLoading(true);
-                setMessages(prev => [...prev, userMessage]);
-
-                try {
-                    const feedbackMessages = [
-                        { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
-                        { role: 'user', content: `Skilaboð nemanda: "${trimmed}".` }
-                    ];
-
-                    const feedbackText = await callOpenAI(
-                        feedbackMessages, 60, 'gpt-4o-mini', 0.2
-                    );
-
-                    if (feedbackText && typeof feedbackText === 'string') {
-                        setMessages(prev => [...prev, { role: 'feedback', content: feedbackText }]);
-                        await new Promise(res => setTimeout(res, 500));
-                    }
-                } catch (e) {
-                    console.error('Feedback error:', e);
-                }
-
-                try {
-                    const conversationHistory = messages
-                        .filter(m => m.role === 'assistant' || m.role === 'user')
-                        .map(m => ({ role: m.role, content: m.content }));
-                    
-                    const assistantMessages = [
-                        { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
-                        ...conversationHistory,
-                        userMessage,
-                    ];
-                    
-                    const assistantReply = await callOpenAI(
-                        assistantMessages, 220, 'gpt-4o-mini', 0.3
-                    );
-
-                    if (assistantReply) {
-                        setMessages(prev => [...prev, { 
-                            role: 'assistant', 
-                            content: assistantReply.trim(),
-                            feedback: null
-                        }]);
-                    }
-                } catch (e) {
-                    console.error('Assistant error:', e);
-                    setMessages(prev => [
-                        ...prev,
-                        { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis við svarið.', feedback: null }
-                    ]);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            return (
-                <div className="min-h-screen pb-12">
-                    <header className="bg-white shadow-sm border-b border-gray-200">
-                        <div className="max-w-4xl mx-auto px-6 py-8">
-                            <button 
-                                onClick={() => window.history.back()} 
-                                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
-                            >
-                                ← Til baka
-                            </button>
-                            <h1 className="text-3xl font-light text-gray-800 mb-2">Íslensku Aðstoðarmaðurinn</h1>
-                            <p className="text-gray-500 text-sm font-light">Azure TTS með Guðrúnu · A1-A2 · Hlustunaræfing 🎧</p>
-                        </div>
-                    </header>
-
-                    <main className="max-w-4xl mx-auto px-6 mt-8">
-                        <section className="bg-white rounded-lg shadow-xl overflow-hidden flex flex-col h-[70vh] min-h-[500px]">
-                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                {messages.map((msg, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={`flex ${
-                                            msg.role === 'user'
-                                                ? 'justify-end'
-                                                : msg.role === 'feedback'
-                                                ? 'justify-center'
-                                                : 'justify-start'
-                                        }`}
-                                    >
-                                        <div
-                                            className={`max-w-lg px-4 py-2 rounded-xl font-light ${
-                                                msg.role === 'user'
-                                                    ? 'bg-blue-600 text-white'
-                                                    : msg.role === 'feedback'
-                                                    ? 'bg-red-50 text-red-700 border border-red-200 text-sm italic'
-                                                    : 'bg-gray-100 text-gray-800'
-                                            } shadow-sm relative`}
-                                        >
-                                            {msg.role === 'feedback' && (
-                                                <span className="font-normal text-red-800">📚 Málfar: </span>
-                                            )}
-                                            
-                                            {msg.role !== 'assistant' && (
-                                                <p className="whitespace-pre-wrap">{msg.content}</p>
-                                            )}
-                                            
-                                            {msg.role === 'assistant' && (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-gray-600 text-sm">🎧 Hlustaðu:</span>
-                                                    <SpeakerIcon 
-                                                        onClick={() => handleManualSpeak(msg.content, idx)} 
-                                                        isSpeaking={speakingIndex === idx}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {loading && (
-                                    <div className="flex justify-start">
-                                        <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-xl">
-                                            <div className="flex space-x-2">
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                                <div ref={messagesEndRef} />
-                            </div>
-
-                            <div className="border-t p-4 bg-white">
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        ref={inputRef}
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                                        placeholder="Skrifaðu spurningu eða setningu..."
-                                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
-                                        disabled={loading}
-                                    />
-                                    <button
-                                        onClick={sendMessage}
-                                        disabled={loading || !input.trim()}
-                                        className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-normal flex items-center justify-center"
-                                        aria-label="Senda skilaboð"
-                                        title="Senda"
-                                    >
-                                        <SendIcon />
-                                    </button>
-                                </div>
-                            </div>
-                        </section>
-                    </main>
-                </div>
-            );
-        };
-
-        ReactDOM.createRoot(document.getElementById('root')).render(<IslenskuAdstodarmaðurinn />);
-    </script>
-</body>
-</html>
+      <p className="text-sm text-center mt-4">
+        Stig: {score}
+      </p>
+    </div>
+  );
+}
