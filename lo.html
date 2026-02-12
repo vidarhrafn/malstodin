@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="is">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finndu lýsingarorðin</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; padding: 24px; background: #f7f7f8; color: #111; }
+    .card {
+      max-width: 980px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #e6e6ea;
+      border-radius: 14px;
+      padding: 18px 18px 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    p.help { margin: 0 0 14px; color: #444; line-height: 1.35; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .pill {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid #e6e6ea;
+      background: #fafafa;
+      font-size: 14px;
+    }
+    button {
+      border: 1px solid #d6d6db;
+      background: #fff;
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:hover { background: #f2f2f4; }
+    .feedback {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #f6f6ff;
+      border: 1px solid #e7e7ff;
+      min-height: 20px;
+      line-height: 1.35;
+    }
+    .text {
+      margin-top: 14px;
+      font-size: 18px;
+      line-height: 1.8;
+      user-select: none;
+    }
+    .w {
+      display: inline-block;
+      padding: 2px 3px;
+      margin: 1px 1px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background .12s ease, transform .06s ease;
+    }
+    .w:hover { background: #f2f2f6; }
+    .w:active { transform: scale(.98); }
+
+    .correct { background: #e7f7ea !important; border: 1px solid #bfe8c6; }
+    .wrongFlash { animation: flash .35s ease-in-out 1; }
+    @keyframes flash {
+      0% { background: #ffe7e7; }
+      60% { background: #ffe7e7; }
+      100% { background: transparent; }
+    }
+
+    .legend {
+      margin-top: 14px;
+      color: #555;
+      font-size: 13px;
+    }
+    .small { font-size: 13px; color: #666; }
+    .done {
+      background: #eef7ff;
+      border: 1px solid #cfe8ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Finndu lýsingarorðin</h1>
+    <p class="help">
+      Smelltu á orðin í textanum og reyndu að finna <strong>lýsingarorð</strong>.
+      Ef þú smellir á rangt orð færðu að vita hvaða orðflokkur það er.
+    </p>
+
+    <div class="toolbar">
+      <div class="pill"><strong>Rétt:</strong> <span id="score">0</span> / <span id="total">0</span></div>
+      <button id="resetBtn" type="button">Endurstilla</button>
+      <span class="small">Ábending: Lýsingarorð lýsa oft hlutum (t.d. <em>gott, hlýtt, kalt</em>).</span>
+    </div>
+
+    <div id="feedback" class="feedback">Byrjaðu að smella á orð.</div>
+
+    <div id="text" class="text" aria-label="Texti til að smella á"></div>
+
+    <div class="legend">
+      <span>✅ grænt = rétt lýsingarorð</span>
+      <span style="margin-left:10px;">❌ rauður blikk = rangt</span>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // Textinn
+  const rawText = `Veðrið var gott og hlýtt. Solla var ánægð úti í sólskininu. Hún var í nýju úlpunni sinni. Stóru strákarnir léku sér með svarta og hvíta fótboltann og ungu krakkarnir voru í stóru leiktækjunum. Stelpurnar töluðu hátt á skólalóðinni. Þær komu heitar inn úr frímínútum. Kennarinn var reiður. Hann sagði þessum lötum nemendum að setjast strax á gömlu stólana. En hvað það var kalt í stofunni. Olla vildi vera í rauðu úlpunni sinni inni í kennslustofunni. Anna fór inn í háu leðurstígvélunum. Jói var með grænu derhúfuna og Biggi með röndótta trefil um hálsinn.`;
+
+  // Lýsingarorð í textanum (grunnform í þessu samhengi)
+  const ADJ = new Set([
+    "gott","hlýtt","ánægð","nýju","stóru","svarta","hvíta","ungu",
+    "heitar","reiður","lötum","gömlu","kalt","rauðu","hái","háu","grænu","röndótta"
+  ]);
+
+  // Einföld orðflokkun fyrir "rangt orð" (handgert fyrir þennan texta).
+  // Ef orð finnst ekki hér: "annað / óþekkt".
+  const POS = new Map([
+    // Nafnorð
+    ["veðrið","nafnorð"],["solla","nafnorð"],["sólskininu","nafnorð"],["úlpunni","nafnorð"],
+    ["strákarnir","nafnorð"],["fótboltann","nafnorð"],["krakkarnir","nafnorð"],["leiktækjunum","nafnorð"],
+    ["stelpurnar","nafnorð"],["skólalóðinni","nafnorð"],["frímínútum","nafnorð"],["kennarinn","nafnorð"],
+    ["nemendum","nafnorð"],["stólana","nafnorð"],["stofunni","nafnorð"],["olla","nafnorð"],
+    ["kennslustofunni","nafnorð"],["anna","nafnorð"],["leðurstígvélunum","nafnorð"],
+    ["jói","nafnorð"],["derhúfuna","nafnorð"],["biggi","nafnorð"],["trefil","nafnorð"],["hálsinn","nafnorð"],
+
+    // Sagnorð
+    ["var","sagnorð"],["voru","sagnorð"],["léku","sagnorð"],["töluðu","sagnorð"],["komu","sagnorð"],
+    ["sagði","sagnorð"],["setjast","sagnorð"],["vildi","sagnorð"],["vera","sagnorð"],["fór","sagnorð"],
+
+    // Fornöfn / ábendingarorð
+    ["hún","fornafn"],["þær","fornafn"],["hann","fornafn"],["þessum","ábendingarfornafn"],
+    ["hvað","spurnarfornafn"],["það","fornafn"],["sinni","eignarfornafn"],["sér","afturbeygt fornafn"],
+
+    // Atviksorð
+    ["úti","atviksorð"],["hátt","atviksorð"],["strax","atviksorð"],["inni","atviksorð"],
+
+    // Forsetningar
+    ["í","forsetning"],["með","forsetning"],["á","forsetning"],["inn","forsetning"],["úr","forsetning"],["um","forsetning"],
+
+    // Samtengingar
+    ["og","samtenging"],["en","samtenging"],
+
+    // Nafnháttarmerki
+    ["að","nafnháttarmerki"]
+  ]);
+
+  const elText = document.getElementById("text");
+  const elFeedback = document.getElementById("feedback");
+  const elScore = document.getElementById("score");
+  const elTotal = document.getElementById("total");
+  const resetBtn = document.getElementById("resetBtn");
+
+  // Tokenize: orð + greinarmerki sem sér token
+  function tokenize(str) {
+    // Heldur íslenskum stöfum; skilur út punkt/kommu o.fl.
+    // Dæmi: "hlýtt." -> ["hlýtt", "."]
+    return str.match(/[A-Za-zÁÉÍÓÚÝÞÆÖáéíóúýþæö]+|[0-9]+|[^\sA-Za-zÁÉÍÓÚÝÞÆÖáéíóúýþæö0-9]/g) || [];
+  }
+
+  // Normaliserar til samanburðar (lágstafir, fjarlægir óþarfa)
+  function norm(w) {
+    return w.toLocaleLowerCase("is-IS");
+  }
+
+  const tokens = tokenize(rawText);
+
+  // Finna heildarfjölda lýsingarorða í textanum (m.t.t. endurtekninga)
+  const adjectiveTokenIndexes = [];
+  tokens.forEach((t, idx) => {
+    const n = norm(t);
+    if (ADJ.has(n)) adjectiveTokenIndexes.push(idx);
+  });
+  const totalAdjs = adjectiveTokenIndexes.length;
+  elTotal.textContent = String(totalAdjs);
+
+  let found = new Set(); // indexar tokena sem fundust
+  function setFeedback(msg, done=false) {
+    elFeedback.textContent = msg;
+    elFeedback.classList.toggle("done", done);
+  }
+
+  function render() {
+    elText.innerHTML = "";
+    tokens.forEach((t, idx) => {
+      const isWord = /[A-Za-zÁÉÍÓÚÝÞÆÖáéíóúýþæö0-9]/.test(t);
+      if (!isWord) {
+        // Greinarmerki: setja beint inn
+        const span = document.createElement("span");
+        span.textContent = t;
+        elText.appendChild(span);
+        return;
+      }
+
+      const span = document.createElement("span");
+      span.className = "w";
+      span.textContent = t;
+
+      const n = norm(t);
+      const isAdj = ADJ.has(n);
+
+      // merkt þegar rétt hefur verið valið
+      if (found.has(idx)) span.classList.add("correct");
+
+      span.addEventListener("click", () => {
+        // Ef þegar fundið, ekkert
+        if (found.has(idx)) return;
+
+        if (isAdj) {
+          found.add(idx);
+          span.classList.add("correct");
+          elScore.textContent = String(found.size);
+
+          if (found.size === totalAdjs) {
+            setFeedback("🎉 Frábært! Þú fannst öll lýsingarorðin.", true);
+          } else {
+            setFeedback("✅ Rétt! Þetta er lýsingarorð.");
+          }
+        } else {
+          // Rangt: finna orðflokk
+          const pos = POS.get(n) || "annað / óþekkt";
+          span.classList.remove("wrongFlash"); // reset animation
+          void span.offsetWidth; // force reflow so animation restarts
+          span.classList.add("wrongFlash");
+          setFeedback(`❌ Rangt. „${t}“ er ${pos}.`);
+        }
+      });
+
+      // Bil á eftir orðum nema næsta token sé greinarmerki sem á að loða við
+      elText.appendChild(span);
+
+      const next = tokens[idx + 1] || "";
+      const nextIsPunct = next && !/[A-Za-zÁÉÍÓÚÝÞÆÖáéíóúýþæö0-9]/.test(next);
+      if (!nextIsPunct) {
+        elText.appendChild(document.createTextNode(" "));
+      }
+    });
+  }
+
+  function reset() {
+    found = new Set();
+    elScore.textContent = "0";
+    setFeedback("Byrjaðu að smella á orð.");
+    render();
+  }
+
+  resetBtn.addEventListener("click", reset);
+
+  // Fyrsta render
+  render();
+})();
+</script>
+</body>
+</html>
