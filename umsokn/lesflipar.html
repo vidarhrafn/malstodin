@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🛒 Harpa og Eiríkur kaupa í matinn – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .answer-option {
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.disabled) {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.selected {
+      border-color: #2196f3;
+      background: #e3f2fd;
+    }
+    .answer-option.correct {
+      border-color: #4caf50;
+      background: #e8f5e9;
+    }
+    .answer-option.incorrect {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+    .answer-option.disabled {
+      cursor: default;
+    }
+    .chat-container {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-container::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+    .tab-button {
+      transition: all 0.2s;
+    }
+    .tab-button:hover:not(.active) {
+      background: #f3f4f6;
+    }
+    .tab-button.active {
+      background: white;
+      border-bottom: 3px solid #3b82f6;
+      color: #3b82f6;
+    }
+    .reading-text {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .reading-text::-webkit-scrollbar {
+      width: 6px;
+    }
+    .reading-text::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .reading-text::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef } = React;
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const READING_TEXT = `Harpa og Eiríkur ætla að koma Ingibjörgu mömmu Hörpu á óvart. Ingibjörg eldar yfirleitt en í kvöld ætla Harpa og Eiríkur að elda uppáhalds mat mömmu Hörpu. Það er kjúklingur í ofni, en Harpa er grænmetisæta og þess vegna ætla þau að hafa tvíréttað. Kjúkling í ofni, og kjúklingabaunarétt með grænmeti. Meðlætið verður hrísgrjón, sósa og salat. Þau ætla að fara í búðina og kaupa það sem vantar í kvöldmatinn og fleira. Þau fara í Bónus og kaupa þar heilan kjúkling, hrísgrjón, sósu, papriku, lauk, hvítlauk, blómkál og kókosmjólk. Svo kaupa þau líka mjólk, ost, brauð, flatkökur, núðlusúpur og jógúrt. Þegar þau eru að labba út úr búðinni fatta þau að þau gleymdu að kaupa kjúklingabaunir og eitthvað að drekka með matnum. Harpa drífur sig aftur inn í búðina og finnur kjúklingabaunirnar og svo kaupa þau sódavatn með sítrónubragði. Á meðan setur Eiríkur vörurnar í poka. Þegar þau koma heim byrja þau strax að elda. Þau ætla að hafa matinn tilbúinn þegar Ingibjörg kemur heim úr vinnunni.`;
+
+    const MULTIPLE_CHOICE = [
+      {
+        question: "Hvað er uppáhaldsmatur mömmu Hörpu?",
+        options: ["Kjúklingur í ofni", "Hrísgrjón", "Kjúklingabaunir", "Grænmeti"],
+        correct: 0
+      },
+      {
+        question: "Hverjir fara í búðina?",
+        options: ["Harpa og Ingibjörg", "Eiríkur og Ingibjörg", "Harpa og Eiríkur", "Ingibjörg og Eiríkur"],
+        correct: 2
+      },
+      {
+        question: "Hvað gleymdu þau að kaupa í búðinni?",
+        options: ["Kjúkling", "Hrísgrjón", "Kjúklingabaunir", "Sósu"],
+        correct: 2
+      }
+    ];
+
+    const SHORT_OPEN_QUESTIONS = [
+      "Hver er grænmetisæta?",
+      "Hvað er meðlætið í matnum?",
+      "Hvað gerir Eiríkur á meðan Harpa fer aftur inn í búðina að kaupa kjúklingabaunir?"
+    ];
+
+    const DISCUSSION_QUESTIONS = [
+      "Hvað finnst þér um að koma fólki á óvart?",
+      "Hvað finnst þér um að vera grænmetisæta?",
+      "Hvað finnst þér um að elda?"
+    ];
+
+    const TABS = [
+      { id: 'krossar', label: 'Krossaspurningar', icon: '✓' },
+      { id: 'stuttar', label: 'Stuttar spurningar', icon: '📝' },
+      { id: 'umraeda', label: 'Umræða', icon: '💬' }
+    ];
+
+    const HarpaOgEirikurKaupa = () => {
+      const [activeTab, setActiveTab] = useState('krossar');
+      const [showText, setShowText] = useState(true);
+      
+      // Krossaspurningar state
+      const [mcAnswers, setMcAnswers] = useState([]);
+      const [showMcFeedback, setShowMcFeedback] = useState(false);
+      
+      // Stuttar spurningar state
+      const [shortAnswers, setShortAnswers] = useState(['', '', '']);
+      const [shortFeedback, setShortFeedback] = useState([null, null, null]);
+      const [shortLoading, setShortLoading] = useState([false, false, false]);
+      
+      // Umræða state
+      const [conversations, setConversations] = useState([[], [], []]);
+      const [currentInputs, setCurrentInputs] = useState(['', '', '']);
+      const [loadingStates, setLoadingStates] = useState([false, false, false]);
+      const [messageCount, setMessageCount] = useState([0, 0, 0]);
+      
+      const chatRefs = [useRef(null), useRef(null), useRef(null)];
+
+      // Completion status
+      const isMcComplete = showMcFeedback;
+      const isShortComplete = shortFeedback.every(f => f !== null);
+      const isDiscussionComplete = messageCount.every(c => c >= 1);
+
+      const getTabStatus = (tabId) => {
+        switch(tabId) {
+          case 'krossar': return isMcComplete;
+          case 'stuttar': return isShortComplete;
+          case 'umraeda': return isDiscussionComplete;
+          default: return false;
+        }
+      };
+
+      // Krossaspurningar functions
+      const handleMcAnswer = (questionIndex, optionIndex) => {
+        if (showMcFeedback) return;
+        const newAnswers = [...mcAnswers];
+        newAnswers[questionIndex] = optionIndex;
+        setMcAnswers(newAnswers);
+      };
+
+      const checkMcAnswers = () => {
+        if (mcAnswers.length < MULTIPLE_CHOICE.length || mcAnswers.includes(undefined)) {
+          alert('Vinsamlegast svaraðu öllum spurningum!');
+          return;
+        }
+        setShowMcFeedback(true);
+      };
+
+      // Stuttar spurningar functions
+      const handleShortAnswerChange = (index, value) => {
+        const newAnswers = [...shortAnswers];
+        newAnswers[index] = value;
+        setShortAnswers(newAnswers);
+      };
+
+      const getShortFeedback = async (questionIndex) => {
+        const question = SHORT_OPEN_QUESTIONS[questionIndex];
+        const answer = shortAnswers[questionIndex];
+
+        if (!answer.trim() || answer.trim().length < 3) {
+          alert('Vinsamlegast skrifaðu svar (að minnsta kosti nokkur orð)');
+          return;
+        }
+
+        const newLoading = [...shortLoading];
+        newLoading[questionIndex] = true;
+        setShortLoading(newLoading);
+
+        try {
+          const sys = `Þú ert vingjarnlegur íslenskukennari sem er að fara yfir stutt svör nemanda (A1-A2 stig).
+
+TEXTINN SEM NEMANDINN LAS:
+"${READING_TEXT}"
+
+SPURNINGIN:
+"${question}"
+
+SVAR NEMANDANS:
+"${answer}"
+
+VERKEFNI:
+Gefðu hvetjandi endurgjöf (2-3 setningar á íslensku):
+1. Byrjaðu með jákvæðu (t.d. "Gott!", "Frábært!")
+2. Ef svarið er rétt eða nálægt því - hrósaðu og staðfestu
+3. Ef svarið er rangt eða ónákvæmt - leiðréttu á mjúkan hátt og útskýrðu rétta svarið út frá textanum
+
+REGLUR:
+- Alltaf jákvæður og hvetjandi tónn
+- Einföld íslenska (A1-A2)
+- Vísa alltaf í textann
+- 2-3 setningar
+
+SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.5,
+            max_tokens: 150,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: 'Gefðu endurgjöf' }
+            ]
+          });
+
+          const newFeedback = [...shortFeedback];
+          newFeedback[questionIndex] = response.trim();
+          setShortFeedback(newFeedback);
+        } catch (e) {
+          console.error('Short feedback error:', e);
+          alert('Villa við að fá endurgjöf. Reyndu aftur.');
+        } finally {
+          const newLoading = [...shortLoading];
+          newLoading[questionIndex] = false;
+          setShortLoading(newLoading);
+        }
+      };
+
+      // Umræða functions
+      const scrollToBottom = (index) => {
+        setTimeout(() => {
+          if (chatRefs[index].current) {
+            chatRefs[index].current.scrollTop = chatRefs[index].current.scrollHeight;
+          }
+        }, 100);
+      };
+
+      const handleInputChange = (index, value) => {
+        const newInputs = [...currentInputs];
+        newInputs[index] = value;
+        setCurrentInputs(newInputs);
+      };
+
+      const sendMessage = async (questionIndex) => {
+        const message = currentInputs[questionIndex].trim();
+        if (!message) return;
+
+        const newConversations = [...conversations];
+        newConversations[questionIndex] = [
+          ...newConversations[questionIndex],
+          { role: 'user', content: message }
+        ];
+        setConversations(newConversations);
+
+        const newMessageCount = [...messageCount];
+        newMessageCount[questionIndex] = newMessageCount[questionIndex] + 1;
+        setMessageCount(newMessageCount);
+
+        const newInputs = [...currentInputs];
+        newInputs[questionIndex] = '';
+        setCurrentInputs(newInputs);
+
+        const newLoading = [...loadingStates];
+        newLoading[questionIndex] = true;
+        setLoadingStates(newLoading);
+
+        scrollToBottom(questionIndex);
+
+        try {
+          const question = DISCUSSION_QUESTIONS[questionIndex];
+          const isFirstMessage = newConversations[questionIndex].filter(m => m.role === 'user').length === 1;
+          const userMessageCount = newMessageCount[questionIndex];
+          const shouldClose = userMessageCount >= 3;
+
+          const systemPrompt = `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1-A2 nemanda um matargerð og innkaup.
+
+TEXTINN SEM NEMANDINN LAS:
+"${READING_TEXT}"
+
+UPPRUNALEGA SPURNINGIN:
+"${question}"
+
+VERKEFNI:
+${isFirstMessage ? `1. Lestu fyrsta svar nemandans og gefðu hvetjandi, jákvæða endurgjöf
+2. Kommentaðu á efninu - hvað er áhugavert?
+3. Spyrðu einfalda follow-up spurningu til að dýpka umræðuna` : 
+shouldClose ? `1. Svaraðu spurningum nemandans á náttúrulegan hátt
+2. Gefðu jákvæða og hvetjandi endurgjöf
+3. Kláraðu samtalið á eðlilegan hátt með "Takk fyrir spjallið!"
+4. EKKI spyrja fleiri spurninga - þetta er lokun` : 
+`1. Haltu áfram samtali við nemandann á náttúrulegan hátt
+2. Svaraðu spurningum hans
+3. Vertu hvetjandi og spyrðu follow-up ef það á við`}
+
+REGLUR:
+- Vertu ALLTAF jákvæður og hvetjandi
+- Haltu því stuttu (2-4 setningar)
+- Notaðu einfalda íslensku (A1-A2 stig)
+- Notaðu bara íslensku
+- ALDREI gefa einkunn
+${shouldClose ? '- Þetta er LOKUN - kláraðu samtalið á vingjarnlegan hátt' : ''}
+
+SVARAÐU MEÐ JSON Á ÞESSU FORMI:
+{
+  "grammar": "Málfarsendurgjöf BARA ef það eru GRÓFAR villur (beygingarvillur, rangt orðval). Vertu mjög mild og hvetjandi (1-2 setningar). Ef ekkert athugavert, settu null.",
+  "response": "Aðal svarið þitt hér"
+}`;
+
+          const messages = [
+            { role: 'system', content: systemPrompt },
+            ...newConversations[questionIndex]
+              .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+              .map(msg => ({
+                role: msg.role,
+                content: msg.content
+              }))
+          ];
+
+          const response = await callOpenAI({
+            model: 'gpt-4o',
+            temperature: 0.7,
+            max_tokens: 300,
+            messages: messages
+          });
+
+          let cleanResult = response.trim();
+          if (cleanResult.startsWith('```')) {
+            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          }
+          
+          const parsed = JSON.parse(cleanResult);
+
+          let currentConversations = [...newConversations];
+          if (parsed.grammar) {
+            currentConversations[questionIndex] = [
+              ...currentConversations[questionIndex],
+              { role: 'grammar', content: parsed.grammar }
+            ];
+            setConversations(currentConversations);
+            scrollToBottom(questionIndex);
+            
+            await new Promise(resolve => setTimeout(resolve, 400));
+          }
+
+          const updatedConversations = [...currentConversations];
+          updatedConversations[questionIndex] = [
+            ...updatedConversations[questionIndex],
+            { role: 'assistant', content: parsed.response }
+          ];
+          setConversations(updatedConversations);
+          
+          scrollToBottom(questionIndex);
+
+        } catch (e) {
+          console.error('Chat error:', e);
+          alert('Villa við að senda skilaboð. Reyndu aftur.');
+          
+          const rollbackConversations = [...conversations];
+          rollbackConversations[questionIndex] = newConversations[questionIndex].slice(0, -1);
+          setConversations(rollbackConversations);
+          
+          const rollbackCount = [...messageCount];
+          rollbackCount[questionIndex] = rollbackCount[questionIndex] - 1;
+          setMessageCount(rollbackCount);
+        } finally {
+          const newLoading = [...loadingStates];
+          newLoading[questionIndex] = false;
+          setLoadingStates(newLoading);
+        }
+      };
+
+      const handleKeyPress = (e, questionIndex) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage(questionIndex);
+        }
+      };
+
+      return (
+        <div className="min-h-screen pb-12">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-6">
+              <button 
+                onClick={() => window.history.back()} 
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
+              >
+                ← Til baka
+              </button>
+              <h1 className="text-2xl font-light text-gray-800 mb-1">Harpa og Eiríkur kaupa í matinn</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur og umræða · A1-A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-6">
+            {/* Reading text - collapsible */}
+            <div className="bg-white rounded-lg shadow-sm mb-4">
+              <button 
+                onClick={() => setShowText(!showText)}
+                className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">📖</span>
+                  <span className="font-medium text-gray-800">Textinn</span>
+                </div>
+                <span className="text-gray-400 text-xl">{showText ? '▲' : '▼'}</span>
+              </button>
+              
+              {showText && (
+                <div className="px-6 pb-6">
+                  <div className="reading-text bg-gray-50 rounded-lg p-4">
+                    <p className="text-gray-700 leading-relaxed font-light">
+                      {READING_TEXT}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tabs */}
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              {/* Tab buttons */}
+              <div className="flex border-b border-gray-200">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`tab-button flex-1 px-4 py-4 text-sm font-medium flex items-center justify-center gap-2 ${
+                      activeTab === tab.id ? 'active' : 'text-gray-600'
+                    }`}
+                  >
+                    <span>{tab.icon}</span>
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    {getTabStatus(tab.id) && (
+                      <span className="bg-green-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab content */}
+              <div className="p-6">
+                {/* Krossaspurningar */}
+                {activeTab === 'krossar' && (
+                  <div className="space-y-6">
+                    {MULTIPLE_CHOICE.map((q, qIndex) => (
+                      <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-5">
+                        <p className="font-normal text-gray-800 mb-4">
+                          {qIndex + 1}. {q.question}
+                        </p>
+                        <div className="space-y-2">
+                          {q.options.map((option, oIndex) => {
+                            const isSelected = mcAnswers[qIndex] === oIndex;
+                            const isCorrect = oIndex === q.correct;
+                            const showAsCorrect = showMcFeedback && isCorrect;
+                            const showAsIncorrect = showMcFeedback && isSelected && !isCorrect;
+
+                            return (
+                              <div
+                                key={oIndex}
+                                onClick={() => handleMcAnswer(qIndex, oIndex)}
+                                className={`answer-option p-3 rounded-lg ${
+                                  isSelected && !showMcFeedback ? 'selected' : ''
+                                } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
+                                  showMcFeedback ? 'disabled' : ''
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                    isSelected && !showMcFeedback ? 'border-blue-500 bg-blue-500' : 
+                                    showAsCorrect ? 'border-green-500 bg-green-500' :
+                                    showAsIncorrect ? 'border-red-500 bg-red-500' :
+                                    'border-gray-300'
+                                  }`}>
+                                    {(isSelected || showAsCorrect) && (
+                                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                                    )}
+                                  </div>
+                                  <span className="font-light flex-1">{option}</span>
+                                  {showAsCorrect && <span className="text-green-600">✓</span>}
+                                  {showAsIncorrect && <span className="text-red-600">✗</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {!showMcFeedback ? (
+                      <div className="text-center pt-4">
+                        <button
+                          onClick={checkMcAnswers}
+                          className="bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-colors font-light"
+                        >
+                          Athuga svör
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-5">
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">
+                            {mcAnswers.every((a, i) => a === MULTIPLE_CHOICE[i].correct) ? '🎉' : '💪'}
+                          </span>
+                          <div>
+                            <h3 className="font-normal text-gray-800 mb-1">
+                              {mcAnswers.every((a, i) => a === MULTIPLE_CHOICE[i].correct) 
+                                ? 'Frábært! Öll svörin eru rétt!' 
+                                : 'Góð tilraun!'}
+                            </h3>
+                            <p className="text-sm text-gray-600 font-light">
+                              Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Stuttar spurningar */}
+                {activeTab === 'stuttar' && (
+                  <div className="space-y-6">
+                    {SHORT_OPEN_QUESTIONS.map((question, index) => (
+                      <div key={index} className="border-2 border-gray-100 rounded-lg p-5">
+                        <p className="font-normal text-gray-800 mb-3">
+                          {index + 1}. {question}
+                        </p>
+                        <textarea
+                          value={shortAnswers[index]}
+                          onChange={(e) => handleShortAnswerChange(index, e.target.value)}
+                          disabled={shortFeedback[index] !== null}
+                          className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base mb-3 disabled:bg-gray-50"
+                          rows="2"
+                          placeholder="Skrifaðu svarið þitt hér..."
+                        />
+
+                        {!shortFeedback[index] ? (
+                          <button
+                            onClick={() => getShortFeedback(index)}
+                            disabled={shortLoading[index] || shortAnswers[index].trim().length < 3}
+                            className="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
+                          >
+                            {shortLoading[index] ? 'Bíð...' : 'Fá endurgjöf'}
+                          </button>
+                        ) : (
+                          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-xl">✨</span>
+                              <p className="text-gray-800 font-light leading-relaxed">
+                                {shortFeedback[index]}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Umræða */}
+                {activeTab === 'umraeda' && (
+                  <div className="space-y-6">
+                    {DISCUSSION_QUESTIONS.map((question, index) => (
+                      <div key={index} className="border-2 border-gray-100 rounded-lg p-5">
+                        <p className="font-normal text-gray-800 mb-3">
+                          {index + 1}. {question}
+                        </p>
+
+                        <div 
+                          ref={chatRefs[index]}
+                          className="chat-container mb-3 space-y-2 min-h-[60px]"
+                        >
+                          {conversations[index].length === 0 && (
+                            <p className="text-gray-400 text-sm font-light italic">Skrifaðu svarið þitt hér að neðan...</p>
+                          )}
+                          
+                          {conversations[index].map((msg, msgIndex) => (
+                            <div key={msgIndex}>
+                              {msg.role === 'user' ? (
+                                <div className="flex justify-end">
+                                  <div className="bg-blue-50 rounded-lg p-3 max-w-[85%]">
+                                    <p className="text-gray-800 font-light text-sm">{msg.content}</p>
+                                  </div>
+                                </div>
+                              ) : msg.role === 'grammar' ? (
+                                <div className="flex justify-center">
+                                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 max-w-[90%]">
+                                    <div className="flex items-start gap-2">
+                                      <span className="text-sm">📚</span>
+                                      <p className="text-xs text-gray-700 font-light">
+                                        <span className="font-normal">Málfar:</span> {msg.content}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex justify-start">
+                                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 max-w-[85%]">
+                                    <div className="flex items-start gap-2">
+                                      <span className="text-lg">✨</span>
+                                      <p className="text-gray-800 font-light text-sm">{msg.content}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          
+                          {loadingStates[index] && (
+                            <div className="flex justify-start">
+                              <div className="bg-gray-100 rounded-lg p-3">
+                                <p className="text-gray-500 font-light text-sm">Bíð...</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <textarea
+                            value={currentInputs[index]}
+                            onChange={(e) => handleInputChange(index, e.target.value)}
+                            onKeyPress={(e) => handleKeyPress(e, index)}
+                            disabled={loadingStates[index]}
+                            className="flex-1 p-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-sm disabled:bg-gray-50"
+                            rows="2"
+                            placeholder={conversations[index].length === 0 ? "Skrifaðu svarið þitt hér..." : "Haltu áfram að spjalla..."}
+                          />
+                          <button
+                            onClick={() => sendMessage(index)}
+                            disabled={loadingStates[index] || !currentInputs[index].trim()}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end"
+                          >
+                            Senda
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Progress summary */}
+            <div className="mt-6 bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 font-light text-sm">Framvinda:</span>
+                <div className="flex gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${isMcComplete ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    Krossar {isMcComplete ? '✓' : ''}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${isShortComplete ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    Stuttar {isShortComplete ? '✓' : ''}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${isDiscussionComplete ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    Umræða {isDiscussionComplete ? '✓' : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<HarpaOgEirikurKaupa />);
+  </script>
+</body>
+</html>
