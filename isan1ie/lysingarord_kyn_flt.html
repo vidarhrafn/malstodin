@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lýsingarorð í fleirtölu – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom right, #fafaf9, #e7e5e4);
+      min-height: 100vh;
+    }
+    select, input { font-family: inherit; }
+    .fade-in { animation: fadeIn 0.25s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+const data = [
+  {
+    key: "stage1",
+    label: "Stig 1",
+    desc: "Kyn og fleirtöluending sýnileg – veldu rétta mynd",
+    isDropdown: true,
+    showGender: true,
+    sentences: [
+      { id: 1,  before: "Þessir stólar eru",  after: ".",                          noun: "stólar",  gender: "kk",  ending: "-ir", adjBase: "stór",     answers: { kk: "stórir",   kvk: "stórar",   hvk: "stór"    } },
+      { id: 2,  before: "Þessar töskur eru",  after: ".",                          noun: "töskur",  gender: "kvk", ending: "-ar", adjBase: "fallegur",  answers: { kk: "fallegir", kvk: "fallegar", hvk: "falleg"  } },
+      { id: 3,  before: "Þessi hús eru",      after: ".",                          noun: "hús",     gender: "hvk", ending: "-",   adjBase: "stór",     answers: { kk: "stórir",   kvk: "stórar",   hvk: "stór"    } },
+      { id: 4,  before: "",                   after: "strákar sitja í bekknum.",   noun: "strákar", gender: "kk",  ending: "-ir", adjBase: "hár",      answers: { kk: "háir",     kvk: "háar",     hvk: "há"      } },
+      { id: 5,  before: "",                   after: "sögur eru skemmtilegar.",    noun: "sögur",   gender: "kvk", ending: "-ar", adjBase: "stuttur",  answers: { kk: "stuttir",  kvk: "stuttar",  hvk: "stutt"   } },
+      { id: 6,  before: "",                   after: "börn leika sér úti.",        noun: "börn",    gender: "hvk", ending: "-",   adjBase: "nýr",      answers: { kk: "nýir",     kvk: "nýjar",    hvk: "ný"      } },
+    ],
+  },
+  {
+    key: "stage2",
+    label: "Stig 2",
+    desc: "Kyn ekki gefið upp – veldu rétta mynd",
+    isDropdown: true,
+    showGender: false,
+    sentences: [
+      { id: 7,  before: "Þessir pennar eru",  after: ".",                          noun: "pennar",  gender: "kk",  adjBase: "hreinn",   answers: { kk: "hreinir",  kvk: "hreinar",  hvk: "hrein"   } },
+      { id: 8,  before: "Þessar myndir eru",  after: ".",                          noun: "myndir",  gender: "kvk", adjBase: "fallegur",  answers: { kk: "fallegir", kvk: "fallegar", hvk: "falleg"  } },
+      { id: 9,  before: "Þessi borð eru",     after: ".",                          noun: "borð",    gender: "hvk", adjBase: "góður",    answers: { kk: "góðir",    kvk: "góðar",    hvk: "góð"     } },
+      { id: 10, before: "",                   after: "stólar standa við vegginn.", noun: "stólar",  gender: "kk",  adjBase: "nýr",      answers: { kk: "nýir",     kvk: "nýjar",    hvk: "ný"      } },
+      { id: 11, before: "",                   after: "úlpur hanga á króknum.",     noun: "úlpur",   gender: "kvk", adjBase: "stuttur",  answers: { kk: "stuttir",  kvk: "stuttar",  hvk: "stutt"   } },
+      { id: 12, before: "",                   after: "hús standa í götunni.",      noun: "hús",     gender: "hvk", adjBase: "hár",      answers: { kk: "háir",     kvk: "háar",     hvk: "há"      } },
+      { id: 13, before: "Strákarnir eru",     after: ".",                          noun: "strákar", gender: "kk",  adjBase: "sætur",    answers: { kk: "sætir",    kvk: "sætar",    hvk: "sæt"     } },
+    ],
+  },
+  {
+    key: "stage3a",
+    label: "Stig 3a",
+    desc: "Skrifaðu rétta mynd",
+    isDropdown: false,
+    showGender: false,
+    sentences: [
+      { id: 14, before: "Þessar úlpur eru",   after: ".",                          noun: "úlpur",   gender: "kvk", adjBase: "fallegur",  answers: { kk: "fallegir", kvk: "fallegar", hvk: "falleg"  } },
+      { id: 15, before: "",                   after: "stólar standa við borðið.",  noun: "stólar",  gender: "kk",  adjBase: "hár",      answers: { kk: "háir",     kvk: "háar",     hvk: "há"      } },
+      { id: 16, before: "Þessi teppi eru",    after: ".",                          noun: "teppi",   gender: "hvk", adjBase: "hreinn",   answers: { kk: "hreinir",  kvk: "hreinar",  hvk: "hrein"   } },
+      { id: 17, before: "",                   after: "tölvur eru dýrar.",          noun: "tölvur",  gender: "kvk", adjBase: "góður",    answers: { kk: "góðir",    kvk: "góðar",    hvk: "góð"     } },
+      { id: 18, before: "Þessir strákar eru", after: ".",                          noun: "strákar", gender: "kk",  adjBase: "sætur",    answers: { kk: "sætir",    kvk: "sætar",    hvk: "sæt"     } },
+      { id: 19, before: "",                   after: "hús eru í götunni.",         noun: "hús",     gender: "hvk", adjBase: "stór",     answers: { kk: "stórir",   kvk: "stórar",   hvk: "stór"    } },
+      { id: 20, before: "Þessar myndir eru",  after: ".",                          noun: "myndir",  gender: "kvk", adjBase: "stuttur",  answers: { kk: "stuttir",  kvk: "stuttar",  hvk: "stutt"   } },
+      { id: 21, before: "",                   after: "pennar liggja á borðinu.",   noun: "pennar",  gender: "kk",  adjBase: "góður",    answers: { kk: "góðir",    kvk: "góðar",    hvk: "góð"     } },
+      { id: 22, before: "Þessi borð eru",     after: ".",                          noun: "borð",    gender: "hvk", adjBase: "fallegur",  answers: { kk: "fallegir", kvk: "fallegar", hvk: "falleg"  } },
+    ],
+  },
+  {
+    key: "stage3b",
+    label: "Stig 3b",
+    desc: "Skrifaðu rétta mynd",
+    isDropdown: false,
+    showGender: false,
+    sentences: [
+      { id: 23, before: "Þessir dagar eru",   after: ".",                          noun: "dagar",   gender: "kk",  adjBase: "kaldur",   answers: { kk: "kaldir",   kvk: "kaldar",   hvk: "köld"    } },
+      { id: 24, before: "Þessar sögur eru",   after: ".",                          noun: "sögur",   gender: "kvk", adjBase: "stuttur",  answers: { kk: "stuttir",  kvk: "stuttar",  hvk: "stutt"   } },
+      { id: 25, before: "Þessir menn eru",    after: ".",                          noun: "menn",    gender: "kk",  adjBase: "saddur",   answers: { kk: "saddir",   kvk: "saddar",   hvk: "södd"    } },
+      { id: 26, before: "Þessi hús eru",      after: ".",                          noun: "hús",     gender: "hvk", adjBase: "hreinn",   answers: { kk: "hreinir",  kvk: "hreinar",  hvk: "hrein"   } },
+      { id: 27, before: "",                   after: "hús eru ekki notaleg.",      noun: "hús",     gender: "hvk", adjBase: "kaldur",   answers: { kk: "kaldir",   kvk: "kaldar",   hvk: "köld"    } },
+      { id: 28, before: "Þessar konur eru",   after: ".",                          noun: "konur",   gender: "kvk", adjBase: "fallegur",  answers: { kk: "fallegir", kvk: "fallegar", hvk: "falleg"  } },
+      { id: 29, before: "",                   after: "strákar eru í skólanum.",    noun: "strákar", gender: "kk",  adjBase: "saddur",   answers: { kk: "saddir",   kvk: "saddar",   hvk: "södd"    } },
+      { id: 30, before: "Þessi borð eru",     after: ".",                          noun: "borð",    gender: "hvk", adjBase: "stór",     answers: { kk: "stórir",   kvk: "stórar",   hvk: "stór"    } },
+      { id: 31, before: "Þessar úlpur eru",   after: ".",                          noun: "úlpur",   gender: "kvk", adjBase: "hreinn",   answers: { kk: "hreinir",  kvk: "hreinar",  hvk: "hrein"   } },
+    ],
+  },
+];
+
+function buildOptions(answers) {
+  return [answers.kk, answers.kvk, answers.hvk].filter((v, i, a) => a.indexOf(v) === i);
+}
+
+function App() {
+  const [stageIdx, setStageIdx] = useState(0);
+  const [selections, setSelections] = useState({});
+  const [inputs, setInputs] = useState({});
+  const [checked, setChecked] = useState(false);
+  const [stageScores, setStageScores] = useState([]);
+  const [done, setDone] = useState(false);
+
+  const stage = data[stageIdx];
+  const sentences = stage.sentences;
+  const isLast = stageIdx === data.length - 1;
+
+  function getAnswer(s) {
+    return stage.isDropdown ? (selections[s.id] || "") : (inputs[s.id] || "").trim();
+  }
+  function isCorrect(s) { return getAnswer(s) === s.answers[s.gender]; }
+
+  function nextStage() {
+    const correct = sentences.filter(isCorrect).length;
+    const newScores = [...stageScores, { label: stage.label, correct, total: sentences.length }];
+    setStageScores(newScores);
+    if (isLast) {
+      setDone(true);
+    } else {
+      setStageIdx(function(i) { return i + 1; });
+      setSelections({});
+      setInputs({});
+      setChecked(false);
+    }
+  }
+
+  function restart() {
+    setStageIdx(0); setSelections({}); setInputs({});
+    setChecked(false); setStageScores([]); setDone(false);
+  }
+
+  const allAnswered = sentences.every(function(s) { return getAnswer(s) !== ""; });
+  const totalCorrect = stageScores.reduce(function(a, b) { return a + b.correct; }, 0);
+  const totalQuestions = stageScores.reduce(function(a, b) { return a + b.total; }, 0);
+
+  if (done) {
+    const pct = Math.round((totalCorrect / totalQuestions) * 100);
+    return (
+      <div className="min-h-screen" style={{background: "linear-gradient(to bottom right, #fafaf9, #e7e5e4)"}}>
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-2xl mx-auto px-6 py-6">
+            <button onClick={restart} className="inline-flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-5 text-sm bg-transparent border-0 cursor-pointer p-0">
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+              </svg>
+              Reyna aftur
+            </button>
+            <div className="text-center">
+              <h1 className="text-4xl font-light text-gray-800 mb-1">Niðurstöður</h1>
+              <p className="text-gray-400 text-sm font-light">Lýsingarorð í fleirtölu</p>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-6 py-8">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-4">
+            <div className="text-center mb-8">
+              <div className={"text-6xl font-light mb-1 " + (pct >= 80 ? "text-emerald-600" : pct >= 60 ? "text-amber-500" : "text-red-500")}>
+                {pct}%
+              </div>
+              <p className="text-gray-400 text-sm">{totalCorrect} rétt af {totalQuestions}</p>
+            </div>
+            {stageScores.map(function(s, i) {
+              const p = Math.round((s.correct / s.total) * 100);
+              return (
+                <div key={i} className="flex justify-between items-center py-3 border-b border-gray-50 last:border-0">
+                  <span className="text-gray-600 font-light">{s.label}</span>
+                  <span className={"font-medium " + (p === 100 ? "text-emerald-600" : p >= 70 ? "text-amber-500" : "text-red-500")}>
+                    {s.correct}/{s.total} ({p}%)
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={restart} className="w-full bg-gray-800 text-white py-3 rounded-xl hover:bg-gray-700 transition-colors font-light text-base border-0 cursor-pointer">
+            Reyna aftur
+          </button>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen" style={{background: "linear-gradient(to bottom right, #fafaf9, #e7e5e4)"}}>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-6">
+          <button onClick={function() { history.back(); }} className="inline-flex items-center text-gray-500 hover:text-gray-700 transition-colors mb-5 text-sm bg-transparent border-0 cursor-pointer p-0">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Til baka
+          </button>
+          <div className="text-center">
+            <h1 className="text-4xl font-light text-gray-800 mb-1">Lýsingarorð í fleirtölu</h1>
+            <p className="text-gray-400 text-sm font-light">{stage.label} af {data.length}</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-6 py-8">
+        <div className="bg-white border border-gray-100 rounded-xl px-5 py-3 mb-5 text-sm text-gray-500 font-light shadow-sm">
+          {stage.desc}
+        </div>
+
+        <div className="space-y-3 mb-6">
+          {sentences.map(function(s) {
+            const correctAnswer = s.answers[s.gender];
+            const correct = isCorrect(s);
+            const attempted = getAnswer(s) !== "";
+            const borderColor = checked && attempted ? (correct ? "#6ee7b7" : "#fca5a5") : "#f5f5f4";
+
+            return (
+              <div key={s.id} className="bg-white rounded-xl px-5 py-4 shadow-sm fade-in"
+                style={{border: "2px solid " + borderColor, transition: "border-color 0.25s"}}>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-xs bg-stone-100 text-stone-500 rounded px-2 py-0.5 italic">
+                    {s.adjBase}
+                  </span>
+                  {stage.showGender && (
+                    <span className={"text-xs font-medium rounded px-2 py-0.5 border " +
+                      (s.gender === "kk" ? "bg-blue-50 text-blue-600 border-blue-200" :
+                       s.gender === "kvk" ? "bg-pink-50 text-pink-600 border-pink-200" :
+                       "bg-emerald-50 text-emerald-600 border-emerald-200")}>
+                      {s.noun} ({s.gender}, {s.ending})
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-lg text-gray-800">
+                  {s.before && <span>{s.before}</span>}
+                  {stage.isDropdown ? (
+                    <select
+                      value={selections[s.id] || ""}
+                      onChange={function(e) { setSelections(function(p) { return Object.assign({}, p, {[s.id]: e.target.value}); }); }}
+                      className="border border-gray-300 rounded-lg px-3 py-1 text-base bg-stone-50 text-gray-700 cursor-pointer"
+                      style={{outline: "none"}}>
+                      <option value="">– veldu –</option>
+                      {buildOptions(s.answers).map(function(opt) {
+                        return <option key={opt} value={opt}>{opt}</option>;
+                      })}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={inputs[s.id] || ""}
+                      onChange={function(e) { setInputs(function(p) { return Object.assign({}, p, {[s.id]: e.target.value}); }); }}
+                      placeholder="..."
+                      className="border border-gray-300 rounded-lg px-3 py-1 text-base bg-stone-50"
+                      style={{width: "8rem", outline: "none"}}
+                    />
+                  )}
+                  {s.after && <span>{s.after}</span>}
+                </div>
+
+                {checked && attempted && !correct && (
+                  <p className="mt-2 text-sm text-red-500">
+                    Rétt svar: <strong>{correctAnswer}</strong>
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-4">
+          {!checked ? (
+            <button
+              onClick={function() { setChecked(true); }}
+              disabled={!allAnswered}
+              className={"px-6 py-3 rounded-xl text-white font-light transition-colors border-0 " +
+                (allAnswered ? "bg-gray-800 hover:bg-gray-700 cursor-pointer" : "bg-gray-300 cursor-not-allowed")}>
+              Athuga svör
+            </button>
+          ) : (
+            <button
+              onClick={nextStage}
+              className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-light transition-colors border-0 cursor-pointer">
+              {isLast ? "Sjá niðurstöður" : "Næsta æfing →"}
+            </button>
+          )}
+          {checked && (
+            <span className={"font-medium text-base " +
+              (sentences.filter(isCorrect).length === sentences.length ? "text-emerald-600" : "text-amber-500")}>
+              {sentences.filter(isCorrect).length}/{sentences.length} rétt
+            </span>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
