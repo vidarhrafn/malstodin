@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lýsingarorð – Settu orðin á réttan stað</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@400;500&display=swap');
+
+  :root {
+    --bg: #f5f0e8;
+    --surface: #fffdf8;
+    --ink: #1a1208;
+    --ink-light: #5a4e3a;
+    --accent: #c84b2f;
+    --accent-soft: #f5ddd8;
+    --gold: #d4a843;
+    --gold-soft: #fdf3dc;
+    --green: #2d6a4f;
+    --green-soft: #d8ede4;
+    --border: #d9cfc0;
+    --shadow: 0 2px 12px rgba(26,18,8,0.08);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  header h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  header p {
+    color: var(--ink-light);
+    font-size: 0.95rem;
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  .percent-badge {
+    display: inline-block;
+    background: var(--gold-soft);
+    color: var(--gold);
+    font-weight: 500;
+    font-size: 0.8rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+    border: 1px solid #e8d49a;
+  }
+
+  .text-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 20px;
+    max-width: 680px;
+    margin: 0 auto 28px;
+    box-shadow: var(--shadow);
+    line-height: 2.2;
+    font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+  }
+
+  .text-box p {
+    color: var(--ink);
+  }
+
+  /* Drop zones */
+  .drop-zone {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 110px;
+    height: 34px;
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    vertical-align: middle;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    cursor: pointer;
+    margin: 0 2px;
+    padding: 0 6px;
+  }
+
+  .drop-zone.has-word {
+    border-style: solid;
+    border-color: var(--gold);
+    background: var(--gold-soft);
+    cursor: grab;
+  }
+
+  .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: scale(1.03);
+  }
+
+  .drop-zone.correct {
+    border-color: var(--green);
+    background: var(--green-soft);
+    color: var(--green);
+    font-weight: 500;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .drop-zone.wrong {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    animation: shake 0.4s ease;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(3px); }
+  }
+
+  .drop-zone .word-label {
+    font-family: 'Fraunces', serif;
+    font-size: 0.95rem;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .drop-zone .check-icon {
+    margin-left: 4px;
+    font-size: 0.8rem;
+    pointer-events: none;
+  }
+
+  /* Word bank */
+  .word-bank-wrap {
+    max-width: 680px;
+    margin: 0 auto 28px;
+  }
+
+  .word-bank-wrap h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 1.05rem;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--ink-light);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .word-bank {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-height: 60px;
+    box-shadow: var(--shadow);
+  }
+
+  .word-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'Fraunces', serif;
+    font-size: 0.95rem;
+    background: var(--gold-soft);
+    border: 1.5px solid var(--gold);
+    color: var(--ink);
+    padding: 6px 14px;
+    border-radius: 30px;
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+    touch-action: none;
+  }
+
+  .word-chip:active, .word-chip.dragging {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+
+  .word-chip .gender-tag {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.7rem;
+    color: var(--gold);
+    font-style: italic;
+  }
+
+  /* Actions */
+  .actions {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .btn-check {
+    font-family: 'Fraunces', serif;
+    font-size: 1.05rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 36px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 4px 14px rgba(200,75,47,0.3);
+  }
+
+  .btn-check:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(200,75,47,0.35);
+  }
+
+  .btn-check:disabled {
+    background: var(--border);
+    color: var(--ink-light);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* Score */
+  .score-bar {
+    max-width: 680px;
+    margin: 0 auto 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  .score-bar.visible { display: flex; }
+
+  .score-num {
+    font-family: 'Fraunces', serif;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .score-msg {
+    font-size: 0.9rem;
+    color: var(--ink-light);
+    line-height: 1.4;
+  }
+
+  .score-msg strong {
+    color: var(--ink);
+    display: block;
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+
+  /* Dragging ghost */
+  .drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    font-family: 'Fraunces', serif;
+    font-size: 0.95rem;
+    background: var(--gold-soft);
+    border: 1.5px solid var(--gold);
+    padding: 6px 14px;
+    border-radius: 30px;
+    opacity: 0.9;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    display: none;
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="percent-badge">Hlutfall: 10%</div>
+  <h1>Settu lýsingarorðið á réttan stað</h1>
+  <p>Dragðu orðin úr listanum neðst og settu þau í réttar eyður í textanum.</p>
+</header>
+
+<div class="score-bar" id="scoreBar">
+  <div class="score-num" id="scoreNum"></div>
+  <div class="score-msg">
+    <strong id="scoreTitle"></strong>
+    <span id="scoreDetail"></span>
+  </div>
+</div>
+
+<div class="text-box" id="textBox">
+  <p>
+    Ég er <span class="drop-zone" data-answer="þreyttur"></span> í dag því ég sofnaði lítið í nótt.
+    Í morgun var strætóinn <span class="drop-zone" data-answer="seinn"></span> og ég þurfti að hlaupa.
+    Ég var <span class="drop-zone" data-answer="svangur"></span> eftir langan dag og borðaði <span class="drop-zone" data-answer="holla"></span> súpu í hádeginu.
+    Kennslustofan var <span class="drop-zone" data-answer="tóm"></span> eftir prófið því allir fóru heim.
+    Ég er <span class="drop-zone" data-answer="spenntur"></span> að hitta nýja vinnufélagann minn, hann virðist mjög <span class="drop-zone" data-answer="fallegur"></span>.
+    Ég á <span class="drop-zone" data-answer="nýja"></span> skó sem ég keypti í gær.
+    Leikurinn í gær var mjög <span class="drop-zone" data-answer="skemmtilegur"></span> og allir hlógu.
+    Úti er veðrið <span class="drop-zone" data-answer="leiðinlegt"></span> og það er <span class="drop-zone" data-answer="beinan"></span> vindur við sjóinn.
+    Við labbuðum eftir <span class="drop-zone" data-answer="beinan"></span> stíg heim og sáum <span class="drop-zone" data-answer="djúpa"></span> tjörn í garðinum.
+  </p>
+</div>
+
+<div class="word-bank-wrap">
+  <h2>Orðalisti – dragðu orðin upp í textann</h2>
+  <div class="word-bank" id="wordBank"></div>
+</div>
+
+<div class="actions">
+  <button class="btn-check" id="btnCheck">Athuga svör</button>
+</div>
+
+<div class="drag-ghost" id="dragGhost"></div>
+
+<script>
+const WORDS = [
+  { word: 'þreyttur', gender: 'kk' },
+  { word: 'seinn',    gender: 'kk' },
+  { word: 'svangur',  gender: 'kk' },
+  { word: 'holla',    gender: 'kvk' },
+  { word: 'tóm',      gender: 'kvk' },
+  { word: 'spenntur', gender: 'kk' },
+  { word: 'fallegur', gender: 'kk' },
+  { word: 'nýja',     gender: 'kk' },
+  { word: 'skemmtilegur', gender: 'kk' },
+  { word: 'leiðinlegt',   gender: 'hk' },
+  { word: 'beinan',   gender: 'kk' },
+  { word: 'djúpa',    gender: 'kvk' },
+];
+
+// Note: "beinan" appears twice in the text; we allow it to be used twice.
+// We'll track how many times each word is needed.
+const answerCounts = {};
+document.querySelectorAll('.drop-zone').forEach(dz => {
+  const a = dz.dataset.answer;
+  answerCounts[a] = (answerCounts[a] || 0) + 1;
+});
+
+// Build word bank entries (duplicate if needed)
+const bankEntries = [];
+WORDS.forEach(w => {
+  const count = answerCounts[w.word] || 1;
+  for (let i = 0; i < count; i++) {
+    bankEntries.push({ ...w, id: w.word + '_' + i });
+  }
+});
+
+const wordBank = document.getElementById('wordBank');
+const ghost = document.getElementById('dragGhost');
+const btnCheck = document.getElementById('btnCheck');
+
+// State
+let dragData = null; // { word, sourceChipId, sourceZone }
+let touchStartX = 0, touchStartY = 0;
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildWordBank(entries) {
+  wordBank.innerHTML = '';
+  entries.forEach(entry => {
+    const chip = document.createElement('span');
+    chip.className = 'word-chip';
+    chip.dataset.word = entry.word;
+    chip.dataset.chipId = entry.id;
+    chip.innerHTML = `${entry.word} <span class="gender-tag">${entry.gender}</span>`;
+    chip.draggable = true;
+    attachChipEvents(chip);
+    wordBank.appendChild(chip);
+  });
+}
+
+function attachChipEvents(chip) {
+  // Desktop drag
+  chip.addEventListener('dragstart', e => {
+    dragData = { word: chip.dataset.word, sourceChipId: chip.dataset.chipId, sourceZone: null };
+    chip.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+
+  // Touch
+  chip.addEventListener('touchstart', touchStart, { passive: false });
+  chip.addEventListener('touchmove', touchMove, { passive: false });
+  chip.addEventListener('touchend', touchEnd);
+}
+
+// Drop zone events
+document.querySelectorAll('.drop-zone').forEach(dz => {
+  dz.addEventListener('dragover', e => {
+    e.preventDefault();
+    dz.classList.add('drag-over');
+  });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    if (!dragData) return;
+    placeWordInZone(dz, dragData.word, dragData.sourceChipId, dragData.sourceZone);
+    dragData = null;
+  });
+  // Also allow dragging FROM a filled drop zone
+  dz.addEventListener('dragstart', e => {
+    if (!dz.dataset.current) return;
+    dragData = { word: dz.dataset.current, sourceChipId: dz.dataset.chipId, sourceZone: dz };
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  dz.addEventListener('touchstart', e => {
+    if (!dz.dataset.current) return;
+    touchStart(e, dz);
+  }, { passive: false });
+  dz.addEventListener('touchmove', touchMove, { passive: false });
+  dz.addEventListener('touchend', e => touchEnd(e, dz));
+});
+
+// Word bank as drop target (return word)
+wordBank.addEventListener('dragover', e => e.preventDefault());
+wordBank.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!dragData || !dragData.sourceZone) return;
+  returnWordToBank(dragData.sourceZone);
+  dragData = null;
+});
+
+function placeWordInZone(zone, word, chipId, sourceZone) {
+  // If zone already has a word, send it back
+  if (zone.dataset.current) {
+    returnWordToBank(zone);
+  }
+  // Remove chip from bank if it came from bank
+  if (sourceZone === null) {
+    const chip = wordBank.querySelector(`[data-chip-id="${chipId}"]`);
+    if (chip) chip.remove();
+  } else {
+    // Came from another zone — clear that zone
+    sourceZone.dataset.current = '';
+    sourceZone.dataset.chipId = '';
+    sourceZone.classList.remove('has-word', 'wrong', 'correct');
+    sourceZone.innerHTML = '';
+    sourceZone.setAttribute('draggable', 'false');
+  }
+  zone.dataset.current = word;
+  zone.dataset.chipId = chipId;
+  zone.classList.add('has-word');
+  zone.classList.remove('wrong', 'correct');
+  zone.setAttribute('draggable', 'true');
+  zone.innerHTML = `<span class="word-label">${word}</span>`;
+  updateCheckBtn();
+}
+
+function returnWordToBank(zone) {
+  const word = zone.dataset.current;
+  const chipId = zone.dataset.chipId;
+  if (!word) return;
+  const gender = WORDS.find(w => w.word === word)?.gender || '';
+  const chip = document.createElement('span');
+  chip.className = 'word-chip';
+  chip.dataset.word = word;
+  chip.dataset.chipId = chipId;
+  chip.innerHTML = `${word} <span class="gender-tag">${gender}</span>`;
+  chip.draggable = true;
+  attachChipEvents(chip);
+  wordBank.appendChild(chip);
+  zone.dataset.current = '';
+  zone.dataset.chipId = '';
+  zone.classList.remove('has-word', 'wrong', 'correct');
+  zone.setAttribute('draggable', 'false');
+  zone.innerHTML = '';
+  updateCheckBtn();
+}
+
+function updateCheckBtn() {
+  const zones = document.querySelectorAll('.drop-zone');
+  const allFilled = [...zones].every(z => z.dataset.current);
+  btnCheck.disabled = !allFilled;
+}
+
+// Check answers
+btnCheck.addEventListener('click', () => {
+  const zones = document.querySelectorAll('.drop-zone');
+  let correct = 0;
+  const wrong = [];
+
+  zones.forEach(zone => {
+    if (zone.classList.contains('correct')) { correct++; return; }
+    const answer = zone.dataset.answer;
+    const current = zone.dataset.current;
+    if (current === answer) {
+      zone.classList.remove('wrong', 'has-word');
+      zone.classList.add('correct');
+      zone.setAttribute('draggable', 'false');
+      zone.innerHTML = `<span class="word-label">${current}</span><span class="check-icon">✓</span>`;
+      correct++;
+    } else {
+      zone.classList.add('wrong');
+      setTimeout(() => {
+        returnWordToBank(zone);
+      }, 700);
+      wrong.push(zone);
+    }
+  });
+
+  // Show score
+  const total = zones.length;
+  const pct = Math.round((correct / total) * 100);
+  const bar = document.getElementById('scoreBar');
+  document.getElementById('scoreNum').textContent = `${correct}/${total}`;
+  document.getElementById('scoreTitle').textContent =
+    pct === 100 ? 'Frábært! Allt rétt! 🎉' :
+    pct >= 70 ? 'Vel gert! Reyndu aftur með þau sem vantaði.' :
+    'Haltu áfram! Settu röng orð aftur á réttan stað.';
+  document.getElementById('scoreDetail').textContent =
+    wrong.length > 0 ? `${wrong.length} orð fóru til baka í listann.` : 'Allar eyður eru réttar!';
+  bar.classList.add('visible');
+  bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  updateCheckBtn();
+});
+
+// ---- Touch drag ----
+let activeTouchEl = null;
+let activeTouchWord = null;
+let activeTouchChipId = null;
+let activeTouchSourceZone = null;
+
+function touchStart(e, zoneOverride) {
+  const el = zoneOverride || e.currentTarget;
+  const isZone = el.classList.contains('drop-zone');
+  const word = isZone ? el.dataset.current : el.dataset.word;
+  if (!word) return;
+  e.preventDefault();
+  activeTouchEl = el;
+  activeTouchWord = word;
+  activeTouchChipId = isZone ? el.dataset.chipId : el.dataset.chipId;
+  activeTouchSourceZone = isZone ? el : null;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  ghost.textContent = word;
+  ghost.style.display = 'block';
+  ghost.style.left = touchStartX + 'px';
+  ghost.style.top = touchStartY + 'px';
+}
+
+function touchMove(e) {
+  if (!activeTouchWord) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  ghost.style.left = t.clientX + 'px';
+  ghost.style.top = t.clientY + 'px';
+  // Highlight drop zones under finger
+  document.querySelectorAll('.drop-zone').forEach(dz => dz.classList.remove('drag-over'));
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const target = el?.closest('.drop-zone');
+  if (target && !target.classList.contains('correct')) target.classList.add('drag-over');
+}
+
+function touchEnd(e) {
+  if (!activeTouchWord) return;
+  ghost.style.display = 'none';
+  document.querySelectorAll('.drop-zone').forEach(dz => dz.classList.remove('drag-over'));
+
+  const t = e.changedTouches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const targetZone = el?.closest('.drop-zone');
+  const targetBank = el?.closest('#wordBank');
+
+  if (targetZone && !targetZone.classList.contains('correct')) {
+    placeWordInZone(targetZone, activeTouchWord, activeTouchChipId, activeTouchSourceZone);
+  } else if (targetBank && activeTouchSourceZone) {
+    returnWordToBank(activeTouchSourceZone);
+  }
+  // else: drop outside — do nothing
+
+  activeTouchEl = null;
+  activeTouchWord = null;
+  activeTouchChipId = null;
+  activeTouchSourceZone = null;
+}
+
+// Init
+shuffle(bankEntries);
+buildWordBank(bankEntries);
+updateCheckBtn();
+</script>
+</body>
+</html>
