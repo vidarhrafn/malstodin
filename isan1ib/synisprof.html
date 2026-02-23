@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Próf 3 – Sýnishorn</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+    .speaking-pulse { animation: pulse-ring 1.2s infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ========== AI TENGINGAR ==========
+    async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model, temperature })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    async function playAudio(text, onEnd) {
+      try {
+        const r = await fetch('/.netlify/functions/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text_to_speak: text })
+        });
+        const data = await r.json();
+        if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audio.onended = () => onEnd && onEnd();
+        audio.onerror = () => onEnd && onEnd();
+        await audio.play().catch(() => onEnd && onEnd());
+        return audio;
+      } catch (e) {
+        console.error(e);
+        onEnd && onEnd();
+      }
+    }
+
+    // ========== HJÁLPAREININGAR ==========
+    const ProgressBar = ({ current, total }) => (
+      <div className="flex items-center gap-3 mb-6">
+        {Array.from({ length: total }).map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i < current ? 'bg-green-500' : i === current ? 'bg-blue-400' : 'bg-gray-200'}`} />
+        ))}
+        <span className="text-xs text-gray-400 font-light whitespace-nowrap">{current}/{total}</span>
+      </div>
+    );
+
+    const SectionHeader = ({ number, title, subtitle }) => (
+      <div className="mb-6 fade-in">
+        <div className="flex items-center gap-3 mb-1">
+          <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">{number}</span>
+          <h2 className="text-lg font-medium text-gray-800">{title}</h2>
+        </div>
+        {subtitle && <p className="text-sm text-gray-500 font-light ml-10">{subtitle}</p>}
+      </div>
+    );
+
+    const FeedbackBadge = ({ correct, score, message }) => {
+      const color = correct === null ? 'blue' : correct ? 'green' : 'amber';
+      const colors = {
+        blue: 'bg-blue-50 border-blue-200 text-blue-700',
+        green: 'bg-green-50 border-green-200 text-green-700',
+        amber: 'bg-amber-50 border-amber-200 text-amber-700'
+      };
+      return (
+        <div className={`mt-3 p-3 rounded-lg border ${colors[color]} fade-in`}>
+          {score !== undefined && <div className="font-medium text-sm mb-1">Stig: {score}/5</div>}
+          <p className="text-sm font-light">{message}</p>
+        </div>
+      );
+    };
+
+    const SpeakButton = ({ onClick, speaking, label }) => (
+      <button
+        onClick={onClick}
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all ${speaking ? 'bg-green-50 text-green-700 border-green-200 speaking-pulse' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
+      >
+        <span className="opacity-70">🎧</span>
+        <span className="font-light">{label || 'Hlustaðu'}</span>
+        <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+      </button>
+    );
+
+    const NextButton = ({ onClick, disabled, last }) => (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
+      >
+        {last ? '✓ Ljúka prófi' : 'Næsti liður →'}
+      </button>
+    );
+
+    // ========== LIÐUR 1: TÖLUR ==========
+    const TolurSection = ({ onComplete }) => {
+      const [number] = useState(() => Math.floor(Math.random() * 200) + 1);
+      const [speaking, setSpeaking] = useState(false);
+      const [answer, setAnswer] = useState('');
+      const [submitted, setSubmitted] = useState(false);
+      const [feedback, setFeedback] = useState(null);
+
+      const handleSpeak = async () => {
+        setSpeaking(true);
+        const words = numberToIcelandic(number);
+        await playAudio(words, () => setSpeaking(false));
+      };
+
+      const handleSubmit = () => {
+        const parsed = parseInt(answer.trim(), 10);
+        const correct = parsed === number;
+        setFeedback({
+          correct,
+          message: correct
+            ? `Rétt! Talan var ${number}.`
+            : `Rangt. Talan var ${number}. Þú skrifaðir ${answer.trim()}.`
+        });
+        setSubmitted(true);
+        onComplete(correct ? 5 : 0, number);
+      };
+
+      return (
+        <div className="fade-in">
+          <SectionHeader number="1" title="Tölur" subtitle="Hlustaðu á töluna og skrifaðu hana í tölustöfum." />
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="mb-5">
+              <SpeakButton onClick={handleSpeak} speaking={speaking} label="Hlusta á töluna" />
+              <p className="text-xs text-gray-400 font-light mt-2">Ýttu á hnappinn til að heyra töluna.</p>
+            </div>
+
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-600 font-light mb-1">Svarið þitt (í tölustöfum):</label>
+                <input
+                  type="number"
+                  value={answer}
+                  onChange={e => setAnswer(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !submitted && answer && handleSubmit()}
+                  disabled={submitted}
+                  placeholder="t.d. 47"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-lg disabled:bg-gray-50"
+                />
+              </div>
+              {!submitted && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!answer}
+                  className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                >
+                  Staðfesta
+                </button>
+              )}
+            </div>
+
+            {feedback && <FeedbackBadge correct={feedback.correct} message={feedback.message} />}
+          </div>
+        </div>
+      );
+    };
+
+    // Tala í íslenskar orð (simplified)
+    function numberToIcelandic(n) {
+      const ones = ['', 'einn', 'tveir', 'þrír', 'fjórir', 'fimm', 'sex', 'sjö', 'átta', 'níu',
+        'tíu', 'ellefu', 'tólf', 'þrettán', 'fjórtán', 'fimmtán', 'sextán', 'sautján', 'átján', 'nítján'];
+      const tens = ['', '', 'tuttugu', 'þrjátíu', 'fjörutíu', 'fimmtíu', 'sextíu', 'sjötíu', 'áttatíu', 'níutíu'];
+      if (n <= 19) return ones[n];
+      if (n < 100) {
+        const t = Math.floor(n / 10);
+        const o = n % 10;
+        return o === 0 ? tens[t] : `${tens[t]} og ${ones[o]}`;
+      }
+      if (n < 200) {
+        const rest = n - 100;
+        if (rest === 0) return 'eitt hundrað';
+        return `eitt hundrað og ${numberToIcelandic(rest)}`;
+      }
+      return `${n}`; // fallback
+    }
+
+    // ========== LIÐUR 2: STAÐIR ==========
+    const StaðirSection = ({ onComplete }) => {
+      const [answer, setAnswer] = useState('');
+      const [submitted, setSubmitted] = useState(false);
+      const [feedback, setFeedback] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async () => {
+        if (!answer.trim()) return;
+        setLoading(true);
+        setSubmitted(true);
+        try {
+          const prompt = `Þú ert íslenskukennari. Nemandinn var spurður: "Hvað er hægt að gera í skóla?" og svaraði: "${answer.trim()}"
+
+Mettu svarið á kvarðanum 0-5:
+- 5: Frábært! Rétt svar og skiljanlegt (t.d. "að læra", "að lesa", "að hlusta", "að skrifa", "að tala við vini", "að borða í matsal" osfrv.)
+- 3-4: Gott svar, smá villa í málfræði eða stafasetningu en skiljanlegt
+- 1-2: Reyndi en svarið er ekki mjög rétt eða skiljanlegt
+- 0: Svaraði ekki eða alveg rangt
+
+Svar á íslensku. Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein setning, vinaleg og hvetjandi]`;
+
+          const result = await callOpenAI([{ role: 'user', content: prompt }], 100, 'gpt-4o-mini', 0.2);
+          const stigMatch = result.match(/STIG:\s*(\d)/);
+          const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/);
+          const score = stigMatch ? parseInt(stigMatch[1]) : 3;
+          const msg = endurgjofMatch ? endurgjofMatch[1].trim() : result.trim();
+          setFeedback({ score, message: msg });
+          onComplete(score, answer.trim());
+        } catch (e) {
+          setFeedback({ score: 0, message: 'Villa við mat. Reyndu aftur.' });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="fade-in">
+          <SectionHeader number="2" title="Staðir" subtitle="Svaraðu spurningunni með fullri setningu eða orðum." />
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-5">
+              <p className="text-blue-800 font-medium text-lg text-center">Hvað er hægt að gera í skóla?</p>
+            </div>
+
+            <label className="block text-sm text-gray-600 font-light mb-1">Svarið þitt:</label>
+            <textarea
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              disabled={submitted}
+              placeholder="t.d. Það er hægt að læra og lesa..."
+              rows={3}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50"
+            />
+
+            {!submitted && (
+              <button
+                onClick={handleSubmit}
+                disabled={!answer.trim() || loading}
+                className="mt-3 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
+              >
+                {loading ? 'Mat...' : 'Staðfesta'}
+              </button>
+            )}
+
+            {loading && (
+              <div className="mt-3 text-sm text-gray-400 font-light animate-pulse">OpenAI er að meta svarið...</div>
+            )}
+
+            {feedback && !loading && (
+              <FeedbackBadge correct={feedback.score >= 3} score={feedback.score} message={feedback.message} />
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // ========== LIÐUR 3: LITUR OG HLUTUR ==========
+    const LiturSection = ({ onComplete }) => {
+      const [answer, setAnswer] = useState('');
+      const [submitted, setSubmitted] = useState(false);
+      const [feedback, setFeedback] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async () => {
+        if (!answer.trim()) return;
+        setLoading(true);
+        setSubmitted(true);
+        try {
+          const prompt = `Þú ert íslenskukennari sem próf ar kynbeygingu í íslensku. Nemandinn sér mynd af guli peysu.
+
+RÉTT SVAR ER NÁKVÆMLEGA: "gul peysa"
+- Peysa er kvenkynsorð → litarorðið á að vera í kvenkyni: "gul" (ekki "gulur" sem er karlkyn, ekki "gult" sem er hvorugkyn)
+
+Nemandinn svaraði: "${answer.trim()}"
+
+Mettu svarið STRANGLEGA:
+- 5: Bæði orðin rétt OG kynbeygð rétt: "gul peysa" eða "peysan er gul" (kvenkynsform)
+- 3: Hluturinn (peysa) er rétt en liturinn er í röngu kyni (t.d. "gulur peysa" eða "gult peysa")
+- 2: Liturinn er rétt beygður (gul) en hluturinn er rangt (t.d. "gul skyrta")
+- 0: Bæði rangt eða óskiljanleg svör
+
+MIKILVÆGT: Kyn skiptir máli hér. "gulur" og "gult" eru RANGAR kynbeygingarnar fyrir peysu.
+
+Svar á íslensku. Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein setning sem útskýrir hvort kynbeygíng var rétt]`;
+
+          const result = await callOpenAI([{ role: 'user', content: prompt }], 80, 'gpt-4o-mini', 0.1);
+          const stigMatch = result.match(/STIG:\s*(\d)/);
+          const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/);
+          const score = stigMatch ? parseInt(stigMatch[1]) : 2;
+          const msg = endurgjofMatch ? endurgjofMatch[1].trim() : result.trim();
+          setFeedback({ score, message: msg });
+          onComplete(score, answer.trim());
+        } catch (e) {
+          setFeedback({ score: 0, message: 'Villa við mat.' });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="fade-in">
+          <SectionHeader number="3" title="Litur og hlutur" subtitle="Nefndu lit og hlut sem þú sérð á myndinni." />
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="mb-5 rounded-lg overflow-hidden border border-gray-100 mx-auto" style={{ maxWidth: '280px' }}>
+              <img
+                src="media/gulpeysa.jpg"
+                alt="Mynd til að lýsa"
+                className="w-full h-auto object-cover"
+              />
+            </div>
+
+            <label className="block text-sm text-gray-600 font-light mb-1">Lýstu myndinni (litur + hlutur):</label>
+            <input
+              type="text"
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !submitted && answer && handleSubmit()}
+              disabled={submitted}
+              placeholder="litur + hlutur"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
+            />
+
+            {!submitted && (
+              <button
+                onClick={handleSubmit}
+                disabled={!answer.trim() || loading}
+                className="mt-3 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
+              >
+                Staðfesta
+              </button>
+            )}
+
+            {loading && <div className="mt-3 text-sm text-gray-400 font-light animate-pulse">Mat...</div>}
+            {feedback && !loading && (
+              <FeedbackBadge correct={feedback.score >= 3} score={feedback.score} message={feedback.message} />
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // ========== LIÐUR 4: ANDSTÆÐUR ==========
+    const AndstæðurSection = ({ onComplete }) => {
+      const [word1, setWord1] = useState('');
+      const [word2, setWord2] = useState('');
+      const [submitted, setSubmitted] = useState(false);
+      const [feedback, setFeedback] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async () => {
+        if (!word1.trim() || !word2.trim()) return;
+        setLoading(true);
+        setSubmitted(true);
+        try {
+          const prompt = `Þú ert íslenskukennari. Nemandinn á að skrifa tvær andstæður á íslensku.
+Nemandinn skrifaði: "${word1.trim()}" og "${word2.trim()}"
+
+Mettu hvort þetta séu andstæður:
+- 5: Já, þetta eru andstæður (t.d. heitur/kaldur, stór/lítill, já/nei, dagur/nótt) - kyn skiptir ekki máli, smávægilegar stafsetningarvillur eru í lagi
+- 3: Nánast andstæður eða tengd hugtök
+- 0: Þetta eru ekki andstæður
+
+Svar á íslensku. Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein setning, vinaleg]`;
+
+          const result = await callOpenAI([{ role: 'user', content: prompt }], 80, 'gpt-4o-mini', 0.1);
+          const stigMatch = result.match(/STIG:\s*(\d)/);
+          const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/);
+          const score = stigMatch ? parseInt(stigMatch[1]) : 2;
+          const msg = endurgjofMatch ? endurgjofMatch[1].trim() : result.trim();
+          setFeedback({ score, message: msg });
+          onComplete(score, `${word1.trim()} – ${word2.trim()}`);
+        } catch (e) {
+          setFeedback({ score: 0, message: 'Villa við mat.' });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="fade-in">
+          <SectionHeader number="4" title="Andstæður" subtitle="Skrifaðu tvær andstæður á íslensku í reitina." />
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-purple-50 border border-purple-100 rounded-lg p-4 mb-5 text-center">
+              <p className="text-purple-800 font-medium">Nefndu andstæður</p>
+              <p className="text-purple-600 text-sm font-light mt-1">t.d. heitur – kaldur</p>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 font-light mb-1">Fyrra orðið</label>
+                <input
+                  type="text"
+                  value={word1}
+                  onChange={e => setWord1(e.target.value)}
+                  disabled={submitted}
+                  placeholder="t.d. heitur"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-400 font-light disabled:bg-gray-50"
+                />
+              </div>
+              <div className="text-2xl text-gray-300 mt-4">–</div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 font-light mb-1">Seinna orðið</label>
+                <input
+                  type="text"
+                  value={word2}
+                  onChange={e => setWord2(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !submitted && word1 && word2 && handleSubmit()}
+                  disabled={submitted}
+                  placeholder="t.d. kaldur"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-400 font-light disabled:bg-gray-50"
+                />
+              </div>
+            </div>
+
+            {!submitted && (
+              <button
+                onClick={handleSubmit}
+                disabled={!word1.trim() || !word2.trim() || loading}
+                className="mt-4 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
+              >
+                Staðfesta
+              </button>
+            )}
+
+            {loading && <div className="mt-3 text-sm text-gray-400 font-light animate-pulse">Mat...</div>}
+            {feedback && !loading && (
+              <FeedbackBadge correct={feedback.score >= 3} score={feedback.score} message={feedback.message} />
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // ========== NIÐURSTÖÐUR ==========
+    const Results = ({ scores, answers }) => {
+      const total = scores.reduce((a, b) => a + b, 0);
+      const max = scores.length * 5;
+      const pct = Math.round((total / max) * 100);
+      const labels = ['Tölur', 'Staðir', 'Litur og hlutur', 'Andstæður'];
+
+      return (
+        <div className="fade-in">
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-3">{pct >= 80 ? '🎉' : pct >= 50 ? '👏' : '💪'}</div>
+            <h2 className="text-2xl font-light text-gray-800 mb-1">Prófi lokið!</h2>
+            <div className="text-4xl font-medium text-blue-600">{total}/{max}</div>
+            <p className="text-gray-500 font-light mt-1">{pct}%</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+            {labels.map((label, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-32 text-sm text-gray-600 font-light">{label}</div>
+                <div className="flex-1 bg-gray-100 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-700 ${scores[i] >= 4 ? 'bg-green-500' : scores[i] >= 2 ? 'bg-amber-400' : 'bg-red-400'}`}
+                    style={{ width: `${(scores[i] / 5) * 100}%` }}
+                  />
+                </div>
+                <div className="text-sm text-gray-600 font-light w-10 text-right">{scores[i]}/5</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h3 className="text-sm font-medium text-gray-600 mb-3">Svör þín</h3>
+            {labels.map((label, i) => (
+              <div key={i} className="flex gap-3 text-sm py-1.5 border-b border-gray-50 last:border-0">
+                <span className="text-gray-400 font-light w-32">{label}</span>
+                <span className="text-gray-700 font-light">{answers[i] || '—'}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm"
+            >
+              ↺ Reyna aftur
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // ========== AÐALFORRIT ==========
+    const ProfApp = () => {
+      const [section, setSection] = useState(0); // 0=tölur,1=staðir,2=litur,3=andstæður,4=niðurstaða
+      const [scores, setScores] = useState([0, 0, 0, 0]);
+      const [answers, setAnswers] = useState(['', '', '', '']);
+      const [sectionDone, setSectionDone] = useState(false);
+
+      const handleComplete = (score, answer) => {
+        const newScores = [...scores];
+        const newAnswers = [...answers];
+        newScores[section] = score;
+        newAnswers[section] = answer;
+        setScores(newScores);
+        setAnswers(newAnswers);
+        setSectionDone(true);
+      };
+
+      const goNext = () => {
+        setSectionDone(false);
+        setSection(s => s + 1);
+      };
+
+      const sections = [
+        <TolurSection onComplete={handleComplete} />,
+        <StaðirSection onComplete={handleComplete} />,
+        <LiturSection onComplete={handleComplete} />,
+        <AndstæðurSection onComplete={handleComplete} />,
+      ];
+
+      return (
+        <div className="min-h-screen pb-16">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-2xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">Próf 3 – Sýnishorn</h1>
+              <p className="text-gray-400 text-sm font-light">Málstöðin • Sýnishorn</p>
+            </div>
+          </header>
+
+          <main className="max-w-2xl mx-auto px-6 mt-8">
+            {section < 4 && <ProgressBar current={section} total={4} />}
+
+            {section < 4 ? (
+              <div>
+                {sections[section]}
+
+                {sectionDone && (
+                  <NextButton
+                    onClick={goNext}
+                    disabled={false}
+                    last={section === 3}
+                  />
+                )}
+              </div>
+            ) : (
+              <Results scores={scores} answers={answers} />
+            )}
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<ProfApp />);
+  </script>
+</body>
+</html>
