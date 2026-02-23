@@ -6,63 +6,38 @@
   <title>Æfingapróf – Lýsingarorð</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
-      min-height: 100vh;
-    }
-    /* Drop zones */
-    .drop-zone {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-width: 110px; height: 34px;
-      border: 2px dashed #d1d5db; border-radius: 8px;
-      background: #f9fafb; vertical-align: middle;
-      margin: 0 2px; padding: 0 8px;
-      transition: border-color .15s, background .15s, transform .15s;
-    }
-    .drop-zone.has-word { border-style:solid; border-color:#3b82f6; background:#eff6ff; cursor:grab; }
-    .drop-zone.drag-over { border-color:#2563eb; background:#dbeafe; transform:scale(1.04); }
-    .drop-zone.correct { border-style:solid; border-color:#22c55e; background:#f0fdf4; color:#15803d; font-weight:500; pointer-events:none; }
-    .drop-zone.wrong { border-color:#ef4444; background:#fef2f2; animation:shake .4s ease; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:linear-gradient(to bottom,#f8f7f4 0%,#e8e6e1 100%); min-height:100vh; }
+    .drop-zone { display:inline-flex;align-items:center;justify-content:center;min-width:110px;height:34px;border:2px dashed #d1d5db;border-radius:8px;background:#f9fafb;vertical-align:middle;margin:0 2px;padding:0 8px;transition:border-color .15s,background .15s,transform .15s; }
+    .drop-zone.has-word { border-style:solid;border-color:#3b82f6;background:#eff6ff;cursor:grab; }
+    .drop-zone.drag-over { border-color:#2563eb;background:#dbeafe;transform:scale(1.04); }
+    .drop-zone.correct { border-style:solid;border-color:#22c55e;background:#f0fdf4;color:#15803d;font-weight:500;pointer-events:none; }
+    .drop-zone.wrong { border-color:#ef4444;background:#fef2f2;animation:shake .4s ease; }
     @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(3px)} }
-    .drop-zone .word-label { font-size:.88rem; pointer-events:none; white-space:nowrap; }
-    /* Chips */
-    .word-chip {
-      display:inline-flex; align-items:center; gap:4px; font-size:.88rem;
-      background:#eff6ff; border:1.5px solid #93c5fd; color:#1e3a5f;
-      padding:5px 12px; border-radius:999px; cursor:grab;
-      user-select:none; touch-action:none;
-      transition:transform .15s, box-shadow .15s, opacity .2s;
-    }
-    .word-chip:hover { box-shadow:0 2px 8px rgba(59,130,246,.25); transform:translateY(-1px); }
+    .drop-zone .word-label { font-size:.88rem;pointer-events:none;white-space:nowrap; }
+    .word-chip { display:inline-flex;align-items:center;gap:4px;font-size:.88rem;background:#eff6ff;border:1.5px solid #93c5fd;color:#1e3a5f;padding:5px 12px;border-radius:999px;cursor:grab;user-select:none;touch-action:none;transition:transform .15s,box-shadow .15s,opacity .2s; }
+    .word-chip:hover { box-shadow:0 2px 8px rgba(59,130,246,.25);transform:translateY(-1px); }
     .word-chip.dragging { opacity:.4; }
-    .word-chip .gt { font-size:.68rem; color:#3b82f6; font-style:italic; }
-    .wb-drop { transition:border-color .15s, background .15s; }
-    .wb-drop.dob { border-color:#93c5fd !important; background:#eff6ff !important; }
-    /* Ghost */
-    .drag-ghost { position:fixed; pointer-events:none; z-index:9999; font-size:.88rem; background:#eff6ff; border:1.5px solid #93c5fd; padding:5px 12px; border-radius:999px; opacity:.9; transform:translate(-50%,-50%); white-space:nowrap; display:none; }
-    /* Input fields */
-    .ans-input { border:2px solid #e5e7eb; border-radius:8px; padding:6px 12px; font-size:.9rem; width:100%; outline:none; transition:border-color .15s; background:white; }
+    .word-chip .gt { font-size:.68rem;color:#3b82f6;font-style:italic; }
+    .wb-drop { transition:border-color .15s,background .15s; }
+    .wb-drop.dob { border-color:#93c5fd !important;background:#eff6ff !important; }
+    .drag-ghost { position:fixed;pointer-events:none;z-index:9999;font-size:.88rem;background:#eff6ff;border:1.5px solid #93c5fd;padding:5px 12px;border-radius:999px;opacity:.9;transform:translate(-50%,-50%);white-space:nowrap;display:none; }
+    .ans-input { border:2px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:.9rem;width:100%;outline:none;transition:border-color .15s;background:white; }
     .ans-input:focus { border-color:#3b82f6; }
-    .ans-input.correct-inp { border-color:#22c55e !important; background:#f0fdf4; color:#15803d; }
-    .ans-input.wrong-inp { border-color:#ef4444 !important; background:#fef2f2; }
-    /* Section badge */
-    .sec-badge { display:inline-block; background:#eff6ff; color:#2563eb; font-size:.75rem; font-weight:600; padding:2px 10px; border-radius:20px; border:1px solid #bfdbfe; margin-bottom:8px; }
-    /* Feedback boxes */
-    .fb-ok { background:#f0fdf4; border:2px solid #86efac; border-radius:10px; padding:12px 16px; color:#15803d; }
-    .fb-bad { background:#fef9c3; border:2px solid #fde047; border-radius:10px; padding:12px 16px; color:#854d0e; }
-    /* Progress dots */
-    .prog-dot { width:12px; height:12px; border-radius:50%; transition:background .3s; }
-    /* Table inputs */
-    .tbl-input { border:2px solid #e5e7eb; border-radius:6px; padding:4px 8px; font-size:.85rem; width:100%; outline:none; transition:border-color .15s; background:white; text-align:center; }
+    .ans-input.correct-inp { border-color:#22c55e !important;background:#f0fdf4;color:#15803d; }
+    .ans-input.wrong-inp { border-color:#ef4444 !important;background:#fef2f2; }
+    .sec-badge { display:inline-block;background:#eff6ff;color:#2563eb;font-size:.75rem;font-weight:600;padding:2px 10px;border-radius:20px;border:1px solid #bfdbfe;margin-bottom:8px; }
+    .fb-ok { background:#f0fdf4;border:2px solid #86efac;border-radius:10px;padding:12px 16px;color:#15803d; }
+    .fb-bad { background:#fef9c3;border:2px solid #fde047;border-radius:10px;padding:12px 16px;color:#854d0e; }
+    .prog-dot { width:12px;height:12px;border-radius:50%;transition:background .3s; }
+    .tbl-input { border:2px solid #e5e7eb;border-radius:6px;padding:4px 8px;font-size:.85rem;width:100%;outline:none;transition:border-color .15s;background:white;text-align:center; }
     .tbl-input:focus { border-color:#3b82f6; }
-    .tbl-input.correct-inp { border-color:#22c55e !important; background:#f0fdf4; color:#15803d; }
-    .tbl-input.wrong-inp { border-color:#ef4444 !important; background:#fef2f2; }
-    /* Match select */
-    .match-sel { border:2px solid #e5e7eb; border-radius:8px; padding:6px 10px; font-size:.88rem; outline:none; transition:border-color .15s; background:white; width:80px; }
+    .tbl-input.correct-inp { border-color:#22c55e !important;background:#f0fdf4;color:#15803d; }
+    .tbl-input.wrong-inp { border-color:#ef4444 !important;background:#fef2f2; }
+    .match-sel { border:2px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:.88rem;outline:none;transition:border-color .15s;background:white;width:80px; }
     .match-sel:focus { border-color:#3b82f6; }
-    .match-sel.correct-inp { border-color:#22c55e !important; background:#f0fdf4; color:#15803d; }
-    .match-sel.wrong-inp { border-color:#ef4444 !important; background:#fef2f2; }
+    .match-sel.correct-inp { border-color:#22c55e !important;background:#f0fdf4;color:#15803d; }
+    .match-sel.wrong-inp { border-color:#ef4444 !important;background:#fef2f2; }
+    .dnd-dot { width:10px;height:10px;border-radius:50%;transition:background .2s; }
   </style>
 </head>
 <body class="pb-20">
@@ -75,7 +50,6 @@
   </div>
 </header>
 
-<!-- Progress bar -->
 <div class="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
   <div class="max-w-3xl mx-auto px-6 py-3">
     <div class="flex items-center gap-3">
@@ -91,40 +65,24 @@
 
 <main class="max-w-3xl mx-auto px-6 mt-6 space-y-8">
 
-<!-- ══════════════════════════════════════════
-     1. STIGBREYTING
-════════════════════════════════════════════ -->
+<!-- 1. STIGBREYTING -->
 <section id="sec1" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">1. Stigbreyting · 8%</div>
   <h2 class="text-xl font-light text-gray-800 mb-2">Stigbreyttu lýsingarorðunum</h2>
   <p class="text-sm text-gray-500 font-light mb-6">Dæmi: <em>latur → latari → latastur</em></p>
   <div class="space-y-6">
-    <!-- heitur -->
     <div class="border-2 border-gray-100 rounded-lg p-5">
       <p class="text-base font-normal text-gray-800 mb-4">Grunnstig: <strong class="text-blue-600">heitur</strong></p>
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="text-xs text-gray-500 font-light mb-1 block">Miðstig</label>
-          <input class="ans-input" data-correct="heitari" placeholder="..." id="s1_1a"/>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 font-light mb-1 block">Efsta stig</label>
-          <input class="ans-input" data-correct="heitastur" placeholder="..." id="s1_1b"/>
-        </div>
+        <div><label class="text-xs text-gray-500 font-light mb-1 block">Miðstig</label><input class="ans-input" data-correct="heitari" placeholder="..." id="s1_1a"/></div>
+        <div><label class="text-xs text-gray-500 font-light mb-1 block">Efsta stig</label><input class="ans-input" data-correct="heitastur" placeholder="..." id="s1_1b"/></div>
       </div>
     </div>
-    <!-- stór -->
     <div class="border-2 border-gray-100 rounded-lg p-5">
       <p class="text-base font-normal text-gray-800 mb-4">Grunnstig: <strong class="text-blue-600">stór</strong></p>
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="text-xs text-gray-500 font-light mb-1 block">Miðstig</label>
-          <input class="ans-input" data-correct="stærri" placeholder="..." id="s1_2a"/>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 font-light mb-1 block">Efsta stig</label>
-          <input class="ans-input" data-correct="stærstur" placeholder="..." id="s1_2b"/>
-        </div>
+        <div><label class="text-xs text-gray-500 font-light mb-1 block">Miðstig</label><input class="ans-input" data-correct="stærri" placeholder="..." id="s1_2a"/></div>
+        <div><label class="text-xs text-gray-500 font-light mb-1 block">Efsta stig</label><input class="ans-input" data-correct="stærstur" placeholder="..." id="s1_2b"/></div>
       </div>
     </div>
   </div>
@@ -132,34 +90,26 @@
   <button onclick="checkSec1()" class="mt-5 bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 font-normal transition-colors" id="btn1">Athuga svör</button>
 </section>
 
-<!-- ══════════════════════════════════════════
-     2. DRAG AND DROP
-════════════════════════════════════════════ -->
+<!-- 2. DRAG AND DROP – ONE AT A TIME -->
 <section id="sec2" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">2. Fylla í eyður · 10%</div>
-  <h2 class="text-xl font-light text-gray-800 mb-6">Settu rétt lýsingarorð inn í frásögnina</h2>
-  <div class="text-gray-700 font-light leading-10 text-base mb-6" id="dndText">
-    Ég er <span class="drop-zone" data-answer="ánægður"></span> af því að ég fékk loksins frí í dag.
-    Bróðir minn var <span class="drop-zone" data-answer="reiður"></span> þegar hann missti símann sinn.
-    Í gær keypti ég <span class="drop-zone" data-answer="ferskt"></span> brauð í bakaríi.
-    Ég er <span class="drop-zone" data-answer="leiður"></span> á því að þú getir ekki komið í heimsókn.
-    Hundurinn minn er mjög <span class="drop-zone" data-answer="fjörugur"></span> og elskar að hlaupa.
-    Þegar ég er með hausverk er ég oft <span class="drop-zone" data-answer="þreyttur"></span>.
-    Kaffið er <span class="drop-zone" data-answer="heitt"></span> og ég þarf að bíða aðeins.
-    Vegurinn heim er <span class="drop-zone" data-answer="beinn"></span> og ég labba hratt.
+  <h2 class="text-xl font-light text-gray-800 mb-2">Settu rétt lýsingarorð inn í setninguna</h2>
+  <p class="text-sm text-gray-500 font-light mb-5">Ein setning í einu – dragðu rétt orð í eyðuna.</p>
+  <div class="flex items-center justify-between mb-3">
+    <span class="text-xs text-gray-400 font-light" id="dnd-counter">Setning 1 af 8</span>
+    <div class="flex gap-1.5" id="dnd-dots"></div>
   </div>
-  <p class="text-sm font-light text-gray-500 mb-3 uppercase tracking-wide">Orðalisti – dragðu orðin upp í textann</p>
+  <div class="bg-gray-50 border-2 border-gray-100 rounded-xl p-6 mb-5 text-gray-700 font-light leading-10 text-base min-h-[80px] flex items-center flex-wrap gap-1" id="dnd-card"></div>
+  <p class="text-sm font-light text-gray-500 mb-2 uppercase tracking-wide">Orðalisti</p>
   <div id="wordBank2" class="wb-drop flex flex-wrap gap-2 min-h-[48px] rounded-lg border-2 border-dashed border-gray-200 p-4 mb-5"></div>
   <div id="sec2-fb" class="hidden mb-4"></div>
-  <div class="flex gap-3 flex-wrap">
-    <button id="btn2" onclick="checkSec2()" disabled class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-normal transition-colors">Athuga svör</button>
-    <button id="btn2r" onclick="resetSec2()" class="hidden bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 font-normal transition-colors">Endurstilla</button>
+  <div class="flex gap-3 flex-wrap items-center">
+    <button id="btn2" onclick="checkSec2()" disabled class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-normal transition-colors">Athuga svar</button>
+    <button id="btn2r" onclick="resetSec2()" class="hidden bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 font-normal transition-colors">Byrja aftur</button>
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     3. TENGJA SAMAN
-════════════════════════════════════════════ -->
+<!-- 3. TENGJA SAMAN -->
 <section id="sec3" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">3. Tengja saman · 8%</div>
   <h2 class="text-xl font-light text-gray-800 mb-6">Tengdu saman orð og rétta merkingu</h2>
@@ -185,7 +135,6 @@
       <div class="text-xs text-gray-400 w-40 font-light hidden md:block" id="mlbl4"></div>
     </div>
   </div>
-  <!-- Key -->
   <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm font-light text-gray-600 space-y-1">
     <p><strong>a.</strong> Fylgir reglum og gerir það sem á að gera</p>
     <p><strong>b.</strong> Sýnir virðingu og segir „takk" og „gjörðu svo vel"</p>
@@ -199,9 +148,7 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     4. KYN LÝSINGARORÐA
-════════════════════════════════════════════ -->
+<!-- 4. KYN – 3 ORÐ -->
 <section id="sec4" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">4. Kyn lýsingarorða · 20%</div>
   <h2 class="text-xl font-light text-gray-800 mb-6">Skrifaðu rétt form í karlkyni, kvenkyni og hvorugkyni</h2>
@@ -214,55 +161,29 @@
           <th class="text-left py-3 px-3 font-normal text-gray-600">Hvorugkyn (Það er…)</th>
         </tr>
       </thead>
-      <tbody id="tbl4">
-        <!-- row 0: dæmi -->
+      <tbody>
         <tr class="border-b border-gray-100 bg-blue-50">
           <td class="py-3 px-3 font-semibold text-blue-700">sterkur</td>
           <td class="py-3 px-3 font-semibold text-blue-700">sterk</td>
           <td class="py-3 px-3 font-semibold text-blue-700">sterkt</td>
         </tr>
-        <!-- rows with blanks: [kk, kvk, hk], null = given -->
-        <!-- gamall -->
+        <!-- kaldur – given kk -->
         <tr class="border-b border-gray-100">
-          <td class="py-2 px-3 font-normal text-gray-700">gamall</td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="gömul" placeholder="..."/></td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="gamalt" placeholder="..."/></td>
-        </tr>
-        <!-- köld -->
-        <tr class="border-b border-gray-100">
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="kaldur" placeholder="..."/></td>
-          <td class="py-2 px-3 font-normal text-gray-700">köld</td>
+          <td class="py-2 px-3 font-normal text-gray-700">kaldur</td>
+          <td class="py-2 px-3"><input class="tbl-input" data-correct="köld" placeholder="..."/></td>
           <td class="py-2 px-3"><input class="tbl-input" data-correct="kalt" placeholder="..."/></td>
         </tr>
-        <!-- dýr -->
-        <tr class="border-b border-gray-100">
-          <td class="py-2 px-3 font-normal text-gray-700">dýr</td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="dýr" placeholder="..."/></td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="dýrt" placeholder="..."/></td>
-        </tr>
-        <!-- róleg -->
-        <tr class="border-b border-gray-100">
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="rólegur" placeholder="..."/></td>
-          <td class="py-2 px-3 font-normal text-gray-700">róleg</td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="rólegt" placeholder="..."/></td>
-        </tr>
-        <!-- nýr -->
-        <tr class="border-b border-gray-100">
-          <td class="py-2 px-3 font-normal text-gray-700">nýr</td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="ný" placeholder="..."/></td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="nýtt" placeholder="..."/></td>
-        </tr>
-        <!-- ljós -->
-        <tr class="border-b border-gray-100">
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="ljós" placeholder="..."/></td>
-          <td class="py-2 px-3 font-normal text-gray-700">ljós</td>
-          <td class="py-2 px-3"><input class="tbl-input" data-correct="ljóst" placeholder="..."/></td>
-        </tr>
-        <!-- þungur -->
+        <!-- þungur – given kk -->
         <tr class="border-b border-gray-100">
           <td class="py-2 px-3 font-normal text-gray-700">þungur</td>
           <td class="py-2 px-3"><input class="tbl-input" data-correct="þung" placeholder="..."/></td>
           <td class="py-2 px-3"><input class="tbl-input" data-correct="þungt" placeholder="..."/></td>
+        </tr>
+        <!-- rólegur – given hk rólegt -->
+        <tr class="border-b border-gray-100">
+          <td class="py-2 px-3"><input class="tbl-input" data-correct="rólegur" placeholder="..."/></td>
+          <td class="py-2 px-3"><input class="tbl-input" data-correct="róleg" placeholder="..."/></td>
+          <td class="py-2 px-3 font-normal text-gray-700">rólegt</td>
         </tr>
       </tbody>
     </table>
@@ -274,9 +195,7 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     5. ANDHEITI
-════════════════════════════════════════════ -->
+<!-- 5. ANDHEITI – 2 ORÐ -->
 <section id="sec5" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">5. Andheiti · 5%</div>
   <h2 class="text-xl font-light text-gray-800 mb-6">Skrifaðu andheiti</h2>
@@ -286,20 +205,8 @@
       <input class="ans-input flex-1" id="and1" placeholder="Andheiti..."/>
     </div>
     <div class="flex items-center gap-4">
-      <span class="w-28 font-normal text-gray-800">2. Hár</span>
+      <span class="w-28 font-normal text-gray-800">2. Léttur</span>
       <input class="ans-input flex-1" id="and2" placeholder="Andheiti..."/>
-    </div>
-    <div class="flex items-center gap-4">
-      <span class="w-28 font-normal text-gray-800">3. Léttur</span>
-      <input class="ans-input flex-1" id="and3" placeholder="Andheiti..."/>
-    </div>
-    <div class="flex items-center gap-4">
-      <span class="w-28 font-normal text-gray-800">4. Gamall</span>
-      <input class="ans-input flex-1" id="and4" placeholder="Andheiti..."/>
-    </div>
-    <div class="flex items-center gap-4">
-      <span class="w-28 font-normal text-gray-800">5. Hægur</span>
-      <input class="ans-input flex-1" id="and5" placeholder="Andheiti..."/>
     </div>
   </div>
   <div id="sec5-fb" class="mt-5 hidden"></div>
@@ -309,9 +216,7 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     6. SKILNINGUR
-════════════════════════════════════════════ -->
+<!-- 6. SKILNINGUR -->
 <section id="sec6" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">6. Skilningur · 21%</div>
   <h2 class="text-xl font-light text-gray-800 mb-4">Lesið söguna og svarið spurningunum</h2>
@@ -319,7 +224,7 @@
     Einu sinni var kona frá Selfossi. Hún átti heima á Akranesi og vann í litlum matvöruverslun. Á þriðjudagsmorgni vaknaði hún snemma og sá að það var skýjað úti en samt hlýtt. Hún vann venjulega frá níu til fimm, en þennan þriðjudag fór hún klukkan fjögur úr vinnunni. Hún ætlaði að heimsækja vinkonu sína í Borgarnesi og koma með smá gjöf.<br/><br/>
     Hún keyrði af stað eftir vinnu og stoppaði í búð til að kaupa blóm. Síðan fór hún áfram og kom til vinkonunnar. Þær drukku te, spjölluðu lengi og hlógu mikið. Um kvöldið fór konan heim, bjó sér einfaldan kvöldmat og fór snemma að sofa.
   </div>
-  <div class="space-y-4" id="sec6questions">
+  <div class="space-y-4">
     <div><p class="text-sm font-normal text-gray-700 mb-1">1. Hvar átti konan heima?</p><input class="ans-input" id="q6_1" placeholder="Svar..."/></div>
     <div><p class="text-sm font-normal text-gray-700 mb-1">2. Hvaðan var konan?</p><input class="ans-input" id="q6_2" placeholder="Svar..."/></div>
     <div><p class="text-sm font-normal text-gray-700 mb-1">3. Hvaða dag gerist sagan?</p><input class="ans-input" id="q6_3" placeholder="Svar..."/></div>
@@ -335,19 +240,15 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     7. FINNA LÝSINGARORÐ
-════════════════════════════════════════════ -->
+<!-- 7. FINNA LÝSINGARORÐ – STYTTRI TEXTI, 3 ORÐ -->
 <section id="sec7" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">7. Finna lýsingarorð · 18%</div>
   <h2 class="text-xl font-light text-gray-800 mb-4">Skrifaðu lýsingarorðin upp og segðu kynið</h2>
-  <div class="bg-amber-50 border-2 border-amber-100 rounded-xl p-6 mb-6 text-gray-700 font-light leading-relaxed text-sm">
-    Sara á <em>litla</em> kött. Kötturinn sefur í <em>mjúku</em> rúmi inni í <em>hlýju</em> herbergi. Á veggnum er <em>stórt</em>, <em>fallegt</em> plakat. Á borðinu er <em>ný</em> lampi og þar liggur líka <em>græn</em> bók. Sara drekkur <em>kalt</em> vatn og borðar <em>heitt</em> brauð. Hún er <em>glöð</em> og <em>róleg</em> heima hjá sér.
+  <div class="bg-amber-50 border-2 border-amber-100 rounded-xl p-6 mb-5 text-gray-700 font-light leading-relaxed text-sm">
+    Er þetta nýr bíll? Já en húsið er gamalt. Bókin er skemmtileg.
   </div>
-  <p class="text-sm text-gray-500 font-light mb-4">Þú mátt nota hvort sem er kk. / kvk. / hk. eða karlkyn / kvenkyn / hvorugkyn</p>
-  <div class="grid grid-cols-1 gap-3" id="sec7rows">
-    <!-- 11 rows, 2 inputs each: orð + kyn -->
-  </div>
+  <p class="text-sm text-gray-500 font-light mb-4">Þú mátt nota kk. / kvk. / hk. eða karlkyn / kvenkyn / hvorugkyn</p>
+  <div class="grid grid-cols-1 gap-3" id="sec7rows"></div>
   <div id="sec7-fb" class="mt-5 hidden"></div>
   <div class="flex gap-3 mt-5 flex-wrap">
     <button onclick="checkSec7()" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 font-normal transition-colors" id="btn7">Athuga svör</button>
@@ -355,21 +256,16 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     8. SKRIFA UM MYND
-════════════════════════════════════════════ -->
+<!-- 8. SKRIFA UM MYND – 2 SETNINGAR -->
 <section id="sec8" class="bg-white rounded-xl shadow-md p-8">
   <div class="sec-badge">8. Skrifa um mynd · 10%</div>
-  <h2 class="text-xl font-light text-gray-800 mb-2">Skrifaðu 5 setningar um myndina</h2>
-  <p class="text-sm text-gray-500 font-light mb-5">Notaðu <strong>að minnsta kosti 4 lýsingarorð</strong>. Hver setning þarf að vera að minnsta kosti 4 orð.</p>
+  <h2 class="text-xl font-light text-gray-800 mb-2">Skrifaðu 2 setningar um myndina</h2>
+  <p class="text-sm text-gray-500 font-light mb-5">Notaðu <strong>að minnsta kosti 2 lýsingarorð</strong>. Hver setning þarf að vera að minnsta kosti 4 orð.</p>
   <img src="media/herbergi.jpg" alt="Herbergi" class="w-full rounded-xl mb-6 border-2 border-gray-100 object-cover max-h-80" onerror="this.style.display='none';document.getElementById('imgPlaceholder').style.display='flex'"/>
-  <div id="imgPlaceholder" class="hidden w-full h-48 rounded-xl mb-6 border-2 border-dashed border-gray-200 bg-gray-50 items-center justify-content:center flex items-center justify-center text-gray-400 font-light text-sm">📷 mynd – media/herbergi.jpg</div>
-  <div class="space-y-3" id="sec8sents">
+  <div id="imgPlaceholder" class="hidden w-full h-48 rounded-xl mb-6 border-2 border-dashed border-gray-200 bg-gray-50 items-center justify-center text-gray-400 font-light text-sm flex">📷 media/herbergi.jpg</div>
+  <div class="space-y-3">
     <div><label class="text-xs text-gray-400 font-light">Setning 1</label><input class="ans-input mt-1" id="s8_1" placeholder="Skrifaðu setningu..."/></div>
     <div><label class="text-xs text-gray-400 font-light">Setning 2</label><input class="ans-input mt-1" id="s8_2" placeholder="Skrifaðu setningu..."/></div>
-    <div><label class="text-xs text-gray-400 font-light">Setning 3</label><input class="ans-input mt-1" id="s8_3" placeholder="Skrifaðu setningu..."/></div>
-    <div><label class="text-xs text-gray-400 font-light">Setning 4</label><input class="ans-input mt-1" id="s8_4" placeholder="Skrifaðu setningu..."/></div>
-    <div><label class="text-xs text-gray-400 font-light">Setning 5</label><input class="ans-input mt-1" id="s8_5" placeholder="Skrifaðu setningu..."/></div>
   </div>
   <div id="sec8-fb" class="mt-5 hidden"></div>
   <div class="flex gap-3 mt-5 flex-wrap">
@@ -378,9 +274,7 @@
   </div>
 </section>
 
-<!-- ══════════════════════════════════════════
-     HEILDARNIÐURSTAÐA
-════════════════════════════════════════════ -->
+<!-- HEILDARNIÐURSTAÐA -->
 <div id="finalBox" class="hidden bg-white rounded-xl shadow-md p-8 text-center">
   <p class="text-3xl font-light text-gray-800 mb-2">🎉 Prófi lokið!</p>
   <div id="finalScore" class="text-5xl font-light text-blue-600 my-4"></div>
@@ -388,229 +282,271 @@
 </div>
 
 </main>
-
 <div class="drag-ghost" id="dragGhost"></div>
 
 <script>
-// ══════════════════════════════════════════
-//  UTILITIES
-// ══════════════════════════════════════════
-const TOTAL_SECS = 8;
-const secDone = Array(TOTAL_SECS+1).fill(false); // index 1-8
-const secScores = Array(TOTAL_SECS+1).fill(null);
-const secMax    = [0, 8, 10, 8, 20, 5, 21, 18, 10];
+// ── UTILITIES ────────────────────────────────────────────────
+const TOTAL_SECS=8;
+const secDone=Array(TOTAL_SECS+1).fill(false);
+const secScores=Array(TOTAL_SECS+1).fill(null);
+const secMax=[0,8,10,8,20,5,21,18,10];
 
-function norm(s){ return s.trim().toLowerCase().replace(/[.,!?]/g,''); }
+function norm(s){return s.trim().toLowerCase().replace(/[.,!?]/g,'');}
 
-async function callAI(messages, max_tokens=400){
-  const r = await fetch('/.netlify/functions/openai',{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({messages, max_tokens, model:'gpt-4o', temperature:0.2})
-  });
-  const d = await r.json();
-  if(!r.ok||d.error) throw new Error(d.error||`HTTP ${r.status}`);
+async function callAI(messages,max_tokens=400){
+  const r=await fetch('/.netlify/functions/openai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,max_tokens,model:'gpt-4o',temperature:0.2})});
+  const d=await r.json();
+  if(!r.ok||d.error)throw new Error(d.error||`HTTP ${r.status}`);
   return d.content;
 }
 
-function setLoading(btnId, on){
-  const b = document.getElementById(btnId);
-  if(on){ b.disabled=true; b.textContent='Athuga...'; }
-  else { b.disabled=false; b.textContent='Athuga svör'; }
+function setLoading(btnId,on){
+  const b=document.getElementById(btnId);
+  if(on){b.disabled=true;b.textContent='Athuga...';}
+  else{b.disabled=false;b.textContent='Athuga svör';}
 }
 
-function showFb(id, html){ const el=document.getElementById(id); el.innerHTML=html; el.classList.remove('hidden'); el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+function showFb(id,html){
+  const el=document.getElementById(id);el.innerHTML=html;el.classList.remove('hidden');
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 
 function updateProgress(){
-  const done = secDone.slice(1).filter(Boolean).length;
-  document.getElementById('progBar').style.width = `${(done/TOTAL_SECS)*100}%`;
-  document.getElementById('progText').textContent = `${done}/${TOTAL_SECS}`;
-  const dots = document.getElementById('progDots');
-  dots.innerHTML='';
+  const done=secDone.slice(1).filter(Boolean).length;
+  document.getElementById('progBar').style.width=`${(done/TOTAL_SECS)*100}%`;
+  document.getElementById('progText').textContent=`${done}/${TOTAL_SECS}`;
+  const dots=document.getElementById('progDots');dots.innerHTML='';
   for(let i=1;i<=TOTAL_SECS;i++){
     const d=document.createElement('div');
     d.className='prog-dot '+(secDone[i]?'bg-green-500':'bg-gray-200');
-    d.title=`Verkefni ${i}`;
     dots.appendChild(d);
   }
-  if(secDone.slice(1).every(Boolean)) showFinal();
+  if(secDone.slice(1).every(Boolean))showFinal();
 }
 
-function markDone(sec, score){
-  secDone[sec]=true;
-  secScores[sec]=score;
+function markDone(sec,score){
+  secDone[sec]=true;secScores[sec]=score;
   const btn=document.getElementById('btn'+sec);
-  if(btn){ btn.disabled=true; btn.textContent='Lokið ✓'; btn.classList.remove('bg-blue-600','hover:bg-blue-700'); btn.classList.add('bg-green-600'); }
+  if(btn){btn.disabled=true;btn.textContent='Lokið ✓';btn.classList.remove('bg-blue-600','hover:bg-blue-700');btn.classList.add('bg-green-600');}
   const rbtn=document.getElementById('btn'+sec+'r');
-  if(rbtn) rbtn.classList.remove('hidden');
+  if(rbtn)rbtn.classList.remove('hidden');
   updateProgress();
 }
 
 function showFinal(){
-  const box=document.getElementById('finalBox');
-  box.classList.remove('hidden');
-  let total=0, max=0;
-  let bd='';
-  for(let i=1;i<=TOTAL_SECS;i++){
-    total+=secScores[i]||0;
-    max+=secMax[i];
-    bd+=`<p>Verkefni ${i}: ${secScores[i]||0}/${secMax[i]} stig</p>`;
-  }
+  const box=document.getElementById('finalBox');box.classList.remove('hidden');
+  let total=0,max=0,bd='';
+  for(let i=1;i<=TOTAL_SECS;i++){total+=secScores[i]||0;max+=secMax[i];bd+=`<p>Verkefni ${i}: ${secScores[i]||0}/${secMax[i]} stig</p>`;}
   document.getElementById('finalScore').textContent=`${total}/${max} stig`;
   document.getElementById('finalBreakdown').innerHTML=bd;
   box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// ══════════════════════════════════════════
-//  SECTION 1 – STIGBREYTING (AI)
-// ══════════════════════════════════════════
+// ── SEC 1: STIGBREYTING (AI) ────────────────────────────────
 async function checkSec1(){
   const fields=[{id:'s1_1a',w:'heitur',slot:'miðstig'},{id:'s1_1b',w:'heitur',slot:'efsta stig'},{id:'s1_2a',w:'stór',slot:'miðstig'},{id:'s1_2b',w:'stór',slot:'efsta stig'}];
-  const answers = fields.map(f=>({slot:`${f.w} – ${f.slot}`, answer:document.getElementById(f.id).value.trim()}));
-  if(answers.some(a=>!a.answer)){ showFb('sec1-fb','<p class="text-yellow-700 text-sm font-light">Vinsamlega fylltu í allar eyður.</p>'); return; }
+  const answers=fields.map(f=>({slot:`${f.w} – ${f.slot}`,answer:document.getElementById(f.id).value.trim()}));
+  if(answers.some(a=>!a.answer)){showFb('sec1-fb','<p class="text-yellow-700 text-sm font-light">Vinsamlega fylltu í allar eyður.</p>');return;}
   setLoading('btn1',true);
   try{
-    const sys=`Þú ert íslenskukennari. Nemandi er að stigbreyta íslensku lýsingarorðum. 
-Svörin sem við gerum ráð fyrir:
-heitur miðstig: heitari, efsta stig: heitastur
-stór miðstig: stærri, efsta stig: stærstur
-
-Athugaðu svör nemandans og gefðu eitt stig fyrir hvert rétt svar (hámark 4).
-SKILAÐU EINUNGIS JSON: {"score":N,"feedback":"stutt íslensk endurgjöf"}`;
-    const res = await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(answers)}]);
-    const obj = JSON.parse(res);
-    const score = Math.min(4, Math.max(0, obj.score||0));
-    const pts = Math.round(score*2); // 4 fields = 8%
-    showFb('sec1-fb',`<div class="fb-ok"><p class="font-normal mb-1">Einkunn: ${pts}/8 stig</p><p class="text-sm font-light">${obj.feedback}</p></div>`);
-    markDone(1, pts);
-  } catch(e){ showFb('sec1-fb','<p class="text-red-600 text-sm">Villa við tengingu. Reyndu aftur.</p>'); setLoading('btn1',false); }
+    const sys=`Þú ert íslenskukennari. Nemandi er að stigbreyta íslensku lýsingarorðum.
+Svörin sem við gerum ráð fyrir: heitur miðstig: heitari, efsta stig: heitastur. stór miðstig: stærri, efsta stig: stærstur.
+Gefðu 1 stig fyrir hvert rétt svar (hámark 4). Skalaðu í 8 (margfalda með 2).
+SKILAÐU EINUNGIS JSON: {"score_8":N,"feedback":"stutt íslensk endurgjöf – sýndu rétt svar ef rangt"}`;
+    const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(answers)}]);
+    const obj=JSON.parse(res);
+    const score=Math.min(8,Math.max(0,obj.score_8||0));
+    showFb('sec1-fb',`<div class="${score>=6?'fb-ok':'fb-bad'}"><p class="font-normal mb-1">Einkunn: ${score}/8 stig</p><p class="text-sm font-light">${obj.feedback}</p></div>`);
+    markDone(1,score);
+  }catch(e){showFb('sec1-fb','<p class="text-red-600 text-sm">Villa við tengingu. Reyndu aftur.</p>');setLoading('btn1',false);}
 }
 
-// ══════════════════════════════════════════
-//  SECTION 2 – DRAG AND DROP
-// ══════════════════════════════════════════
-const WORDS2 = [
+// ── SEC 2: DRAG AND DROP – ONE AT A TIME ────────────────────
+const DND_SENTENCES=[
+  {before:'Ég er',answer:'ánægður',after:'af því að ég fékk loksins frí í dag.'},
+  {before:'Bróðir minn var',answer:'reiður',after:'þegar hann missti símann sinn.'},
+  {before:'Í gær keypti ég',answer:'ferskt',after:'brauð í bakaríi.'},
+  {before:'Ég er',answer:'leiður',after:'yfir því að þú getir ekki komið í heimsókn.'},
+  {before:'Hundurinn minn er mjög',answer:'fjörugur',after:'og elskar að hlaupa.'},
+  {before:'Þegar ég er með hausverk er ég oft',answer:'þreyttur',after:''},
+  {before:'Kaffið er',answer:'heitt',after:'og ég þarf að bíða aðeins.'},
+  {before:'Vegurinn heim er',answer:'beinn',after:'og ég labba hratt.'},
+];
+const WORDS2=[
   {word:'ánægður',gender:'kk'},{word:'reiður',gender:'kk'},{word:'ferskt',gender:'hk'},
   {word:'leiður',gender:'kk'},{word:'fjörugur',gender:'kk'},{word:'þreyttur',gender:'kk'},
   {word:'heitt',gender:'hk'},{word:'beinn',gender:'kk'}
 ];
 function shuf(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-const bankEntries2 = shuf(WORDS2.map((w,i)=>({...w,id:w.word+'_'+i})));
-let drag2=null;
 
-function buildBank2(entries){
-  const wb=document.getElementById('wordBank2');
-  wb.innerHTML='';
-  entries.forEach(e=>wb.appendChild(makeChip2(e)));
+let dndCurrent=0; // current sentence index
+let dndScores=[]; // per sentence: true/false
+let dnd2Drag=null;
+const ghost=document.getElementById('dragGhost');
+
+function buildDndDots(){
+  const c=document.getElementById('dnd-dots');c.innerHTML='';
+  DND_SENTENCES.forEach((_,i)=>{
+    const d=document.createElement('div');
+    d.className='dnd-dot '+(i<dndCurrent?'bg-green-400':i===dndCurrent?'bg-blue-400':'bg-gray-200');
+    c.appendChild(d);
+  });
 }
+
+function renderDndCard(idx){
+  const s=DND_SENTENCES[idx];
+  const card=document.getElementById('dnd-card');
+  card.innerHTML='';
+  // before text
+  if(s.before){const t=document.createTextNode(s.before+' ');card.appendChild(t);}
+  // drop zone
+  const dz=document.createElement('span');
+  dz.className='drop-zone';dz.dataset.answer=s.answer;
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');if(!dnd2Drag)return;placeDnd(dz,dnd2Drag.word,dnd2Drag.chipId);dnd2Drag=null;});
+  dz.addEventListener('touchstart',e=>{if(!dz.dataset.current)return;onTSDnd(e,dz);},{passive:false});
+  dz.addEventListener('touchmove',onTMDnd,{passive:false});
+  dz.addEventListener('touchend',e=>onTEDnd(e,dz));
+  card.appendChild(dz);
+  // after text
+  if(s.after){const t=document.createTextNode(' '+s.after);card.appendChild(t);}
+  document.getElementById('dnd-counter').textContent=`Setning ${idx+1} af ${DND_SENTENCES.length}`;
+  buildDndDots();
+  upd2();
+}
+
+function buildBank2(words){
+  const wb=document.getElementById('wordBank2');wb.innerHTML='';
+  words.forEach(e=>wb.appendChild(makeChip2(e)));
+}
+
 function makeChip2(e){
-  const c=document.createElement('span'); c.className='word-chip';
-  c.dataset.word=e.word; c.dataset.chipId=e.id;
+  const c=document.createElement('span');c.className='word-chip';
+  c.dataset.word=e.word;c.dataset.chipId=e.id||e.word;
   c.innerHTML=`${e.word} <span class="gt">${e.gender}</span>`;
   c.draggable=true;
-  c.addEventListener('dragstart',ev=>{drag2={word:c.dataset.word,chipId:c.dataset.chipId,sourceZone:null};c.classList.add('dragging');ev.dataTransfer.effectAllowed='move';});
+  c.addEventListener('dragstart',ev=>{dnd2Drag={word:c.dataset.word,chipId:c.dataset.chipId};c.classList.add('dragging');ev.dataTransfer.effectAllowed='move';});
   c.addEventListener('dragend',()=>c.classList.remove('dragging'));
-  c.addEventListener('touchstart',onTS2,{passive:false});
-  c.addEventListener('touchmove',onTM2,{passive:false});
-  c.addEventListener('touchend',onTE2);
+  c.addEventListener('touchstart',onTSDnd,{passive:false});
+  c.addEventListener('touchmove',onTMDnd,{passive:false});
+  c.addEventListener('touchend',onTEDnd);
   return c;
 }
 
-document.querySelectorAll('#dndText .drop-zone').forEach(dz=>{
-  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
-  dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
-  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');if(!drag2)return;place2(dz,drag2.word,drag2.chipId,drag2.sourceZone);drag2=null;});
-  dz.addEventListener('dragstart',e=>{if(!dz.dataset.current)return;drag2={word:dz.dataset.current,chipId:dz.dataset.chipId,sourceZone:dz};e.dataTransfer.effectAllowed='move';});
-  dz.addEventListener('touchstart',e=>{if(!dz.dataset.current)return;onTS2(e,dz);},{passive:false});
-  dz.addEventListener('touchmove',onTM2,{passive:false});
-  dz.addEventListener('touchend',e=>onTE2(e,dz));
-});
 const wb2=document.getElementById('wordBank2');
 wb2.addEventListener('dragover',e=>{e.preventDefault();wb2.classList.add('dob');});
 wb2.addEventListener('dragleave',()=>wb2.classList.remove('dob'));
-wb2.addEventListener('drop',e=>{e.preventDefault();wb2.classList.remove('dob');if(!drag2?.sourceZone)return;returnBank2(drag2.sourceZone);drag2=null;});
+wb2.addEventListener('drop',e=>{e.preventDefault();wb2.classList.remove('dob');});
 
-function place2(zone,word,chipId,srcZone){
-  if(zone.dataset.current) returnBank2(zone);
-  if(!srcZone){const c=wb2.querySelector(`[data-chip-id="${chipId}"]`);if(c)c.remove();}
-  else clearZone2(srcZone);
-  zone.dataset.current=word; zone.dataset.chipId=chipId;
-  zone.classList.add('has-word'); zone.classList.remove('wrong','correct');
+function placeDnd(zone,word,chipId){
+  // remove chip from bank
+  const chip=wb2.querySelector(`[data-chip-id="${chipId}"]`);if(chip)chip.remove();
+  zone.dataset.current=word;zone.dataset.chipId=chipId;
+  zone.classList.add('has-word');zone.classList.remove('wrong','correct');
   zone.setAttribute('draggable','true');
   zone.innerHTML=`<span class="word-label">${word}</span>`;
   upd2();
 }
-function returnBank2(zone){
-  const word=zone.dataset.current,chipId=zone.dataset.chipId;
-  if(!word)return;
-  const gender=WORDS2.find(w=>w.word===word)?.gender||'';
-  wb2.appendChild(makeChip2({word,gender,id:chipId}));
-  clearZone2(zone); upd2();
-}
-function clearZone2(z){z.dataset.current='';z.dataset.chipId='';z.classList.remove('has-word','wrong','correct');z.setAttribute('draggable','false');z.innerHTML='';}
+
 function upd2(){
-  const zones=[...document.querySelectorAll('#dndText .drop-zone')];
-  document.getElementById('btn2').disabled=!zones.every(z=>z.dataset.current||z.classList.contains('correct'));
+  const dz=document.querySelector('#dnd-card .drop-zone');
+  document.getElementById('btn2').disabled=!dz||!dz.dataset.current;
 }
+
 function checkSec2(){
-  const zones=[...document.querySelectorAll('#dndText .drop-zone')];
-  let correct=0,wrong=0;
-  zones.forEach(z=>{
-    if(z.classList.contains('correct')){correct++;return;}
-    if(z.dataset.current===z.dataset.answer){
-      z.classList.remove('has-word','wrong');z.classList.add('correct');
-      z.setAttribute('draggable','false');
-      z.innerHTML=`<span class="word-label">${z.dataset.current}</span><span class="ml-1 text-green-500 text-sm">✓</span>`;
-      correct++;
-    }else{z.classList.add('wrong');wrong++;setTimeout(()=>returnBank2(z),700);}
-  });
-  const score=Math.round(correct/zones.length*10);
-  showFb('sec2-fb',`<div class="${correct===zones.length?'fb-ok':'fb-bad'}"><p class="font-normal">${correct}/${zones.length} rétt – ${score}/10 stig</p>${wrong>0?`<p class="text-sm font-light mt-1">${wrong} orð fóru til baka. Prófaðu aftur!</p>`:''}</div>`);
-  if(correct===zones.length){ document.getElementById('btn2r').classList.remove('hidden'); markDone(2,score); }
-  else upd2();
+  const dz=document.querySelector('#dnd-card .drop-zone');
+  if(!dz||!dz.dataset.current)return;
+  const correct=dz.dataset.current===dz.dataset.answer;
+  dndScores.push(correct);
+  if(correct){
+    dz.classList.add('correct');dz.classList.remove('has-word');
+    dz.setAttribute('draggable','false');
+    dz.innerHTML=`<span class="word-label">${dz.dataset.current}</span><span class="ml-1 text-green-500 text-sm">✓</span>`;
+    // brief pause then next
+    document.getElementById('btn2').disabled=true;
+    setTimeout(()=>advanceDnd(),700);
+  } else {
+    dz.classList.add('wrong');
+    // return chip to bank
+    const word=dz.dataset.current;
+    const gender=WORDS2.find(w=>w.word===word)?.gender||'';
+    setTimeout(()=>{
+      dz.dataset.current='';dz.dataset.chipId='';
+      dz.classList.remove('wrong','has-word','correct');dz.setAttribute('draggable','false');dz.innerHTML='';
+      wb2.appendChild(makeChip2({word,gender,id:word}));
+      upd2();
+    },600);
+    showFb('sec2-fb','<div class="fb-bad"><p class="text-sm font-light">Ekki rétt – reyndu aftur!</p></div>');
+    setTimeout(()=>document.getElementById('sec2-fb').classList.add('hidden'),1500);
+  }
 }
-function resetSec2(){ document.querySelectorAll('#dndText .drop-zone').forEach(clearZone2); buildBank2(shuf([...bankEntries2])); document.getElementById('sec2-fb').classList.add('hidden'); document.getElementById('btn2r').classList.add('hidden'); upd2(); }
 
-// Touch for section 2
-let tc2={word:null,chipId:null,sourceZone:null};
-const ghost=document.getElementById('dragGhost');
-function onTS2(e,zo){
-  const el=zo||e.currentTarget; const isZ=el.classList.contains('drop-zone');
-  const word=isZ?el.dataset.current:el.dataset.word; if(!word)return;
-  e.preventDefault(); tc2={word,chipId:el.dataset.chipId,sourceZone:isZ?el:null};
-  ghost.textContent=word; ghost.style.display='block';
-  const t=e.touches[0]; ghost.style.left=t.clientX+'px'; ghost.style.top=t.clientY+'px';
+function advanceDnd(){
+  document.getElementById('sec2-fb').classList.add('hidden');
+  dndCurrent++;
+  if(dndCurrent>=DND_SENTENCES.length){
+    // all done
+    const correct=dndScores.filter(Boolean).length;
+    const score=Math.round(correct/DND_SENTENCES.length*10);
+    showFb('sec2-fb',`<div class="fb-ok"><p class="font-normal">Lokið! ${correct}/${DND_SENTENCES.length} rétt – ${score}/10 stig 🎉</p></div>`);
+    markDone(2,score);
+    document.getElementById('btn2r').classList.remove('hidden');
+    document.getElementById('dnd-card').innerHTML='<span class="text-green-600 font-normal">✓ Öllum setningum lokið!</span>';
+    buildDndDots();
+    return;
+  }
+  // rebuild bank for next sentence – only show words not yet used
+  const usedAnswers=DND_SENTENCES.slice(0,dndCurrent).map(s=>s.answer);
+  const remaining=WORDS2.filter(w=>!usedAnswers.includes(w.word));
+  buildBank2(shuf(remaining.map((w,i)=>({...w,id:w.word+'_'+i}))));
+  renderDndCard(dndCurrent);
 }
-function onTM2(e){
-  if(!tc2.word)return; e.preventDefault();
-  const t=e.touches[0]; ghost.style.left=t.clientX+'px'; ghost.style.top=t.clientY+'px';
-  document.querySelectorAll('#dndText .drop-zone').forEach(d=>d.classList.remove('drag-over'));
-  document.elementFromPoint(t.clientX,t.clientY)?.closest('#dndText .drop-zone:not(.correct)')?.classList.add('drag-over');
+
+function resetSec2(){
+  dndCurrent=0;dndScores=[];
+  buildBank2(shuf(WORDS2.map((w,i)=>({...w,id:w.word+'_'+i}))));
+  renderDndCard(0);
+  document.getElementById('sec2-fb').classList.add('hidden');
+  document.getElementById('btn2r').classList.add('hidden');
+  secDone[2]=false;secScores[2]=null;updateProgress();
+  const btn=document.getElementById('btn2');btn.textContent='Athuga svar';btn.classList.remove('bg-green-600');btn.classList.add('bg-blue-600','hover:bg-blue-700');
 }
-function onTE2(e){
-  if(!tc2.word)return; ghost.style.display='none';
-  document.querySelectorAll('#dndText .drop-zone').forEach(d=>d.classList.remove('drag-over'));
+
+// Touch for DnD
+let tcDnd={word:null,chipId:null};
+function onTSDnd(e,zo){
+  const el=zo||e.currentTarget;
+  const isZ=el.classList.contains('drop-zone');
+  const word=isZ?el.dataset.current:el.dataset.word;if(!word)return;
+  e.preventDefault();tcDnd={word,chipId:el.dataset.chipId||el.dataset.word,sourceZone:isZ?el:null};
+  ghost.textContent=word;ghost.style.display='block';
+  const t=e.touches[0];ghost.style.left=t.clientX+'px';ghost.style.top=t.clientY+'px';
+}
+function onTMDnd(e){
+  if(!tcDnd.word)return;e.preventDefault();
+  const t=e.touches[0];ghost.style.left=t.clientX+'px';ghost.style.top=t.clientY+'px';
+  document.querySelectorAll('#dnd-card .drop-zone').forEach(d=>d.classList.remove('drag-over'));
+  document.elementFromPoint(t.clientX,t.clientY)?.closest('#dnd-card .drop-zone:not(.correct)')?.classList.add('drag-over');
+}
+function onTEDnd(e){
+  if(!tcDnd.word)return;ghost.style.display='none';
+  document.querySelectorAll('#dnd-card .drop-zone').forEach(d=>d.classList.remove('drag-over'));
   wb2.classList.remove('dob');
-  const t=e.changedTouches[0]; const el=document.elementFromPoint(t.clientX,t.clientY);
-  const tz=el?.closest('#dndText .drop-zone:not(.correct)'); const tb=el?.closest('#wordBank2');
-  if(tz) place2(tz,tc2.word,tc2.chipId,tc2.sourceZone);
-  else if(tb&&tc2.sourceZone) returnBank2(tc2.sourceZone);
-  tc2={word:null,chipId:null,sourceZone:null};
+  const t=e.changedTouches[0];const el=document.elementFromPoint(t.clientX,t.clientY);
+  const tz=el?.closest('#dnd-card .drop-zone:not(.correct)');
+  if(tz)placeDnd(tz,tcDnd.word,tcDnd.chipId);
+  tcDnd={word:null,chipId:null,sourceZone:null};
 }
 
-// ══════════════════════════════════════════
-//  SECTION 3 – MATCHING
-// ══════════════════════════════════════════
+// ── SEC 3: MATCHING ──────────────────────────────────────────
 const matchCorrect={m1:'c',m2:'d',m3:'b',m4:'a'};
-const matchLabels={c:'c. Brosir, talar fallega og hjálpar öðrum',d:'d. Hefur allt á sínum stað',b:'b. Sýnir virðingu',a:'a. Fylgir reglum'};
-function updateBtn3(){
-  const all=['m1','m2','m3','m4'].every(id=>document.getElementById(id).value);
-  document.getElementById('btn3').disabled=!all;
-}
+const matchLabels={c:'c. Brosir, talar fallega',d:'d. Hefur allt á sínum stað',b:'b. Sýnir virðingu',a:'a. Fylgir reglum'};
+function updateBtn3(){document.getElementById('btn3').disabled=!['m1','m2','m3','m4'].every(id=>document.getElementById(id).value);}
 function checkSec3(){
   let correct=0;
   ['m1','m2','m3','m4'].forEach((id,i)=>{
-    const sel=document.getElementById(id);
-    const lbl=document.getElementById('mlbl'+(i+1));
+    const sel=document.getElementById(id);const lbl=document.getElementById('mlbl'+(i+1));
     if(sel.value===matchCorrect[id]){sel.classList.add('correct-inp');correct++;if(lbl)lbl.textContent='✓ '+matchLabels[sel.value];}
     else{sel.classList.add('wrong-inp');if(lbl){lbl.textContent='✗ Rétt: '+matchLabels[matchCorrect[id]];lbl.classList.add('text-red-500');}}
     sel.disabled=true;
@@ -621,70 +557,67 @@ function checkSec3(){
 }
 function resetSec3(){
   ['m1','m2','m3','m4'].forEach((id,i)=>{
-    const sel=document.getElementById(id); sel.value=''; sel.className='match-sel'; sel.disabled=false;
-    const lbl=document.getElementById('mlbl'+(i+1)); if(lbl){lbl.textContent='';lbl.className='text-xs text-gray-400 w-40 font-light hidden md:block';}
+    const sel=document.getElementById(id);sel.value='';sel.className='match-sel';sel.disabled=false;
+    const lbl=document.getElementById('mlbl'+(i+1));if(lbl){lbl.textContent='';lbl.className='text-xs text-gray-400 w-40 font-light hidden md:block';}
   });
-  document.getElementById('sec3-fb').classList.add('hidden');
-  document.getElementById('btn3').disabled=true; document.getElementById('btn3r').classList.add('hidden');
-  secDone[3]=false; secScores[3]=null; updateProgress();
-  const btn=document.getElementById('btn3'); btn.textContent='Athuga svör'; btn.classList.add('bg-blue-600','hover:bg-blue-700'); btn.classList.remove('bg-green-600');
+  document.getElementById('sec3-fb').classList.add('hidden');document.getElementById('btn3r').classList.add('hidden');
+  document.getElementById('btn3').disabled=true;secDone[3]=false;secScores[3]=null;updateProgress();
+  const btn=document.getElementById('btn3');btn.textContent='Athuga svör';btn.classList.add('bg-blue-600','hover:bg-blue-700');btn.classList.remove('bg-green-600');
 }
 
-// ══════════════════════════════════════════
-//  SECTION 4 – KYN TAFLA
-// ══════════════════════════════════════════
+// ── SEC 4: KYN TAFLA ─────────────────────────────────────────
 function checkSec4(){
   const inputs=document.querySelectorAll('#sec4 .tbl-input');
   let correct=0;
   inputs.forEach(inp=>{
     if(norm(inp.value)===norm(inp.dataset.correct)){inp.classList.add('correct-inp');inp.disabled=true;correct++;}
-    else{inp.classList.add('wrong-inp');}
+    else inp.classList.add('wrong-inp');
   });
-  const total=inputs.length; // 14
+  const total=inputs.length; // 5 eyður
   const score=Math.round(correct/total*20);
-  showFb('sec4-fb',`<div class="${correct===total?'fb-ok':'fb-bad'}"><p class="font-normal">${correct}/${total} rétt – ${score}/20 stig</p>${correct<total?'<p class="text-sm font-light mt-1">Rauðu reitirnir eru rangir. Leiðréttu þá og reyndu aftur.</p>':''}</div>`);
-  if(correct===total) markDone(4,score);
-  else{ document.querySelectorAll('#sec4 .tbl-input.wrong-inp').forEach(i=>i.classList.remove('wrong-inp')); }
+  showFb('sec4-fb',`<div class="${correct===total?'fb-ok':'fb-bad'}"><p class="font-normal">${correct}/${total} rétt – ${score}/20 stig</p>${correct<total?'<p class="text-sm font-light mt-1">Rauðu reitirnir eru rangir.</p>':''}</div>`);
+  if(correct===total)markDone(4,score);
+  else document.querySelectorAll('#sec4 .tbl-input.wrong-inp').forEach(i=>i.classList.remove('wrong-inp'));
 }
 function resetSec4(){
   document.querySelectorAll('#sec4 .tbl-input').forEach(i=>{i.value='';i.className='tbl-input';i.disabled=false;});
-  document.getElementById('sec4-fb').classList.add('hidden');
-  document.getElementById('btn4r').classList.add('hidden');
+  document.getElementById('sec4-fb').classList.add('hidden');document.getElementById('btn4r').classList.add('hidden');
   secDone[4]=false;secScores[4]=null;updateProgress();
   const btn=document.getElementById('btn4');btn.textContent='Athuga svör';btn.disabled=false;btn.classList.add('bg-blue-600','hover:bg-blue-700');btn.classList.remove('bg-green-600');
 }
 
-// ══════════════════════════════════════════
-//  SECTION 5 – ANDHEITI (AI)
-// ══════════════════════════════════════════
+// ── SEC 5: ANDHEITI – 2 ORÐ, BETRI AI ──────────────────────
 async function checkSec5(){
-  const words=['Heitur','Hár','Léttur','Gamall','Hægur'];
-  const answers=words.map((w,i)=>({word:w,answer:document.getElementById('and'+(i+1)).value.trim()}));
-  if(answers.some(a=>!a.answer)){showFb('sec5-fb','<p class="text-yellow-700 text-sm font-light">Fylltu í öll svör.</p>');return;}
+  const pairs=[{word:'Heitur',ans:document.getElementById('and1').value.trim()},{word:'Léttur',ans:document.getElementById('and2').value.trim()}];
+  if(pairs.some(p=>!p.ans)){showFb('sec5-fb','<p class="text-yellow-700 text-sm font-light">Fylltu í bæði svörin.</p>');return;}
   setLoading('btn5',true);
   try{
-    const sys=`Þú ert íslenskukennari. Nemandi á að skrifa andheiti við 5 lýsingarorð.
-Réttar andheiti (gera ráð fyrir kk. nefnifall): kaldur, lágur, þungur, ungur, fljótur.
-Aðrar lögmætar andheitar eru líka réttar ef þær eru íslenskar og rökréttar.
-Gefðu 1 stig fyrir hvert rétt andheiti (hámark 5).
-SKILAÐU EINUNGIS JSON: {"score":N,"feedback":"stutt íslensk endurgjöf"}`;
-    const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(answers)}]);
+    const sys=`Þú ert íslenskukennari. Nemandi á að skrifa andheiti við tvö íslensk lýsingarorð í karlkyni nefnifalli (kk. nf.).
+Orð 1: Heitur – rétt andheiti: kaldur (eða jafngildar lögmætar íslenskar andheitar)
+Orð 2: Léttur – rétt andheiti: þungur (eða jafngildar lögmætar íslenskar andheitar)
+Gefðu 1 stig fyrir hvert orð þar sem nemandinn skilar lögmætu íslensku andheiti (hvort sem það er í nákvæmlega réttri beygingarform eða ekki, meta MERKINGUNA).
+Ef svarið er rangt, sýndu rétt svar í endurgjöfinni.
+SKILAÐU EINUNGIS JSON: {"score":N,"feedback_1":"endurgjöf á íslensku um orð 1","feedback_2":"endurgjöf á íslensku um orð 2"}`;
+    const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(pairs)}]);
     const obj=JSON.parse(res);
-    const score=Math.min(5,Math.max(0,obj.score||0));
-    showFb('sec5-fb',`<div class="fb-ok"><p class="font-normal mb-1">Einkunn: ${score}/5 stig</p><p class="text-sm font-light">${obj.feedback}</p></div>`);
-    markDone(5,score);
+    const score=Math.min(2,Math.max(0,obj.score||0));
+    const pts=score===2?5:score===1?2:0;
+    showFb('sec5-fb',`<div class="${score===2?'fb-ok':'fb-bad'}">
+      <p class="font-normal mb-2">Einkunn: ${pts}/5 stig</p>
+      <p class="text-sm font-light mb-1"><strong>1. Heitur:</strong> ${obj.feedback_1}</p>
+      <p class="text-sm font-light"><strong>2. Léttur:</strong> ${obj.feedback_2}</p>
+    </div>`);
+    markDone(5,pts);
   }catch(e){showFb('sec5-fb','<p class="text-red-600 text-sm">Villa við tengingu. Reyndu aftur.</p>');setLoading('btn5',false);}
 }
 function resetSec5(){
-  ['and1','and2','and3','and4','and5'].forEach(id=>{const el=document.getElementById(id);el.value='';el.className='ans-input flex-1';});
+  ['and1','and2'].forEach(id=>{const el=document.getElementById(id);el.value='';el.className='ans-input flex-1';});
   document.getElementById('sec5-fb').classList.add('hidden');document.getElementById('btn5r').classList.add('hidden');
   secDone[5]=false;secScores[5]=null;updateProgress();
   const btn=document.getElementById('btn5');btn.textContent='Athuga svör';btn.disabled=false;btn.classList.add('bg-blue-600','hover:bg-blue-700');btn.classList.remove('bg-green-600');
 }
 
-// ══════════════════════════════════════════
-//  SECTION 6 – SKILNINGUR (AI)
-// ══════════════════════════════════════════
+// ── SEC 6: SKILNINGUR (AI) ───────────────────────────────────
 async function checkSec6(){
   const qs=['Hvar átti konan heima?','Hvaðan var konan?','Hvaða dag gerist sagan?','Hvert ætlaði konan að fara eftir vinnu?','Hvenær fór hún úr vinnunni þennan dag?','Hvað keypti hún í búðinni?','Hvað gerðu þær vinkonurnar saman?'];
   const answers=qs.map((q,i)=>({question:q,answer:document.getElementById('q6_'+(i+1)).value.trim()}));
@@ -710,65 +643,71 @@ function resetSec6(){
   const btn=document.getElementById('btn6');btn.textContent='Athuga svör';btn.disabled=false;btn.classList.add('bg-blue-600','hover:bg-blue-700');btn.classList.remove('bg-green-600');
 }
 
-// ══════════════════════════════════════════
-//  SECTION 7 – FINNA LÝSINGARORÐ (AI)
-// ══════════════════════════════════════════
+// ── SEC 7: FINNA LÝSINGARORÐ – 3 ORÐ, SJÁLFVIRKT ───────────
 (function buildSec7(){
   const rows=document.getElementById('sec7rows');
-  for(let i=1;i<=11;i++){
-    const div=document.createElement('div');
-    div.className='flex items-center gap-3';
-    div.innerHTML=`<span class="text-xs text-gray-400 font-light w-4">${i}.</span><input class="ans-input flex-1" id="s7w${i}" placeholder="Lýsingarorð..."/><input class="ans-input w-28" id="s7g${i}" placeholder="kyn..."/>`;
+  for(let i=1;i<=3;i++){
+    const div=document.createElement('div');div.className='flex items-center gap-3';
+    div.innerHTML=`<span class="text-xs text-gray-400 font-light w-4">${i}.</span><input class="ans-input flex-1" id="s7w${i}" placeholder="Lýsingarorð..."/><input class="ans-input w-32" id="s7g${i}" placeholder="kyn..."/>`;
     rows.appendChild(div);
   }
 })();
 
-async function checkSec7(){
-  const answers=[];
-  for(let i=1;i<=11;i++){
-    const w=document.getElementById('s7w'+i).value.trim();
-    const g=document.getElementById('s7g'+i).value.trim();
-    if(w||g) answers.push({num:i,word:w,gender:g});
+// Correct answers: nýr(kk), gamalt(hk), skemmtileg(kvk)
+const SEC7_ANSWERS=[
+  {word:'nýr',genders:['kk','karlkyn']},
+  {word:'gamalt',genders:['hk','hvorugkyn']},
+  {word:'skemmtileg',genders:['kvk','kvenkyn']},
+];
+function normG(s){return s.trim().toLowerCase().replace(/\./g,'');}
+
+function checkSec7(){
+  let correct=0;
+  for(let i=1;i<=3;i++){
+    const wEl=document.getElementById('s7w'+i);const gEl=document.getElementById('s7g'+i);
+    const w=norm(wEl.value);const g=normG(gEl.value);
+    const exp=SEC7_ANSWERS[i-1];
+    const wOk=w===exp.word;
+    const gOk=exp.genders.includes(g);
+    if(wOk&&gOk){wEl.classList.add('correct-inp');gEl.classList.add('correct-inp');correct++;}
+    else{
+      if(!wOk)wEl.classList.add('wrong-inp');else wEl.classList.add('correct-inp');
+      if(!gOk)gEl.classList.add('wrong-inp');else gEl.classList.add('correct-inp');
+    }
   }
-  if(answers.length<9){showFb('sec7-fb','<p class="text-yellow-700 text-sm font-light">Skrifaðu a.m.k. 9 lýsingarorð.</p>');return;}
-  setLoading('btn7',true);
-  try{
-    const sys=`Þú ert íslenskukennari. Nemandi á að finna öll lýsingarorð í textanum og tilgreina kyn þeirra.
-TEXTINN: "Sara á litla kött. Kötturinn sefur í mjúku rúmi inni í hlýju herbergi. Á veggnum er stórt, fallegt plakat. Á borðinu er ný lampi og þar liggur líka græn bók. Sara drekkur kalt vatn og borðar heitt brauð. Hún er glöð og róleg heima hjá sér."
-RÉTT SVÖR (11 lýsingarorð): litla(kvk), mjúku(kvk), hlýju(hk), stórt(hk), fallegt(hk), ný(kvk), græn(kvk), kalt(hk), heitt(hk), glöð(kvk), róleg(kvk).
-Meta hvort nemandinn hafi fundið lýsingarorðið og gefið rétt kyn. Gefðu 1 stig fyrir hvert (hámark 11, en próf er 18 stig). Leggðu saman og skalaðu í 18.
-SKILAÐU EINUNGIS JSON: {"score_raw":N,"score_18":N,"feedback":"stutt íslensk endurgjöf"}`;
-    const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(answers)}],400);
-    const obj=JSON.parse(res);
-    const score=Math.min(18,Math.max(0,obj.score_18||0));
-    showFb('sec7-fb',`<div class="${obj.score_raw>=9?'fb-ok':'fb-bad'}"><p class="font-normal mb-1">Einkunn: ${score}/18 stig (${obj.score_raw}/11 orð rétt)</p><p class="text-sm font-light">${obj.feedback}</p></div>`);
-    markDone(7,score);
-  }catch(e){showFb('sec7-fb','<p class="text-red-600 text-sm">Villa við tengingu. Reyndu aftur.</p>');setLoading('btn7',false);}
+  const score=Math.round(correct/3*18);
+  const allRight=correct===3;
+  showFb('sec7-fb',`<div class="${allRight?'fb-ok':'fb-bad'}">
+    <p class="font-normal mb-1">${correct}/3 rétt – ${score}/18 stig</p>
+    ${!allRight?`<p class="text-sm font-light mt-1">Rétt svör: <strong>nýr (kk)</strong>, <strong>gamalt (hk)</strong>, <strong>skemmtileg (kvk)</strong></p>`:''}
+  </div>`);
+  if(allRight){markDone(7,score);}
+  else{
+    setTimeout(()=>{
+      document.querySelectorAll('#sec7rows .wrong-inp').forEach(el=>{el.classList.remove('wrong-inp');el.classList.remove('correct-inp');});
+    },1500);
+  }
 }
 function resetSec7(){
-  for(let i=1;i<=11;i++){
-    document.getElementById('s7w'+i).value='';document.getElementById('s7w'+i).className='ans-input flex-1';
-    document.getElementById('s7g'+i).value='';document.getElementById('s7g'+i).className='ans-input w-28';
+  for(let i=1;i<=3;i++){
+    ['s7w','s7g'].forEach(pre=>{const el=document.getElementById(pre+i);el.value='';el.className=pre==='s7w'?'ans-input flex-1':'ans-input w-32';});
   }
   document.getElementById('sec7-fb').classList.add('hidden');document.getElementById('btn7r').classList.add('hidden');
   secDone[7]=false;secScores[7]=null;updateProgress();
   const btn=document.getElementById('btn7');btn.textContent='Athuga svör';btn.disabled=false;btn.classList.add('bg-blue-600','hover:bg-blue-700');btn.classList.remove('bg-green-600');
 }
 
-// ══════════════════════════════════════════
-//  SECTION 8 – SKRIFA UM MYND (AI)
-// ══════════════════════════════════════════
+// ── SEC 8: SKRIFA UM MYND – 2 SETNINGAR (AI) ────────────────
 async function checkSec8(){
-  const sents=[];
-  for(let i=1;i<=5;i++){const v=document.getElementById('s8_'+i).value.trim();if(v)sents.push(v);}
-  if(sents.length<5){showFb('sec8-fb','<p class="text-yellow-700 text-sm font-light">Skrifaðu 5 setningar.</p>');return;}
+  const sents=[document.getElementById('s8_1').value.trim(),document.getElementById('s8_2').value.trim()];
+  if(sents.some(s=>!s)){showFb('sec8-fb','<p class="text-yellow-700 text-sm font-light">Skrifaðu báðar setningar.</p>');return;}
   setLoading('btn8',true);
   try{
     const sys=`Þú ert íslenskukennari sem metur ritun nemanda.
-VERKEFNI: Nemandinn átti að skrifa 5 setningar um mynd af herbergi. 
-KRÖFUR: (1) 5 setningar, (2) a.m.k. 4 lýsingarorð í textanum alls, (3) hverri setningu a.m.k. 4 orð.
+VERKEFNI: Nemandinn átti að skrifa 2 setningar um mynd af herbergi.
+KRÖFUR: (1) 2 setningar, (2) a.m.k. 2 lýsingarorð í textanum alls, (3) hverri setningu a.m.k. 4 orð.
 Gefðu einkunn 0-10 miðað við þessar kröfur og málfræðilega nákvæmni.
-SKILAÐU EINUNGIS JSON: {"score":N,"feedback":"hvetjandi endurgjöf á íslensku, bentu á lýsingarorð sem notuð voru"}`;
+SKILAÐU EINUNGIS JSON: {"score":N,"feedback":"hvetjandi endurgjöf á íslensku, tilgreindu lýsingarorðin sem notuð voru og bentu á villur ef einhverjar eru"}`;
     const res=await callAI([{role:'system',content:sys},{role:'user',content:sents.join('\n')}],400);
     const obj=JSON.parse(res);
     const score=Math.min(10,Math.max(0,obj.score||0));
@@ -777,17 +716,15 @@ SKILAÐU EINUNGIS JSON: {"score":N,"feedback":"hvetjandi endurgjöf á íslensku
   }catch(e){showFb('sec8-fb','<p class="text-red-600 text-sm">Villa við tengingu. Reyndu aftur.</p>');setLoading('btn8',false);}
 }
 function resetSec8(){
-  for(let i=1;i<=5;i++){const el=document.getElementById('s8_'+i);el.value='';el.className='ans-input mt-1';}
+  ['s8_1','s8_2'].forEach(id=>{const el=document.getElementById(id);el.value='';el.className='ans-input mt-1';});
   document.getElementById('sec8-fb').classList.add('hidden');document.getElementById('btn8r').classList.add('hidden');
   secDone[8]=false;secScores[8]=null;updateProgress();
   const btn=document.getElementById('btn8');btn.textContent='Athuga svör';btn.disabled=false;btn.classList.add('bg-blue-600','hover:bg-blue-700');btn.classList.remove('bg-green-600');
 }
 
-// ══════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════
-buildBank2(bankEntries2);
-upd2();
+// ── INIT ─────────────────────────────────────────────────────
+buildBank2(shuf(WORDS2.map((w,i)=>({...w,id:w.word+'_'+i}))));
+renderDndCard(0);
 updateProgress();
 </script>
 </body>
