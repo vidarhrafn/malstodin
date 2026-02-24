@@ -403,7 +403,7 @@
         if (!msg || closed[i]) return;
 
         const newTurn = turnCount[i] + 1;
-        const isLast = newTurn >= 3;
+        const isLast = newTurn >= 4;
 
         setLoading(l => { const n=[...l]; n[i]=true; return n; });
         setConvos(c => { const n=[...c]; n[i]=[...n[i], {role:'user', text:msg}]; return n; });
@@ -414,25 +414,44 @@
         try {
           const history = convos[i].map(m => ({
             role: m.role === 'user' ? 'user' : 'assistant',
-            content: m.text
-          }));
+            content: m.role === 'grammar' ? '' : m.text
+          })).filter(m => m.content);
 
           const systemPrompt = isLast
             ? `Þú ert vingjarnlegur íslenskukennari. Þetta er síðasta svar þitt í þessu samtali.
-Svaraðu hlýlega og stuttlega (1-2 setningar) og ljúktu samtalinu á náttúrulegan og hlý máta – 
+Svaraðu hlýlega og stuttlega (1-2 setningar) og ljúktu samtalinu á náttúrulegan og hlý máta –
 eins og "Þetta er frábært að heyra!" eða "Já, það hlýtur að vera gaman!".
 Engar spurningar. Á íslensku.`
             : `Þú ert vingjarnlegur íslenskukennari sem ræðir við nemanda um áhugamál.
 Svaraðu stuttlega (1-2 setningar) við því sem nemandinn sagði og settu fram eina náttúrulega eftirspurningu til að halda samtalinu áfram.
 Vertu hlýr og áhugasamur. Á íslensku.`;
 
-          const result = await callOpenAI([
-            { role: 'system', content: systemPrompt },
-            ...history,
-            { role: 'user', content: msg }
-          ], 150);
+          // Run conversation reply and grammar check in parallel
+          const [result, grammarResult] = await Promise.all([
+            callOpenAI([
+              { role: 'system', content: systemPrompt },
+              ...history,
+              { role: 'user', content: msg }
+            ], 150),
+            callOpenAI([
+              { role: 'system', content: `Þú ert íslenskukennari sem gefur MJÖG stuttar og hlýjar málfarsábendingar til nemenda á A1-A2 stigi.
+Skoðaðu setninguna og athugaðu hvort það sé ein augljós villa (stafsetning, kyn orða, eintölu/fleirtölu eða beygingu).
+Ef það er villa: Svaraðu með einni stuttri setningu sem byrjar á "Mundu að..." og lagar villuna hlýlega, t.d. "Mundu að 'gaman' er hvorugkyn, svo við segjum 'það er gaman' 😊" eða "Mundu að það er bara eitt n í 'kenna' 😊".
+Ef engin villa eða ef það er of flókið: Svaraðu EINUNGIS með "ENGIN".
+Vera MJÖG hvetjandi. Aldrei nefna fleiri en eina villu.` },
+              { role: 'user', content: msg }
+            ], 80)
+          ]);
 
-          setConvos(c => { const n=[...c]; n[i]=[...n[i], {role:'assistant', text:result}]; return n; });
+          const msgs = [];
+          // Add grammar tip if there is one
+          const grammarClean = grammarResult.trim();
+          if (grammarClean && grammarClean !== 'ENGIN' && !grammarClean.toUpperCase().startsWith('ENGIN')) {
+            msgs.push({ role: 'grammar', text: grammarClean });
+          }
+          msgs.push({ role: 'assistant', text: result });
+
+          setConvos(c => { const n=[...c]; n[i]=[...n[i], ...msgs]; return n; });
 
           if (isLast) {
             setClosed(cl => {
@@ -480,6 +499,13 @@ Vertu hlýr og áhugasamur. Á íslensku.`;
                       <div className="flex justify-end">
                         <div className="bg-blue-50 rounded-xl rounded-tr-sm px-4 py-3 max-w-[80%]">
                           <p className="text-gray-800 font-light text-sm">{msg.text}</p>
+                        </div>
+                      </div>
+                    ) : msg.role === 'grammar' ? (
+                      <div className="flex justify-center">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-[90%] flex items-start gap-2">
+                          <span className="text-amber-500 text-xs mt-0.5 flex-shrink-0">📌</span>
+                          <p className="text-amber-800 font-light text-xs">{msg.text}</p>
                         </div>
                       </div>
                     ) : (
