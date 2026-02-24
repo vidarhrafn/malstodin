@@ -14,599 +14,598 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+
     .answer-option {
       border: 2px solid #e0e0e0;
       transition: all 0.2s;
       cursor: pointer;
     }
     .answer-option:hover:not(.disabled) {
-      border-color: #2196f3;
-      background: #e3f2fd;
+      border-color: #3b82f6;
+      background: #eff6ff;
     }
-    .answer-option.selected {
-      border-color: #2196f3;
-      background: #e3f2fd;
+    .answer-option.selected { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.correct  { border-color: #22c55e; background: #f0fdf4; }
+    .answer-option.incorrect{ border-color: #ef4444; background: #fef2f2; }
+    .answer-option.disabled { cursor: default; }
+
+    .tab-btn {
+      transition: all 0.2s;
+      position: relative;
     }
-    .answer-option.correct {
-      border-color: #4caf50;
-      background: #e8f5e9;
+    .tab-btn:not(.active):hover {
+      background: #f3f4f6;
     }
-    .answer-option.incorrect {
-      border-color: #f44336;
-      background: #ffebee;
+    .tab-btn.active {
+      background: white;
+      color: #2563eb;
+      font-weight: 500;
     }
-    .answer-option.disabled {
-      cursor: default;
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0; right: 0;
+      height: 3px;
+      background: #2563eb;
+      border-radius: 2px 2px 0 0;
     }
+
     .chat-container {
-      max-height: 500px;
+      max-height: 420px;
       overflow-y: auto;
     }
-    .chat-container::-webkit-scrollbar {
-      width: 6px;
+    .chat-container::-webkit-scrollbar { width: 6px; }
+    .chat-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .chat-container::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+
+    .text-panel {
+      overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
     }
-    .chat-container::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 10px;
-    }
-    .chat-container::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 10px;
-    }
-    
-    /* Modal styles */
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      overflow-y: auto;
-    }
-    .modal.active {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .modal-content {
-      background: white;
-      border-radius: 12px;
-      max-width: 800px;
-      width: 100%;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-    }
-    .modal-content::-webkit-scrollbar {
-      width: 8px;
-    }
-    .modal-content::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 10px;
-    }
-    .modal-content::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 10px;
-    }
-    
-    /* Sticky text button */
-    .sticky-text-btn {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: white;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
+    .text-panel.open  { max-height: 800px; opacity: 1; }
+    .text-panel.closed{ max-height: 0;    opacity: 0; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useRef, useEffect } = React;
 
-    async function callOpenAI(payload) {
+    /* ─── API ─── */
+    async function callOpenAI(messages, max_tokens = 300) {
       const r = await fetch('/.netlify/functions/openai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ messages, max_tokens, model: 'gpt-4o-mini', temperature: 0.3 })
       });
       const data = await r.json();
       if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
       return data.content;
     }
 
-    const READING_TEXT = `Fólk hefur ólík áhugamál. Sumir eru hrifnir af íþróttum, aðrir lesa bækur eða hlusta á tónlist. Áhugamál eru mikilvæg því þau gefa gleði og orku. Þau geta hjálpað fólki að slaka á eftir erfiðan dag og læra nýja hluti. Sum áhugamál eru róleg, eins og lestur, en önnur eru meira spennandi, eins og fótbolti eða sund.
+    /* ─── EFNI ─── */
+    const READING_TEXT = [
+      { type: 'intro', text: 'Áhugamál geta verið mörg og ólík. Sumir hafa eitt áhugamál en aðrir mörg. Og stundum breytast áhugamálin okkar eða við fáum ný áhugamál. Margir hafa áhuga á íþróttum en aðrir lesa bækur eða hlusta á tónlist. Áhugamál geta hjálpað okkur að slappa af en líka að gera eitthvað spennandi.' },
+      { type: 'heading', text: '1. Sund' },
+      { type: 'para', text: 'Sund er mjög vinsælt á Íslandi. Flestir synda í sundlaugum en sumir synda í sjónum og jafnvel á veturna! Sund er gott fyrir heilsuna því það er auðvelt að hreyfa sig í vatni. Margir fara í sund tvisvar eða þrisvar sinnum í viku. Eftir sund er vinsælt að fara í heitan pott til að slappa af. Fólk spjallar oft mikið saman í heitum pottum.' },
+      { type: 'heading', text: '2. Fótbolti' },
+      { type: 'para', text: 'Fótbolti er vinsælasta íþróttin í heimi. Tvö lið reyna að skora mark. Oft eru ellefu leikmenn í liði og einn er markvörður. Hann má taka boltann með höndum. Það er mikilvægt að hlaupa hratt og sparka fast í boltann. Margir æfa með liði, kannski 4–5 sinnum í viku en sumir vilja bara leika sér í fótbolta með vinum sínum. Mjög margir horfa á fótbolta í sjónvarpinu og styðja sitt lið.' },
+      { type: 'heading', text: '3. Tónlist' },
+      { type: 'para', text: 'Tónlist er fallegt áhugamál. Fólk spilar á hljóðfæri eins og til dæmis gítar, píanó eða fiðlu. Aðrir syngja eða hlusta á tónlist. Tónlist getur verið róleg eða hröð, glaðleg eða sorgleg. Margir fara á tónleika eða dansa við tónlist. Sumir semja lög og texta og spila á tónleikum, jafnvel með hljómsveit. Margir hlusta á tónlist þegar þeir vinna eða læra.' },
+      { type: 'heading', text: '4. Lesa bækur' },
+      { type: 'para', text: 'Að lesa bækur er gott áhugamál. Sumar bækur eru spennandi, aðrar eru fyndnar eða sorglegar. Margir lesa á kvöldin áður en þeir fara að sofa. Við lærum ný orð og fáum nýjar hugmyndir þegar við lesum bækur.' },
+      { type: 'outro', text: 'Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir elska að vera virkir og æfa sig, en aðrir njóta þess að slaka á og lesa eða hlusta á tónlist.' }
+    ];
 
-**Sund**
-
-Sund er vinsæl íþrótt á Íslandi. Fólk syndir í sundlaugum eða í sjónum. Sund er gott fyrir heilsuna því það er auðvelt að hreyfa sig í vatni. Margir fara í sund tvisvar eða þrisvar í viku. Eftir sund fer fólk oft í heita potta og slakar á. Á veturna er notalegt að fara í heitt vatn þegar það er kalt úti. Sund getur verið keppnisíþrótt, en margir synda bara í rólegheitum til að njóta vatnsins.
-
-**Fótbolti**
-
-Fótbolti er vinsælasta íþróttin í heiminum. Tvö lið spila saman og reyna að skora mörk. Leikmenn hlaupa hratt og sparka boltanum. Mörg börn og fullorðnir spila fótbolta. Þetta er skemmtileg og spennandi íþrótt. Fótbolti kennir fólki að vinna saman og hafa gaman af hreyfingu. Margir horfa á fótbolta í sjónvarpinu og styðja sitt lið.
-
-**Tónlist**
-
-Tónlist er fallegt áhugamál. Fólk spilar á hljóðfæri eins og gítar, píanó eða fiðlu. Aðrir syngja eða hlusta á tónlist. Tónlist getur verið róleg eða hröð, glaðleg eða sorgleg. Margir fara á tónleika eða dansa við tónlist. Sumir semja eigin lög og skrifa texta. Margir hlusta á tónlist þegar þeir vinna eða læra.
-
-**Lesa bækur**
-
-Að lesa bækur er gott áhugamál. Þegar fólk les, lærir það ný orð og setningar. Sumar bækur eru spennandi, aðrar eru fyndnar eða sorglegar. Margir lesa á kvöldin áður en þeir fara að sofa. Bækur opna dyr að öðrum heimum. Barnabækur eru einfaldar og skemmtilegar, en sumir vilja lesa langar sögur eða fræðibækur. Bækur geta frætt fólk um sögu, vísindi og menningu.
-
-Hver hefur sitt áhugamál. Sumir hafa mörg áhugamál, aðrir hafa fá. Sumir elska að vera virkir og æfa sig, en aðrir njóta þess að slaka á og lesa eða hlusta á tónlist. Hvað er þitt áhugamál?`;
-
-    const MULTIPLE_CHOICE = [
+    const MC_QUESTIONS = [
       {
-        question: 'Hverjar eru tvær ástæður fyrir því að áhugamál eru mikilvæg?',
+        question: 'Hvers vegna er gott fyrir heilsuna að fara í sund?',
         options: [
-          'Áhugamál gefa gleði og orku, og þau geta hjálpað fólki að slaka á eftir annasaman dag.',
-          'Áhugamál hjálpa fólki að læra nýja hluti og þau geta hjálpað fólki að fá vinnu.',
-          'Áhugamál hjálpa fólki að vera í formi og þau geta hjálpað fólki að vinna betur.',
-          'Áhugamál hjálpa fólki að vera með öðrum og þau geta hjálpað fólki að vera í sambandi við fjölskyldu og vini.'
+          'Vegna þess að vatnið er kalt.',
+          'Vegna þess að það er auðvelt að hreyfa sig í vatni.',
+          'Vegna þess að það er erfitt að synda.'
         ],
-        correct: 0
+        correct: 1
       },
       {
-        question: 'Hvernig getur sund hjálpað fólki að slaka á eftir erfiðan dag?',
+        question: 'Hvað gera margir í heitum pottum eftir sund?',
         options: [
-          'Sund hjálpar fólki að vera í formi og það getur hjálpað fólki að vera með öðrum.',
-          'Sund hjálpar fólki að læra nýja hluti og það getur hjálpað fólki að vera í sambandi við fjölskyldu og vini.',
-          'Sund hjálpar fólki að slaka á í heitum pottum eftir æfingu og það getur hjálpað fólki að vera í formi.',
-          'Sund hjálpar fólki að vera í sambandi við náttúruna og það getur hjálpað fólki að vera í formi.'
+          'Þeir sofa.',
+          'Þeir borða mat.',
+          'Þeir slappa af og spjalla saman.'
         ],
         correct: 2
       },
       {
-        question: 'Hvernig getur tónlist hjálpað fólki að vera í sambandi við fjölskyldu og vini?',
+        question: 'Hvað má markvörður í fótbolta gera sem aðrir leikmenn mega ekki?',
         options: [
-          'Fólk getur spilað á hljóðfæri saman eða farið á tónleika saman.',
-          'Fólk getur hlustað á tónlist saman eða sungið saman.',
-          'Fólk getur dansað saman eða samið lög saman.',
-          'Allar ofangreindar ástæður.'
+          'Hann má hlaupa hraðar.',
+          'Hann má taka boltann með höndum.',
+          'Hann má skora mörg mörk.'
         ],
-        correct: 3
+        correct: 1
+      },
+      {
+        question: 'Hvaða hljóðfæri eru nefnd sem dæmi í textanum?',
+        options: [
+          'Trommur og flauta.',
+          'Gítar, píanó og fiðla.',
+          'Orgel og lúður.'
+        ],
+        correct: 1
+      },
+      {
+        question: 'Hvenær finnst mörgum gott að lesa bækur?',
+        options: [
+          'Á morgnana þegar þeir vakna.',
+          'Á kvöldin áður en þeir fara að sofa.',
+          'Þegar þeir eru að borða hádegismat.'
+        ],
+        correct: 1
+      },
+      {
+        question: 'Hvað gerist þegar við lesum bækur samkvæmt textanum?',
+        options: [
+          'Við gleymum öllu.',
+          'Við lærum ný orð og fáum nýjar hugmyndir.',
+          'Við verðum mjög þreytt.'
+        ],
+        correct: 1
       }
     ];
 
     const OPEN_QUESTIONS = [
-      'Í textanum er talað um hvernig áhugamál geta hjálpað fólki að slaka á eftir erfiðan dag. Hvernig hjálpa þín áhugamál þér að slaka á og hvernig finnst þér þau gera þig betri manneskju?',
-      'Textinn fjallar um ýmis áhugamál, bæði róleg og spennandi. Hver eru þín uppáhalds áhugamál og hvernig hafa þau áhrif á þig?',
-      'Í textanum er sagt að áhugamál geti hjálpað fólki að læra nýja hluti. Hvernig hafa þín áhugamál hjálpað þér að læra og vaxa sem manneskja?'
+      'Lýstu því hvernig fótboltaleikur virkar samkvæmt textanum (lið, leikmenn og markmið).',
+      'Hvaða mismunandi tilfinningar getur tónlist kallað fram og hvenær hlustar fólk oft á hana?',
+      'Af hverju heldur þú að sund sé svona vinsælt á Íslandi miðað við það sem fram kemur í textanum?'
     ];
 
-    const Ahugamal = () => {
-      const [stage, setStage] = useState('quiz');
-      const [showModal, setShowModal] = useState(false);
-      const [mcAnswers, setMcAnswers] = useState([]);
-      const [showMcFeedback, setShowMcFeedback] = useState(false);
-      const [quizScore, setQuizScore] = useState(null);
-      
-      // Chat state for each question
-      const [conversations, setConversations] = useState([[], [], []]);
-      const [currentInputs, setCurrentInputs] = useState(['', '', '']);
-      const [loadingStates, setLoadingStates] = useState([false, false, false]);
-      const [questionScores, setQuestionScores] = useState([0, 0, 0]);
-      
-      const chatRefs = [useRef(null), useRef(null), useRef(null)];
+    const DISCUSSION_QUESTIONS = [
+      'Hvert er þitt uppáhalds áhugamál og af hverju?',
+      'Hversu oft á viku æfir þú íþróttir eða sinnir þínu áhugamáli?',
+      'Finnst þér skemmtilegara að lesa bækur eða horfa á sjónvarpið?',
+      'Spilar þú á hljóðfæri eða hlustarðu mikið á tónlist? Hvers konar tónlist?',
+      'Finnst þér gaman að fara í sund? Hvað finnst þér skemmtilegast að gera í sundlauginni?',
+      'Er betra að stunda áhugamál einn eða með vinum? Af hverju?',
+      'Ef þú gætir prófað nýtt áhugamál á morgun, hvað myndir þú velja?'
+    ];
 
-      const handleMcAnswer = (questionIndex, optionIndex) => {
-        if (showMcFeedback) return;
-        const newAnswers = [...mcAnswers];
-        newAnswers[questionIndex] = optionIndex;
-        setMcAnswers(newAnswers);
-      };
-
-      const checkMcAnswers = () => {
-        if (mcAnswers.length < MULTIPLE_CHOICE.length) {
-          alert('Vinsamlegast svaraðu öllum spurningum!');
-          return;
-        }
-        
-        const correctCount = mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length;
-        const score = Math.round((correctCount / MULTIPLE_CHOICE.length) * 100);
-        setQuizScore(score);
-        setShowMcFeedback(true);
-
-        console.log('📊 Krossaspurningar:', score + '%');
-      };
-
-      const continueToOpenQuestions = () => {
-        setStage('open');
-      };
-
-      const handleInputChange = (index, value) => {
-        const newInputs = [...currentInputs];
-        newInputs[index] = value;
-        setCurrentInputs(newInputs);
-      };
-
-      const scrollToBottom = (index) => {
-        setTimeout(() => {
-          if (chatRefs[index].current) {
-            chatRefs[index].current.scrollTop = chatRefs[index].current.scrollHeight;
-          }
-        }, 100);
-      };
-
-      const sendMessage = async (questionIndex) => {
-        const userMessage = currentInputs[questionIndex].trim();
-        if (!userMessage) return;
-
-        const newLoadingStates = [...loadingStates];
-        newLoadingStates[questionIndex] = true;
-        setLoadingStates(newLoadingStates);
-
-        const updatedConversations = [...conversations];
-        updatedConversations[questionIndex] = [
-          ...updatedConversations[questionIndex],
-          { role: 'user', content: userMessage }
-        ];
-        setConversations(updatedConversations);
-
-        const newInputs = [...currentInputs];
-        newInputs[questionIndex] = '';
-        setCurrentInputs(newInputs);
-
-        scrollToBottom(questionIndex);
-
-        try {
-          const systemMessage = 'Þú ert hlýr og hvetjandi íslenskukennari. Þú leggur áherslu á jákvæðni og framfarir fremur en villur.';
-          
-          const userPrompt = `Nemandinn svaraði spurningunni: "${OPEN_QUESTIONS[questionIndex]}"
-          
-Svar nemandans: "${userMessage}"
-
-Verkefnið þitt:
-1. **Byrjaðu ALLTAF á jákvæðri viðurkenningu** - hvað var gott í svarinu?
-2. **Ef það er ein stór málfræðivilla** sem getur hjálpað nemandanum - nefndu hana STUTTLEGA og HVETJANDI (t.d. "Smávægileg ábending: prófaðu að nota þolfall hér...")
-3. **Settu fram eina áhugaverða eftirfylgnisspurningu** sem hvetur til dýpri umhugsunar
-
-MIKILVÆGT:
-- Vertu MJÖG hvetjandi og jákvæð
-- Nefndu bara villur ef þær eru MJÖG augljósar og mikilvægar
-- Flestar villur eru ekki þess virði að nefna - leggðu áherslu á efnið!
-- Svartu á íslensku og vertu nákvæm og hlý`;
-
-          const parsed = await callOpenAI({ 
-            messages: [
-              { role: 'system', content: systemMessage },
-              { role: 'user', content: userPrompt }
-            ]
-          });
-
-          const responseText = parsed.content || parsed;
-          const hasGrammarFeedback = responseText.toLowerCase().includes('málfar') || 
-                                      responseText.toLowerCase().includes('villa') ||
-                                      responseText.toLowerCase().includes('beyging') ||
-                                      responseText.toLowerCase().includes('fall');
-
-          if (hasGrammarFeedback) {
-            const parts = responseText.split(/(?=Frábært|Gott|Vel|Þetta er)/);
-            if (parts.length > 1) {
-              updatedConversations[questionIndex].push({ 
-                role: 'grammar', 
-                content: parts[0].trim() 
-              });
-              updatedConversations[questionIndex].push({ 
-                role: 'assistant', 
-                content: parts.slice(1).join('').trim() 
-              });
-            } else {
-              updatedConversations[questionIndex].push({ role: 'assistant', content: responseText });
-            }
-          } else {
-            updatedConversations[questionIndex].push({ role: 'assistant', content: responseText });
-          }
-
-          setConversations(updatedConversations);
-
-          const userMessages = updatedConversations[questionIndex].filter(
-            msg => msg.role === 'user'
-          ).length;
-
-          const newScores = [...questionScores];
-          if (userMessages === 1) {
-            newScores[questionIndex] = 50;
-          } else if (userMessages >= 2) {
-            newScores[questionIndex] = 100;
-          }
-          setQuestionScores(newScores);
-
-          const totalWritingScore = Math.round(newScores.reduce((a, b) => a + b, 0) / 3);
-          const allAnswered = newScores.every(score => score >= 50);
-
-          console.log('📊 Skriflegt:', totalWritingScore + '%', '- Spurning', questionIndex + 1, ':', newScores[questionIndex] + '%');
-
-          scrollToBottom(questionIndex);
-        } catch (e) {
-          console.error('Chat error:', e);
-          alert('Villa við að senda skilaboð. Reyndu aftur.');
-          
-          const rollbackConversations = [...conversations];
-          rollbackConversations[questionIndex] = rollbackConversations[questionIndex].slice(0, -1);
-          setConversations(rollbackConversations);
-        }
-
-        newLoadingStates[questionIndex] = false;
-        setLoadingStates(newLoadingStates);
-      };
-
-      const handleKeyPress = (e, index) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage(index);
-        }
-      };
-
+    /* ─── COMPONENTS ─── */
+    const FeedbackBadge = ({ score, message }) => {
+      const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+      const cls = {
+        green: 'bg-green-50 border-green-200 text-green-700',
+        amber: 'bg-amber-50 border-amber-200 text-amber-700',
+        red:   'bg-red-50 border-red-200 text-red-700'
+      }[color];
       return (
-        <div className="min-h-screen pb-12">
-          {/* Header */}
-          <header className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-4xl mx-auto px-6 py-8">
-              <button 
-                onClick={() => window.history.back()} 
-                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
-              >
-                ← Til baka
-              </button>
-              <h1 className="text-3xl font-light text-gray-800 mb-2">Áhugamál</h1>
-              <p className="text-gray-500 text-sm font-light">Lesskilningur og umræða · A1-A2</p>
-            </div>
-          </header>
-
-          {/* Sticky Text Button */}
-          {stage !== 'reading' && (
-            <div className="sticky-text-btn">
-              <div className="max-w-4xl mx-auto px-6 py-4">
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg px-6 py-3 w-full hover:from-blue-100 hover:to-blue-200 transition-all"
-                >
-                  <span className="text-blue-800 font-normal">📖 Sjá texta</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Modal for Reading Text */}
-          <div className={`modal ${showModal ? 'active' : ''}`} onClick={() => setShowModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
-                <h2 className="text-2xl font-light text-gray-800">📖 Textinn</h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600 text-3xl font-light leading-none"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="p-6 prose max-w-none">
-                {READING_TEXT.split('\n\n').map((para, i) => {
-                  if (para.startsWith('**') && para.endsWith('**')) {
-                    return (
-                      <h2 key={i} className="text-2xl font-normal text-gray-800 mt-6 mb-4">
-                        {para.replace(/\*\*/g, '')}
-                      </h2>
-                    );
-                  }
-                  return (
-                    <p key={i} className="text-gray-700 leading-relaxed font-light mb-4">
-                      {para}
-                    </p>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <main className="max-w-4xl mx-auto px-6 mt-8">
-            {stage === 'quiz' && (
-              <div className="space-y-6">
-                <div className="text-center mb-8 bg-white rounded-lg shadow-sm p-8">
-                  <div className="text-6xl mb-4">📝</div>
-                  <h2 className="text-2xl font-light text-gray-800 mb-4">Krossaspurningar</h2>
-                  <p className="text-gray-600 font-light">
-                    Lestu spurningarnar vandlega og veldu rétt svar.
-                  </p>
-                </div>
-
-                <div className="space-y-6">
-                  {MULTIPLE_CHOICE.map((q, qIndex) => (
-                    <div key={qIndex} className="bg-white rounded-lg shadow-sm p-6">
-                      <p className="font-normal text-gray-800 mb-4 text-lg">
-                        {qIndex + 1}. {q.question}
-                      </p>
-                      <div className="space-y-3">
-                        {q.options.map((option, oIndex) => {
-                          const isSelected = mcAnswers[qIndex] === oIndex;
-                          const isCorrect = oIndex === q.correct;
-                          let className = 'answer-option p-4 rounded-lg font-light';
-                          
-                          if (showMcFeedback) {
-                            className += ' disabled';
-                            if (isSelected && isCorrect) {
-                              className += ' correct';
-                            } else if (isSelected && !isCorrect) {
-                              className += ' incorrect';
-                            } else if (isCorrect) {
-                              className += ' correct';
-                            }
-                          } else if (isSelected) {
-                            className += ' selected';
-                          }
-
-                          return (
-                            <div
-                              key={oIndex}
-                              className={className}
-                              onClick={() => handleMcAnswer(qIndex, oIndex)}
-                            >
-                              <div className="flex items-start gap-3">
-                                <span className="font-normal">
-                                  {String.fromCharCode(65 + oIndex)}.
-                                </span>
-                                <span>{option}</span>
-                                {showMcFeedback && isCorrect && (
-                                  <span className="ml-auto text-green-600">✓</span>
-                                )}
-                                {showMcFeedback && isSelected && !isCorrect && (
-                                  <span className="ml-auto text-red-600">✗</span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {!showMcFeedback ? (
-                  <div className="text-center mt-8">
-                    <button
-                      onClick={checkMcAnswers}
-                      className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
-                    >
-                      Athuga svör
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-8">
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
-                      <div className="flex items-start gap-3">
-                        <span className="text-3xl">
-                          {quizScore === 100 ? '🎉' : quizScore >= 66 ? '👍' : '💪'}
-                        </span>
-                        <div>
-                          <h3 className="font-normal text-gray-800 mb-2">
-                            {quizScore === 100
-                              ? 'Frábært! Öll svörin eru rétt!' 
-                              : quizScore >= 66
-                              ? 'Vel gert! Flest svörin eru rétt!'
-                              : 'Góð tilraun! Skoðaðu svörin og reyndu aftur ef þú vilt.'}
-                          </h3>
-                          <p className="text-sm text-gray-600 font-light">
-                            Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt ({quizScore}%).
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <button
-                        onClick={continueToOpenQuestions}
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
-                      >
-                        Halda áfram í umræðuspurningar →
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {stage === 'open' && (
-              <div className="space-y-6">
-                <div className="text-center mb-8 bg-white rounded-lg shadow-sm p-8">
-                  <div className="text-6xl mb-4">💬</div>
-                  <h2 className="text-2xl font-light text-gray-800 mb-4">Umræðuspurningar</h2>
-                  <p className="text-gray-600 font-light">
-                    Svaraðu spurningunum og haltu samtali áfram!
-                  </p>
-                </div>
-
-                {OPEN_QUESTIONS.map((question, index) => (
-                  <div key={index} className="bg-white rounded-lg shadow-sm p-6">
-                    <p className="font-normal text-gray-800 mb-4 text-lg">
-                      {index + 1}. {question}
-                    </p>
-
-                    <div 
-                      ref={chatRefs[index]}
-                      className="chat-container mb-4 space-y-3"
-                    >
-                      {conversations[index].map((msg, msgIndex) => (
-                        <div key={msgIndex}>
-                          {msg.role === 'user' ? (
-                            <div className="flex justify-end">
-                              <div className="bg-blue-50 rounded-lg p-4 max-w-[80%]">
-                                <p className="text-gray-800 font-light">{msg.content}</p>
-                              </div>
-                            </div>
-                          ) : msg.role === 'grammar' ? (
-                            <div className="flex justify-center">
-                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-[85%]">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-lg">📚</span>
-                                  <p className="text-sm text-gray-700 font-light">
-                                    <span className="font-normal">Málfar:</span> {msg.content}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex justify-start">
-                              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-[80%]">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-xl">✨</span>
-                                  <p className="text-gray-800 font-light">{msg.content}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      
-                      {loadingStates[index] && (
-                        <div className="flex justify-start">
-                          <div className="bg-gray-100 rounded-lg p-4">
-                            <p className="text-gray-500 font-light">Bíð...</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <textarea
-                        value={currentInputs[index]}
-                        onChange={(e) => handleInputChange(index, e.target.value)}
-                        onKeyPress={(e) => handleKeyPress(e, index)}
-                        disabled={loadingStates[index]}
-                        className="flex-1 p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base disabled:bg-gray-50"
-                        rows="2"
-                        placeholder={conversations[index].length === 0 ? "Skrifaðu svarið þitt hér..." : "Haltu áfram að spjalla..."}
-                      />
-                      <button
-                        onClick={() => sendMessage(index)}
-                        disabled={loadingStates[index] || !currentInputs[index].trim()}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light self-end"
-                      >
-                        {conversations[index].length === 0 ? 'Fá endurgjöf' : 'Senda'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="text-center mt-8">
-                  <button
-                    onClick={() => window.history.back()}
-                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
-                  >
-                    ← Til baka
-                  </button>
-                </div>
-              </div>
-            )}
-          </main>
+        <div className={`mt-3 p-3 rounded-lg border ${cls} fade-in`}>
+          <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+          <p className="text-sm font-light">{message}</p>
         </div>
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<Ahugamal />);
+    /* ─── TEXT PANEL ─── */
+    const TextPanel = ({ open, onToggle }) => (
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-4xl mx-auto px-6">
+          <button
+            onClick={onToggle}
+            className="w-full flex items-center justify-between py-4 text-left group"
+          >
+            <span className="flex items-center gap-2 text-gray-700 font-light group-hover:text-blue-600 transition-colors">
+              <span className="text-lg">📖</span>
+              <span>Textinn – <em className="font-light text-gray-500">Áhugamál</em></span>
+            </span>
+            <span className={`text-gray-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+          <div className={`text-panel ${open ? 'open' : 'closed'}`}>
+            <div className="pb-6 space-y-3">
+              {READING_TEXT.map((block, i) => {
+                if (block.type === 'heading') return (
+                  <h3 key={i} className="text-lg font-medium text-gray-800 mt-4">{block.text}</h3>
+                );
+                return (
+                  <p key={i} className="text-gray-700 leading-relaxed font-light text-sm">{block.text}</p>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
+    /* ─── TABS ─── */
+    const TABS = [
+      { id: 'krossar',  label: 'Krossaspurningar', icon: '✓' },
+      { id: 'stuttar',  label: 'Stuttar spurningar', icon: '📝' },
+      { id: 'umraeda',  label: 'Umræðuspurningar', icon: '💬' }
+    ];
+
+    const TabBar = ({ active, done, onSelect }) => (
+      <div className="bg-white border-b border-gray-200 sticky top-[57px] z-10">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="flex gap-1">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => onSelect(t.id)}
+                className={`tab-btn px-4 py-4 text-sm flex items-center gap-2 ${active === t.id ? 'active' : 'text-gray-500'}`}
+              >
+                <span>{t.icon}</span>
+                <span className="hidden sm:inline">{t.label}</span>
+                {done[t.id] && <span className="text-green-500 text-xs">✔</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+
+    /* ─── TAB: KROSSASPURNINGAR ─── */
+    const KrossarTab = ({ onDone }) => {
+      const [answers, setAnswers] = useState({});
+      const [checked, setChecked] = useState(false);
+
+      const pick = (qi, oi) => { if (!checked) setAnswers(a => ({ ...a, [qi]: oi })); };
+
+      const check = () => {
+        if (Object.keys(answers).length < MC_QUESTIONS.length) {
+          alert('Vinsamlegast svaraðu öllum spurningum!'); return;
+        }
+        setChecked(true);
+        const correct = MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length;
+        onDone(correct, MC_QUESTIONS.length);
+      };
+
+      const score = checked
+        ? MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length
+        : null;
+
+      return (
+        <div className="space-y-5 fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+            <div className="text-5xl mb-3">✓</div>
+            <h2 className="text-xl font-light text-gray-800 mb-1">Krossaspurningar</h2>
+            <p className="text-gray-500 text-sm font-light">Veldu réttan valmöguleika fyrir hverja spurningu.</p>
+          </div>
+
+          {MC_QUESTIONS.map((q, qi) => (
+            <div key={qi} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <p className="font-medium text-gray-800 mb-4">{qi + 1}. {q.question}</p>
+              <div className="space-y-3">
+                {q.options.map((opt, oi) => {
+                  const sel = answers[qi] === oi;
+                  const isCorrect = oi === q.correct;
+                  let cls = 'answer-option p-4 rounded-lg font-light text-sm';
+                  if (checked) {
+                    cls += ' disabled';
+                    if (sel && isCorrect) cls += ' correct';
+                    else if (sel && !isCorrect) cls += ' incorrect';
+                    else if (isCorrect) cls += ' correct';
+                  } else if (sel) cls += ' selected';
+                  return (
+                    <div key={oi} className={cls} onClick={() => pick(qi, oi)}>
+                      <div className="flex items-start gap-3">
+                        <span className="font-medium text-gray-500">{String.fromCharCode(65 + oi)}.</span>
+                        <span>{opt}</span>
+                        {checked && isCorrect && <span className="ml-auto text-green-600">✓</span>}
+                        {checked && sel && !isCorrect && <span className="ml-auto text-red-500">✗</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {!checked ? (
+            <div className="text-center">
+              <button onClick={check}
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                Athuga svör
+              </button>
+            </div>
+          ) : (
+            <div className={`bg-white rounded-xl shadow-sm border p-6 text-center fade-in ${score === MC_QUESTIONS.length ? 'border-green-200' : 'border-blue-100'}`}>
+              <div className="text-4xl mb-3">
+                {score === MC_QUESTIONS.length ? '🎉' : score >= MC_QUESTIONS.length * 0.67 ? '👍' : '💪'}
+              </div>
+              <p className="text-gray-700 font-light">
+                Þú fékkst <strong className="font-medium">{score}</strong> af <strong className="font-medium">{MC_QUESTIONS.length}</strong> rétt
+                {' '}({Math.round(score / MC_QUESTIONS.length * 100)}%)
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ─── TAB: STUTTAR SPURNINGAR ─── */
+    const StuttarTab = ({ onDone }) => {
+      const [convos, setConvos] = useState([[], [], []]);
+      const [inputs, setInputs] = useState(['', '', '']);
+      const [loading, setLoading] = useState([false, false, false]);
+      const [feedback, setFeedback] = useState([null, null, null]);
+      const chatRefs = [useRef(null), useRef(null), useRef(null)];
+
+      const scroll = (i) => setTimeout(() => {
+        if (chatRefs[i].current) chatRefs[i].current.scrollTop = chatRefs[i].current.scrollHeight;
+      }, 100);
+
+      const send = async (i) => {
+        const msg = inputs[i].trim();
+        if (!msg) return;
+
+        setLoading(l => { const n=[...l]; n[i]=true; return n; });
+        setConvos(c => { const n=[...c]; n[i]=[...n[i], {role:'user', text:msg}]; return n; });
+        setInputs(inp => { const n=[...inp]; n[i]=''; return n; });
+        scroll(i);
+
+        try {
+          const prompt = `Þú ert hlýr og hvetjandi íslenskukennari sem metur svör nemenda við lesskilningsspurningum.
+
+Spurning: "${OPEN_QUESTIONS[i]}"
+Svar nemanda: "${msg}"
+
+Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á hrós, bentu á eitt ef eitthvað vantar]`;
+
+          const result = await callOpenAI([
+            { role: 'system', content: 'Þú ert hjálplegur íslenskukennari.' },
+            { role: 'user', content: prompt }
+          ]);
+
+          const stigMatch = result.match(/STIG:\s*(\d)/);
+          const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/s);
+          const score = stigMatch ? parseInt(stigMatch[1]) : 3;
+          const text  = endMatch  ? endMatch[1].trim() : result.trim();
+
+          setFeedback(f => { const n=[...f]; n[i]={score, text}; return n; });
+          setConvos(c => {
+            const n=[...c];
+            n[i]=[...n[i], {role:'assistant', text, score}];
+            return n;
+          });
+
+          // Mark done when all 3 answered
+          const newFeedback = [...feedback];
+          newFeedback[i] = { score, text };
+          if (newFeedback.every(f => f !== null)) onDone();
+
+          scroll(i);
+        } catch (e) {
+          console.error(e);
+          alert('Villa við að senda. Reyndu aftur.');
+          setConvos(c => { const n=[...c]; n[i]=n[i].slice(0,-1); return n; });
+        }
+        setLoading(l => { const n=[...l]; n[i]=false; return n; });
+      };
+
+      const allDone = feedback.every(f => f !== null);
+
+      return (
+        <div className="space-y-5 fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+            <div className="text-5xl mb-3">📝</div>
+            <h2 className="text-xl font-light text-gray-800 mb-1">Stuttar spurningar</h2>
+            <p className="text-gray-500 text-sm font-light">Svaraðu spurningunum með heilum setningum.</p>
+          </div>
+
+          {OPEN_QUESTIONS.map((q, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <p className="font-medium text-gray-800 mb-4">{i + 1}. {q}</p>
+
+              <div ref={chatRefs[i]} className="chat-container mb-4 space-y-3 min-h-[60px]">
+                {convos[i].map((msg, mi) => (
+                  <div key={mi}>
+                    {msg.role === 'user' ? (
+                      <div className="flex justify-end">
+                        <div className="bg-blue-50 rounded-lg p-3 max-w-[85%]">
+                          <p className="text-gray-800 font-light text-sm">{msg.text}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-start">
+                        <div className="max-w-[85%]">
+                          <FeedbackBadge score={msg.score} message={msg.text} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {loading[i] && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-lg p-3">
+                      <p className="text-gray-400 text-sm font-light">Bíð…</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!feedback[i] && (
+                <div className="flex gap-2">
+                  <textarea
+                    value={inputs[i]}
+                    onChange={e => setInputs(inp => { const n=[...inp]; n[i]=e.target.value; return n; })}
+                    onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(i); } }}
+                    disabled={loading[i]}
+                    rows={2}
+                    placeholder="Skrifaðu svarið þitt hér…"
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm resize-none disabled:bg-gray-50"
+                  />
+                  <button
+                    onClick={() => send(i)}
+                    disabled={loading[i] || !inputs[i].trim()}
+                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end"
+                  >
+                    Fá endurgjöf
+                  </button>
+                </div>
+              )}
+              {feedback[i] && (
+                <div className="flex items-center gap-2 text-green-600 text-sm font-light mt-1">
+                  <span>✔</span><span>Lokið</span>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {allDone && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center fade-in">
+              <p className="text-green-700 font-light">🎉 Frábært! Þú svaraðir öllum stuttu spurningunum.</p>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ─── TAB: UMRÆÐUSPURNINGAR ─── */
+    const UmraeðaTab = ({ onDone }) => {
+      const [done, setDone] = useState(new Set());
+
+      const toggle = (i) => {
+        const next = new Set(done);
+        next.has(i) ? next.delete(i) : next.add(i);
+        setDone(next);
+        if (next.size >= 3) onDone();
+      };
+
+      return (
+        <div className="space-y-5 fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+            <div className="text-5xl mb-3">💬</div>
+            <h2 className="text-xl font-light text-gray-800 mb-1">Umræðuspurningar</h2>
+            <p className="text-gray-500 text-sm font-light">
+              Ræddu þessar spurningar í hóp. Merktu við þegar þú hefur rætt spurninguna.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="space-y-4">
+              {DISCUSSION_QUESTIONS.map((q, i) => (
+                <div
+                  key={i}
+                  onClick={() => toggle(i)}
+                  className={`flex items-start gap-4 p-4 rounded-lg cursor-pointer transition-all border-2 ${
+                    done.has(i)
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-gray-50 border-transparent hover:border-gray-200'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center mt-0.5 transition-all ${
+                    done.has(i) ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                  }`}>
+                    {done.has(i) && <span className="text-white text-xs">✓</span>}
+                  </div>
+                  <p className={`font-light text-sm leading-relaxed ${done.has(i) ? 'text-green-800' : 'text-gray-700'}`}>
+                    {i + 1}. {q}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between text-sm text-gray-500 font-light mb-2">
+                <span>Framvinda</span>
+                <span>{done.size} / {DISCUSSION_QUESTIONS.length}</span>
+              </div>
+              <div className="flex gap-1.5">
+                {DISCUSSION_QUESTIONS.map((_, i) => (
+                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                    done.has(i) ? 'bg-green-500' : 'bg-gray-200'
+                  }`} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {done.size >= 3 && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center fade-in">
+              <p className="text-green-700 font-light">🎉 Gott starf! Þú hefur rætt {done.size} af {DISCUSSION_QUESTIONS.length} spurningum.</p>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ─── BOTTOM PROGRESS BAR ─── */
+    const BottomProgress = ({ done }) => {
+      const count = Object.values(done).filter(Boolean).length;
+      return (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 z-30">
+          <div className="max-w-4xl mx-auto flex items-center gap-4">
+            <span className="text-xs text-gray-500 font-light whitespace-nowrap">Framvinda</span>
+            <div className="flex gap-1.5 flex-1">
+              {TABS.map(t => (
+                <div key={t.id} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                  done[t.id] ? 'bg-green-500' : 'bg-gray-200'
+                }`} />
+              ))}
+            </div>
+            <span className="text-xs text-gray-500 font-light whitespace-nowrap">{count}/{TABS.length} lokið</span>
+          </div>
+        </div>
+      );
+    };
+
+    /* ─── MAIN APP ─── */
+    const App = () => {
+      const [textOpen, setTextOpen] = useState(true);
+      const [activeTab, setActiveTab] = useState('krossar');
+      const [done, setDone] = useState({ krossar: false, stuttar: false, umraeda: false });
+
+      const markDone = (tab) => setDone(d => ({ ...d, [tab]: true }));
+
+      return (
+        <div className="min-h-screen pb-16">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-6">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">Áhugamál</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur og umræða · A1–A2</p>
+            </div>
+          </header>
+
+          {/* Foldable text */}
+          <TextPanel open={textOpen} onToggle={() => setTextOpen(o => !o)} />
+
+          {/* Tab bar */}
+          <TabBar active={activeTab} done={done} onSelect={setActiveTab} />
+
+          {/* Tab content */}
+          <main className="max-w-4xl mx-auto px-6 mt-6">
+            {activeTab === 'krossar' && (
+              <KrossarTab onDone={(correct, total) => markDone('krossar')} />
+            )}
+            {activeTab === 'stuttar' && (
+              <StuttarTab onDone={() => markDone('stuttar')} />
+            )}
+            {activeTab === 'umraeda' && (
+              <UmraeðaTab onDone={() => markDone('umraeda')} />
+            )}
+          </main>
+
+          {/* Bottom progress */}
+          <BottomProgress done={done} />
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
