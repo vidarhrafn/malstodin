@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fantasíuleikur – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      background: #0f0a1a;
+      overflow-x: hidden;
+    }
+
+    .story-font { font-family: 'Crimson Pro', Georgia, serif; }
+
+    .game-bg {
+      background: linear-gradient(175deg, #0f0a1a 0%, #1a1030 20%, #2d1b4e 40%, #3d2766 55%, #1a1030 85%, #0f0a1a 100%);
+      min-height: 100vh;
+      position: relative;
+    }
+
+    .game-bg::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(1.5px 1.5px at 12% 8%, rgba(255,255,255,0.8), transparent),
+        radial-gradient(1px 1px at 25% 18%, rgba(200,180,255,0.6), transparent),
+        radial-gradient(1.5px 1.5px at 55% 5%, rgba(255,255,255,0.7), transparent),
+        radial-gradient(1px 1px at 72% 22%, rgba(200,180,255,0.5), transparent),
+        radial-gradient(2px 2px at 88% 12%, rgba(255,255,255,0.6), transparent),
+        radial-gradient(1px 1px at 35% 30%, rgba(255,255,255,0.4), transparent),
+        radial-gradient(1.5px 1.5px at 65% 15%, rgba(200,180,255,0.5), transparent),
+        radial-gradient(1px 1px at 8% 25%, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 45% 10%, rgba(255,220,255,0.6), transparent),
+        radial-gradient(1.5px 1.5px at 92% 28%, rgba(200,180,255,0.4), transparent);
+      pointer-events: none;
+      z-index: 0;
+      animation: twinkle 5s ease-in-out infinite alternate;
+    }
+
+    @keyframes twinkle {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.7; }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.3); }
+      50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.6); }
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+
+    .fade-in-up { animation: fadeInUp 0.6s ease both; }
+    .fade-in { animation: fadeIn 0.5s ease both; }
+
+    .mountain-silhouette {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 200px;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .glow-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(139,92,246,0.4), transparent);
+      margin: 1.5rem 0;
+    }
+
+    .choice-btn {
+      background: rgba(30, 20, 50, 0.7);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+    .choice-btn:hover {
+      background: rgba(139, 92, 246, 0.15);
+      border-color: rgba(139, 92, 246, 0.6);
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+      transform: translateY(-2px);
+    }
+    .choice-btn:active { transform: translateY(0); }
+
+    .speaking-wave {
+      display: inline-flex;
+      gap: 2px;
+      align-items: center;
+      height: 16px;
+    }
+    .speaking-wave span {
+      display: block;
+      width: 3px;
+      background: #a78bfa;
+      border-radius: 2px;
+      animation: wave 0.8s ease-in-out infinite;
+    }
+    .speaking-wave span:nth-child(2) { animation-delay: 0.1s; }
+    .speaking-wave span:nth-child(3) { animation-delay: 0.2s; }
+    .speaking-wave span:nth-child(4) { animation-delay: 0.3s; }
+
+    @keyframes wave {
+      0%, 100% { height: 4px; }
+      50% { height: 14px; }
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 3px; }
+
+    .magic-input:focus {
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ============================================================
+// API TENGINGAR – Málstöðin
+// ============================================================
+
+async function callOpenAI(messages, max_tokens = 600, model = 'gpt-4o-mini', temperature = 0.5) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens, model, temperature })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+async function playAudio(text, onEnd) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return null; }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    await audio.play().catch(() => onEnd && onEnd());
+    return audio;
+  } catch (e) {
+    console.error('TTS villa:', e);
+    onEnd && onEnd();
+    return null;
+  }
+}
+
+// ============================================================
+// SYSTEM PROMPT – Sögumaðurinn
+// ============================================================
+
+const SYSTEM_PROMPT = `HLUTVERK: Þú ert sögumaður í íslenskum fantasíuleik fyrir nemendur sem eru að læra íslensku á A1-A2 stigi. Þú skrifar allt á íslensku.
+
+MÁLFAR – MIKILVÆGAST:
+Íslenska þín verður að vera málfræðilega fullkomin. Þetta er kennsluefni og nemendur læra af því sem þeir sjá.
+- Kynbeyging lýsingarorða: brú (kvenkyns) → gömul brú, þröng brú. Þoka (kvenkyns) → þykk þoka. Loft (hvorugkyn) → kalt loft. Dalur (karlkyns) → djúpur dalur.
+- Fallbeyging: nefnifall, þolfall, þágufall, eignarfall – alltaf rétt.
+- Persónufornöfn í réttu falli: "mér líður vel", "mér er kalt", "hjálpaðu mér".
+- Sagnbeyging: "hvað gerir þú" ekki "hvað gerir þér".
+- Lestu yfir texta þinn áður en þú skilar honum og leiðréttu allar villur.
+
+TUNGUMÁLASTIG: Stuttar einfaldar setningar. Algengur orðaforði sem hentar A1-A2. Engar flóknar málsgreinar.
+
+SÖGUÞRÁÐUR: Þú manst hvað gerðist á fyrri hnútum. Ákvarðanir leikmannsins hafa raunveruleg áhrif á framvinduna. Þú gefur alltaf nákvæmlega 2-3 valkosti á hverjum hnút, númeraða A, B, C.
+
+PERSÓNUR:
+- Ormur: gamall maður með langt hvítt skegg og brúna skikkju. Vitur og vinalegur. Birtist á brúnni (hnútur 1) og kemur aftur í lok sögunnar.
+- Drifa: drottning fjallsins. Hún gerði himininn fjólubláan. Býr í turninum. Ekki endilega vond – leikmaðurinn getur talað við hana.
+- Símon: lítill strákur með rauðan hatt. Birtist á leiðinni upp á fjallið. Glaður og hjálpsamur.
+- Lykillinn: opnar himininn aftur. Hann er í turninum.
+
+SÖGUUPPBYGGING (7 hnútar):
+1. Brúin – leikmaður vaknar, hittir Orm, kynnir sig
+2. Velja leið – skógur eða fjallsvegur
+3. Hittir Símon eða áskorun á leiðinni
+4. Kominn nær turninum – áskorun eða ráðgáta
+5. Í turninum – hittir Drifu
+6. Ákvarðanin – hvað gerir leikmaður við lykilinn og Drifu?
+7. Ending – mismunandi eftir valkostum. Ormur kemur aftur.
+
+SVARA ALLTAF Á ÞESSU JSON FORMI OG ENGU ÖÐRU:
+{
+  "hnútur": [númer 1-7],
+  "saga": "[Stutt lýsing, 2-4 setningar]",
+  "persóna": "[Hvað persóna segir – eða null ef engin talar]",
+  "persóna_nafn": "[Nafn þess sem talar – eða null]",
+  "valkostir": ["A) ...", "B) ...", "C) ..."],
+  "frjálst_svar": [true ef leikmaður á að skrifa eigið svar, annars false],
+  "ending": [true ef hnútur 7, annars false]
+}
+
+ÞEGAR LEIKMAÐUR SKRIFAR EIGIÐ SVAR: Bregstu við því náttúrulega í sögunni og haltu áfram á næsta hnút.
+MIKILVÆGT: Svaraðu AÐEINS með JSON. Ekkert annað utan JSON.`;
+
+// ============================================================
+// ÍHLUTIR
+// ============================================================
+
+const MountainSilhouette = () => (
+  <svg className="mountain-silhouette" viewBox="0 0 1440 200" preserveAspectRatio="none" fill="none">
+    <path d="M0,200 L0,140 L120,90 L240,120 L360,60 L480,100 L560,40 L640,80 L720,20 L800,70 L880,30 L960,90 L1040,50 L1120,80 L1200,45 L1320,100 L1440,60 L1440,200 Z"
+      fill="url(#mGrad)" />
+    <rect x="710" y="5" width="8" height="18" fill="#1a1030" opacity="0.8" />
+    <rect x="706" y="3" width="16" height="4" fill="#1a1030" opacity="0.8" />
+    <defs>
+      <linearGradient id="mGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#1a1030" />
+        <stop offset="100%" stopColor="#0f0a1a" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const SpeakingWave = () => (
+  <span className="speaking-wave">
+    <span></span><span></span><span></span><span></span>
+  </span>
+);
+
+const ListenBtn = ({ text, label }) => {
+  const [speaking, setSpeaking] = useState(false);
+  const audioRef = useRef(null);
+
+  const handlePlay = async () => {
+    if (speaking && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setSpeaking(false);
+      return;
+    }
+    setSpeaking(true);
+    audioRef.current = await playAudio(text, () => setSpeaking(false));
+  };
+
+  return (
+    <button onClick={handlePlay}
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all
+        ${speaking
+          ? 'bg-purple-500/20 text-purple-300 border-purple-400/40'
+          : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-purple-300'}`}>
+      {speaking ? <SpeakingWave /> : <span className="text-sm">🔊</span>}
+      <span className="font-light">{label || 'Hlustaðu'}</span>
+    </button>
+  );
+};
+
+const ProgressNodes = ({ current, total }) => (
+  <div className="flex items-center gap-1 justify-center">
+    {Array.from({ length: total }).map((_, i) => (
+      <React.Fragment key={i}>
+        <div className={`w-3 h-3 rounded-full transition-all duration-500 ${
+          i < current ? 'bg-purple-400 shadow-sm shadow-purple-400/50'
+            : i === current ? 'bg-purple-500 ring-2 ring-purple-400/50 ring-offset-1 ring-offset-transparent'
+            : 'bg-white/10'
+        }`} />
+        {i < total - 1 && (
+          <div className={`w-5 h-0.5 transition-all duration-500 ${
+            i < current ? 'bg-purple-400/40' : 'bg-white/5'
+          }`} />
+        )}
+      </React.Fragment>
+    ))}
+  </div>
+);
+
+// Character emoji
+const charEmoji = (name) => {
+  if (!name) return '💬';
+  const n = name.toLowerCase();
+  if (n.includes('ormur')) return '🧙';
+  if (n.includes('símon')) return '🧒';
+  if (n.includes('drifa')) return '👑';
+  return '💬';
+};
+
+// ============================================================
+// AÐALFORRIT
+// ============================================================
+
+function App() {
+  const [gameState, setGameState] = useState('intro');
+  const [storyNodes, setStoryNodes] = useState([]);
+  const [messages, setMessages] = useState([{ role: 'system', content: SYSTEM_PROMPT }]);
+  const [freeText, setFreeText] = useState('');
+  const [error, setError] = useState(null);
+  const [autoPlayed, setAutoPlayed] = useState(new Set());
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      setTimeout(() => scrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' }), 200);
+    }
+  }, [storyNodes, gameState]);
+
+  const parseResponse = (text) => {
+    try {
+      let cleaned = text.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+      }
+      return JSON.parse(cleaned);
+    } catch (e) {
+      console.error('JSON parse villa:', e, 'Svar:', text);
+      return null;
+    }
+  };
+
+  // Auto-play TTS when character speaks
+  const autoPlayDialogue = useCallback(async (node, nodeIndex) => {
+    if (node.persóna && node.persóna_nafn && !autoPlayed.has(nodeIndex)) {
+      setAutoPlayed(prev => new Set(prev).add(nodeIndex));
+      await new Promise(r => setTimeout(r, 1000));
+      await playAudio(node.persóna, () => {});
+    }
+  }, [autoPlayed]);
+
+  const sendToAI = async (userContent) => {
+    setGameState('loading');
+    setError(null);
+
+    const userMsg = { role: 'user', content: userContent };
+    const newMessages = [...messages, userMsg];
+
+    try {
+      const response = await callOpenAI(newMessages, 600, 'gpt-4o-mini', 0.5);
+      const node = parseResponse(response);
+
+      if (!node) {
+        setError('Sögumaðurinn sveitaðist... Reyndu aftur.');
+        setGameState(storyNodes.length > 0 ? 'playing' : 'intro');
+        return;
+      }
+
+      const assistantMsg = { role: 'assistant', content: response };
+      setMessages([...newMessages, assistantMsg]);
+
+      const newNodes = [...storyNodes, node];
+      setStoryNodes(newNodes);
+      setGameState(node.ending ? 'ended' : 'playing');
+      setFreeText('');
+
+      autoPlayDialogue(node, newNodes.length - 1);
+    } catch (e) {
+      console.error(e);
+      setError('Villa í tengingu. Reyndu aftur.');
+      setGameState(storyNodes.length > 0 ? 'playing' : 'intro');
+    }
+  };
+
+  const startGame = () => {
+    sendToAI('Byrjaðu leikinn. Hnútur 1: Leikmaðurinn vaknar á gömlu steinbrú. Himinninn er fjólublár en það er miðdegis. Ormur gamli stendur þar og spyr hvað leikmaðurinn heitir. Leikmaðurinn á að skrifa eigið svar (nafnið sitt).');
+  };
+
+  const makeChoice = (choiceText) => {
+    sendToAI(`Leikmaðurinn velur: ${choiceText}`);
+  };
+
+  const handleFreeSubmit = (e) => {
+    e.preventDefault();
+    if (freeText.trim()) {
+      sendToAI(freeText.trim());
+    }
+  };
+
+  const resetGame = () => {
+    setGameState('intro');
+    setStoryNodes([]);
+    setMessages([{ role: 'system', content: SYSTEM_PROMPT }]);
+    setAutoPlayed(new Set());
+    setError(null);
+    setFreeText('');
+  };
+
+  // ===== INTRO =====
+  if (gameState === 'intro') {
+    return (
+      <div className="game-bg flex items-center justify-center px-4">
+        <MountainSilhouette />
+        <div className="relative z-10 text-center max-w-lg fade-in-up">
+          <div className="mb-8">
+            <div className="text-6xl mb-4">🏔️</div>
+            <h1 className="story-font text-4xl md:text-5xl font-light text-white mb-3 tracking-wide">
+              Fjólublái himinninn
+            </h1>
+            <p className="text-purple-300/70 font-light text-sm tracking-widest uppercase">
+              Fantasíuleikur – Málstöðin
+            </p>
+          </div>
+
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
+            <p className="story-font text-xl text-purple-100/90 font-light leading-relaxed mb-4">
+              Þú vaknar á gamalli brú. Himinninn er fjólublár.
+              Gamall maður stendur fyrir framan þig...
+            </p>
+            <p className="text-purple-300/50 text-sm font-light">
+              Íslenskuæfing á A1–A2 stigi · 7 kaflar · Þú velur söguna
+            </p>
+          </div>
+
+          <button onClick={startGame}
+            className="px-10 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl
+              font-light text-lg transition-all hover:shadow-lg hover:shadow-purple-500/30
+              hover:-translate-y-0.5 active:translate-y-0"
+            style={{ animation: 'pulseGlow 3s ease-in-out infinite' }}>
+            Byrja leikinn ✨
+          </button>
+
+          {error && <p className="mt-4 text-red-400 text-sm font-light">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // ===== LOADING (first node) =====
+  if (gameState === 'loading' && storyNodes.length === 0) {
+    return (
+      <div className="game-bg flex items-center justify-center px-4">
+        <MountainSilhouette />
+        <div className="relative z-10 text-center fade-in">
+          <div className="flex gap-2 justify-center mb-4">
+            {[0,1,2].map(i => (
+              <div key={i} className="w-3 h-3 rounded-full bg-purple-400"
+                style={{ animation: 'breathe 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
+            ))}
+          </div>
+          <p className="story-font text-xl text-purple-200/70 font-light italic">
+            Sögumaðurinn opnar bókina...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== GAME SCREEN =====
+  return (
+    <div className="game-bg">
+      <MountainSilhouette />
+
+      {/* Header */}
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-md">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg">🏔️</span>
+              <div>
+                <h1 className="story-font text-base text-white font-light leading-tight">Fjólublái himinninn</h1>
+                <p className="text-purple-400/50 text-xs font-light">Fantasíuleikur</p>
+              </div>
+            </div>
+            <div className="text-purple-300/50 text-xs font-light">
+              Kafli {storyNodes.length} / 7
+            </div>
+          </div>
+          <ProgressNodes current={storyNodes.length} total={7} />
+        </div>
+      </header>
+
+      {/* Story */}
+      <main className="relative z-10 max-w-2xl mx-auto px-4 py-6 pb-40">
+        {storyNodes.map((node, idx) => {
+          const isLast = idx === storyNodes.length - 1;
+          return (
+            <div key={idx} className={`mb-8 ${isLast ? 'fade-in-up' : ''}`}>
+
+              {/* Hnútur badge */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-6 h-6 rounded-full bg-purple-500/30 text-purple-300 text-xs
+                  flex items-center justify-center font-medium border border-purple-400/30">
+                  {node.hnútur || idx + 1}
+                </span>
+                <div className="flex-1 h-px bg-purple-400/10"></div>
+              </div>
+
+              {/* Saga texti */}
+              <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-5 border border-white/10 mb-3">
+                <p className="story-font text-lg text-purple-50/90 font-light leading-relaxed whitespace-pre-line">
+                  {node.saga}
+                </p>
+
+                {/* Persóna talar */}
+                {node.persóna && (
+                  <div className="mt-4 pl-4 border-l-2 border-purple-400/40">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-base">{charEmoji(node.persóna_nafn)}</span>
+                      <span className="text-purple-300 text-sm font-medium story-font">
+                        {node.persóna_nafn || 'Persóna'}
+                      </span>
+                      <ListenBtn text={node.persóna} label="Hlustaðu" />
+                    </div>
+                    <p className="story-font text-lg text-purple-100 font-light italic leading-relaxed">
+                      „{node.persóna}"
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Hlusta á söguna */}
+              <div className="flex justify-end mb-3">
+                <ListenBtn text={node.saga + (node.persóna ? ' ' + node.persóna : '')} label="Hlustaðu á kafla" />
+              </div>
+
+              {/* Valkostir – aðeins á síðasta hnút og ef ekki ending */}
+              {isLast && !node.ending && gameState === 'playing' && (
+                <div className="space-y-3 fade-in" style={{ animationDelay: '0.4s' }}>
+                  {node.valkostir && node.valkostir.map((choice, ci) => (
+                    <button key={ci}
+                      onClick={() => makeChoice(choice)}
+                      className="choice-btn w-full text-left px-5 py-4 rounded-xl text-purple-100/90
+                        font-light story-font text-base leading-relaxed">
+                      {choice}
+                    </button>
+                  ))}
+
+                  {node.frjálst_svar && (
+                    <form onSubmit={handleFreeSubmit} className="mt-3">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={freeText}
+                          onChange={(e) => setFreeText(e.target.value)}
+                          placeholder="Skrifaðu svarið þitt..."
+                          className="magic-input flex-1 px-4 py-3 bg-white/5 border border-white/15
+                            rounded-xl text-purple-100 placeholder-purple-300/30 font-light
+                            focus:outline-none focus:border-purple-400/50 transition-all"
+                          autoFocus
+                        />
+                        <button type="submit"
+                          disabled={!freeText.trim()}
+                          className="px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl
+                            font-light transition-all disabled:bg-white/5 disabled:text-white/20
+                            disabled:cursor-not-allowed">
+                          Senda
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Divider */}
+              {!isLast && <div className="glow-line"></div>}
+            </div>
+          );
+        })}
+
+        {/* Loading */}
+        {gameState === 'loading' && storyNodes.length > 0 && (
+          <div className="flex items-center justify-center gap-3 py-12 fade-in">
+            <div className="flex gap-1.5">
+              {[0,1,2].map(i => (
+                <div key={i} className="w-2.5 h-2.5 rounded-full bg-purple-400"
+                  style={{ animation: 'breathe 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
+              ))}
+            </div>
+            <span className="text-purple-300/50 text-sm font-light story-font italic">
+              Sögumaðurinn hugsar...
+            </span>
+          </div>
+        )}
+
+        {/* Ending */}
+        {gameState === 'ended' && (
+          <div className="text-center py-8 fade-in-up" style={{ animationDelay: '0.3s' }}>
+            <div className="glow-line mb-6"></div>
+            <div className="text-4xl mb-4">✨</div>
+            <h2 className="story-font text-2xl text-white font-light mb-2">
+              Sögunni er lokið
+            </h2>
+            <p className="text-purple-300/60 font-light text-sm mb-6">
+              Vel gert! Þú kláraðir fantasíuleikinn.
+            </p>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <button onClick={resetGame}
+                className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl
+                  font-light transition-all hover:shadow-lg hover:shadow-purple-500/30">
+                Spila aftur 🔄
+              </button>
+              <button onClick={() => window.history.back()}
+                className="px-8 py-3 border border-white/15 text-purple-200/70 rounded-xl
+                  font-light hover:bg-white/5 transition-all">
+                ← Til baka
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-4 mt-4 fade-in">
+            <p className="text-red-300 text-sm font-light">{error}</p>
+            <button onClick={() => setError(null)}
+              className="text-red-400/60 text-xs mt-2 hover:text-red-300 transition-colors">
+              Loka ✕
+            </button>
+          </div>
+        )}
+
+        <div ref={scrollRef}></div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+</body>
+</html>
