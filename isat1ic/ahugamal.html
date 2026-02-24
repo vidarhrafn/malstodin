@@ -25,65 +25,48 @@
       transition: all 0.2s;
       cursor: pointer;
     }
-    .answer-option:hover:not(.disabled) {
-      border-color: #3b82f6;
-      background: #eff6ff;
-    }
-    .answer-option.selected { border-color: #3b82f6; background: #eff6ff; }
-    .answer-option.correct  { border-color: #22c55e; background: #f0fdf4; }
-    .answer-option.incorrect{ border-color: #ef4444; background: #fef2f2; }
-    .answer-option.disabled { cursor: default; }
+    .answer-option:hover:not(.disabled) { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.selected  { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.correct   { border-color: #22c55e; background: #f0fdf4; }
+    .answer-option.incorrect { border-color: #ef4444; background: #fef2f2; }
+    .answer-option.disabled  { cursor: default; }
 
-    .tab-btn {
-      transition: all 0.2s;
-      position: relative;
-    }
-    .tab-btn:not(.active):hover {
-      background: #f3f4f6;
-    }
-    .tab-btn.active {
-      background: white;
-      color: #2563eb;
-      font-weight: 500;
-    }
+    .tab-btn { transition: all 0.2s; position: relative; }
+    .tab-btn:not(.active):hover { background: #f3f4f6; }
+    .tab-btn.active { background: white; color: #2563eb; font-weight: 500; }
     .tab-btn.active::after {
-      content: '';
-      position: absolute;
-      bottom: -1px;
-      left: 0; right: 0;
-      height: 3px;
-      background: #2563eb;
-      border-radius: 2px 2px 0 0;
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+      height: 3px; background: #2563eb; border-radius: 2px 2px 0 0;
     }
 
-    .chat-container {
-      max-height: 420px;
+    .chat-box {
+      max-height: 380px;
       overflow-y: auto;
     }
-    .chat-container::-webkit-scrollbar { width: 6px; }
-    .chat-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-    .chat-container::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+    .chat-box::-webkit-scrollbar { width: 5px; }
+    .chat-box::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .chat-box::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
 
     .text-panel {
       overflow: hidden;
       transition: max-height 0.4s ease, opacity 0.3s ease;
     }
     .text-panel.open  { max-height: 800px; opacity: 1; }
-    .text-panel.closed{ max-height: 0;    opacity: 0; }
+    .text-panel.closed { max-height: 0; opacity: 0; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useRef, useEffect } = React;
+    const { useState, useRef } = React;
 
     /* ─── API ─── */
     async function callOpenAI(messages, max_tokens = 300) {
       const r = await fetch('/.netlify/functions/openai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, max_tokens, model: 'gpt-4o-mini', temperature: 0.3 })
+        body: JSON.stringify({ messages, max_tokens, model: 'gpt-4o-mini', temperature: 0.5 })
       });
       const data = await r.json();
       if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
@@ -107,56 +90,32 @@
     const MC_QUESTIONS = [
       {
         question: 'Hvers vegna er gott fyrir heilsuna að fara í sund?',
-        options: [
-          'Vegna þess að vatnið er kalt.',
-          'Vegna þess að það er auðvelt að hreyfa sig í vatni.',
-          'Vegna þess að það er erfitt að synda.'
-        ],
+        options: ['Vegna þess að vatnið er kalt.', 'Vegna þess að það er auðvelt að hreyfa sig í vatni.', 'Vegna þess að það er erfitt að synda.'],
         correct: 1
       },
       {
         question: 'Hvað gera margir í heitum pottum eftir sund?',
-        options: [
-          'Þeir sofa.',
-          'Þeir borða mat.',
-          'Þeir slappa af og spjalla saman.'
-        ],
+        options: ['Þeir sofa.', 'Þeir borða mat.', 'Þeir slappa af og spjalla saman.'],
         correct: 2
       },
       {
         question: 'Hvað má markvörður í fótbolta gera sem aðrir leikmenn mega ekki?',
-        options: [
-          'Hann má hlaupa hraðar.',
-          'Hann má taka boltann með höndum.',
-          'Hann má skora mörg mörk.'
-        ],
+        options: ['Hann má hlaupa hraðar.', 'Hann má taka boltann með höndum.', 'Hann má skora mörg mörk.'],
         correct: 1
       },
       {
         question: 'Hvaða hljóðfæri eru nefnd sem dæmi í textanum?',
-        options: [
-          'Trommur og flauta.',
-          'Gítar, píanó og fiðla.',
-          'Orgel og lúður.'
-        ],
+        options: ['Trommur og flauta.', 'Gítar, píanó og fiðla.', 'Orgel og lúður.'],
         correct: 1
       },
       {
         question: 'Hvenær finnst mörgum gott að lesa bækur?',
-        options: [
-          'Á morgnana þegar þeir vakna.',
-          'Á kvöldin áður en þeir fara að sofa.',
-          'Þegar þeir eru að borða hádegismat.'
-        ],
+        options: ['Á morgnana þegar þeir vakna.', 'Á kvöldin áður en þeir fara að sofa.', 'Þegar þeir eru að borða hádegismat.'],
         correct: 1
       },
       {
         question: 'Hvað gerist þegar við lesum bækur samkvæmt textanum?',
-        options: [
-          'Við gleymum öllu.',
-          'Við lærum ný orð og fáum nýjar hugmyndir.',
-          'Við verðum mjög þreytt.'
-        ],
+        options: ['Við gleymum öllu.', 'Við lærum ný orð og fáum nýjar hugmyndir.', 'Við verðum mjög þreytt.'],
         correct: 1
       }
     ];
@@ -168,16 +127,18 @@
     ];
 
     const DISCUSSION_QUESTIONS = [
-      'Hvert er þitt uppáhalds áhugamál og af hverju?',
-      'Hversu oft á viku æfir þú íþróttir eða sinnir þínu áhugamáli?',
-      'Finnst þér skemmtilegara að lesa bækur eða horfa á sjónvarpið?',
-      'Spilar þú á hljóðfæri eða hlustarðu mikið á tónlist? Hvers konar tónlist?',
-      'Finnst þér gaman að fara í sund? Hvað finnst þér skemmtilegast að gera í sundlauginni?',
-      'Er betra að stunda áhugamál einn eða með vinum? Af hverju?',
-      'Ef þú gætir prófað nýtt áhugamál á morgun, hvað myndir þú velja?'
+      'Hvert er þitt uppáhalds áhugamál og af hverju líður þér vel þegar þú stundar það?',
+      'Finnst þér skemmtilegara að stunda áhugamál einn eða með öðrum? Af hverju?',
+      'Ef þú gætir prófað eitt nýtt áhugamál, hvað myndir þú velja og hvers vegna?'
     ];
 
-    /* ─── COMPONENTS ─── */
+    const TABS = [
+      { id: 'krossar', label: 'Krossaspurningar', icon: '✓' },
+      { id: 'stuttar', label: 'Stuttar spurningar', icon: '📝' },
+      { id: 'umraeda', label: 'Umræðuspurningar', icon: '💬' }
+    ];
+
+    /* ─── SHARED COMPONENTS ─── */
     const FeedbackBadge = ({ score, message }) => {
       const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
       const cls = {
@@ -186,8 +147,8 @@
         red:   'bg-red-50 border-red-200 text-red-700'
       }[color];
       return (
-        <div className={`mt-3 p-3 rounded-lg border ${cls} fade-in`}>
-          <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+        <div className={`p-3 rounded-lg border ${cls}`}>
+          <div className="font-medium text-xs mb-1">Stig: {score}/5</div>
           <p className="text-sm font-light">{message}</p>
         </div>
       );
@@ -197,10 +158,8 @@
     const TextPanel = ({ open, onToggle }) => (
       <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
         <div className="max-w-4xl mx-auto px-6">
-          <button
-            onClick={onToggle}
-            className="w-full flex items-center justify-between py-4 text-left group"
-          >
+          <button onClick={onToggle}
+            className="w-full flex items-center justify-between py-4 text-left group">
             <span className="flex items-center gap-2 text-gray-700 font-light group-hover:text-blue-600 transition-colors">
               <span className="text-lg">📖</span>
               <span>Textinn – <em className="font-light text-gray-500">Áhugamál</em></span>
@@ -210,12 +169,9 @@
           <div className={`text-panel ${open ? 'open' : 'closed'}`}>
             <div className="pb-6 space-y-3">
               {READING_TEXT.map((block, i) => {
-                if (block.type === 'heading') return (
-                  <h3 key={i} className="text-lg font-medium text-gray-800 mt-4">{block.text}</h3>
-                );
-                return (
-                  <p key={i} className="text-gray-700 leading-relaxed font-light text-sm">{block.text}</p>
-                );
+                if (block.type === 'heading')
+                  return <h3 key={i} className="text-base font-medium text-gray-800 mt-4">{block.text}</h3>;
+                return <p key={i} className="text-gray-700 leading-relaxed font-light text-sm">{block.text}</p>;
               })}
             </div>
           </div>
@@ -223,26 +179,17 @@
       </div>
     );
 
-    /* ─── TABS ─── */
-    const TABS = [
-      { id: 'krossar',  label: 'Krossaspurningar', icon: '✓' },
-      { id: 'stuttar',  label: 'Stuttar spurningar', icon: '📝' },
-      { id: 'umraeda',  label: 'Umræðuspurningar', icon: '💬' }
-    ];
-
+    /* ─── TAB BAR ─── */
     const TabBar = ({ active, done, onSelect }) => (
       <div className="bg-white border-b border-gray-200 sticky top-[57px] z-10">
         <div className="max-w-4xl mx-auto px-6">
           <div className="flex gap-1">
             {TABS.map(t => (
-              <button
-                key={t.id}
-                onClick={() => onSelect(t.id)}
-                className={`tab-btn px-4 py-4 text-sm flex items-center gap-2 ${active === t.id ? 'active' : 'text-gray-500'}`}
-              >
+              <button key={t.id} onClick={() => onSelect(t.id)}
+                className={`tab-btn px-4 py-4 text-sm flex items-center gap-1.5 ${active === t.id ? 'active' : 'text-gray-500'}`}>
                 <span>{t.icon}</span>
                 <span className="hidden sm:inline">{t.label}</span>
-                {done[t.id] && <span className="text-green-500 text-xs">✔</span>}
+                {done[t.id] && <span className="text-green-500 text-xs ml-1">✔</span>}
               </button>
             ))}
           </div>
@@ -250,7 +197,7 @@
       </div>
     );
 
-    /* ─── TAB: KROSSASPURNINGAR ─── */
+    /* ─── TAB 1: KROSSASPURNINGAR ─── */
     const KrossarTab = ({ onDone }) => {
       const [answers, setAnswers] = useState({});
       const [checked, setChecked] = useState(false);
@@ -262,13 +209,10 @@
           alert('Vinsamlegast svaraðu öllum spurningum!'); return;
         }
         setChecked(true);
-        const correct = MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length;
-        onDone(correct, MC_QUESTIONS.length);
+        onDone();
       };
 
-      const score = checked
-        ? MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length
-        : null;
+      const score = checked ? MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length : null;
 
       return (
         <div className="space-y-5 fade-in">
@@ -315,12 +259,13 @@
               </button>
             </div>
           ) : (
-            <div className={`bg-white rounded-xl shadow-sm border p-6 text-center fade-in ${score === MC_QUESTIONS.length ? 'border-green-200' : 'border-blue-100'}`}>
-              <div className="text-4xl mb-3">
-                {score === MC_QUESTIONS.length ? '🎉' : score >= MC_QUESTIONS.length * 0.67 ? '👍' : '💪'}
+            <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 text-center fade-in">
+              <div className="text-4xl mb-2">
+                {score === MC_QUESTIONS.length ? '🎉' : score >= 4 ? '👍' : '💪'}
               </div>
               <p className="text-gray-700 font-light">
-                Þú fékkst <strong className="font-medium">{score}</strong> af <strong className="font-medium">{MC_QUESTIONS.length}</strong> rétt
+                Þú fékkst <strong className="font-medium">{score}</strong> af{' '}
+                <strong className="font-medium">{MC_QUESTIONS.length}</strong> rétt
                 {' '}({Math.round(score / MC_QUESTIONS.length * 100)}%)
               </p>
             </div>
@@ -329,7 +274,7 @@
       );
     };
 
-    /* ─── TAB: STUTTAR SPURNINGAR ─── */
+    /* ─── TAB 2: STUTTAR SPURNINGAR ─── */
     const StuttarTab = ({ onDone }) => {
       const [convos, setConvos] = useState([[], [], []]);
       const [inputs, setInputs] = useState(['', '', '']);
@@ -351,47 +296,27 @@
         scroll(i);
 
         try {
-          const prompt = `Þú ert hlýr og hvetjandi íslenskukennari sem metur svör nemenda við lesskilningsspurningum.
-
-Spurning: "${OPEN_QUESTIONS[i]}"
-Svar nemanda: "${msg}"
-
-Svaraðu EINUNGIS á þessu formi:
-STIG: [tala 0-5]
-ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á hrós, bentu á eitt ef eitthvað vantar]`;
-
           const result = await callOpenAI([
-            { role: 'system', content: 'Þú ert hjálplegur íslenskukennari.' },
-            { role: 'user', content: prompt }
-          ]);
+            { role: 'system', content: 'Þú ert hlýr og hvetjandi íslenskukennari.' },
+            { role: 'user', content: `Spurning: "${OPEN_QUESTIONS[i]}"\nSvar: "${msg}"\n\nSvaraðu EINUNGIS:\nSTIG: [0-5]\nENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi]` }
+          ], 200);
 
           const stigMatch = result.match(/STIG:\s*(\d)/);
           const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/s);
           const score = stigMatch ? parseInt(stigMatch[1]) : 3;
-          const text  = endMatch  ? endMatch[1].trim() : result.trim();
+          const text  = endMatch ? endMatch[1].trim() : result.trim();
 
-          setFeedback(f => { const n=[...f]; n[i]={score, text}; return n; });
-          setConvos(c => {
-            const n=[...c];
-            n[i]=[...n[i], {role:'assistant', text, score}];
-            return n;
-          });
-
-          // Mark done when all 3 answered
-          const newFeedback = [...feedback];
-          newFeedback[i] = { score, text };
+          const newFeedback = [...feedback]; newFeedback[i] = {score, text};
+          setFeedback(newFeedback);
+          setConvos(c => { const n=[...c]; n[i]=[...n[i], {role:'assistant', score, text}]; return n; });
           if (newFeedback.every(f => f !== null)) onDone();
-
           scroll(i);
         } catch (e) {
-          console.error(e);
-          alert('Villa við að senda. Reyndu aftur.');
+          alert('Villa. Reyndu aftur.');
           setConvos(c => { const n=[...c]; n[i]=n[i].slice(0,-1); return n; });
         }
         setLoading(l => { const n=[...l]; n[i]=false; return n; });
       };
-
-      const allDone = feedback.every(f => f !== null);
 
       return (
         <div className="space-y-5 fade-in">
@@ -404,19 +329,18 @@ ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á h
           {OPEN_QUESTIONS.map((q, i) => (
             <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <p className="font-medium text-gray-800 mb-4">{i + 1}. {q}</p>
-
-              <div ref={chatRefs[i]} className="chat-container mb-4 space-y-3 min-h-[60px]">
+              <div ref={chatRefs[i]} className="chat-box mb-4 space-y-3 min-h-[40px]">
                 {convos[i].map((msg, mi) => (
                   <div key={mi}>
                     {msg.role === 'user' ? (
                       <div className="flex justify-end">
-                        <div className="bg-blue-50 rounded-lg p-3 max-w-[85%]">
+                        <div className="bg-blue-50 rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]">
                           <p className="text-gray-800 font-light text-sm">{msg.text}</p>
                         </div>
                       </div>
                     ) : (
                       <div className="flex justify-start">
-                        <div className="max-w-[85%]">
+                        <div className="max-w-[90%]">
                           <FeedbackBadge score={msg.score} message={msg.text} />
                         </div>
                       </div>
@@ -425,60 +349,108 @@ ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á h
                 ))}
                 {loading[i] && (
                   <div className="flex justify-start">
-                    <div className="bg-gray-100 rounded-lg p-3">
-                      <p className="text-gray-400 text-sm font-light">Bíð…</p>
+                    <div className="bg-gray-100 rounded-lg px-4 py-3">
+                      <p className="text-gray-400 text-sm font-light">…</p>
                     </div>
                   </div>
                 )}
               </div>
 
-              {!feedback[i] && (
+              {!feedback[i] ? (
                 <div className="flex gap-2">
                   <textarea
                     value={inputs[i]}
                     onChange={e => setInputs(inp => { const n=[...inp]; n[i]=e.target.value; return n; })}
                     onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(i); } }}
-                    disabled={loading[i]}
-                    rows={2}
+                    disabled={loading[i]} rows={2}
                     placeholder="Skrifaðu svarið þitt hér…"
                     className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm resize-none disabled:bg-gray-50"
                   />
-                  <button
-                    onClick={() => send(i)}
+                  <button onClick={() => send(i)}
                     disabled={loading[i] || !inputs[i].trim()}
-                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end"
-                  >
+                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end">
                     Fá endurgjöf
                   </button>
                 </div>
-              )}
-              {feedback[i] && (
-                <div className="flex items-center gap-2 text-green-600 text-sm font-light mt-1">
+              ) : (
+                <div className="flex items-center gap-2 text-green-600 text-sm font-light">
                   <span>✔</span><span>Lokið</span>
                 </div>
               )}
             </div>
           ))}
-
-          {allDone && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center fade-in">
-              <p className="text-green-700 font-light">🎉 Frábært! Þú svaraðir öllum stuttu spurningunum.</p>
-            </div>
-          )}
         </div>
       );
     };
 
-    /* ─── TAB: UMRÆÐUSPURNINGAR ─── */
+    /* ─── TAB 3: UMRÆÐUSPURNINGAR (AI spjall) ─── */
     const UmraeðaTab = ({ onDone }) => {
-      const [done, setDone] = useState(new Set());
+      const [convos, setConvos] = useState(
+        DISCUSSION_QUESTIONS.map(q => [{ role: 'assistant', text: q }])
+      );
+      const [inputs, setInputs] = useState(['', '', '']);
+      const [loading, setLoading] = useState([false, false, false]);
+      const [turnCount, setTurnCount] = useState([0, 0, 0]);
+      const [closed, setClosed] = useState([false, false, false]);
+      const chatRefs = [useRef(null), useRef(null), useRef(null)];
 
-      const toggle = (i) => {
-        const next = new Set(done);
-        next.has(i) ? next.delete(i) : next.add(i);
-        setDone(next);
-        if (next.size >= 3) onDone();
+      const scroll = (i) => setTimeout(() => {
+        if (chatRefs[i].current) chatRefs[i].current.scrollTop = chatRefs[i].current.scrollHeight;
+      }, 100);
+
+      const send = async (i) => {
+        const msg = inputs[i].trim();
+        if (!msg || closed[i]) return;
+
+        const newTurn = turnCount[i] + 1;
+        const isLast = newTurn >= 3;
+
+        setLoading(l => { const n=[...l]; n[i]=true; return n; });
+        setConvos(c => { const n=[...c]; n[i]=[...n[i], {role:'user', text:msg}]; return n; });
+        setInputs(inp => { const n=[...inp]; n[i]=''; return n; });
+        setTurnCount(t => { const n=[...t]; n[i]=newTurn; return n; });
+        scroll(i);
+
+        try {
+          const history = convos[i].map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: m.text
+          }));
+
+          const systemPrompt = isLast
+            ? `Þú ert vingjarnlegur íslenskukennari. Þetta er síðasta svar þitt í þessu samtali.
+Svaraðu hlýlega og stuttlega (1-2 setningar) og ljúktu samtalinu á náttúrulegan og hlý máta – 
+eins og "Þetta er frábært að heyra!" eða "Já, það hlýtur að vera gaman!".
+Engar spurningar. Á íslensku.`
+            : `Þú ert vingjarnlegur íslenskukennari sem ræðir við nemanda um áhugamál.
+Svaraðu stuttlega (1-2 setningar) við því sem nemandinn sagði og settu fram eina náttúrulega eftirspurningu til að halda samtalinu áfram.
+Vertu hlýr og áhugasamur. Á íslensku.`;
+
+          const result = await callOpenAI([
+            { role: 'system', content: systemPrompt },
+            ...history,
+            { role: 'user', content: msg }
+          ], 150);
+
+          setConvos(c => { const n=[...c]; n[i]=[...n[i], {role:'assistant', text:result}]; return n; });
+
+          if (isLast) {
+            setClosed(cl => {
+              const n = [...cl]; n[i] = true;
+              if (n.every(Boolean)) onDone();
+              return n;
+            });
+          }
+          scroll(i);
+        } catch (e) {
+          alert('Villa. Reyndu aftur.');
+          setConvos(c => { const n=[...c]; n[i]=n[i].slice(0,-1); return n; });
+          setTurnCount(t => { const n=[...t]; n[i]=newTurn-1; return n; });
+        }
+        setLoading(l => { const n=[...l]; n[i]=false; return n; });
       };
+
+      const allDone = closed.every(Boolean);
 
       return (
         <div className="space-y-5 fade-in">
@@ -486,59 +458,80 @@ ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á h
             <div className="text-5xl mb-3">💬</div>
             <h2 className="text-xl font-light text-gray-800 mb-1">Umræðuspurningar</h2>
             <p className="text-gray-500 text-sm font-light">
-              Ræddu þessar spurningar í hóp. Merktu við þegar þú hefur rætt spurninguna.
+              Spjallaðu við AI um áhugamál þín – 3 tilsvör í hverju samtali.
             </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="space-y-4">
-              {DISCUSSION_QUESTIONS.map((q, i) => (
-                <div
-                  key={i}
-                  onClick={() => toggle(i)}
-                  className={`flex items-start gap-4 p-4 rounded-lg cursor-pointer transition-all border-2 ${
-                    done.has(i)
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-gray-50 border-transparent hover:border-gray-200'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center mt-0.5 transition-all ${
-                    done.has(i) ? 'bg-green-500 border-green-500' : 'border-gray-300'
-                  }`}>
-                    {done.has(i) && <span className="text-white text-xs">✓</span>}
+          {DISCUSSION_QUESTIONS.map((_, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-gray-400 font-light uppercase tracking-wide">Samtal {i + 1}</p>
+                {closed[i] && (
+                  <span className="text-xs text-green-600 font-light flex items-center gap-1">
+                    <span>✔</span> Lokið
+                  </span>
+                )}
+              </div>
+
+              <div ref={chatRefs[i]} className="chat-box mb-4 space-y-3">
+                {convos[i].map((msg, mi) => (
+                  <div key={mi}>
+                    {msg.role === 'user' ? (
+                      <div className="flex justify-end">
+                        <div className="bg-blue-50 rounded-xl rounded-tr-sm px-4 py-3 max-w-[80%]">
+                          <p className="text-gray-800 font-light text-sm">{msg.text}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-xs">🤖</div>
+                        <div className="bg-gray-50 border border-gray-100 rounded-xl rounded-tl-sm px-4 py-3 max-w-[80%]">
+                          <p className="text-gray-700 font-light text-sm">{msg.text}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <p className={`font-light text-sm leading-relaxed ${done.has(i) ? 'text-green-800' : 'text-gray-700'}`}>
-                    {i + 1}. {q}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <div className="flex items-center justify-between text-sm text-gray-500 font-light mb-2">
-                <span>Framvinda</span>
-                <span>{done.size} / {DISCUSSION_QUESTIONS.length}</span>
-              </div>
-              <div className="flex gap-1.5">
-                {DISCUSSION_QUESTIONS.map((_, i) => (
-                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
-                    done.has(i) ? 'bg-green-500' : 'bg-gray-200'
-                  }`} />
                 ))}
+                {loading[i] && (
+                  <div className="flex items-start gap-2">
+                    <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 text-xs">🤖</div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                      <p className="text-gray-400 text-sm">…</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
 
-          {done.size >= 3 && (
+              {!closed[i] && (
+                <div className="flex gap-2">
+                  <textarea
+                    value={inputs[i]}
+                    onChange={e => setInputs(inp => { const n=[...inp]; n[i]=e.target.value; return n; })}
+                    onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(i); } }}
+                    disabled={loading[i]} rows={2}
+                    placeholder="Svaraðu hér…"
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-400 font-light text-sm resize-none disabled:bg-gray-50"
+                  />
+                  <button onClick={() => send(i)}
+                    disabled={loading[i] || !inputs[i].trim()}
+                    className="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end">
+                    Senda
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {allDone && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center fade-in">
-              <p className="text-green-700 font-light">🎉 Gott starf! Þú hefur rætt {done.size} af {DISCUSSION_QUESTIONS.length} spurningum.</p>
+              <p className="text-green-700 font-light">🎉 Frábært! Þú kláraðir öll þrjú samtölin.</p>
             </div>
           )}
         </div>
       );
     };
 
-    /* ─── BOTTOM PROGRESS BAR ─── */
+    /* ─── BOTTOM PROGRESS ─── */
     const BottomProgress = ({ done }) => {
       const count = Object.values(done).filter(Boolean).length;
       return (
@@ -547,18 +540,16 @@ ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á h
             <span className="text-xs text-gray-500 font-light whitespace-nowrap">Framvinda</span>
             <div className="flex gap-1.5 flex-1">
               {TABS.map(t => (
-                <div key={t.id} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
-                  done[t.id] ? 'bg-green-500' : 'bg-gray-200'
-                }`} />
+                <div key={t.id} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${done[t.id] ? 'bg-green-500' : 'bg-gray-200'}`} />
               ))}
             </div>
-            <span className="text-xs text-gray-500 font-light whitespace-nowrap">{count}/{TABS.length} lokið</span>
+            <span className="text-xs text-gray-500 font-light whitespace-nowrap">{count}/{TABS.length}</span>
           </div>
         </div>
       );
     };
 
-    /* ─── MAIN APP ─── */
+    /* ─── APP ─── */
     const App = () => {
       const [textOpen, setTextOpen] = useState(true);
       const [activeTab, setActiveTab] = useState('krossar');
@@ -568,7 +559,6 @@ ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á h
 
       return (
         <div className="min-h-screen pb-16">
-          {/* Header */}
           <header className="bg-white shadow-sm border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-6 py-6">
               <button onClick={() => window.history.back()}
@@ -580,26 +570,15 @@ ENDURGJÖF: [ein til tvær setningar, vinsamlegar og hvetjandi – byrjaðu á h
             </div>
           </header>
 
-          {/* Foldable text */}
           <TextPanel open={textOpen} onToggle={() => setTextOpen(o => !o)} />
-
-          {/* Tab bar */}
           <TabBar active={activeTab} done={done} onSelect={setActiveTab} />
 
-          {/* Tab content */}
           <main className="max-w-4xl mx-auto px-6 mt-6">
-            {activeTab === 'krossar' && (
-              <KrossarTab onDone={(correct, total) => markDone('krossar')} />
-            )}
-            {activeTab === 'stuttar' && (
-              <StuttarTab onDone={() => markDone('stuttar')} />
-            )}
-            {activeTab === 'umraeda' && (
-              <UmraeðaTab onDone={() => markDone('umraeda')} />
-            )}
+            {activeTab === 'krossar' && <KrossarTab onDone={() => markDone('krossar')} />}
+            {activeTab === 'stuttar' && <StuttarTab onDone={() => markDone('stuttar')} />}
+            {activeTab === 'umraeda' && <UmraeðaTab onDone={() => markDone('umraeda')} />}
           </main>
 
-          {/* Bottom progress */}
           <BottomProgress done={done} />
         </div>
       );
