@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Föll fornafna – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      70% { transform: scale(1.05); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop-in { animation: popIn 0.35s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+const SCREENS = [
+  {
+    id: 1,
+    title: "Skjár 1 – Ég / Mig / Mér (með vísbendingu)",
+    subtitle: "Veldu rétt form. Fallið er gefið upp til hjálpar.",
+    options: ["Ég", "Mig", "Mér"],
+    showHint: true,
+    sentences: [
+      { before: "", after: " heiti Jón og er 17 ára.", answer: "Ég",  hint: "nf" },
+      { before: "", after: " langar í ís eftir matinn.",    answer: "Mig", hint: "þf" },
+      { before: "", after: " finnst íslenska skemmtileg.",  answer: "Mér", hint: "þgf" },
+      { before: "", after: " vantar penna – má ég fá lánaðan?", answer: "Mig", hint: "þf" },
+      { before: "", after: " líður vel í dag.",             answer: "Mér", hint: "þgf" },
+    ]
+  },
+  {
+    id: 2,
+    title: "Skjár 2 – Ég / Mig / Mér (án vísbendingar)",
+    subtitle: "Veldu rétt form. Núna er enginn vísbending um fallið.",
+    options: ["Ég", "Mig", "Mér"],
+    showHint: false,
+    sentences: [
+      { before: "", after: " er þreytt(ur) í dag.",             answer: "Ég",  hint: "nf" },
+      { before: "", after: " dreymir oft um að ferðast til Japans.", answer: "Mig", hint: "þf" },
+      { before: "", after: " þykir vænt um fjölskylduna mína.", answer: "Mér", hint: "þgf" },
+      { before: "", after: " bý í Reykjavík með foreldrum mínum.", answer: "Ég", hint: "nf" },
+      { before: "", after: " líst ekki á veðrið.",              answer: "Mér", hint: "þgf" },
+    ]
+  },
+  {
+    id: 3,
+    title: "Skjár 3 – Hún / Hana / Henni (með vísbendingu)",
+    subtitle: "Veldu rétt form. Fallið er gefið upp til hjálpar.",
+    options: ["Hún", "Hana", "Henni"],
+    showHint: true,
+    sentences: [
+      { before: "", after: " langar í gosdrykk.",              answer: "Hana",   hint: "þf" },
+      { before: "", after: " heitir Sigríður og er í 10. bekk.", answer: "Hún",   hint: "nf" },
+      { before: "", after: " líður ekki vel – hún er veik.",   answer: "Henni",  hint: "þgf" },
+      { before: "", after: " vantar jakka – það er kalt úti.", answer: "Hana",   hint: "þf" },
+      { before: "", after: " þykir þetta mjög gaman.",         answer: "Henni",  hint: "þgf" },
+    ]
+  },
+  {
+    id: 4,
+    title: "Skjár 4 – Hún / Hana / Henni (án vísbendingar)",
+    subtitle: "Veldu rétt form. Enginn vísbending – þú ræður þessu!",
+    options: ["Hún", "Hana", "Henni"],
+    showHint: false,
+    sentences: [
+      { before: "", after: " er alltaf sein í skólann.",        answer: "Hún",    hint: "nf" },
+      { before: "", after: " langar í ís þótt það sé kalt.",   answer: "Hana",   hint: "þf" },
+      { before: "", after: " finnst tónlist vera það besta í lífinu.", answer: "Henni", hint: "þgf" },
+      { before: "", after: " vantar peninga til að kaupa miða.", answer: "Hana",  hint: "þf" },
+      { before: "", after: " líst mjög vel á nýja kennarann.", answer: "Henni",  hint: "þgf" },
+    ]
+  }
+];
+
+const HINT_LABELS = {
+  "nf": { label: "nf", title: "nefnifall",  color: "bg-blue-100 text-blue-700 border-blue-200" },
+  "þf": { label: "þf", title: "þolfall",    color: "bg-purple-100 text-purple-700 border-purple-200" },
+  "þgf":{ label: "þgf", title: "þágufall", color: "bg-amber-100 text-amber-700 border-amber-200" },
+};
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+const ProgressBar = ({ current, total }) => (
+  <div className="flex items-center gap-2 mb-6">
+    {Array.from({ length: total }).map((_, i) => (
+      <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500
+        ${i < current ? 'bg-green-500' : i === current ? 'bg-blue-400' : 'bg-gray-200'}`} />
+    ))}
+    <span className="text-xs text-gray-400 font-light whitespace-nowrap">{current}/{total}</span>
+  </div>
+);
+
+const FallBadge = ({ fall, show }) => {
+  if (!show) return null;
+  const h = HINT_LABELS[fall];
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ml-1 ${h.color}`}
+      title={h.title}>
+      {h.label}
+    </span>
+  );
+};
+
+const OptionButton = ({ label, onClick, state, disabled }) => {
+  const base = "px-5 py-2.5 rounded-lg border-2 font-light text-sm transition-all duration-200 ";
+  const styles = {
+    idle:    "border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50",
+    correct: "border-green-400 bg-green-50 text-green-800 scale-105 shadow-sm",
+    wrong:   "border-red-300 bg-red-50 text-red-700 opacity-70",
+    reveal:  "border-green-300 bg-green-50 text-green-700",
+    done:    "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed",
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={base + (styles[state] || styles.idle)}
+    >
+      {label}
+    </button>
+  );
+};
+
+// ── Sentence Exercise ──────────────────────────────────────────────────────────
+
+const SentenceExercise = ({ sentence, options, showHint, onAnswer, answered }) => {
+  const [selected, setSelected] = useState(null);
+
+  const handleClick = (opt) => {
+    if (answered) return;
+    setSelected(opt);
+    onAnswer(opt === sentence.answer, opt);
+  };
+
+  const getState = (opt) => {
+    if (!selected) return 'idle';
+    if (opt === sentence.answer) return selected === opt ? 'correct' : 'reveal';
+    if (opt === selected) return 'wrong';
+    return 'done';
+  };
+
+  return (
+    <div className="fade-in">
+      {/* Sentence display */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-6 py-5 mb-5 text-center">
+        <p className="text-xl font-light text-gray-800 leading-relaxed">
+          <span className={`inline-block px-3 py-0.5 rounded-lg border-2 mr-1 font-medium text-base
+            ${selected
+              ? selected === sentence.answer
+                ? 'border-green-400 bg-green-100 text-green-800'
+                : 'border-red-300 bg-red-100 text-red-700'
+              : 'border-blue-300 bg-blue-100 text-blue-700'
+            }`}>
+            {selected || '___'}
+          </span>
+          <FallBadge fall={sentence.hint} show={showHint} />
+          {sentence.after}
+        </p>
+      </div>
+
+      {/* Options */}
+      <div className="flex gap-3 justify-center flex-wrap">
+        {options.map(opt => (
+          <OptionButton
+            key={opt}
+            label={opt}
+            onClick={() => handleClick(opt)}
+            state={selected ? getState(opt) : 'idle'}
+            disabled={!!selected}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Screen (5 sentences) ───────────────────────────────────────────────────────
+
+const Screen = ({ screen, onComplete }) => {
+  const [index, setIndex] = useState(0);
+  const [results, setResults] = useState([]);
+  const [lastCorrect, setLastCorrect] = useState(null);
+  const [answered, setAnswered] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const current = screen.sentences[index];
+
+  const handleAnswer = (correct, chosen) => {
+    setLastCorrect(correct);
+    setAnswered(true);
+    setResults(prev => [...prev, { correct, chosen, answer: current.answer }]);
+  };
+
+  const handleNext = () => {
+    if (index + 1 >= screen.sentences.length) {
+      setDone(true);
+      const score = results.filter(r => r.correct).length + (lastCorrect ? 1 : 0);
+      onComplete(score);
+    } else {
+      setIndex(i => i + 1);
+      setAnswered(false);
+      setLastCorrect(null);
+    }
+  };
+
+  if (done) return null;
+
+  const totalAnswered = results.length + (answered ? 1 : 0);
+
+  return (
+    <div className="fade-in">
+      <ProgressBar current={totalAnswered} total={screen.sentences.length} />
+
+      {/* Hint legend */}
+      {screen.showHint && (
+        <div className="flex gap-2 mb-5 flex-wrap">
+          {Object.entries(HINT_LABELS).map(([k, v]) => (
+            <span key={k} className={`text-xs px-2 py-1 rounded border font-medium ${v.color}`}>
+              {v.label} = {v.title}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <SentenceExercise
+        key={index}
+        sentence={current}
+        options={screen.options}
+        showHint={screen.showHint}
+        onAnswer={handleAnswer}
+        answered={answered}
+      />
+
+      {/* Feedback */}
+      {answered && (
+        <div className={`mt-4 p-3 rounded-lg border pop-in text-sm font-light
+          ${lastCorrect
+            ? 'bg-green-50 border-green-200 text-green-700'
+            : 'bg-amber-50 border-amber-200 text-amber-700'
+          }`}>
+          {lastCorrect
+            ? "✓ Rétt! Vel gert."
+            : `✗ Rétt svar er: ${current.answer} (${HINT_LABELS[current.hint].title})`
+          }
+        </div>
+      )}
+
+      {answered && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={handleNext}
+            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm"
+          >
+            {index + 1 >= screen.sentences.length ? "Sjá niðurstöður →" : "Næsta setning →"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Results for one screen ─────────────────────────────────────────────────────
+
+const ScreenResults = ({ screen, score, onNext, isLast }) => (
+  <div className="fade-in text-center">
+    <div className="text-5xl mb-3">{score === 5 ? "🎉" : score >= 3 ? "👍" : "💪"}</div>
+    <h3 className="text-lg font-medium text-gray-800 mb-1">{screen.title.split("–")[0].trim()} lokið</h3>
+    <p className="text-gray-500 font-light text-sm mb-4">
+      Þú fékkst <span className="font-medium text-blue-700">{score} / 5</span> rétt
+    </p>
+    <div className="flex justify-center gap-2 mb-6">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-sm
+          ${i < score ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+          {i < score ? "✓" : "×"}
+        </div>
+      ))}
+    </div>
+    <button
+      onClick={onNext}
+      className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light"
+    >
+      {isLast ? "Sjá heildarniðurstöður →" : "Áfram á næsta skjá →"}
+    </button>
+  </div>
+);
+
+// ── Final Results ──────────────────────────────────────────────────────────────
+
+const FinalResults = ({ scores, onRestart }) => {
+  const total = scores.reduce((a, b) => a + b, 0);
+  const max = scores.length * 5;
+  const pct = Math.round((total / max) * 100);
+
+  return (
+    <div className="fade-in text-center">
+      <div className="text-5xl mb-4">{pct >= 80 ? "🏆" : pct >= 60 ? "⭐" : "📚"}</div>
+      <h3 className="text-2xl font-light text-gray-800 mb-2">Æfingin er lokið!</h3>
+      <p className="text-gray-500 font-light mb-1">Heildareinkunn</p>
+      <p className="text-4xl font-medium text-blue-700 mb-6">{total} / {max}</p>
+
+      <div className="grid grid-cols-2 gap-3 mb-8 max-w-sm mx-auto">
+        {SCREENS.map((s, i) => (
+          <div key={i} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm text-left">
+            <p className="text-xs text-gray-400 font-light mb-1">Skjár {i + 1}</p>
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                ${scores[i] >= 4 ? 'bg-green-100 text-green-700' : scores[i] >= 2 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                {scores[i]}
+              </div>
+              <span className="text-xs text-gray-500 font-light">/ 5</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={onRestart}
+        className="px-8 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light"
+      >
+        Reyna aftur
+      </button>
+    </div>
+  );
+};
+
+// ── Main App ───────────────────────────────────────────────────────────────────
+
+function App() {
+  const [screenIndex, setScreenIndex] = useState(0);
+  const [scores, setScores] = useState([]);
+  const [screenDone, setScreenDone] = useState(false);
+  const [lastScore, setLastScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+
+  const screen = SCREENS[screenIndex];
+
+  const handleScreenComplete = (score) => {
+    setLastScore(score);
+    setScores(prev => [...prev, score]);
+    setScreenDone(true);
+  };
+
+  const handleNext = () => {
+    if (screenIndex + 1 >= SCREENS.length) {
+      setFinished(true);
+    } else {
+      setScreenIndex(i => i + 1);
+      setScreenDone(false);
+    }
+  };
+
+  const handleRestart = () => {
+    setScreenIndex(0);
+    setScores([]);
+    setScreenDone(false);
+    setLastScore(0);
+    setFinished(false);
+  };
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-1">Föll fornafna</h1>
+          <p className="text-gray-500 text-sm font-light">Ég / Mig / Mér – Hún / Hana / Henni · A1–A2</p>
+        </div>
+      </header>
+
+      {/* Overall progress */}
+      <div className="max-w-2xl mx-auto px-6 pt-6">
+        <div className="flex gap-2 mb-2">
+          {SCREENS.map((_, i) => (
+            <div key={i} className={`flex-1 h-2 rounded-full transition-all duration-500
+              ${i < screenIndex ? 'bg-green-400'
+                : i === screenIndex ? 'bg-blue-400'
+                : 'bg-gray-200'}`} />
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 font-light mb-6 text-right">Skjár {screenIndex + 1} af {SCREENS.length}</p>
+      </div>
+
+      {/* Main content */}
+      <main className="max-w-2xl mx-auto px-6 pb-16">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+
+          {finished ? (
+            <FinalResults scores={scores} onRestart={handleRestart} />
+          ) : screenDone ? (
+            <ScreenResults
+              screen={screen}
+              score={lastScore}
+              onNext={handleNext}
+              isLast={screenIndex + 1 >= SCREENS.length}
+            />
+          ) : (
+            <>
+              {/* Screen header */}
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-sm
+                    flex items-center justify-center font-medium">{screen.id}</span>
+                  <h2 className="text-base font-medium text-gray-800">{screen.title.split("–")[1]?.trim()}</h2>
+                </div>
+                <p className="text-sm text-gray-500 font-light ml-10">{screen.subtitle}</p>
+              </div>
+
+              <Screen
+                key={screenIndex}
+                screen={screen}
+                onComplete={handleScreenComplete}
+              />
+            </>
+          )}
+
+        </div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
