@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🀄 Mahjong – Áhugamál</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    /* --- Flísar --- */
+    .mahjong-tile {
+      width: 64px; height: 78px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s ease; position: absolute;
+      user-select: none; font-size: 10px; font-weight: 500;
+      text-align: center; padding: 5px; line-height: 1.2;
+      word-break: break-word;
+    }
+    .tile-is {
+      background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 100%);
+      color: #1e40af;
+      box-shadow: 0 4px 0 #93c5fd, 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8);
+      border: 1px solid #93c5fd;
+    }
+    .tile-native {
+      background: linear-gradient(145deg, #d1fae5 0%, #a7f3d0 100%);
+      color: #065f46;
+      box-shadow: 0 4px 0 #6ee7b7, 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8);
+      border: 1px solid #6ee7b7;
+    }
+    .mahjong-tile:hover:not(.blocked):not(.matched) {
+      transform: translateY(-5px);
+      filter: brightness(1.08);
+    }
+    .mahjong-tile.selected {
+      transform: translateY(-6px);
+      box-shadow: 0 10px 0 rgba(0,0,0,0.2), 0 14px 24px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.9);
+      filter: brightness(1.1);
+    }
+    .mahjong-tile.blocked { cursor: not-allowed; opacity: 0.55; filter: grayscale(0.3); }
+    .mahjong-tile.matched { opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
+    .mahjong-tile.hint { animation: hint-pulse 0.7s ease-in-out infinite; }
+    @keyframes hint-pulse {
+      0%,100% { filter: brightness(1); }
+      50% { filter: brightness(1.5); box-shadow: 0 4px 0 rgba(0,0,0,0.2), 0 0 20px rgba(251,191,36,0.9); }
+    }
+    .mahjong-tile.wrong-flash { animation: wrong-flash 0.4s ease; }
+    @keyframes wrong-flash {
+      0%,100% { background: inherit; }
+      50% { background: linear-gradient(145deg, #fecaca, #f87171) !important; }
+    }
+
+    /* --- Cloze texti --- */
+    .cloze-blank {
+      display: inline-block;
+      min-width: 80px;
+      border-bottom: 2px solid #6b7280;
+      color: transparent;
+      vertical-align: bottom;
+      font-style: italic;
+      transition: all 0.5s ease;
+    }
+    .cloze-blank.filled {
+      color: #1d4ed8;
+      font-weight: 600;
+      border-bottom-color: #1d4ed8;
+      animation: fill-in 0.6s ease;
+    }
+    @keyframes fill-in {
+      0% { color: #fbbf24; transform: scale(1.2); }
+      100% { color: #1d4ed8; transform: scale(1); }
+    }
+
+    /* --- Sigur --- */
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pop-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .victory-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; animation: fade-in 0.4s ease; padding: 20px; }
+    .victory-box { background: white; border-radius: 20px; padding: 40px; max-width: 500px; width: 100%; text-align: center; animation: pop-in 0.4s ease; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+  // ---- Cloze texti ----
+  // Orð sem eiga að vera eyður eru merkt með [[ ]]
+  const CLOZE_TEXT = [
+    { text: "Margir ", blank: false },
+    { text: "njóta", blank: true },
+    { text: " þess að ", blank: false },
+    { text: "hlusta", blank: true },
+    { text: " á ", blank: false },
+    { text: "tónlist", blank: true },
+    { text: " í ", blank: false },
+    { text: "frítíma", blank: true },
+    { text: " sínum. Sumir fara á ", blank: false },
+    { text: "tónleika", blank: true },
+    { text: " með vinum eða fjölskyldu og ", blank: false },
+    { text: "dansa", blank: true },
+    { text: " við tónlistina. Aðrir kjósa að ", blank: false },
+    { text: "æfa", blank: true },
+    { text: " sig í ", blank: false },
+    { text: "íþróttum", blank: true },
+    { text: " og finnst gaman að ", blank: false },
+    { text: "keppa", blank: true },
+    { text: " með ", blank: false },
+    { text: "liði", blank: true },
+    { text: " sínu. Það er ", blank: false },
+    { text: "mikilvægt", blank: true },
+    { text: " að hafa ", blank: false },
+    { text: "áhugamál", blank: true },
+    { text: " – það hjálpar okkur að ", blank: false },
+    { text: "slaka á", blank: true },
+    { text: " eftir langan dag. Sumir ", blank: false },
+    { text: "semja", blank: true },
+    { text: " lög eða skrifa ljóð og ", blank: false },
+    { text: "syngja", blank: true },
+    { text: " með ", blank: false },
+    { text: "hljómsveit", blank: true },
+    { text: " á ", blank: false },
+    { text: "tónleikum", blank: true },
+    { text: ". Hvað sem við ", blank: false },
+    { text: "veljum", blank: true },
+    { text: ", þá gerir ", blank: false },
+    { text: "áhugamálið", blank: true },
+    { text: " okkur ", blank: false },
+    { text: "ánægð", blank: true },
+    { text: ".", blank: false },
+  ];
+
+  // 24 orð
+  const WORDS_IS = [
+    "njóta","hlusta","tónlist","frítíma","tónleika","dansa",
+    "æfa","íþróttum","keppa","liði","mikilvægt","áhugamál",
+    "slaka á","semja","syngja","hljómsveit","tónleikum","veljum",
+    "áhugamálið","ánægð","gítar","fiðla","bók","spila"
+  ];
+
+  // ---- Bretti-uppsetning: 48 flísar á 4 lögum ----
+  const getTilePositions = () => {
+    const TW = 68, TH = 82, LO = 5;
+    const layers = [
+      { cols: 8, rows: 3, ox: 0, oy: 0, z: 0 },
+      { cols: 6, rows: 2, ox: 1, oy: 0.5, z: 1 },
+      { cols: 4, rows: 1, ox: 2, oy: 1, z: 2 },
+      { cols: 2, rows: 1, ox: 3, oy: 1, z: 3 },
+    ];
+    const positions = [];
+    layers.forEach(l => {
+      for (let r = 0; r < l.rows; r++) {
+        for (let c = 0; c < l.cols; c++) {
+          positions.push({
+            x: (c + l.ox) * TW - l.z * LO,
+            y: (r + l.oy) * TH - l.z * LO,
+            z: l.z, row: r + l.oy, col: c + l.ox
+          });
+        }
+      }
+    });
+    return positions; // 8*3 + 6*2 + 4 + 2 = 24+12+4+2 = 42... fáum nákvæmlega 42, bætum við 6
+    // Bætum við hliðarflísar
+  };
+
+  const getAll48Positions = () => {
+    const TW = 68, TH = 82, LO = 5;
+    const positions = [];
+    // Lag 0: 8×3 = 24
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 8; c++)
+        positions.push({ x: c*TW, y: r*TH, z: 0, row: r, col: c });
+    // Lag 1: 6×2 = 12
+    for (let r = 0; r < 2; r++)
+      for (let c = 0; c < 6; c++)
+        positions.push({ x: (c+1)*TW - LO, y: (r+0.5)*TH - LO, z: 1, row: r+0.5, col: c+1 });
+    // Lag 2: 4×1 = 4
+    for (let c = 0; c < 4; c++)
+      positions.push({ x: (c+2)*TW - 2*LO, y: 1*TH - 2*LO, z: 2, row: 1, col: c+2 });
+    // Lag 3: 2×1 = 2
+    for (let c = 0; c < 2; c++)
+      positions.push({ x: (c+3)*TW - 3*LO, y: 1*TH - 3*LO, z: 3, row: 1, col: c+3 });
+    // Hliðarflísar til að ná 48: 3 til vinstri, 3 til hægri á miðju lagi
+    positions.push({ x: -TW, y: TH*0.5, z: 0, row: 0.5, col: -1 });
+    positions.push({ x: -TW, y: TH*1.5, z: 0, row: 1.5, col: -1 });
+    positions.push({ x: -TW, y: TH*2.5, z: 0, row: 2.5, col: -1 });
+    positions.push({ x: 8*TW, y: TH*0.5, z: 0, row: 0.5, col: 8 });
+    positions.push({ x: 8*TW, y: TH*1.5, z: 0, row: 1.5, col: 8 });
+    positions.push({ x: 8*TW, y: TH*2.5, z: 0, row: 2.5, col: 8 });
+    return positions;
+  };
+
+  const shuffle = arr => {
+    const a = [...arr];
+    for (let i = a.length-1; i>0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  };
+
+  const isTileOpen = (tile, allTiles) => {
+    if (tile.matched) return false;
+    const active = allTiles.filter(t => !t.matched);
+    const blocked = active.some(t =>
+      t.id !== tile.id && t.z > tile.z &&
+      Math.abs(t.col - tile.col) < 1.1 && Math.abs(t.row - tile.row) < 1.1
+    );
+    if (blocked) return false;
+    const same = active.filter(t => t.z === tile.z && t.id !== tile.id);
+    const hasLeft = same.some(t => Math.abs(t.row - tile.row) < 0.7 && t.col >= tile.col-1.2 && t.col < tile.col-0.1);
+    const hasRight = same.some(t => Math.abs(t.row - tile.row) < 0.7 && t.col <= tile.col+1.2 && t.col > tile.col+0.1);
+    return !(hasLeft && hasRight);
+  };
+
+  const findPairs = tiles => {
+    const open = tiles.filter(t => !t.matched && isTileOpen(t, tiles));
+    const pairs = [];
+    for (let i = 0; i < open.length; i++) {
+      for (let j = i+1; j < open.length; j++) {
+        if (open[i].pairId === open[j].pairId) pairs.push([open[i].id, open[j].id]);
+      }
+    }
+    return pairs;
+  };
+
+  const buildTiles = (translations) => {
+    const positions = shuffle(getAll48Positions());
+    const tiles = [];
+    WORDS_IS.forEach((word, idx) => {
+      const nativeWord = translations[word] || word;
+      const pairId = idx;
+      tiles.push({ id: idx*2,   word, type: 'is',     pairId, ...positions[idx*2] });
+      tiles.push({ id: idx*2+1, word: nativeWord, type: 'native', pairId, ...positions[idx*2+1], isWord: word });
+      // isWord geymir upprunalega íslenska orðið
+    });
+    return tiles.map(t => ({ ...t, matched: false }));
+  };
+
+  // ---- API ----
+  async function callOpenAI(messages, max_tokens=800) {
+    const r = await fetch('/.netlify/functions/openai', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ messages, max_tokens, model:'gpt-4o-mini', temperature:0.1 })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+    return data.content;
+  }
+
+  // ---- Aðalforritið ----
+  const App = () => {
+    const [phase, setPhase] = useState('intro'); // intro | loading | game | victory
+    const [language, setLanguage] = useState('');
+    const [langInput, setLangInput] = useState('');
+    const [translations, setTranslations] = useState({});
+    const [tiles, setTiles] = useState([]);
+    const [selected, setSelected] = useState(null);
+    const [filledBlanks, setFilledBlanks] = useState(new Set());
+    const [matchCount, setMatchCount] = useState(0);
+    const [hintPair, setHintPair] = useState(null);
+    const [wrongFlash, setWrongFlash] = useState(null);
+    const [loadError, setLoadError] = useState('');
+
+    const totalPairs = WORDS_IS.length;
+
+    // Þýðingar
+    const loadTranslations = async (lang) => {
+      setPhase('loading');
+      setLoadError('');
+      try {
+        const wordList = WORDS_IS.join('\n');
+        const result = await callOpenAI([{
+          role: 'user',
+          content: `Þýddu þessi íslenska orð yfir á ${lang}. Skilaðu AÐEINS JSON hlut þar sem lykillinn er íslenska orðið og gildið er þýðingin. Engar skýringar. Dæmi: {"hlusta":"listen"}\n\nOrð:\n${wordList}`
+        }], 600);
+        // Hreinsa JSON
+        const clean = result.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(clean);
+        setTranslations(parsed);
+        setTiles(buildTiles(parsed));
+        setPhase('game');
+      } catch(e) {
+        console.error(e);
+        setLoadError('Gat ekki þýtt orðin. Reyndu aftur.');
+        setPhase('intro');
+      }
+    };
+
+    const handleStart = () => {
+      if (!langInput.trim()) return;
+      setLanguage(langInput.trim());
+      loadTranslations(langInput.trim());
+    };
+
+    // Flís smellt á
+    const handleTileClick = (tile) => {
+      if (!isTileOpen(tile, tiles)) return;
+
+      if (selected?.id === tile.id) { setSelected(null); return; }
+
+      if (!selected) { setSelected(tile); return; }
+
+      // Athuga par
+      if (selected.pairId === tile.pairId && selected.id !== tile.id) {
+        // Rétt!
+        const isWord = tile.type === 'is' ? tile.word : selected.word;
+        setTiles(prev => prev.map(t =>
+          (t.id === selected.id || t.id === tile.id) ? {...t, matched: true} : t
+        ));
+        setFilledBlanks(prev => new Set([...prev, isWord]));
+        setMatchCount(c => c+1);
+        setSelected(null);
+        setTimeout(() => {
+          if (matchCount + 1 >= totalPairs) setPhase('victory');
+        }, 500);
+      } else {
+        // Rangt
+        setWrongFlash([selected.id, tile.id]);
+        setTimeout(() => setWrongFlash(null), 400);
+        setSelected(null);
+      }
+    };
+
+    const handleHint = () => {
+      const pairs = findPairs(tiles);
+      if (pairs.length > 0) {
+        const pair = pairs[Math.floor(Math.random()*pairs.length)];
+        setHintPair(pair);
+        setTimeout(() => setHintPair(null), 2000);
+      }
+    };
+
+    const handleShuffle = () => {
+      const positions = shuffle(getAll48Positions());
+      const unmatched = tiles.filter(t => !t.matched);
+      const matched = tiles.filter(t => t.matched);
+      let pi = 0;
+      const newUnmatched = unmatched.map(t => ({...t, ...positions[pi++]}));
+      setTiles([...matched, ...newUnmatched]);
+      setSelected(null);
+    };
+
+    const resetGame = () => {
+      setPhase('intro');
+      setLangInput('');
+      setLanguage('');
+      setTranslations({});
+      setTiles([]);
+      setSelected(null);
+      setFilledBlanks(new Set());
+      setMatchCount(0);
+      setHintPair(null);
+    };
+
+    const availablePairs = useMemo(() => findPairs(tiles), [tiles]);
+
+    // Auto-stokka ef engin möguleg pör
+    useEffect(() => {
+      if (phase === 'game' && tiles.length > 0 && availablePairs.length === 0) {
+        const hasUnmatched = tiles.some(t => !t.matched);
+        if (hasUnmatched) setTimeout(handleShuffle, 600);
+      }
+    }, [availablePairs, phase]);
+
+    // ---- Render ----
+    if (phase === 'intro') return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-10 max-w-md w-full">
+          <div className="text-5xl text-center mb-4">🀄</div>
+          <h1 className="text-3xl font-light text-gray-800 text-center mb-2">Mahjong – Áhugamál</h1>
+          <p className="text-gray-500 text-sm font-light text-center mb-8">Finndu íslensk-ensk (eða annað tungumál) pör og fylltu inn í textann</p>
+
+          <div className="mb-6">
+            <label className="block text-sm font-light text-gray-600 mb-2">Hvert er móðurmál þitt?</label>
+            <input
+              type="text"
+              value={langInput}
+              onChange={e => setLangInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleStart()}
+              placeholder="t.d. enska, arabíska, pólska..."
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+            />
+          </div>
+          {loadError && <p className="text-red-600 text-sm font-light mb-4">{loadError}</p>}
+          <button onClick={handleStart} disabled={!langInput.trim()}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg">
+            Hefja leik →
+          </button>
+          <div className="mt-6 bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700 font-light">
+            <p className="font-medium mb-1">Hvernig á að spila:</p>
+            <p>Finndu samsvarandi íslenska orðið og þýðinguna á móðurmálinu þínu. Þegar þú finnur par fyllst orðið inn í textann efst.</p>
+          </div>
+        </div>
+      </div>
+    );
+
+    if (phase === 'loading') return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-pulse">🀄</div>
+          <p className="text-gray-600 font-light text-lg">Gervigreind er að þýða orðin yfir á {language}...</p>
+          <p className="text-gray-400 font-light text-sm mt-2">Þetta tekur sekúndu</p>
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="min-h-screen pb-16">
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-5xl mx-auto px-6 py-6">
+            <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h1 className="text-2xl font-light text-gray-800">🀄 Mahjong – Áhugamál</h1>
+                <p className="text-gray-400 text-sm font-light mt-1">
+                  Pör: {matchCount}/{totalPairs} · Tungumál: {language} ·
+                  <span className={availablePairs.length === 0 ? 'text-amber-500' : 'text-gray-400'}>
+                    {' '}Möguleg pör: {availablePairs.length}
+                  </span>
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleHint} disabled={availablePairs.length === 0}
+                  className="px-4 py-2 bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 disabled:opacity-40 font-light text-sm transition-colors">
+                  💡 Vísbending
+                </button>
+                <button onClick={handleShuffle}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-light text-sm transition-colors">
+                  🔀 Stokka
+                </button>
+                <button onClick={resetGame}
+                  className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-light text-sm transition-colors">
+                  🔄 Byrja aftur
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-5xl mx-auto px-6 mt-6">
+
+          {/* Cloze texti */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-medium">1</span>
+              <h2 className="text-sm font-medium text-gray-700">Frítími og áhugamál – fylltu inn orðin</h2>
+            </div>
+            <p className="text-gray-700 leading-relaxed font-light text-base">
+              {CLOZE_TEXT.map((token, i) => {
+                if (!token.blank) return <span key={i}>{token.text}</span>;
+                const filled = filledBlanks.has(token.text);
+                return (
+                  <span key={i} className={`cloze-blank ${filled ? 'filled' : ''}`}>
+                    {filled ? token.text : '\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0'}
+                  </span>
+                );
+              })}
+            </p>
+          </div>
+
+          {/* Litaskýring */}
+          <div className="flex gap-4 mb-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-5 rounded tile-is" style={{background:'linear-gradient(145deg,#dbeafe,#bfdbfe)', border:'1px solid #93c5fd'}}></div>
+              <span className="text-xs text-gray-500 font-light">Íslenska</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-5 rounded tile-native" style={{background:'linear-gradient(145deg,#d1fae5,#a7f3d0)', border:'1px solid #6ee7b7'}}></div>
+              <span className="text-xs text-gray-500 font-light">{language}</span>
+            </div>
+          </div>
+
+          {/* Mahjong-bretti */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 overflow-x-auto">
+            <div className="relative mx-auto" style={{ width: 10*68 + 20, height: 3*82 + 60 }}>
+              {tiles.map(tile => {
+                const open = isTileOpen(tile, tiles);
+                const isSel = selected?.id === tile.id;
+                const isHint = hintPair && (hintPair[0] === tile.id || hintPair[1] === tile.id);
+                const isWrong = wrongFlash && wrongFlash.includes(tile.id);
+                return (
+                  <div key={tile.id}
+                    className={`mahjong-tile tile-${tile.type} ${tile.matched ? 'matched' : ''} ${!open ? 'blocked' : ''} ${isSel ? 'selected' : ''} ${isHint ? 'hint' : ''} ${isWrong ? 'wrong-flash' : ''}`}
+                    style={{ left: tile.x + 68, top: tile.y + 10, zIndex: tile.z*100 + Math.floor(tile.row)*10 + Math.floor(tile.col) }}
+                    onClick={() => !tile.matched && handleTileClick(tile)}
+                  >
+                    {tile.word}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+        </main>
+
+        {/* Sigurvegari */}
+        {phase === 'victory' && (
+          <div className="victory-overlay">
+            <div className="victory-box">
+              <div className="text-5xl mb-4">🎉</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-2">Vel gert!</h2>
+              <p className="text-gray-600 font-light mb-6">Þú fannst öll {totalPairs} pörin!</p>
+              <div className="bg-blue-50 rounded-xl p-5 text-left mb-6">
+                <p className="text-sm font-medium text-gray-700 mb-3">Fullur texti:</p>
+                <p className="text-gray-700 leading-relaxed font-light text-sm">
+                  {CLOZE_TEXT.map((token, i) => (
+                    <span key={i} className={token.blank ? 'font-semibold text-blue-700' : ''}>{token.text}</span>
+                  ))}
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <button onClick={resetGame}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-light transition-colors">
+                  🔄 Spila aftur
+                </button>
+                <button onClick={() => window.history.back()}
+                  className="px-6 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-light transition-colors">
+                  ← Til baka
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
