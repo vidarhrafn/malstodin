@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🔍 Finndu orðið – Áhugamál og líkamsrækt</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%); min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SpeakerIcon = ({ active = false }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-5 h-5 ${active ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+    );
+
+    const SendIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    );
+
+    async function callOpenAI(payload) {
+      const r = await fetch('/.netlify/functions/openai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    async function speak(text) {
+      try {
+        const r = await fetch('/.netlify/functions/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text_to_speak: text }) });
+        const data = await r.json();
+        if (!r.ok || data.error || !data.audio_base64) throw new Error(data.error || 'No audio');
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        await audio.play();
+      } catch (e) { console.error('speak error:', e); }
+    }
+
+    // Orðalisti – Áhugamál, Líkamsrækt, Björgunarsveitir (A1–B1)
+    const DEFAULT_WORDS = [
+      // Áhugamál
+      { word: 'sundlaug', def: 'stór pýramídalaga pottur með vatni þar sem fólk syndar', topic: 'Áhugamál' },
+      { word: 'markvörður', def: 'leikmaður í fótbolta sem verndar markið og má taka boltann með höndum', topic: 'Áhugamál' },
+      { word: 'heitur pottur', def: 'lítil laug með mjög heitu vatni þar sem fólk slappir af eftir sund', topic: 'Áhugamál' },
+      { word: 'gítar', def: 'hljóðfæri með sex strengi sem maður spilar á með fingurna', topic: 'Áhugamál' },
+      { word: 'fiðla', def: 'hljóðfæri með strengi sem maður spilar á með boga', topic: 'Áhugamál' },
+      { word: 'hljómsveit', def: 'hópur tónlistarmanna sem spilar saman á tónleikum', topic: 'Áhugamál' },
+      { word: 'tónleikар', def: 'viðburður þar sem hljómsveit eða söngvari syngur og spilar fyrir áhorfendur', topic: 'Áhugamál' },
+      { word: 'fótbolti', def: 'vinsæl íþrótt þar sem tvö lið reyna að sparka bolta í mark', topic: 'Áhugamál' },
+      { word: 'áhugamál', def: 'eitthvað sem þér líður vel að gera í frítíma þínum', topic: 'Áhugamál' },
+
+      // Líkamsrækt
+      { word: 'hlaupabretti', def: 'tæki í ræktinni þar sem maður hleypur en er alltaf á sama stað', topic: 'Líkamsrækt' },
+      { word: 'lóð', def: 'þungt járn sem maður lyftur til að byggja upp vöðva', topic: 'Líkamsrækt' },
+      { word: 'jóga', def: 'hreyfing þar sem maður teygir líkamann og slappir af með andardrætti', topic: 'Líkamsrækt' },
+      { word: 'gufubað', def: 'lítið herbergi fullt af heitu gufu þar sem maður svitnar', topic: 'Líkamsrækt' },
+      { word: 'þrek', def: 'geta til að hreyfa sig lengi án þess að verða þreyttur', topic: 'Líkamsrækt' },
+      { word: 'líkamsrækt', def: 'það að hreyfa sig reglulega til að halda líkamanum heilbrigðum og sterkum', topic: 'Líkamsrækt' },
+      { word: 'teygjuæfingar', def: 'æfingar þar sem maður teygir vöðvana til að verða sveigjanlegur', topic: 'Líkamsrækt' },
+      { word: 'árskort', def: 'miði sem gefur þér aðgang í ræktina í heilt ár', topic: 'Líkamsrækt' },
+      { word: 'fjallganga', def: 'það að ganga langar leiðir upp í fjöll í náttúrunni', topic: 'Líkamsrækt' },
+
+      // Björgunarsveitir
+      { word: 'þyrla', def: 'flugvél sem getur flogið upp og niður og stillt hraða á lofti – notuð við björgun', topic: 'Björgunarsveitir' },
+      { word: 'jeppi', def: 'sterk og há bifreið sem getur ekið um erfitt landslag og snjó', topic: 'Björgunarsveitir' },
+      { word: 'vélsleði', def: 'farartæki á snjónum sem keyrist með vél og fer hratt', topic: 'Björgunarsveitir' },
+      { word: 'sjálfboðaliði', def: 'einstaklingur sem vinnur án þess að fá greitt vegna þess að hann vill hjálpa', topic: 'Björgunarsveitir' },
+      { word: 'skyndihjálp', def: 'fyrsta aðstoð sem maður veitir þegar einhver slasast áður en læknir kemur', topic: 'Björgunarsveitir' },
+      { word: 'talstöð', def: 'tæki sem fólk notar til að tala saman þegar það er langt frá hvert öðru', topic: 'Björgunarsveitir' },
+      { word: 'útkall', def: 'þegar björgunarsveit er kölluð út til að hjálpa fólki í hættu', topic: 'Björgunarsveitir' },
+      { word: 'samvinna', def: 'þegar fólk vinnur vel saman og hjálpar hvert öðru að ná markmiðum', topic: 'Björgunarsveitir' },
+    ];
+
+    const TOPIC_COLORS = {
+      'Áhugamál': 'bg-blue-100 text-blue-800 border-blue-300',
+      'Líkamsrækt': 'bg-green-100 text-green-800 border-green-300',
+      'Björgunarsveitir': 'bg-purple-100 text-purple-800 border-purple-300',
+    };
+
+    const Game = () => {
+      const [words] = useState(DEFAULT_WORDS);
+      const [usedWords, setUsedWords] = useState([]);
+      const [target, setTarget] = useState(null);
+      const [desc, setDesc] = useState('');
+      const [input, setInput] = useState('');
+      const [messages, setMessages] = useState([]);
+      const [wrong, setWrong] = useState(0);
+      const [round, setRound] = useState(1);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [speakingDesc, setSpeakingDesc] = useState(false);
+      const [loading, setLoading] = useState(false);
+      const [gameOver, setGameOver] = useState(false);
+      const messagesEndRef = useRef(null);
+
+      useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages]);
+
+      const newRound = async (prevUsed = usedWords, prevTarget = null) => {
+        const newUsed = prevTarget ? [...prevUsed, prevTarget.word] : prevUsed;
+        const available = words.filter(w => !newUsed.includes(w.word));
+        if (available.length === 0) { setGameOver(true); return; }
+
+        setUsedWords(newUsed);
+        setLoading(true);
+        setMessages([]);
+        setInput('');
+        setWrong(0);
+        setDesc('');
+
+        const pick = available[Math.floor(Math.random() * available.length)];
+        setTarget(pick);
+
+        const sys = `Þú hjálpar íslenskunema á A1–B1 stigi. Lýstu hlut eða hugtaki án þess að nefna orðið sjálft. Notaðu 1–3 einfaldar setningar á íslensku. Ekki nota flókin orð. Ljúktu með spurningu: "Hvað er þetta?".`;
+        const user = `Orð: "${pick.word}". Einföld útskýring: "${pick.def}". Búðu til A1–B1 lýsingu.`;
+
+        try {
+          const content = await callOpenAI({ model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 120, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }] });
+          setDesc(content);
+        } catch (e) {
+          setDesc(`Þetta er ${pick.def}. Hvað er þetta?`);
+        }
+        setLoading(false);
+      };
+
+      useEffect(() => { newRound([], null); }, []);
+
+      const submitGuess = async () => {
+        const guess = input.trim();
+        if (!guess || !target) return;
+        setMessages(prev => [...prev, { role: 'user', content: guess }]);
+        setInput('');
+
+        const checkSys = `Þú ert að meta hvort nemandi giskaði rétt á orð. Rétta orðið er "${target.word}". Nemandinn giskaði: "${guess}".
+SAMÞYKKJA: nákvæmlega rétt, sagnir með/án "að", smávægilegar stafsetningarvillur, eintölu/fleirtölu.
+HAFNA: alveg rangt orð.
+Svaraðu AÐEINS með "RÉTT" eða "RANGT".`;
+
+        try {
+          const aiDecision = await callOpenAI({ model: 'gpt-4o-mini', temperature: 0.1, max_tokens: 10, messages: [{ role: 'system', content: checkSys }] });
+          const isCorrect = aiDecision.trim().toUpperCase().includes('RÉTT');
+
+          if (isCorrect) {
+            const ok = `✅ Rétt! Orðið var „${target.word}".`;
+            setMessages(prev => [...prev, { role: 'system', content: ok }]);
+            await speak(ok);
+            setCorrectCount(c => c + 1);
+            setTimeout(() => { setRound(r => r + 1); newRound(usedWords, target); }, 900);
+            return;
+          }
+        } catch (e) {
+          if (guess.toLowerCase() === target.word.toLowerCase()) {
+            const ok = `✅ Rétt! Orðið var „${target.word}".`;
+            setMessages(prev => [...prev, { role: 'system', content: ok }]);
+            await speak(ok); setCorrectCount(c => c + 1);
+            setTimeout(() => { setRound(r => r + 1); newRound(usedWords, target); }, 900);
+            return;
+          }
+        }
+
+        const wrongMsg = `❌ Ekki rétt. Prófaðu aftur.`;
+        setMessages(prev => [...prev, { role: 'system', content: wrongMsg }]);
+        await speak(wrongMsg);
+
+        const n = wrong + 1;
+        setWrong(n);
+
+        if (n === 2) {
+          const first = target.word[0];
+          const pron = getLetterPronunciation(first);
+          setMessages(prev => [...prev, { role: 'hint', content: '💡 Vísbending 1', hintText: `Vísbending: Orðið byrjar á ${pron}.` }]);
+        } else if (n === 4) {
+          setMessages(prev => [...prev, { role: 'hint', content: '💡 Vísbending 2', hintText: `Önnur vísbending: Orðið hefur ${target.word.length} stafi.` }]);
+        } else if (n === 6) {
+          const ending = target.word.slice(-3);
+          setMessages(prev => [...prev, { role: 'hint', content: '💡 Vísbending 3', hintText: `Síðasta vísbending: Orðið endar á „${ending}".` }]);
+        } else if (n >= 7) {
+          await speak(`Rétt svar er: ${target.word}. Prófum nýtt orð!`);
+          setMessages(prev => [...prev, { role: 'system', content: `Rétt svar var: „${target.word}"` }]);
+          setTimeout(() => { setRound(r => r + 1); newRound(usedWords, target); }, 700);
+        }
+      };
+
+      const replayDesc = async () => {
+        if (desc) { setSpeakingDesc(true); await speak(desc); setSpeakingDesc(false); }
+      };
+
+      const resetGame = () => {
+        setUsedWords([]); setRound(1); setCorrectCount(false); setGameOver(false);
+        setCorrectCount(0);
+        newRound([], null);
+      };
+
+      function getLetterPronunciation(letter) {
+        const p = { a:'a', á:'á', b:'bé', d:'dé', ð:'eð', e:'e', f:'eff', g:'gé', h:'há', i:'i', í:'í', j:'joð', k:'ká', l:'ell', m:'emm', n:'enn', o:'o', ó:'ó', p:'pé', r:'err', s:'ess', t:'té', u:'u', ú:'ú', v:'vaff', x:'ex', y:'ufsilon y', ý:'ufsilon ý', þ:'þoddn', æ:'æ', ö:'ö' };
+        return p[letter.toLowerCase()] || letter;
+      }
+
+      const currentTopic = target?.topic;
+      const topicColor = currentTopic ? TOPIC_COLORS[currentTopic] : 'bg-gray-100 text-gray-700 border-gray-200';
+
+      return (
+        <div className="min-h-screen pb-12">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-3xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h1 className="text-3xl font-light text-gray-800 mb-1">🔍 Finndu orðið</h1>
+                  <p className="text-gray-500 text-sm font-light">Áhugamál · Líkamsrækt · Björgunarsveitir · A1–B1</p>
+                  <p className="text-gray-400 text-xs font-light mt-1">
+                    Umferð {round} · Rétt: {correctCount} · Orð eftir: {words.length - usedWords.length}
+                  </p>
+                </div>
+                <button onClick={resetGame} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 font-light">🔄 Byrja aftur</button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-3xl mx-auto px-6 mt-8">
+
+            {/* Litakóðar */}
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {Object.entries(TOPIC_COLORS).map(([topic, cls]) => (
+                <span key={topic} className={`px-3 py-1 rounded-full text-xs font-light border ${cls}`}>{topic}</span>
+              ))}
+            </div>
+
+            {/* Leikur lokið */}
+            {gameOver && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+                <div className="text-6xl mb-4">🎉</div>
+                <h2 className="text-2xl font-light text-gray-800 mb-2">Vel gert!</h2>
+                <p className="text-gray-600 font-light mb-6">Þú fórst í gegnum öll {words.length} orðin.<br />Rétt: {correctCount} / {words.length}</p>
+                <button onClick={resetGame} className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-light transition-colors">🔄 Spila aftur</button>
+              </div>
+            )}
+
+            {!gameOver && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+
+                {/* Efnisflokkur */}
+                {currentTopic && !loading && (
+                  <div className={`px-6 py-2 border-b flex items-center gap-2 ${TOPIC_COLORS[currentTopic]}`}>
+                    <span className="text-xs font-light">Efnisflokkur:</span>
+                    <span className="text-xs font-medium">{currentTopic}</span>
+                  </div>
+                )}
+
+                {/* Hljóðtakki */}
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+                  <span className="text-sm text-gray-600 font-light">🎧 Hlustaðu á lýsinguna og giskaðu á orðið</span>
+                  {loading && <span className="text-xs font-light text-blue-600 animate-pulse">⏳ Gervigreind er að hugsa...</span>}
+                </div>
+
+                {!loading && desc && (
+                  <div className="bg-blue-50 border-b border-blue-100 px-6 py-4">
+                    <button onClick={replayDesc} disabled={speakingDesc}
+                      className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-light disabled:bg-gray-300 disabled:cursor-not-allowed">
+                      <SpeakerIcon active={speakingDesc} />
+                      <span>{speakingDesc ? '🔊 Spilar...' : '🎧 Spila lýsingu'}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Spjallsvæði */}
+                <div className="p-6 space-y-3 min-h-[260px]">
+                  {messages.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {m.role === 'hint' ? (
+                        <button onClick={() => speak(m.hintText)}
+                          className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-lg font-light hover:bg-amber-100 transition-colors flex items-center gap-2">
+                          <span>🔊</span>
+                          <span>{m.content}</span>
+                        </button>
+                      ) : (
+                        <div className={`max-w-lg px-4 py-2 rounded-lg font-light shadow-sm text-sm ${
+                          m.role === 'user' ? 'bg-gray-800 text-white' : 'bg-blue-50 text-blue-800 border border-blue-100'
+                        }`}>
+                          {m.content}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {messages.length === 0 && !loading && (
+                    <p className="text-center text-gray-400 font-light py-8">Smelltu á hljóðhnappinn til að byrja 👆</p>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Innsláttur */}
+                <div className="border-t p-4 bg-white">
+                  <div className="flex gap-2">
+                    <input type="text" value={input} onChange={e => setInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && submitGuess()}
+                      placeholder="Skrifaðu gisk…"
+                      className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+                      disabled={loading || !desc} />
+                    <button onClick={submitGuess}
+                      className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition-colors font-light disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      disabled={loading || !desc}>
+                      <SendIcon />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* Notuð orð */}
+            {usedWords.length > 0 && !gameOver && (
+              <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <p className="text-sm text-gray-500 font-light mb-2">✅ Orð sem komu fyrir:</p>
+                <div className="flex flex-wrap gap-2">
+                  {usedWords.map((w, i) => {
+                    const found = DEFAULT_WORDS.find(x => x.word === w);
+                    const cls = found ? TOPIC_COLORS[found.topic] : 'bg-gray-100 text-gray-600 border-gray-200';
+                    return <span key={i} className={`px-3 py-1 rounded-full text-xs font-light border ${cls}`}>{w}</span>;
+                  })}
+                </div>
+              </div>
+            )}
+
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Game />);
+  </script>
+</body>
+</html>
