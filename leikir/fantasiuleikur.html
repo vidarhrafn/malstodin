@@ -141,10 +141,6 @@
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback } = React;
 
-// ============================================================
-// API TENGINGAR – Málstöðin
-// ============================================================
-
 async function callOpenAI(messages, max_tokens = 600, model = 'gpt-4o-mini', temperature = 0.5) {
   const r = await fetch('/.netlify/functions/openai', {
     method: 'POST',
@@ -177,10 +173,6 @@ async function playAudio(text, onEnd) {
   }
 }
 
-// ============================================================
-// SYSTEM PROMPT – Sögumaðurinn
-// ============================================================
-
 const SYSTEM_PROMPT = `HLUTVERK: Þú ert sögumaður í íslenskum fantasíuleik fyrir nemendur sem eru að læra íslensku á A1-A2 stigi. Þú skrifar allt á íslensku.
 
 MÁLFAR – MIKILVÆGAST:
@@ -189,6 +181,7 @@ MÁLFAR – MIKILVÆGAST:
 - Fallbeyging: nefnifall, þolfall, þágufall, eignarfall – alltaf rétt.
 - Persónufornöfn í réttu falli: "mér líður vel", "mér er kalt", "hjálpaðu mér".
 - Sagnbeyging: "hvað gerir þú" ekki "hvað gerir þér".
+- FORÐASTU orðið "halló" – notaðu "góðan dag", "sæll" eða "hæ" í staðinn.
 - Lestu yfir texta þinn áður en þú skilar honum og leiðréttu allar villur.
 
 TUNGUMÁLASTIG: Stuttar einfaldar setningar. Algengur orðaforði sem hentar A1-A2. Engar flóknar málsgreinar.
@@ -223,10 +216,6 @@ SVARA ALLTAF Á ÞESSU JSON FORMI OG ENGU ÖÐRU:
 
 ÞEGAR LEIKMAÐUR SKRIFAR EIGIÐ SVAR: Bregstu við því náttúrulega í sögunni og haltu áfram á næsta hnút.
 MIKILVÆGT: Svaraðu AÐEINS með JSON. Ekkert annað utan JSON.`;
-
-// ============================================================
-// ÍHLUTIR
-// ============================================================
 
 const MountainSilhouette = () => (
   <svg className="mountain-silhouette" viewBox="0 0 1440 200" preserveAspectRatio="none" fill="none">
@@ -295,19 +284,14 @@ const ProgressNodes = ({ current, total }) => (
   </div>
 );
 
-// Character emoji
 const charEmoji = (name) => {
-  if (!name) return '💬';
+  if (!name) return '\u{1F4AC}';
   const n = name.toLowerCase();
-  if (n.includes('ormur')) return '🧙';
-  if (n.includes('símon')) return '🧒';
-  if (n.includes('drífa')) return '👑';
-  return '💬';
+  if (n.includes('ormur')) return '\u{1F9D9}';
+  if (n.includes('símon')) return '\u{1F9D2}';
+  if (n.includes('drífa')) return '\u{1F451}';
+  return '\u{1F4AC}';
 };
-
-// ============================================================
-// AÐALFORRIT
-// ============================================================
 
 function App() {
   const [gameState, setGameState] = useState('intro');
@@ -327,8 +311,8 @@ function App() {
   const parseResponse = (text) => {
     try {
       let cleaned = text.trim();
-      if (cleaned.startsWith('```')) {
-        cleaned = cleaned.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+      if (cleaned.startsWith('` + '`' + '`' + `')) {
+        cleaned = cleaned.replace(/^\`\`\`json?\n?/, '').replace(/\n?\`\`\`$/, '');
       }
       return JSON.parse(cleaned);
     } catch (e) {
@@ -337,7 +321,6 @@ function App() {
     }
   };
 
-  // Auto-play TTS when character speaks
   const autoPlayDialogue = useCallback(async (node, nodeIndex) => {
     if (node.persóna && node.persóna_nafn && !autoPlayed.has(nodeIndex)) {
       setAutoPlayed(prev => new Set(prev).add(nodeIndex));
@@ -349,28 +332,22 @@ function App() {
   const sendToAI = async (userContent) => {
     setGameState('loading');
     setError(null);
-
     const userMsg = { role: 'user', content: userContent };
     const newMessages = [...messages, userMsg];
-
     try {
       const response = await callOpenAI(newMessages, 600, 'gpt-4o-mini', 0.5);
       const node = parseResponse(response);
-
       if (!node) {
         setError('Sögumaðurinn sveitaðist... Reyndu aftur.');
         setGameState(storyNodes.length > 0 ? 'playing' : 'intro');
         return;
       }
-
       const assistantMsg = { role: 'assistant', content: response };
       setMessages([...newMessages, assistantMsg]);
-
       const newNodes = [...storyNodes, node];
       setStoryNodes(newNodes);
       setGameState(node.ending ? 'ended' : 'playing');
       setFreeText('');
-
       autoPlayDialogue(node, newNodes.length - 1);
     } catch (e) {
       console.error(e);
@@ -389,9 +366,7 @@ function App() {
 
   const handleFreeSubmit = (e) => {
     e.preventDefault();
-    if (freeText.trim()) {
-      sendToAI(freeText.trim());
-    }
+    if (freeText.trim()) sendToAI(freeText.trim());
   };
 
   const resetGame = () => {
@@ -403,7 +378,6 @@ function App() {
     setFreeText('');
   };
 
-  // ===== INTRO =====
   if (gameState === 'intro') {
     return (
       <div className="game-bg flex items-center justify-center px-4">
@@ -418,7 +392,6 @@ function App() {
               Fantasíuleikur – Málstöðin
             </p>
           </div>
-
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
             <p className="story-font text-xl text-purple-100/90 font-light leading-relaxed mb-4">
               Þú vaknar á gamalli brú. Himinninn er fjólublár.
@@ -428,7 +401,6 @@ function App() {
               Íslenskuæfing á A1–A2 stigi · 7 kaflar · Þú velur söguna
             </p>
           </div>
-
           <button onClick={startGame}
             className="px-10 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl
               font-light text-lg transition-all hover:shadow-lg hover:shadow-purple-500/30
@@ -436,14 +408,12 @@ function App() {
             style={{ animation: 'pulseGlow 3s ease-in-out infinite' }}>
             Byrja leikinn ✨
           </button>
-
           {error && <p className="mt-4 text-red-400 text-sm font-light">{error}</p>}
         </div>
       </div>
     );
   }
 
-  // ===== LOADING (first node) =====
   if (gameState === 'loading' && storyNodes.length === 0) {
     return (
       <div className="game-bg flex items-center justify-center px-4">
@@ -463,12 +433,9 @@ function App() {
     );
   }
 
-  // ===== GAME SCREEN =====
   return (
     <div className="game-bg">
       <MountainSilhouette />
-
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-2.5">
@@ -487,51 +454,40 @@ function App() {
         </div>
       </header>
 
-      {/* Story */}
       <main className="relative z-10 max-w-2xl mx-auto px-4 py-6 pb-40">
         {storyNodes.map((node, idx) => {
           const isLast = idx === storyNodes.length - 1;
           return (
             <div key={idx} className={`mb-8 ${isLast ? 'fade-in-up' : ''}`}>
-
-              {/* Hnútur badge */}
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-6 h-6 rounded-full bg-purple-500/30 text-purple-300 text-xs
                   flex items-center justify-center font-medium border border-purple-400/30">
-                  {node.hnútur || idx + 1}
+                  {node['hnútur'] || idx + 1}
                 </span>
                 <div className="flex-1 h-px bg-purple-400/10"></div>
               </div>
-
-              {/* Saga texti */}
               <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-5 border border-white/10 mb-3">
                 <p className="story-font text-lg text-purple-50/90 font-light leading-relaxed whitespace-pre-line">
                   {node.saga}
                 </p>
-
-                {/* Persóna talar */}
-                {node.persóna && (
+                {node['persóna'] && (
                   <div className="mt-4 pl-4 border-l-2 border-purple-400/40">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="text-base">{charEmoji(node.persóna_nafn)}</span>
+                      <span className="text-base">{charEmoji(node['persóna_nafn'])}</span>
                       <span className="text-purple-300 text-sm font-medium story-font">
-                        {node.persóna_nafn || 'Persóna'}
+                        {node['persóna_nafn'] || 'Persóna'}
                       </span>
-                      <ListenBtn text={node.persóna} label="Hlustaðu" />
+                      <ListenBtn text={node['persóna']} label="Hlustaðu" />
                     </div>
                     <p className="story-font text-lg text-purple-100 font-light italic leading-relaxed">
-                      „{node.persóna}"
+                      "{node['persóna']}"
                     </p>
                   </div>
                 )}
               </div>
-
-              {/* Hlusta á söguna */}
               <div className="flex justify-end mb-3">
-                <ListenBtn text={node.saga + (node.persóna ? ' ' + node.persóna : '')} label="Hlustaðu á kafla" />
+                <ListenBtn text={node.saga + (node['persóna'] ? ' ' + node['persóna'] : '')} label="Hlustaðu á kafla" />
               </div>
-
-              {/* Valkostir – aðeins á síðasta hnút og ef ekki ending */}
               {isLast && !node.ending && gameState === 'playing' && (
                 <div className="space-y-3 fade-in" style={{ animationDelay: '0.4s' }}>
                   {node.valkostir && node.valkostir.map((choice, ci) => (
@@ -542,8 +498,7 @@ function App() {
                       {choice}
                     </button>
                   ))}
-
-                  {node.frjálst_svar && (
+                  {node['frjálst_svar'] && (
                     <form onSubmit={handleFreeSubmit} className="mt-3">
                       <div className="flex gap-2">
                         <input
@@ -568,14 +523,11 @@ function App() {
                   )}
                 </div>
               )}
-
-              {/* Divider */}
               {!isLast && <div className="glow-line"></div>}
             </div>
           );
         })}
 
-        {/* Loading */}
         {gameState === 'loading' && storyNodes.length > 0 && (
           <div className="flex items-center justify-center gap-3 py-12 fade-in">
             <div className="flex gap-1.5">
@@ -590,17 +542,12 @@ function App() {
           </div>
         )}
 
-        {/* Ending */}
         {gameState === 'ended' && (
           <div className="text-center py-8 fade-in-up" style={{ animationDelay: '0.3s' }}>
             <div className="glow-line mb-6"></div>
             <div className="text-4xl mb-4">✨</div>
-            <h2 className="story-font text-2xl text-white font-light mb-2">
-              Sögunni er lokið
-            </h2>
-            <p className="text-purple-300/60 font-light text-sm mb-6">
-              Vel gert! Þú kláraðir fantasíuleikinn.
-            </p>
+            <h2 className="story-font text-2xl text-white font-light mb-2">Sögunni er lokið</h2>
+            <p className="text-purple-300/60 font-light text-sm mb-6">Vel gert! Þú kláraðir fantasíuleikinn.</p>
             <div className="flex gap-3 justify-center flex-wrap">
               <button onClick={resetGame}
                 className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl
@@ -616,7 +563,6 @@ function App() {
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-4 mt-4 fade-in">
             <p className="text-red-300 text-sm font-light">{error}</p>
