@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🖼️ Mona Lisa – Lesskilningur</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    .answer-option { border: 2px solid #e0e0e0; transition: all 0.2s; cursor: pointer; }
+    .answer-option:hover:not(.disabled) { border-color: #2196f3; background: #e3f2fd; }
+    .answer-option.selected { border-color: #2196f3; background: #e3f2fd; }
+    .answer-option.correct { border-color: #4caf50; background: #e8f5e9; }
+    .answer-option.incorrect { border-color: #f44336; background: #ffebee; }
+    .answer-option.disabled { cursor: default; }
+    .tab-btn { transition: all 0.2s; border-bottom: 3px solid transparent; }
+    .tab-btn:hover:not(.tab-active) { background: #f3f4f6; }
+    .tab-btn.tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; background: white; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    async function callOpenAI(messages, max_tokens = 300) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model: 'gpt-4o-mini', temperature: 0.3 })
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const READING_TEXT = `Mona Lisa er án efa eitt þekktasta málverk í heimi. Það er afrakstur snillingsins Leonardo da Vinci, ítalsks listamanns sem uppi var á endurreisnartímanum. Málverkið sýnir konu að nafni Lisa del Giocondo, sem var gift kaupmanni í Flórens á Ítalíu. Þessi dularfulla mynd hefur heillað listunnendur og fræðimenn um allan heim í meira en fimm aldir.
+
+Það eru margar ástæður fyrir því að Mona Lisa er svona fræg. Eitt af því sem gerir málverkið einstakt er bros hennar. Það er erfitt að segja til um hvað hún er að hugsa eða hvaða tilfinningar búa að baki brosinu. Sumir segja að hún sé glöð, á meðan aðrir telja að hún sé sorgmædd eða jafnvel leyndardómsfull. Þessi óvissa um tilfinningar hennar hefur gert málverkið enn áhugaverðara og enn meira heillandi.
+
+Leonardo da Vinci var meistari í að nota sérstaka tækni í málverkum sínum. Hann notaði tækni sem kallast „sfumato," sem er ítalskt orð sem þýðir „að gufa upp" eða „að reykja." Þessi tækni felur í sér að mála mjög þunn lög af málningu ofan á hvert annað til að skapa mjúk og óskýr mörk. Þetta gefur andlitinu á Monu Lisu mjúkt og raunverulegt útlit, eins og hún sé lifandi.
+
+Málverkið er ekki mjög stórt, en það er samt mjög áhrifamikið. Það er 77 sentímetrar á hæð og 53 sentímetrar á breidd. Leonardo málaði það með olíu á tréplötu. Hann byrjaði að vinna að því um árið 1503 og hélt áfram að bæta við það í mörg ár. Það er sagt að hann hafi aldrei talið það fullklárað.
+
+Í dag er Mona Lisa til sýnis í Louvre safninu í París, Frakklandi. Það hefur verið þar síðan árið 1797. Safnið er eitt af stærstu og frægustu listasöfnum í heimi. Þúsundir manna koma á hverjum degi til að sjá Monu Lisu. Vegna mikilla vinsælda getur verið mjög þröngt og erfitt að komast nálægt málverkinu.
+
+Árið 1911 gerðist ótrúlegur atburður. Monu Lisu var stolið af Louvre safninu. Þjófurinn var ítalskur maður að nafni Vincenzo Peruggia. Hann var fyrrverandi starfsmaður safnsins og vildi að málverkið færi aftur til Ítalíu.
+
+Árið 1913 fannst Mona Lisa aftur á Ítalíu. Vincenzo Peruggia reyndi að selja það til listasala í Flórens. Listasalinn varð strax tortrygginn og tilkynnti málið til lögreglunnar. Peruggia var handtekinn og málverkið fór aftur til Louvre safnsins. Eftir þjófnaðinn varð Mona Lisa enn frægari og vinsælli en áður.`;
+
+    const MC_QUESTIONS = [
+      {
+        question: 'Hvar er Mona Lisa til sýnis í dag?',
+        options: ['Í einkasafni á Ítalíu', 'Í Louvre safninu í París', 'Í listasafni í Flórens', 'Í Vatíkaninu í Róm'],
+        correct: 1
+      },
+      {
+        question: 'Hver var Vincenzo Peruggia?',
+        options: ['Listamaðurinn sem málaði Mona Lisa', 'Kaupmaðurinn sem var giftur konu á málverkinu', 'Ítalskur maður sem stal Mona Lisa', 'Forstjóri Louvre árið 1911'],
+        correct: 2
+      },
+      {
+        question: 'Hvaða tækni notaði Leonardo da Vinci til að mála Mona Lisa?',
+        options: ['Pointillisma', 'Kúbisma', 'Sfumato', 'Raunsæi'],
+        correct: 2
+      }
+    ];
+
+    const SHORT_QUESTIONS = [
+      { q: 'Hver málaði Mona Lisa samkvæmt textanum?', keywords: ['Leonardo da Vinci', 'Leonardo', 'da Vinci'] },
+      { q: 'Hvað er Mona Lisa há og breið samkvæmt textanum?', keywords: ['77', '53', 'sentímetrar', 'sentímetra'] },
+      { q: 'Hvenær var Mona Lisa stolið frá Louvre safninu samkvæmt textanum?', keywords: ['1911'] }
+    ];
+
+    const DISCUSSION_QUESTIONS = [
+      'Hefur þú einhvern tíma upplifað eitthvað sem var mjög fjölmennt og vinsælt, eins og að sjá Monu Lisu? Hvernig var sú upplifun?',
+      'Mona Lisa er fræg fyrir leyndardómsfullt bros sitt. Er eitthvað leyndardómsfullt við þig eða einhvern sem þú þekkir?',
+      'Monu Lisu var stolið og fannst svo aftur. Hefur þú einhvern tíma týnt einhverju mikilvægu og fundið það aftur? Hvernig leið þér?'
+    ];
+
+    // ── Shared UI ──────────────────────────────────────────────────────────────
+
+    const FeedbackBadge = ({ score, message }) => {
+      const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+      const colors = {
+        green: 'bg-green-50 border-green-200 text-green-800',
+        amber: 'bg-amber-50 border-amber-200 text-amber-800',
+        red: 'bg-red-50 border-red-200 text-red-800'
+      };
+      return (
+        <div className={`mt-3 p-3 rounded-lg border ${colors[color]} fade-in`}>
+          <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+          <p className="text-sm font-light">{message}</p>
+        </div>
+      );
+    };
+
+    // ── Tab: Krossaspurningar ──────────────────────────────────────────────────
+
+    const KrossarTab = ({ onComplete }) => {
+      const [answers, setAnswers] = useState([]);
+      const [checked, setChecked] = useState(false);
+
+      const score = checked
+        ? MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length
+        : null;
+
+      const handleCheck = () => {
+        setChecked(true);
+        if (onComplete) onComplete(Math.round((score ?? 0) / MC_QUESTIONS.length * 5));
+      };
+
+      // Recompute after setChecked
+      const computedScore = MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length;
+
+      return (
+        <div className="fade-in space-y-6">
+          <p className="text-gray-600 font-light text-sm">Merktu við eitt svar (A–D).</p>
+          {MC_QUESTIONS.map((q, qi) => (
+            <div key={qi} className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+              <p className="font-medium text-gray-800 mb-4 text-sm">{qi + 1}. {q.question}</p>
+              <div className="space-y-2">
+                {q.options.map((opt, oi) => {
+                  const sel = answers[qi] === oi;
+                  const isCorrect = oi === q.correct;
+                  const showCorrect = checked && isCorrect;
+                  const showWrong = checked && sel && !isCorrect;
+                  return (
+                    <div key={oi}
+                      onClick={() => { if (!checked) { const a = [...answers]; a[qi] = oi; setAnswers(a); } }}
+                      className={`answer-option p-3 rounded-lg flex items-center gap-3
+                        ${sel && !checked ? 'selected' : ''} 
+                        ${showCorrect ? 'correct' : ''} 
+                        ${showWrong ? 'incorrect' : ''} 
+                        ${checked ? 'disabled' : ''}`}>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        sel && !checked ? 'border-blue-500 bg-blue-500' :
+                        showCorrect ? 'border-green-500 bg-green-500' :
+                        showWrong ? 'border-red-500 bg-red-500' : 'border-gray-300'}`}>
+                        {(sel || showCorrect) && <div className="w-2 h-2 bg-white rounded-full" />}
+                      </div>
+                      <span className="font-light text-sm">{String.fromCharCode(65 + oi)}. {opt}</span>
+                      {showCorrect && <span className="ml-auto text-green-600">✓</span>}
+                      {showWrong && <span className="ml-auto text-red-600">✗</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {!checked ? (
+            <div className="flex gap-3 pt-2">
+              <button onClick={handleCheck}
+                disabled={answers.length < MC_QUESTIONS.length}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                Athuga svör
+              </button>
+              <button onClick={() => setAnswers([])}
+                className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+                Endurstilla
+              </button>
+            </div>
+          ) : (
+            <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 fade-in">
+              <p className="text-green-800 font-light">✓ Þú fékkst {computedScore} af {MC_QUESTIONS.length} rétt!</p>
+              <button onClick={() => { setAnswers([]); setChecked(false); }}
+                className="mt-2 px-4 py-2 rounded-lg border-2 border-gray-200 hover:bg-gray-50 font-light text-sm">
+                Reyna aftur
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ── Tab: Stuttar spurningar ────────────────────────────────────────────────
+
+    const StuttarTab = ({ onComplete }) => {
+      const [answers, setAnswers] = useState(SHORT_QUESTIONS.map(() => ''));
+      const [feedback, setFeedback] = useState(SHORT_QUESTIONS.map(() => null));
+      const [loading, setLoading] = useState(SHORT_QUESTIONS.map(() => false));
+
+      const checkAnswer = async (i) => {
+        const ans = answers[i].trim();
+        if (!ans) return;
+        const newLoading = [...loading]; newLoading[i] = true; setLoading(newLoading);
+        try {
+          const result = await callOpenAI([{
+            role: 'user',
+            content: `Þú ert kennari í íslensku sem A2 máli. Nemandinn er að læra íslensku sem annað mál.
+
+Spurning: "${SHORT_QUESTIONS[i].q}"
+Svar nemanda: "${ans}"
+Rétt efni ætti að innihalda: ${SHORT_QUESTIONS[i].keywords.join(', ')}
+
+Mettu svarið. Vera sveigjanlegur með orðalag en nákvæm með staðreyndir.
+Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein setning, vinaleg og á íslensku]`
+          }], 150);
+          const stigMatch = result.match(/STIG:\s*(\d)/);
+          const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/);
+          const score = stigMatch ? parseInt(stigMatch[1]) : 0;
+          const msg = endurgjofMatch ? endurgjofMatch[1].trim() : result.trim();
+          const newFeedback = [...feedback]; newFeedback[i] = { score, msg }; setFeedback(newFeedback);
+          // Check if all done
+          const allDone = feedback.map((f, idx) => idx === i ? { score, msg } : f).every(f => f !== null);
+          if (allDone && onComplete) {
+            const total = feedback.map((f, idx) => idx === i ? score : (f?.score ?? 0)).reduce((a, b) => a + b, 0);
+            onComplete(Math.round(total / SHORT_QUESTIONS.length));
+          }
+        } catch(e) {
+          const newFeedback = [...feedback]; newFeedback[i] = { score: 0, msg: 'Gat ekki tengst. Reyndu aftur.' }; setFeedback(newFeedback);
+        }
+        const nl = [...loading]; nl[i] = false; setLoading(nl);
+      };
+
+      return (
+        <div className="fade-in space-y-6">
+          <p className="text-gray-600 font-light text-sm">Svaraðu með þínum eigin orðum (1–2 setningar).</p>
+          {SHORT_QUESTIONS.map((q, i) => (
+            <div key={i} className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+              <p className="font-medium text-gray-800 mb-3 text-sm">{i + 1}. {q.q}</p>
+              {!feedback[i] ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={answers[i]}
+                    onChange={e => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }}
+                    rows={3}
+                    placeholder="Skrifaðu svarið þitt hér..."
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light resize-none text-sm disabled:bg-gray-50"
+                    disabled={loading[i]}
+                  />
+                  <button onClick={() => checkAnswer(i)}
+                    disabled={!answers[i].trim() || loading[i]}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                    {loading[i] ? 'Athuga...' : 'Athuga svar'}
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-gray-600 font-light italic mb-2">„{answers[i]}"</p>
+                  <FeedbackBadge score={feedback[i].score} message={feedback[i].msg} />
+                  <button onClick={() => {
+                    const nf = [...feedback]; nf[i] = null; setFeedback(nf);
+                    const na = [...answers]; na[i] = ''; setAnswers(na);
+                  }} className="mt-3 px-4 py-2 rounded-lg border-2 border-gray-200 hover:bg-gray-50 font-light text-xs">
+                    Reyna aftur
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    // ── Tab: Umræða ────────────────────────────────────────────────────────────
+
+    const UmraeduSpurning = ({ question, index }) => {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+      const chatRef = useRef(null);
+
+      useEffect(() => {
+        if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+      }, [messages]);
+
+      const send = async () => {
+        const text = input.trim();
+        if (!text || loading) return;
+        const newMessages = [...messages, { role: 'user', content: text }];
+        setMessages(newMessages);
+        setInput('');
+        setLoading(true);
+        try {
+          const history = newMessages.map(m => ({ role: m.role, content: m.content }));
+          const result = await callOpenAI([
+            {
+              role: 'system',
+              content: `Þú ert vingjarnlegur íslenskukennarinn. Nemandinn er að læra íslensku sem A2 tungumál. 
+Spurningin sem við ræðum er: "${question}"
+Svaraðu ALLTAF á íslensku. Vertu hvetjandi og styddu nemandann. 
+Ef nemandinn skrifar á öðru máli, svaraðu á íslensku en getur bætt við þýðingu í sviga.
+Kommentaðu á svarið (1-2 setningar) og spyrðu einnar follow-up spurningar til að halda samtali áfram.
+Haltu svörum stuttum og einföldum (A2 stig).`
+            },
+            ...history
+          ], 250);
+          setMessages([...newMessages, { role: 'assistant', content: result }]);
+        } catch(e) {
+          setMessages([...newMessages, { role: 'assistant', content: 'Gat ekki tengst. Reyndu aftur.' }]);
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+          <p className="font-medium text-gray-800 mb-4 text-sm">{index + 1}. {question}</p>
+          {messages.length > 0 && (
+            <div ref={chatRef} className="mb-4 space-y-3 max-h-60 overflow-y-auto pr-1">
+              {messages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs px-4 py-2 rounded-2xl text-sm font-light leading-relaxed ${
+                    m.role === 'user'
+                      ? 'bg-blue-600 text-white rounded-br-sm'
+                      : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-sm'
+                  }`}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                    <div className="flex gap-1">
+                      {[0,1,2].map(i => (
+                        <div key={i} className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
+                          style={{ animationDelay: `${i * 0.15}s` }} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              rows={2}
+              placeholder="Skrifaðu svar þitt hér..."
+              className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light resize-none text-sm disabled:bg-gray-50"
+              disabled={loading}
+            />
+            <button onClick={send} disabled={!input.trim() || loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end">
+              Senda
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const UmraeduTab = ({ onComplete }) => {
+      const [msgCounts, setMsgCounts] = useState(DISCUSSION_QUESTIONS.map(() => 0));
+
+      useEffect(() => {
+        if (msgCounts.every(c => c >= 1) && onComplete) onComplete(5);
+      }, [msgCounts]);
+
+      return (
+        <div className="fade-in space-y-6">
+          <p className="text-gray-600 font-light text-sm">Svaraðu spurningunum á íslensku. Kennarinn hjálpar þér!</p>
+          {DISCUSSION_QUESTIONS.map((q, i) => (
+            <UmraeduSpurning key={i} question={q} index={i} />
+          ))}
+        </div>
+      );
+    };
+
+    // ── Aðalforrit ─────────────────────────────────────────────────────────────
+
+    const App = () => {
+      const [showText, setShowText] = useState(true);
+      const [activeTab, setActiveTab] = useState('krossar');
+      const [completed, setCompleted] = useState({ krossar: false, stuttar: false, umraeda: false });
+
+      const TABS = [
+        { id: 'krossar', label: 'Krossaspurningar', icon: '✓' },
+        { id: 'stuttar', label: 'Stuttar spurningar', icon: '📝' },
+        { id: 'umraeda', label: 'Umræða', icon: '💬' }
+      ];
+
+      const doneCount = Object.values(completed).filter(Boolean).length;
+
+      const markDone = (tab) => setCompleted(prev => ({ ...prev, [tab]: true }));
+
+      return (
+        <div className="min-h-screen pb-16">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">🖼️ Mona Lisa</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur · A1–A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-8 space-y-6">
+
+            {/* Textabox */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+              <button
+                onClick={() => setShowText(v => !v)}
+                className="w-full flex items-center justify-between px-6 py-4 text-left">
+                <span className="font-medium text-gray-800 flex items-center gap-2">
+                  📖 Lesefnið
+                </span>
+                <span className="text-gray-400 text-sm font-light">
+                  {showText ? '▲ Fela' : '▼ Sýna'}
+                </span>
+              </button>
+              {showText && (
+                <div className="px-6 pb-6 border-t border-gray-100 fade-in">
+                  {READING_TEXT.split('\n\n').map((p, i) => (
+                    <p key={i} className="mt-4 text-gray-700 font-light leading-relaxed text-sm">{p}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Flipar */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              {/* Tab-stika */}
+              <div className="flex border-b border-gray-100 bg-gray-50">
+                {TABS.map(tab => (
+                  <button key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`tab-btn flex-1 px-4 py-4 text-sm font-light flex items-center justify-center gap-2 relative ${activeTab === tab.id ? 'tab-active' : 'text-gray-500'}`}>
+                    <span>{tab.icon}</span>
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    {completed[tab.id] && (
+                      <span className="absolute top-2 right-2 w-4 h-4 bg-green-500 text-white rounded-full text-xs flex items-center justify-center">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab-innihald */}
+              <div className="p-6">
+                {activeTab === 'krossar' && (
+                  <KrossarTab onComplete={() => markDone('krossar')} />
+                )}
+                {activeTab === 'stuttar' && (
+                  <StuttarTab onComplete={() => markDone('stuttar')} />
+                )}
+                {activeTab === 'umraeda' && (
+                  <UmraeduTab onComplete={() => markDone('umraeda')} />
+                )}
+              </div>
+            </div>
+
+            {/* Framvindustika */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-6 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600 font-light">Framvinda</span>
+                <span className="text-sm text-gray-500 font-light">{doneCount}/{TABS.length} lokið</span>
+              </div>
+              <div className="flex gap-2">
+                {TABS.map(tab => (
+                  <div key={tab.id}
+                    className={`h-2 flex-1 rounded-full transition-all duration-500 ${completed[tab.id] ? 'bg-green-500' : activeTab === tab.id ? 'bg-blue-300' : 'bg-gray-200'}`} />
+                ))}
+              </div>
+              {doneCount === TABS.length && (
+                <p className="mt-3 text-center text-green-700 font-light text-sm fade-in">🎉 Vel gert! Þú hefur lokið öllum verkefnum.</p>
+              )}
+            </div>
+
+          </main>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
