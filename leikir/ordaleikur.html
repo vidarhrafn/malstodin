@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Orðaleikur – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.3); }
+      70% { box-shadow: 0 0 0 12px rgba(37, 99, 235, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+    }
+    .pulse-ring { animation: pulse-ring 1.5s ease-out infinite; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner { animation: spin 1s linear infinite; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+// ── Orðalisti ────────────────────────────────────────────────────────────────
+const ORDALISTINN = [
+  { ord: "hestur",      flokkur: "dýr",       stig: "A1" },
+  { ord: "hundur",      flokkur: "dýr",       stig: "A1" },
+  { ord: "köttur",      flokkur: "dýr",       stig: "A1" },
+  { ord: "fugl",        flokkur: "dýr",       stig: "A1" },
+  { ord: "fiskur",      flokkur: "dýr",       stig: "A1" },
+  { ord: "bók",         flokkur: "hlutir",    stig: "A1" },
+  { ord: "stóll",       flokkur: "húsgögn",   stig: "A1" },
+  { ord: "borð",        flokkur: "húsgögn",   stig: "A1" },
+  { ord: "gluggi",      flokkur: "híbýli",    stig: "A1" },
+  { ord: "dyra",        flokkur: "híbýli",    stig: "A1" },
+  { ord: "sólskin",     flokkur: "veður",     stig: "A2" },
+  { ord: "rigning",     flokkur: "veður",     stig: "A2" },
+  { ord: "snjór",       flokkur: "veður",     stig: "A2" },
+  { ord: "skógur",      flokkur: "náttúra",   stig: "A2" },
+  { ord: "fjall",       flokkur: "náttúra",   stig: "A2" },
+  { ord: "sjór",        flokkur: "náttúra",   stig: "A2" },
+  { ord: "brauð",       flokkur: "matur",     stig: "A1" },
+  { ord: "mjólk",       flokkur: "matur",     stig: "A1" },
+  { ord: "epli",        flokkur: "matur",     stig: "A1" },
+  { ord: "kaffi",       flokkur: "drykkir",   stig: "A1" },
+  { ord: "kertaljós",   flokkur: "hlutir",    stig: "A2" },
+  { ord: "regnhlíf",    flokkur: "klæðnaður", stig: "A2" },
+  { ord: "sjónvarp",    flokkur: "tækni",     stig: "A2" },
+  { ord: "síminn",      flokkur: "tækni",     stig: "A2" },
+  { ord: "tölva",       flokkur: "tækni",     stig: "A2" },
+  { ord: "strætó",      flokkur: "samgöngur", stig: "A2" },
+  { ord: "flugvél",     flokkur: "samgöngur", stig: "A2" },
+  { ord: "hjól",        flokkur: "samgöngur", stig: "A2" },
+  { ord: "bíll",        flokkur: "samgöngur", stig: "A1" },
+  { ord: "kennari",     flokkur: "störf",     stig: "A2" },
+  { ord: "læknir",      flokkur: "störf",     stig: "A2" },
+  { ord: "kokkur",      flokkur: "störf",     stig: "A2" },
+  { ord: "lögregla",    flokkur: "störf",     stig: "B1" },
+  { ord: "húsnæði",     flokkur: "híbýli",    stig: "B1" },
+  { ord: "samband",     flokkur: "samfélag",  stig: "B1" },
+  { ord: "umhverfi",    flokkur: "náttúra",   stig: "B1" },
+  { ord: "menning",     flokkur: "samfélag",  stig: "B1" },
+  { ord: "þjóðlíf",    flokkur: "samfélag",  stig: "B1" },
+  { ord: "framtíð",     flokkur: "tími",      stig: "B1" },
+  { ord: "fortíð",      flokkur: "tími",      stig: "B1" },
+  { ord: "sigur",       flokkur: "tilfinningar", stig: "B1" },
+  { ord: "gleði",       flokkur: "tilfinningar", stig: "A2" },
+  { ord: "sorg",        flokkur: "tilfinningar", stig: "B1" },
+  { ord: "ótti",        flokkur: "tilfinningar", stig: "B1" },
+  { ord: "kærleikur",   flokkur: "tilfinningar", stig: "B1" },
+  { ord: "þolinmæði",   flokkur: "eiginleikar", stig: "B2" },
+  { ord: "hugrekki",    flokkur: "eiginleikar", stig: "B2" },
+  { ord: "þjóðsaga",    flokkur: "menning",   stig: "B2" },
+  { ord: "náttúruvernд",flokkur: "náttúra",   stig: "B2" },
+  { ord: "sjálfbærni",  flokkur: "samfélag",  stig: "B2" },
+];
+
+// ── API föll ─────────────────────────────────────────────────────────────────
+async function callOpenAI(messages, max_tokens = 400, temperature = 0.5) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens, model: 'gpt-4o-mini', temperature })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+async function playAudio(text, onEnd) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    await audio.play().catch(() => onEnd && onEnd());
+    return audio;
+  } catch (e) {
+    console.error(e);
+    onEnd && onEnd();
+  }
+}
+
+// ── Hjálparföll ──────────────────────────────────────────────────────────────
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function veljaOrð(fjoldi = 8) {
+  return shuffleArray(ORDALISTINN).slice(0, fjoldi);
+}
+
+// ── Íhlutir ──────────────────────────────────────────────────────────────────
+const ListenPill = ({ onClick, speaking, label }) => (
+  <button onClick={onClick}
+    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all ${
+      speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+    }`}>
+    <span className="opacity-70">🎧</span>
+    <span className="font-light">{label || 'Hlustaðu'}</span>
+    <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+  </button>
+);
+
+// ── Forsíða – veldu hlutverk ─────────────────────────────────────────────────
+function ModeSelection({ onSelect }) {
+  return (
+    <div className="fade-in max-w-2xl mx-auto px-6 py-12">
+      <div className="text-center mb-10">
+        <div className="text-5xl mb-4">📝</div>
+        <h2 className="text-2xl font-light text-gray-800 mb-2">Veldu hlutverk</h2>
+        <p className="text-gray-500 font-light text-sm">Hvort vilt þú lýsa orðum eða giska?</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <button onClick={() => onSelect('nemandi-lysir')}
+          className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 text-left hover:shadow-md hover:border-blue-200 transition-all group">
+          <div className="text-3xl mb-3">🗣️</div>
+          <h3 className="text-lg font-medium text-gray-800 mb-2 group-hover:text-blue-700 transition-colors">
+            Ég lýsi – AI giskar
+          </h3>
+          <p className="text-sm text-gray-500 font-light leading-relaxed">
+            Þú færð leynilegt orð og lýsir því á íslensku. Gervigreindin reynir að giska á hvað þú ert að lýsa!
+          </p>
+          <div className="mt-4 flex gap-2 flex-wrap">
+            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg font-light">Talar íslensku</span>
+            <span className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-lg font-light">Æfir tjáningu</span>
+          </div>
+        </button>
+
+        <button onClick={() => onSelect('ai-lysir')}
+          className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 text-left hover:shadow-md hover:border-green-200 transition-all group">
+          <div className="text-3xl mb-3">🤖</div>
+          <h3 className="text-lg font-medium text-gray-800 mb-2 group-hover:text-green-700 transition-colors">
+            AI lýsir – ég giska
+          </h3>
+          <p className="text-sm text-gray-500 font-light leading-relaxed">
+            Gervigreindin lýsir leynilegu orði á íslensku og þú reynir að giska hvað það er!
+          </p>
+          <div className="mt-4 flex gap-2 flex-wrap">
+            <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded-lg font-light">Hlustun</span>
+            <span className="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded-lg font-light">Skilningur</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Hamur 1: Nemandi lýsir, AI giskar ────────────────────────────────────────
+function NemAndiLysir({ ordaListi, onDone }) {
+  const [index, setIndex] = useState(0);
+  const [lysing, setLysing] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [aiSvar, setAiSvar] = useState(null);   // { gisk, rett, endurgjof }
+  const [speaking, setSpeaking] = useState(false);
+  const [scores, setScores] = useState([]);
+  const [stig, setStig] = useState(null);
+
+  const ord = ordaListi[index];
+  const eftir = ordaListi.length - index - 1;
+
+  const senda = async () => {
+    if (!lysing.trim() || loading) return;
+    setLoading(true);
+    setAiSvar(null);
+    setStig(null);
+    try {
+      const result = await callOpenAI([
+        {
+          role: 'system',
+          content: `Þú ert leikmaður í orðalýsingaleik á íslensku. Nemandi lýsir orði á íslensku (án þess að segja orðið sjálft) og þú átt að giska.
+Leyniorðið er: "${ord.ord}" (flokkur: ${ord.flokkur}).
+
+Lestu lýsinguna vandlega. Svaraðu EINUNGIS á þessu formi:
+GISK: [eitt orð – giskurinn þinn á íslensku]
+RÉTT: [JÁ eða NEI]
+STIG: [0-5 – 5 ef lýsingin var mjög góð og skýr á íslensku, 0 ef engin lýsing]
+ENDURGJÖF: [ein stutt vinaleg setning á íslensku um lýsinguna]`
+        },
+        { role: 'user', content: `Lýsing nemanda: "${lysing}"` }
+      ], 200, 0.2);
+
+      const giskMatch = result.match(/GISK:\s*(.+)/i);
+      const rettMatch = result.match(/RÉTT:\s*(JÁ|NEI)/i);
+      const stigMatch = result.match(/STIG:\s*(\d)/i);
+      const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/i);
+
+      const gisk = giskMatch ? giskMatch[1].trim() : '?';
+      const rett = rettMatch ? rettMatch[1].toUpperCase() === 'JÁ' : gisk.toLowerCase() === ord.ord.toLowerCase();
+      const s = stigMatch ? parseInt(stigMatch[1]) : 3;
+      const endurgjof = endurgjofMatch ? endurgjofMatch[1].trim() : 'Gott!';
+
+      setAiSvar({ gisk, rett, endurgjof });
+      setStig(s);
+      setScores(prev => [...prev, { ord: ord.ord, stig: s, rett, lysing }]);
+
+      // Les upp gisk AI
+      setSpeaking(true);
+      await playAudio(`${gisk}. ${endurgjof}`, () => setSpeaking(false));
+
+    } catch (e) {
+      setAiSvar({ gisk: '?', rett: false, endurgjof: 'Villa kom upp. Reyndu aftur.' });
+    }
+    setLoading(false);
+  };
+
+  const naesta = () => {
+    if (index + 1 >= ordaListi.length) {
+      onDone(scores);
+    } else {
+      setIndex(i => i + 1);
+      setLysing('');
+      setAiSvar(null);
+      setStig(null);
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !aiSvar) {
+      e.preventDefault();
+      senda();
+    }
+  };
+
+  return (
+    <div className="fade-in max-w-2xl mx-auto px-6 py-8">
+      {/* Framvindusía */}
+      <div className="flex items-center gap-2 mb-6">
+        {ordaListi.map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+            i < index ? 'bg-green-500' : i === index ? 'bg-blue-400' : 'bg-gray-200'
+          }`} />
+        ))}
+        <span className="text-xs text-gray-400 font-light whitespace-nowrap">{index + 1}/{ordaListi.length}</span>
+      </div>
+
+      {/* Leyniorðið */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-gray-400 font-light uppercase tracking-wider">Leyniorðið þitt</span>
+          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-lg font-light">{ord.flokkur}</span>
+        </div>
+        <div className="text-4xl font-light text-blue-700 tracking-wide mt-2 mb-1">{ord.ord}</div>
+        <p className="text-xs text-gray-400 font-light">Lýstu þessu orði án þess að segja það! 🤫</p>
+      </div>
+
+      {/* Lýsingareitur */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5 mb-4">
+        <label className="block text-sm text-gray-600 font-light mb-2">
+          Lýstu orðinu á íslensku:
+        </label>
+        <textarea
+          value={lysing}
+          onChange={e => setLysing(e.target.value)}
+          onKeyDown={handleKey}
+          disabled={!!aiSvar || loading}
+          rows={3}
+          placeholder="Þetta er eitthvað sem... / Þetta er stór/lítill... / Þú notar þetta til að..."
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50 text-gray-800"
+        />
+        {!aiSvar && (
+          <button
+            onClick={senda}
+            disabled={!lysing.trim() || loading}
+            className="mt-3 w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light flex items-center justify-center gap-2">
+            {loading ? (
+              <>
+                <svg className="spinner w-4 h-4 border-2 border-white border-t-transparent rounded-full" viewBox="0 0 24 24"/>
+                <span>AI er að giska...</span>
+              </>
+            ) : 'Senda lýsingu →'}
+          </button>
+        )}
+      </div>
+
+      {/* Svar AI */}
+      {aiSvar && (
+        <div className={`fade-in bg-white border-2 rounded-xl shadow-sm p-5 mb-4 ${
+          aiSvar.rett ? 'border-green-200' : 'border-amber-200'
+        }`}>
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <div className="text-xs text-gray-400 font-light mb-1">AI giskaði:</div>
+              <div className={`text-2xl font-medium ${aiSvar.rett ? 'text-green-700' : 'text-amber-700'}`}>
+                {aiSvar.gisk} {aiSvar.rett ? '✓' : '✗'}
+              </div>
+            </div>
+            <ListenPill
+              onClick={() => {
+                setSpeaking(true);
+                playAudio(`${aiSvar.gisk}. ${aiSvar.endurgjof}`, () => setSpeaking(false));
+              }}
+              speaking={speaking}
+              label="Hlustaðu"
+            />
+          </div>
+          {!aiSvar.rett && (
+            <div className="text-sm text-gray-600 font-light mb-2">
+              Rétta svarið var: <span className="font-medium text-gray-800">{ord.ord}</span>
+            </div>
+          )}
+          <div className={`p-3 rounded-lg text-sm font-light ${
+            aiSvar.rett ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            <span className="font-medium">Stig: {stig}/5 · </span>{aiSvar.endurgjof}
+          </div>
+          <button onClick={naesta}
+            className="mt-4 w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+            {eftir > 0 ? 'Næsta orð →' : 'Sjá niðurstöður →'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Hamur 2: AI lýsir, nemandi giskar ────────────────────────────────────────
+function AiLysir({ ordaListi, onDone }) {
+  const [index, setIndex] = useState(0);
+  const [lysing, setLysing] = useState('');
+  const [loadingLysing, setLoadingLysing] = useState(false);
+  const [lysingTexti, setLysingTexti] = useState('');
+  const [gisk, setGisk] = useState('');
+  const [niðurstaða, setNiðurstaða] = useState(null);
+  const [speaking, setSpeaking] = useState(false);
+  const [scores, setScores] = useState([]);
+  const audioRef = useRef(null);
+
+  const ord = ordaListi[index];
+  const eftir = ordaListi.length - index - 1;
+
+  // Sækja lýsingu frá AI
+  const saekjaLysingu = useCallback(async () => {
+    setLoadingLysing(true);
+    setLysingTexti('');
+    setNiðurstaða(null);
+    setGisk('');
+    try {
+      const result = await callOpenAI([
+        {
+          role: 'system',
+          content: `Þú ert leikstjóri í orðalýsingaleik á íslensku. Lýstu orðinu á einfalda og skemmtilega íslensku, ALDREI nota orðið sjálft eða beina þýðingu þess. Nota 2-3 setningar. Stig nemandans (${ord.stig}) – aðlaga erfiðleikastig að þessu.`
+        },
+        { role: 'user', content: `Lýstu þessu orði: "${ord.ord}" (flokkur: ${ord.flokkur}). Mundu: EKKI nota orðið sjálft!` }
+      ], 150, 0.7);
+      setLysingTexti(result.trim());
+      // Les upp lýsinguna
+      setSpeaking(true);
+      audioRef.current = await playAudio(result.trim(), () => setSpeaking(false));
+    } catch (e) {
+      setLysingTexti('Villa kom upp. Reyndu aftur.');
+    }
+    setLoadingLysing(false);
+  }, [ord]);
+
+  // Hlöðum lýsingu þegar index breytist
+  React.useEffect(() => {
+    saekjaLysingu();
+  }, [index]);
+
+  const athugaGisk = async () => {
+    if (!gisk.trim() || niðurstaða) return;
+    const rett = gisk.trim().toLowerCase() === ord.ord.toLowerCase();
+    // Nota AI til að meta ef ekki nákvæmlega rétt
+    let s = 0;
+    let endurgjof = '';
+    try {
+      const result = await callOpenAI([
+        {
+          role: 'system',
+          content: `Þú metur hvort giskur nemanda samsvari leyniorðinu í orðalýsingaleik á íslensku.
+Leyniorðið er: "${ord.ord}"
+Nemandi giskaði: "${gisk.trim()}"
+Svaraðu EINUNGIS:
+STIG: [0-5, þar sem 5=nákvæmlega rétt eða mjög nálægt, 3=svipað hugtak, 0=rangt]
+ENDURGJÖF: [ein stutt vinaleg setning á íslensku]`
+        },
+        { role: 'user', content: `Leyniorð: "${ord.ord}" – Giskur: "${gisk.trim()}"` }
+      ], 100, 0.2);
+      const stigMatch = result.match(/STIG:\s*(\d)/i);
+      const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/i);
+      s = stigMatch ? parseInt(stigMatch[1]) : (rett ? 5 : 0);
+      endurgjof = endurgjofMatch ? endurgjofMatch[1].trim() : (rett ? 'Rétt!' : 'Reyndu aftur!');
+    } catch {
+      s = rett ? 5 : 0;
+      endurgjof = rett ? 'Frábært, rétt svar!' : `Leyniorðið var: ${ord.ord}`;
+    }
+
+    const rettNg = s >= 3;
+    setNiðurstaða({ rett: rettNg, stig: s, endurgjof });
+    setScores(prev => [...prev, { ord: ord.ord, stig: s, rett: rettNg, gisk: gisk.trim() }]);
+    setSpeaking(true);
+    await playAudio(endurgjof, () => setSpeaking(false));
+  };
+
+  const naesta = () => {
+    if (index + 1 >= ordaListi.length) {
+      onDone(scores);
+    } else {
+      setIndex(i => i + 1);
+      setGisk('');
+      setNiðurstaða(null);
+      setLysingTexti('');
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !niðurstaða) {
+      e.preventDefault();
+      athugaGisk();
+    }
+  };
+
+  return (
+    <div className="fade-in max-w-2xl mx-auto px-6 py-8">
+      {/* Framvindusía */}
+      <div className="flex items-center gap-2 mb-6">
+        {ordaListi.map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+            i < index ? 'bg-green-500' : i === index ? 'bg-green-400' : 'bg-gray-200'
+          }`} />
+        ))}
+        <span className="text-xs text-gray-400 font-light whitespace-nowrap">{index + 1}/{ordaListi.length}</span>
+      </div>
+
+      {/* Lýsing AI */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-gray-400 font-light uppercase tracking-wider">AI lýsir…</span>
+          <div className="flex items-center gap-2">
+            {lysingTexti && (
+              <ListenPill
+                onClick={() => {
+                  setSpeaking(true);
+                  playAudio(lysingTexti, () => setSpeaking(false));
+                }}
+                speaking={speaking}
+                label="Hlustaðu aftur"
+              />
+            )}
+          </div>
+        </div>
+
+        {loadingLysing ? (
+          <div className="flex items-center gap-3 py-4 text-gray-400">
+            <svg className="spinner w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full" viewBox="0 0 24 24"/>
+            <span className="font-light text-sm">AI er að setja saman lýsingu…</span>
+          </div>
+        ) : (
+          <p className="text-gray-800 font-light leading-relaxed text-base">{lysingTexti}</p>
+        )}
+        <div className="mt-3 flex gap-2 flex-wrap">
+          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-lg font-light">{ord.flokkur}</span>
+          <span className="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-lg font-light">{ord.stig}</span>
+        </div>
+      </div>
+
+      {/* Giskingareitur */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-5 mb-4">
+        <label className="block text-sm text-gray-600 font-light mb-2">
+          Hvað er AI að lýsa?
+        </label>
+        <input
+          type="text"
+          value={gisk}
+          onChange={e => setGisk(e.target.value)}
+          onKeyDown={handleKey}
+          disabled={!!niðurstaða || loadingLysing}
+          placeholder="Skrifaðu giskinn þinn hér…"
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 font-light disabled:bg-gray-50 text-gray-800"
+        />
+        {!niðurstaða && (
+          <button
+            onClick={athugaGisk}
+            disabled={!gisk.trim() || loadingLysing}
+            className="mt-3 w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            Giska →
+          </button>
+        )}
+      </div>
+
+      {/* Niðurstaða */}
+      {niðurstaða && (
+        <div className={`fade-in bg-white border-2 rounded-xl shadow-sm p-5 mb-4 ${
+          niðurstaða.rett ? 'border-green-200' : 'border-amber-200'
+        }`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl">{niðurstaða.rett ? '🎉' : '💡'}</span>
+            <div>
+              <div className="text-sm font-light text-gray-500">Rétta svarið var:</div>
+              <div className="text-xl font-medium text-gray-800">{ord.ord}</div>
+            </div>
+          </div>
+          <div className={`p-3 rounded-lg text-sm font-light ${
+            niðurstaða.rett ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            <span className="font-medium">Stig: {niðurstaða.stig}/5 · </span>{niðurstaða.endurgjof}
+          </div>
+          <button onClick={naesta}
+            className="mt-4 w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light">
+            {eftir > 0 ? 'Næsta orð →' : 'Sjá niðurstöður →'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Niðurstöður ───────────────────────────────────────────────────────────────
+function Niðurstöður({ scores, mode, onRestart }) {
+  const total = scores.reduce((s, x) => s + x.stig, 0);
+  const maxTotal = scores.length * 5;
+  const hlutfall = Math.round((total / maxTotal) * 100);
+
+  const color = hlutfall >= 80 ? 'green' : hlutfall >= 50 ? 'amber' : 'red';
+  const colorClasses = {
+    green: 'bg-green-50 border-green-200 text-green-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    red: 'bg-red-50 border-red-200 text-red-700'
+  };
+  const emoji = hlutfall >= 80 ? '🏆' : hlutfall >= 50 ? '👍' : '💪';
+
+  return (
+    <div className="fade-in max-w-2xl mx-auto px-6 py-10">
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-8 text-center mb-6">
+        <div className="text-5xl mb-4">{emoji}</div>
+        <h2 className="text-2xl font-light text-gray-800 mb-1">Leiknum lokið!</h2>
+        <p className="text-gray-500 font-light text-sm mb-4">
+          {mode === 'nemandi-lysir' ? 'Þú lýstir – AI giskaði' : 'AI lýsti – þú gissaðir'}
+        </p>
+        <div className={`inline-block px-6 py-3 rounded-xl border text-lg font-medium ${colorClasses[color]}`}>
+          {total} / {maxTotal} stig · {hlutfall}%
+        </div>
+      </div>
+
+      {/* Per-orð yfirlit */}
+      <div className="space-y-3 mb-6">
+        {scores.map((s, i) => (
+          <div key={i} className="bg-white border border-gray-100 rounded-xl shadow-sm px-5 py-4 flex items-center justify-between">
+            <div>
+              <span className="font-medium text-gray-800">{s.ord}</span>
+              {mode === 'nemandi-lysir' && s.lysing && (
+                <p className="text-xs text-gray-400 font-light mt-0.5 italic">„{s.lysing.slice(0, 60)}{s.lysing.length > 60 ? '…' : ''}"</p>
+              )}
+              {mode === 'ai-lysir' && s.gisk && (
+                <p className="text-xs text-gray-400 font-light mt-0.5">Gissað: <span className="text-gray-600">{s.gisk}</span></p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className={`text-sm font-medium ${s.rett ? 'text-green-600' : 'text-amber-600'}`}>
+                  {s.stig}/5
+                </div>
+              </div>
+              <span className="text-lg">{s.rett ? '✅' : '🔸'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={onRestart}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+          Spila aftur 🔄
+        </button>
+        <button onClick={() => window.history.back()}
+          className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+          Til baka
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Aðalforrit ────────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState('mode');   // mode | spila | niðurstöður
+  const [mode, setMode] = useState(null);
+  const [ordaListi, setOrdaListi] = useState([]);
+  const [scores, setScores] = useState([]);
+
+  const veljaHam = (valinn) => {
+    setMode(valinn);
+    setOrdaListi(veljaOrð(8));
+    setScreen('spila');
+  };
+
+  const handleDone = (s) => {
+    setScores(s);
+    setScreen('niðurstöður');
+  };
+
+  const restart = () => {
+    setScreen('mode');
+    setMode(null);
+    setScores([]);
+  };
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <button onClick={() => screen === 'spila' ? setScreen('mode') : window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← {screen === 'spila' ? 'Velja hlutverk' : 'Til baka'}
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-2">Orðaleikur</h1>
+          <p className="text-gray-500 text-sm font-light">
+            {mode === 'nemandi-lysir'
+              ? 'Þú lýsir – AI giskar'
+              : mode === 'ai-lysir'
+              ? 'AI lýsir – þú giskar'
+              : 'Lýstu orðum án þess að segja þau!'}
+          </p>
+        </div>
+      </header>
+
+      {/* Innihald */}
+      <main>
+        {screen === 'mode' && <ModeSelection onSelect={veljaHam} />}
+        {screen === 'spila' && mode === 'nemandi-lysir' && (
+          <NemAndiLysir ordaListi={ordaListi} onDone={handleDone} />
+        )}
+        {screen === 'spila' && mode === 'ai-lysir' && (
+          <AiLysir ordaListi={ordaListi} onDone={handleDone} />
+        )}
+        {screen === 'niðurstöður' && (
+          <Niðurstöður scores={scores} mode={mode} onRestart={restart} />
+        )}
+      </main>
+
+      <footer className="text-center py-8 text-gray-400 text-xs font-light">
+        © 2025 Málstöðin
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
