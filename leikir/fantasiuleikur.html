@@ -138,8 +138,15 @@
 
 <div id="root"></div>
 
+<!-- SYSTEM_PROMPT defined in plain script to avoid Babel issues with special characters -->
+<script>
+window.SYSTEM_PROMPT = "HLUTVERK: Þú ert sögumaður í íslenskum fantasíuleik fyrir nemendur sem eru að læra íslensku á A1-A2 stigi. Þú skrifar allt á íslensku.\n\nMÁLFÆRI \u2013 MIKILVÆGAST:\nÍslenska þín verður að vera málfræðilega fullkomin. Þetta er kennsluefni og nemendur læra af því sem þeir sjá.\n- Kynbeyging lýsingarorða: brú (kvenkyns) \u2192 gömul brú, þröng brú. Þoka (kvenkyns) \u2192 þykk þoka. Loft (hvorugkyn) \u2192 kalt loft. Dalur (karlkyns) \u2192 djúpur dalur.\n- Fallbeyging: nefnifall, þolfall, þágufall, eignarfall \u2013 alltaf rétt.\n- Persónufornöfn í réttu falli: \"mér líður vel\", \"mér er kalt\", \"hjálpaðu mér\".\n- Sagnbeyging: \"hvað gerir þú\" ekki \"hvað gerir þér\".\n- FORÐASTU orðið \"halló\" \u2013 notaðu \"góðan dag\", \"sæll\" eða \"hæ\" í staðinn.\n- Lestu yfir texta þinn áður en þú skilar honum og leiðréttu allar villur.\n\nTUNGUMÁLASTIG: Stuttar einfaldar setningar. Algengur orðaforði sem hentar A1-A2. Engar flóknar málsgreinar.\n\nSÖGUÞRÁÐUR: Þú manst hvað gerðist á fyrri hnútum. Ákvarðanir leikmannsins hafa raunveruleg áhrif á framvinduna. Þú gefur alltaf nákvæmlega 2-3 valkosti á hverjum hnút, númeraða A, B, C.\n\nPERSÓNUR:\n- Ormur: gamall maður með langt hvítt skegg og brúna skikkju. Vitur og vinalegur. Birtist á brúnni (hnútur 1) og kemur aftur í lok sögunnar.\n- Drífa: drottning fjallsins. Hún gerði himininn fjólubláan. Býr í turninum. Ekki endilega vond \u2013 leikmaðurinn getur talað við hana.\n- Símon: lítill strákur með rauðan hatt. Birtist á leiðinni upp á fjallið. Glaður og hjálpsamur.\n- Lykillinn: opnar himininn aftur. Hann er í turninum.\n\nSÖGUUPPBYGGING (7 hnútar):\n1. Brúin \u2013 leikmaður vaknar, hittir Orm, kynnir sig\n2. Velja leið \u2013 skógur eða fjallsvegur\n3. Hittir Símon eða áskorun á leiðinni\n4. Kominn nær turninum \u2013 áskorun eða ráðgáta\n5. Í turninum \u2013 hittir Drífu\n6. Ákvörðun \u2013 hvað gerir leikmaður við lykilinn og Drífu?\n7. Ending \u2013 mismunandi eftir valkostum. Ormur kemur aftur.\n\nSVARA ALLTAF Á ÞESSU JSON FORMI OG ENGU ÖÐRU:\n{\n  \"hnútur\": [númer 1-7],\n  \"saga\": \"[Stutt lýsing, 2-4 setningar]\",\n  \"persóna\": \"[Hvað persóna segir \u2013 eða null ef engin talar]\",\n  \"persóna_nafn\": \"[Nafn þess sem talar \u2013 eða null]\",\n  \"valkostir\": [\"A) ...\", \"B) ...\", \"C) ...\"],\n  \"frjálst_svar\": [true ef leikmaður á að skrifa eigið svar, annars false],\n  \"ending\": [true ef hnútur 7, annars false]\n}\n\nÞEGAR LEIKMAÐUR SKRIFAR EIGIÐ SVAR: Bregstu við því náttúrulega í sögunni og haltu áfram á næsta hnút.\nMIKILVÆGT: Svaraðu AÐEINS með JSON. Ekkert annað utan JSON.";
+</script>
+
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback } = React;
+
+const SYSTEM_PROMPT = window.SYSTEM_PROMPT;
 
 async function callOpenAI(messages, max_tokens = 600, model = 'gpt-4o-mini', temperature = 0.5) {
   const r = await fetch('/.netlify/functions/openai', {
@@ -172,8 +179,6 @@ async function playAudio(text, onEnd) {
     return null;
   }
 }
-
-var SYSTEM_PROMPT = 'HLUTVERK: \u00DE\u00FA ert s\u00F6guma\u00F0ur \u00ED \u00EDslenskum fantas\u00EDuleik fyrir nemendur sem eru a\u00F0 l\u00E6ra \u00EDslensku \u00E1 A1-A2 stigi. \u00DE\u00FA skrifar allt \u00E1 \u00EDslensku.\n\nM\u00C1LF\u00C6RI \u2013 MIKILV\u00C6GAST:\n\u00CDslenska \u00FE\u00EDn ver\u00F0ur a\u00F0 vera m\u00E1lfr\u00E6\u00F0ilega fullkomin. \u00DEetta er kennsluefni og nemendur l\u00E6ra af \u00FEv\u00ED sem \u00FEeir sj\u00E1.\n- Kynbeyging l\u00FDsingaror\u00F0a: br\u00FA (kvenkyns) \u2192 g\u00F6mul br\u00FA, \u00FEr\u00F6ng br\u00FA. \u00DEoka (kvenkyns) \u2192 \u00FEykk \u00FEoka. Loft (hvorugkyn) \u2192 kalt loft. Dalur (karlkyns) \u2192 dj\u00FApur dalur.\n- Fallbeyging: nefnifall, \u00FEolfall, \u00FE\u00E1gufall, eignarfall \u2013 alltaf r\u00E9tt.\n- Pers\u00F3nuforn\u00F6fn \u00ED r\u00E9ttu falli: "m\u00E9r l\u00ED\u00F0ur vel", "m\u00E9r er kalt", "hj\u00E1lpa\u00F0u m\u00E9r".\n- Sagnbeyging: "hva\u00F0 gerir \u00FE\u00FA" ekki "hva\u00F0 gerir \u00FE\u00E9r".\n- FOR\u00D0ASTU or\u00F0i\u00F0 "hall\u00F3" \u2013 nota\u00F0u "g\u00F3\u00F0an dag", "s\u00E6ll" e\u00F0a "h\u00E6" \u00ED sta\u00F0inn.\n- Lestu yfir texta \u00FEinn \u00E1\u00F0ur en \u00FE\u00FA skilar honum og lei\u00F0r\u00E9ttu allar villur.\n\nTUNGUM\u00C1LASTIG: Stuttar einfaldar setningar. Algengur or\u00F0afor\u00F0i sem hentar A1-A2. Engar fl\u00F3knar m\u00E1lsgreinar.\n\nS\u00D6GU\u00DER\u00C1\u00D0UR: \u00DE\u00FA manst hva\u00F0 ger\u00F0ist \u00E1 fyrri hn\u00FAtum. \u00C1kvar\u00F0anir leikmannsins hafa raunveruleg \u00E1hrif \u00E1 framvinduna. \u00DE\u00FA gefur alltaf n\u00E1kv\u00E6mlega 2-3 valkosti \u00E1 hverjum hn\u00FAt, n\u00FAmeraða A, B, C.\n\nPERS\u00D3NUR:\n- Ormur: gamall ma\u00F0ur me\u00F0 langt hv\u00EDtt skegg og br\u00FAna skikkju. Vitur og vinalegur. Birtist \u00E1 br\u00FAnni (hn\u00FAtur 1) og kemur aftur \u00ED lok s\u00F6gunnar.\n- Dr\u00EDfa: drottning fjallsins. H\u00FAn ger\u00F0i himininn fj\u00F3lubl\u00E1an. B\u00FDr \u00ED turninum. Ekki endilega vond \u2013 leikma\u00F0urinn getur tala\u00F0 vi\u00F0 hana.\n- S\u00EDmon: l\u00EDtill str\u00E1kur me\u00F0 rau\u00F0an hatt. Birtist \u00E1 lei\u00F0inni upp \u00E1 fjalli\u00F0. Gla\u00F0ur og hj\u00E1lpsamur.\n- Lykillinn: opnar himininn aftur. Hann er \u00ED turninum.\n\nS\u00D6GUUPPBYGGING (7 hn\u00FAtar):\n1. Br\u00FAin \u2013 leikma\u00F0ur vaknar, hittir Orm, kynnir sig\n2. Velja lei\u00F0 \u2013 sk\u00F3gur e\u00F0a fjallsvegur\n3. Hittir S\u00EDmon e\u00F0a \u00E1skorun \u00E1 lei\u00F0inni\n4. Kominn n\u00E6r turninum \u2013 \u00E1skorun e\u00F0a r\u00E1\u00F0g\u00E1ta\n5. \u00CD turninum \u2013 hittir Dr\u00EDfu\n6. \u00C1kv\u00F6r\u00F0un \u2013 hva\u00F0 gerir leikma\u00F0ur vi\u00F0 lykilinn og Dr\u00EDfu?\n7. Ending \u2013 mismunandi eftir valkostum. Ormur kemur aftur.\n\nSVARA ALLTAF \u00C1 \u00DEESSU JSON FORMI OG ENGU \u00D6\u00D0RU:\n{\n  "hn\u00FAtur": [n\u00FAmer 1-7],\n  "saga": "[Stutt l\u00FDsing, 2-4 setningar]",\n  "pers\u00F3na": "[Hva\u00F0 pers\u00F3na segir \u2013 e\u00F0a null ef engin talar]",\n  "pers\u00F3na_nafn": "[Nafn \u00FEess sem talar \u2013 e\u00F0a null]",\n  "valkostir": ["A) ...", "B) ...", "C) ..."],\n  "frj\u00E1lst_svar": [true ef leikma\u00F0ur \u00E1 a\u00F0 skrifa eigia svar, annars false],\n  "ending": [true ef hn\u00FAtur 7, annars false]\n}\n\n\u00DEEGAR LEIKMA\u00D0UR SKRIFAR EIGID SVAR: Bregstu vi\u00F0 \u00FEv\u00ED n\u00E1tt\u00FArulega \u00ED s\u00F6gunni og haltu \u00E1fram \u00E1 n\u00E6sta hn\u00FAt.\nMIKILV\u00C6GT: Svara\u00F0u A\u00D0EINS me\u00F0 JSON. Ekkert anna\u00F0 utan JSON.';
 
 const MountainSilhouette = () => (
   <svg className="mountain-silhouette" viewBox="0 0 1440 200" preserveAspectRatio="none" fill="none">
@@ -217,8 +222,8 @@ const ListenBtn = ({ text, label }) => {
         (speaking
           ? 'bg-purple-500/20 text-purple-300 border-purple-400/40'
           : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-purple-300')}>
-      {speaking ? <SpeakingWave /> : <span className="text-sm">&#x1F50A;</span>}
-      <span className="font-light">{label || 'Hlusta\u00F0u'}</span>
+      {speaking ? <SpeakingWave /> : <span className="text-sm">🔊</span>}
+      <span className="font-light">{label || 'Hlustaðu'}</span>
     </button>
   );
 };
@@ -242,14 +247,14 @@ const ProgressNodes = ({ current, total }) => (
   </div>
 );
 
-var charEmoji = function(name) {
-  if (!name) return '\u{1F4AC}';
+function charEmoji(name) {
+  if (!name) return '💬';
   var n = name.toLowerCase();
-  if (n.indexOf('ormur') !== -1) return '\u{1F9D9}';
-  if (n.indexOf('s\u00EDmon') !== -1) return '\u{1F9D2}';
-  if (n.indexOf('dr\u00EDfa') !== -1) return '\u{1F451}';
-  return '\u{1F4AC}';
-};
+  if (n.indexOf('ormur') !== -1) return '🧙';
+  if (n.indexOf('símon') !== -1) return '🧒';
+  if (n.indexOf('drífa') !== -1) return '👑';
+  return '💬';
+}
 
 function App() {
   const [gameState, setGameState] = useState('intro');
@@ -286,10 +291,10 @@ function App() {
   };
 
   const autoPlayDialogue = useCallback(async (node, nodeIndex) => {
-    if (node['\u0070ers\u00F3na'] && node['\u0070ers\u00F3na_nafn'] && !autoPlayed.has(nodeIndex)) {
+    if (node['persóna'] && node['persóna_nafn'] && !autoPlayed.has(nodeIndex)) {
       setAutoPlayed(function(prev) { return new Set(prev).add(nodeIndex); });
       await new Promise(function(r) { setTimeout(r, 1000); });
-      await playAudio(node['\u0070ers\u00F3na'], function() {});
+      await playAudio(node['persóna'], function() {});
     }
   }, [autoPlayed]);
 
@@ -302,7 +307,7 @@ function App() {
       var response = await callOpenAI(newMessages, 600, 'gpt-4o-mini', 0.5);
       var node = parseResponse(response);
       if (!node) {
-        setError('S\u00F6guma\u00F0urinn sveitaðist... Reyndu aftur.');
+        setError('Sögumaðurinn sveitaðist... Reyndu aftur.');
         setGameState(storyNodes.length > 0 ? 'playing' : 'intro');
         return;
       }
@@ -315,17 +320,17 @@ function App() {
       autoPlayDialogue(node, newNodes.length - 1);
     } catch (e) {
       console.error(e);
-      setError('Villa \u00ED tengingu. Reyndu aftur.');
+      setError('Villa í tengingu. Reyndu aftur.');
       setGameState(storyNodes.length > 0 ? 'playing' : 'intro');
     }
   };
 
   const startGame = () => {
-    sendToAI('Byrja\u00F0u leikinn. Hn\u00FAtur 1: Leikma\u00F0urinn vaknar \u00E1 gamalli steinbr\u00FA. Himinninn er fj\u00F3lubl\u00E1r en \u00FEa\u00F0 er dagur. Ormur gamli stendur \u00FEar og spyr hva\u00F0 leikma\u00F0urinn heitir. Leikma\u00F0urinn \u00E1 a\u00F0 skrifa eigia svar (nafni\u00F0 sitt).');
+    sendToAI('Byrjaðu leikinn. Hnútur 1: Leikmaðurinn vaknar á gamalli steinbrú. Himinninn er fjólublár en það er dagur. Ormur gamli stendur þar og spyr hvað leikmaðurinn heitir. Leikmaðurinn á að skrifa eigið svar (nafnið sitt).');
   };
 
   const makeChoice = (choiceText) => {
-    sendToAI('Leikma\u00F0urinn velur: ' + choiceText);
+    sendToAI('Leikmaðurinn velur: ' + choiceText);
   };
 
   const handleFreeSubmit = (e) => {
@@ -348,27 +353,27 @@ function App() {
         <MountainSilhouette />
         <div className="relative z-10 text-center max-w-lg fade-in-up">
           <div className="mb-8">
-            <div className="text-6xl mb-4">&#x1F3D4;&#xFE0F;</div>
+            <div className="text-6xl mb-4">🏔️</div>
             <h1 className="story-font text-4xl md:text-5xl font-light text-white mb-3 tracking-wide">
-              Fj&#x00F3;lubl&#x00E1;i himinninn
+              Fjólublái himinninn
             </h1>
             <p className="text-purple-300/70 font-light text-sm tracking-widest uppercase">
-              Fantas&#x00ED;uleikur &#x2013; M&#x00E1;lst&#x00F6;&#x00F0;in
+              Fantasíuleikur – Málstöðin
             </p>
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
             <p className="story-font text-xl text-purple-100/90 font-light leading-relaxed mb-4">
-              &#x00DE;&#x00FA; vaknar &#x00E1; gamalli br&#x00FA;. Himinninn er fj&#x00F3;lubl&#x00E1;r.
-              Gamall ma&#x00F0;ur stendur fyrir framan &#x00FE;ig...
+              Þú vaknar á gamalli brú. Himinninn er fjólublár.
+              Gamall maður stendur fyrir framan þig...
             </p>
             <p className="text-purple-300/50 text-sm font-light">
-              &#x00CD;slensku&#x00E6;fing &#x00E1; A1&#x2013;A2 stigi &#x00B7; 7 kaflar &#x00B7; &#x00DE;&#x00FA; velur s&#x00F6;guna
+              Íslenskuæfing á A1–A2 stigi · 7 kaflar · Þú velur söguna
             </p>
           </div>
           <button onClick={startGame}
             className="px-10 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-light text-lg transition-all hover:shadow-lg hover:shadow-purple-500/30 hover:-translate-y-0.5 active:translate-y-0"
             style={{ animation: 'pulseGlow 3s ease-in-out infinite' }}>
-            Byrja leikinn &#x2728;
+            Byrja leikinn ✨
           </button>
           {error && <p className="mt-4 text-red-400 text-sm font-light">{error}</p>}
         </div>
@@ -388,7 +393,7 @@ function App() {
             ); })}
           </div>
           <p className="story-font text-xl text-purple-200/70 font-light italic">
-            S&#x00F6;guma&#x00F0;urinn opnar b&#x00F3;kina...
+            Sögumaðurinn opnar bókina...
           </p>
         </div>
       </div>
@@ -402,10 +407,10 @@ function App() {
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2.5">
-              <span className="text-lg">&#x1F3D4;&#xFE0F;</span>
+              <span className="text-lg">🏔️</span>
               <div>
-                <h1 className="story-font text-base text-white font-light leading-tight">Fj&#x00F3;lubl&#x00E1;i himinninn</h1>
-                <p className="text-purple-400/50 text-xs font-light">Fantas&#x00ED;uleikur</p>
+                <h1 className="story-font text-base text-white font-light leading-tight">Fjólublái himinninn</h1>
+                <p className="text-purple-400/50 text-xs font-light">Fantasíuleikur</p>
               </div>
             </div>
             <div className="text-purple-300/50 text-xs font-light">
@@ -423,7 +428,7 @@ function App() {
             <div key={idx} className={'mb-8 ' + (isLast ? 'fade-in-up' : '')}>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-6 h-6 rounded-full bg-purple-500/30 text-purple-300 text-xs flex items-center justify-center font-medium border border-purple-400/30">
-                  {node['hn\u00FAtur'] || idx + 1}
+                  {node['hnútur'] || idx + 1}
                 </span>
                 <div className="flex-1 h-px bg-purple-400/10"></div>
               </div>
@@ -431,23 +436,23 @@ function App() {
                 <p className="story-font text-lg text-purple-50/90 font-light leading-relaxed whitespace-pre-line">
                   {node.saga}
                 </p>
-                {node['pers\u00F3na'] && (
+                {node['persóna'] && (
                   <div className="mt-4 pl-4 border-l-2 border-purple-400/40">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="text-base">{charEmoji(node['pers\u00F3na_nafn'])}</span>
+                      <span className="text-base">{charEmoji(node['persóna_nafn'])}</span>
                       <span className="text-purple-300 text-sm font-medium story-font">
-                        {node['pers\u00F3na_nafn'] || 'Pers\u00F3na'}
+                        {node['persóna_nafn'] || 'Persóna'}
                       </span>
-                      <ListenBtn text={node['pers\u00F3na']} label="Hlusta\u00F0u" />
+                      <ListenBtn text={node['persóna']} label="Hlustaðu" />
                     </div>
                     <p className="story-font text-lg text-purple-100 font-light italic leading-relaxed">
-                      "{node['pers\u00F3na']}"
+                      "{node['persóna']}"
                     </p>
                   </div>
                 )}
               </div>
               <div className="flex justify-end mb-3">
-                <ListenBtn text={node.saga + (node['pers\u00F3na'] ? ' ' + node['pers\u00F3na'] : '')} label="Hlusta\u00F0u \u00E1 kafla" />
+                <ListenBtn text={node.saga + (node['persóna'] ? ' ' + node['persóna'] : '')} label="Hlustaðu á kafla" />
               </div>
               {isLast && !node.ending && gameState === 'playing' && (
                 <div className="space-y-3 fade-in" style={{ animationDelay: '0.4s' }}>
@@ -458,14 +463,14 @@ function App() {
                       {choice}
                     </button>
                   ); })}
-                  {node['frj\u00E1lst_svar'] && (
+                  {node['frjálst_svar'] && (
                     <form onSubmit={handleFreeSubmit} className="mt-3">
                       <div className="flex gap-2">
                         <input
                           type="text"
                           value={freeText}
                           onChange={function(e) { setFreeText(e.target.value); }}
-                          placeholder="Skrifa\u00F0u svari\u00F0 \u00FEitt..."
+                          placeholder="Skrifaðu svarið þitt..."
                           className="magic-input flex-1 px-4 py-3 bg-white/5 border border-white/15 rounded-xl text-purple-100 placeholder-purple-300/30 font-light focus:outline-none focus:border-purple-400/50 transition-all"
                           autoFocus
                         />
@@ -493,7 +498,7 @@ function App() {
               ); })}
             </div>
             <span className="text-purple-300/50 text-sm font-light story-font italic">
-              S&#x00F6;guma&#x00F0;urinn hugsar...
+              Sögumaðurinn hugsar...
             </span>
           </div>
         )}
@@ -501,17 +506,17 @@ function App() {
         {gameState === 'ended' && (
           <div className="text-center py-8 fade-in-up" style={{ animationDelay: '0.3s' }}>
             <div className="glow-line mb-6"></div>
-            <div className="text-4xl mb-4">&#x2728;</div>
-            <h2 className="story-font text-2xl text-white font-light mb-2">S&#x00F6;gunni er loki&#x00F0;</h2>
-            <p className="text-purple-300/60 font-light text-sm mb-6">Vel gert! &#x00DE;&#x00FA; kl&#x00E1;ra&#x00F0;ir fantas&#x00ED;uleikinn.</p>
+            <div className="text-4xl mb-4">✨</div>
+            <h2 className="story-font text-2xl text-white font-light mb-2">Sögunni er lokið</h2>
+            <p className="text-purple-300/60 font-light text-sm mb-6">Vel gert! Þú kláraðir fantasíuleikinn.</p>
             <div className="flex gap-3 justify-center flex-wrap">
               <button onClick={resetGame}
                 className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-light transition-all hover:shadow-lg hover:shadow-purple-500/30">
-                Spila aftur &#x1F504;
+                Spila aftur 🔄
               </button>
               <button onClick={function() { window.history.back(); }}
                 className="px-8 py-3 border border-white/15 text-purple-200/70 rounded-xl font-light hover:bg-white/5 transition-all">
-                &#x2190; Til baka
+                ← Til baka
               </button>
             </div>
           </div>
@@ -522,7 +527,7 @@ function App() {
             <p className="text-red-300 text-sm font-light">{error}</p>
             <button onClick={function() { setError(null); }}
               className="text-red-400/60 text-xs mt-2 hover:text-red-300 transition-colors">
-              Loka &#x2715;
+              Loka ✕
             </button>
           </div>
         )}
