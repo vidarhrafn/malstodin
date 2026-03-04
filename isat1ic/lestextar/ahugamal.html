@@ -15,10 +15,10 @@
       min-height: 100vh;
     }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(12px); }
+      from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .fade-in { animation: fadeIn 0.4s ease both; }
+    .fade-in { animation: fadeIn 0.35s ease both; }
 
     .answer-option {
       border: 2px solid #e5e7eb;
@@ -59,7 +59,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useRef } = React;
+    const { useState, useRef, useMemo } = React;
 
     /* ─── API ─── */
     async function callOpenAI(messages, max_tokens = 300) {
@@ -72,6 +72,16 @@
       if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
       return data.content;
     }
+
+    /* ─── Stokkun ─── */
+    const shuffle = (arr) => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
 
     /* ─── EFNI ─── */
     const READING_TEXT = [
@@ -198,22 +208,32 @@
       </div>
     );
 
-    /* ─── TAB 1: KROSSASPURNINGAR ─── */
+    /* ─── TAB 1: KROSSASPURNINGAR (stokkaðar) ─── */
     const KrossarTab = ({ onDone }) => {
       const [answers, setAnswers] = useState({});
       const [checked, setChecked] = useState(false);
 
+      const shuffledMC = useMemo(() => MC_QUESTIONS.map(q => {
+        const indices = q.options.map((_, i) => i);
+        const shuffled = shuffle(indices);
+        return {
+          question: q.question,
+          options: shuffled.map(i => q.options[i]),
+          correct: shuffled.indexOf(q.correct),
+        };
+      }), []);
+
       const pick = (qi, oi) => { if (!checked) setAnswers(a => ({ ...a, [qi]: oi })); };
 
       const check = () => {
-        if (Object.keys(answers).length < MC_QUESTIONS.length) {
+        if (Object.keys(answers).length < shuffledMC.length) {
           alert('Vinsamlegast svaraðu öllum spurningum!'); return;
         }
         setChecked(true);
         onDone();
       };
 
-      const score = checked ? MC_QUESTIONS.filter((q, i) => answers[i] === q.correct).length : null;
+      const score = checked ? shuffledMC.filter((q, i) => answers[i] === q.correct).length : null;
 
       return (
         <div className="space-y-5 fade-in">
@@ -223,7 +243,7 @@
             <p className="text-gray-500 text-sm font-light">Veldu réttan valmöguleika fyrir hverja spurningu.</p>
           </div>
 
-          {MC_QUESTIONS.map((q, qi) => (
+          {shuffledMC.map((q, qi) => (
             <div key={qi} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <p className="font-medium text-gray-800 mb-4">{qi + 1}. {q.question}</p>
               <div className="space-y-3">
@@ -262,12 +282,12 @@
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 text-center fade-in">
               <div className="text-4xl mb-2">
-                {score === MC_QUESTIONS.length ? '🎉' : score >= 4 ? '👍' : '💪'}
+                {score === shuffledMC.length ? '🎉' : score >= 4 ? '👍' : '💪'}
               </div>
               <p className="text-gray-700 font-light">
                 Þú fékkst <strong className="font-medium">{score}</strong> af{' '}
-                <strong className="font-medium">{MC_QUESTIONS.length}</strong> rétt
-                {' '}({Math.round(score / MC_QUESTIONS.length * 100)}%)
+                <strong className="font-medium">{shuffledMC.length}</strong> rétt
+                {' '}({Math.round(score / shuffledMC.length * 100)}%)
               </p>
             </div>
           )}
@@ -427,7 +447,6 @@ Engar spurningar. Á íslensku.`
 Svaraðu stuttlega (1-2 setningar) við því sem nemandinn sagði og settu fram eina náttúrulega eftirspurningu til að halda samtalinu áfram.
 Vertu hlýr og áhugasamur. Á íslensku.`;
 
-          // Run conversation reply and grammar check in parallel
           const [result, grammarResult] = await Promise.all([
             callOpenAI([
               { role: 'system', content: systemPrompt },
@@ -445,7 +464,6 @@ Vera MJÖG hvetjandi. Aldrei nefna fleiri en eina villu.` },
           ]);
 
           const msgs = [];
-          // Add grammar tip if there is one
           const grammarClean = grammarResult.trim();
           if (grammarClean && grammarClean !== 'ENGIN' && !grammarClean.toUpperCase().startsWith('ENGIN')) {
             msgs.push({ role: 'grammar', text: grammarClean });
@@ -598,7 +616,7 @@ Vera MJÖG hvetjandi. Aldrei nefna fleiri en eina villu.` },
           <TabBar active={activeTab} done={done} onSelect={setActiveTab} />
 
           <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-20">
-            <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-6">
               <ul className="text-sm text-blue-800 font-light space-y-1">
                 <li>📖 Lestu textann hægt og rólega</li>
                 <li>✏️ Svaraðu krossaspurningunum</li>
