@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stjórnborð – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.3s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// Hvaða áfangar eru til
+const COURSES = [
+  { id: 'isan1ib', label: 'ÍSAN1ÍB – Jæja 1' },
+  { id: 'isat1ic', label: 'ÍSAT1ÍC – Út og suður' },
+];
+
+const StatCard = ({ label, value, color = 'blue' }) => {
+  const colors = {
+    blue:   'bg-blue-50 border-blue-200 text-blue-700',
+    green:  'bg-green-50 border-green-200 text-green-700',
+    red:    'bg-red-50 border-red-200 text-red-700',
+    amber:  'bg-amber-50 border-amber-200 text-amber-700',
+    purple: 'bg-purple-50 border-purple-200 text-purple-700',
+  };
+  return (
+    <div className={`rounded-xl border p-5 ${colors[color]}`}>
+      <div className="text-3xl font-light mb-1">{value}</div>
+      <div className="text-sm font-light opacity-80">{label}</div>
+    </div>
+  );
+};
+
+const formatDate = (iso) => {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('is-IS', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const App = () => {
+  const [password, setPassword] = useState('');
+  const [authed, setAuthed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [data, setData] = useState(null);
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [tab, setTab] = useState('users'); // 'users' | 'codes' | 'expired'
+  const [sortBy, setSortBy] = useState('activatedAt'); // 'activatedAt' | 'expiresAt' | 'email'
+  const [search, setSearch] = useState('');
+
+  const fetchData = async (pwd = password, course = selectedCourse) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/.netlify/functions/admin-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminPassword: pwd, course: course || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Villa');
+        setLoading(false);
+        return;
+      }
+      setData(json);
+      setAuthed(true);
+    } catch {
+      setError('Tenging mistókst. Reyndu aftur.');
+    }
+    setLoading(false);
+  };
+
+  const handleLogin = async () => {
+    if (!password.trim()) return;
+    await fetchData(password);
+  };
+
+  // Fara sía á notendur
+  const filteredUsers = (data?.users || [])
+    .filter(u => {
+      if (tab === 'expired') return u.isExpired;
+      if (tab === 'users') return !u.isExpired;
+      return true;
+    })
+    .filter(u => {
+      if (!search) return true;
+      return u.email.toLowerCase().includes(search.toLowerCase()) ||
+             u.codeUsed.toLowerCase().includes(search.toLowerCase());
+    })
+    .sort((a, b) => {
+      if (sortBy === 'email') return a.email.localeCompare(b.email);
+      if (sortBy === 'expiresAt') return new Date(a.expiresAt) - new Date(b.expiresAt);
+      return new Date(b.activatedAt || 0) - new Date(a.activatedAt || 0);
+    });
+
+  // Innskráningarsíða
+  if (!authed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-light text-gray-800 mb-1">Stjórnborð</h1>
+            <p className="text-gray-500 text-sm font-light">Málstöðin</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              placeholder="Lykilorð"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light mb-4"
+              disabled={loading}
+            />
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-light">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={handleLogin}
+              disabled={loading || !password.trim()}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors font-light"
+            >
+              {loading ? 'Augnablik...' : 'Opna stjórnborð →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { stats, codes } = data;
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-light text-gray-800">Stjórnborð</h1>
+            <p className="text-gray-400 text-xs font-light mt-0.5">Málstöðin · Admin</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Áfangasía */}
+            <select
+              value={selectedCourse}
+              onChange={e => { setSelectedCourse(e.target.value); fetchData(password, e.target.value); }}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-light text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Allir áfangar</option>
+              {COURSES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <button
+              onClick={() => fetchData()}
+              className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              ↻ Uppfæra
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-6 py-8 fade-in">
+
+        {/* Tölfræðikort */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <StatCard label="Virkir notendur" value={stats.activeUsers} color="green" />
+          <StatCard label="Útrunninn aðgangur" value={stats.expiredUsers} color="red" />
+          <StatCard label="Notendur alls" value={stats.totalUsers} color="blue" />
+          <StatCard label="Kóðar notaðir" value={`${stats.usedCodes}/${stats.totalCodes}`} color="purple" />
+          <StatCard label="Ónotaðir kóðar" value={stats.totalCodes - stats.usedCodes} color="amber" />
+        </div>
+
+        {/* Flipar */}
+        <div className="flex gap-1 mb-6 bg-white rounded-xl border border-gray-100 p-1 w-fit shadow-sm">
+          {[
+            { id: 'users', label: `Virkir (${stats.activeUsers})` },
+            { id: 'expired', label: `Útrunnið (${stats.expiredUsers})` },
+            { id: 'codes', label: `Kóðar (${stats.totalCodes})` },
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-light transition-colors ${
+                tab === t.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Notendatafla */}
+        {tab !== 'codes' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            {/* Leit og röðun */}
+            <div className="px-6 py-4 border-b border-gray-100 flex gap-3 items-center">
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Leita að netfangi eða kóða..."
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-light focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-light text-gray-600 focus:outline-none"
+              >
+                <option value="activatedAt">Nýjast fyrst</option>
+                <option value="expiresAt">Rennur út fyrst</option>
+                <option value="email">Netfang A–Ö</option>
+              </select>
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 font-light text-sm">
+                Engir notendur fundust
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Notandi</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Áfangi</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Kóði</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Innleyst</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Rennur út</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Staða</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredUsers.map((u, i) => (
+                      <tr key={`${u.uid}-${u.course}`} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-light text-gray-700">{u.email}</div>
+                          {u.displayName && <div className="text-xs text-gray-400 font-light">{u.displayName}</div>}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="text-xs font-light text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                            {u.course.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm font-light text-gray-500 font-mono">{u.codeUsed}</td>
+                        <td className="px-4 py-4 text-sm font-light text-gray-500">{formatDate(u.activatedAt)}</td>
+                        <td className="px-4 py-4 text-sm font-light text-gray-500">{formatDate(u.expiresAt)}</td>
+                        <td className="px-4 py-4">
+                          {u.isExpired ? (
+                            <span className="text-xs font-light text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100">Útrunnið</span>
+                          ) : (
+                            <span className="text-xs font-light text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
+                              {u.daysLeft}d eftir
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Kóðatafla */}
+        {tab === 'codes' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Kóði</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Áfangi</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Notkunar&shy;tíðni</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Síðast notaður</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Gildir til</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {codes.sort((a, b) => b.useCount - a.useCount).map((c) => (
+                    <tr key={c.code} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 text-sm font-mono font-light text-gray-700">{c.code}</td>
+                      <td className="px-4 py-4">
+                        <span className="text-xs font-light text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                          {c.course.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        {c.useCount === 0 ? (
+                          <span className="text-xs font-light text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-100">Ónotaður</span>
+                        ) : (
+                          <span className="text-sm font-light text-gray-700">{c.useCount}×</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-sm font-light text-gray-500">{formatDate(c.lastUsedAt)}</td>
+                      <td className="px-4 py-4 text-sm font-light text-gray-500">{formatDate(c.expiresAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
