@@ -9,6 +9,58 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase Auth athugun -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
+      authDomain: "malstodin-90f85.firebaseapp.com",
+      projectId: "malstodin-90f85",
+      storageBucket: "malstodin-90f85.firebasestorage.app",
+      messagingSenderId: "190485777754",
+      appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // Ekki innskráður → fara á login
+        window.location.href = '/isan1ib/login.html';
+        return;
+      }
+
+      // Athuga hvort notandi hafi gildan aðgang
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch('/.netlify/functions/auth-firebase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, course: 'isan1ib' })
+        });
+
+        if (!res.ok) {
+          // Enginn aðgangur → fara á login
+          window.location.href = '/isan1ib/login.html';
+          return;
+        }
+
+        // Allt í lagi — geyma notandanafn og sýna síðuna
+        const data = await res.json();
+        window.__currentUser = { email: user.email, uid: user.uid, expiresAt: data.expiresAt };
+        window.__firebaseAuth = auth;
+        window.dispatchEvent(new Event('auth-ready'));
+
+      } catch {
+        window.location.href = '/isan1ib/login.html';
+      }
+    });
+  </script>
+
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -20,12 +72,26 @@
       to { opacity: 1; transform: translateY(0); }
     }
     .fade-in { animation: fadeIn 0.3s ease both; }
+    #root { display: none; }
   </style>
 </head>
 <body>
+
+<!-- Hleðsluskjár á meðan við athugum aðgang -->
+<div id="loading-screen" class="min-h-screen flex items-center justify-center">
+  <div class="text-center">
+    <div style="width:48px;height:48px;border:4px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px"></div>
+    <p style="color:#6b7280;font-weight:300;font-size:0.9rem">Augnablik...</p>
+  </div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
 <div id="root"></div>
+
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect } = React;
+
+const COURSE = 'isan1ib';
 
 const CHAPTERS = [
   {
@@ -60,13 +126,12 @@ const CHAPTERS = [
   { num: 7, title: 'Kafli 7', exercises: [] },
 ];
 
-// Litur eftir tegund æfingar
 const TYPE_COLORS = {
-  hlustun:    { bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-200',  label: 'Hlustun' },
-  lestur:     { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-200',   label: 'Lestur' },
-  spjall:     { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', label: 'Spjall' },
-  ordafordi:  { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-200',  label: 'Orðaforði' },
-  malfraeди:  { bg: 'bg-rose-100',   text: 'text-rose-700',   border: 'border-rose-200',   label: 'Málfræði' },
+  hlustun:   { bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-200',  label: 'Hlustun' },
+  lestur:    { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-200',   label: 'Lestur' },
+  spjall:    { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', label: 'Spjall' },
+  ordafordi: { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-200',  label: 'Orðaforði' },
+  malfraedi: { bg: 'bg-rose-100',   text: 'text-rose-700',   border: 'border-rose-200',   label: 'Málfræði' },
 };
 
 const TypeBadge = ({ type }) => {
@@ -78,18 +143,10 @@ const TypeBadge = ({ type }) => {
   );
 };
 
-const ComingSoonBadge = () => (
-  <span className="inline-block px-2 py-0.5 rounded text-xs font-light border bg-gray-100 text-gray-400 border-gray-200">
-    Í vinnslu
-  </span>
-);
-
 const ChapterGroup = ({ chapter }) => {
   const [open, setOpen] = useState(false);
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Header – alltaf sýnilegur */}
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors text-left"
@@ -100,25 +157,21 @@ const ChapterGroup = ({ chapter }) => {
           </span>
           <div>
             <span className="font-medium text-gray-800">{chapter.title}</span>
-            {chapter.exercises.length === 0 && (
+            {chapter.exercises.length === 0 ? (
               <span className="ml-3 text-xs text-gray-400 font-light">Í vinnslu</span>
-            )}
-            {chapter.exercises.length > 0 && (
+            ) : (
               <span className="ml-3 text-xs text-gray-400 font-light">
                 {chapter.exercises.length} æfing{chapter.exercises.length !== 1 ? 'ar' : ''}
               </span>
             )}
           </div>
         </div>
-        <svg
-          className={`w-5 h-5 text-gray-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
-        >
+        <svg className={`w-5 h-5 text-gray-400 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
 
-      {/* Innihald – sýnt þegar open */}
       {open && (
         <div className="fade-in border-t border-gray-100 px-6 py-4">
           {chapter.exercises.length === 0 ? (
@@ -134,11 +187,8 @@ const ChapterGroup = ({ chapter }) => {
           ) : (
             <div className="space-y-2">
               {chapter.exercises.map((ex, i) => (
-                <a
-                  key={i}
-                  href={ex.href}
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
-                >
+                <a key={i} href={ex.href}
+                  className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50 transition-all group">
                   <div>
                     <span className="font-light text-gray-700 group-hover:text-blue-700 text-sm block">{ex.title}</span>
                     {ex.desc && <span className="text-xs text-gray-400 font-light">{ex.desc}</span>}
@@ -160,24 +210,57 @@ const ChapterGroup = ({ chapter }) => {
 };
 
 const App = () => {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const onReady = () => setUser(window.__currentUser);
+    window.addEventListener('auth-ready', onReady);
+    if (window.__currentUser) setUser(window.__currentUser);
+    return () => window.removeEventListener('auth-ready', onReady);
+  }, []);
+
+  const handleSignOut = async () => {
+    if (window.__firebaseAuth) {
+      await window.__firebaseAuth.signOut();
+      window.location.href = '/isan1ib/login.html';
+    }
+  };
+
+  // Sýna React þegar auth er staðfest
+  useEffect(() => {
+    if (user) {
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('root').style.display = 'block';
+    }
+  }, [user]);
+
+  if (!user) return null;
+
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-8">
           <a href="/" className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
             ← Til baka
           </a>
-          <h1 className="text-3xl font-light text-gray-800 mb-1">ÍSAN1ÍB</h1>
-          <p className="text-gray-400 text-xs font-light uppercase tracking-widest mb-1">Jæja 1</p>
-          <p className="text-gray-500 text-sm font-light">Æfingar eftir köflum · Í vinnslu</p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">ÍSAN1ÍB</h1>
+              <p className="text-gray-400 text-xs font-light uppercase tracking-widest mb-1">Jæja 1</p>
+              <p className="text-gray-500 text-sm font-light">Æfingar eftir köflum · Í vinnslu</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-400 font-light mb-1">{user.email}</p>
+              <button onClick={handleSignOut}
+                className="text-xs text-gray-400 hover:text-red-500 font-light transition-colors">
+                Útskrá
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Efni */}
       <main className="max-w-4xl mx-auto px-6 py-8">
-
-        {/* Í vinnslu banner */}
         <div className="mb-6 px-5 py-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
           <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
@@ -188,7 +271,6 @@ const App = () => {
           </div>
         </div>
 
-        {/* Kaflar */}
         <div className="space-y-3">
           {CHAPTERS.map(ch => (
             <ChapterGroup key={ch.num} chapter={ch} />
@@ -196,7 +278,6 @@ const App = () => {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="text-center py-8 text-gray-400 text-sm font-light">
         <p>© 2025 Málstöðin</p>
       </footer>
