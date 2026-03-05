@@ -42,27 +42,50 @@ exports.handler = async (event) => {
       return { statusCode: 403, body: JSON.stringify({ error: 'Kóðinn er ekki fyrir þennan áfanga' }) };
     }
 
-    // Athuga hvort kóðinn sé útrunninn
+    // Athuga hvort kóðinn sjálfur sé útrunninn (of gamall til að innleysa)
     const now = new Date();
-    const expiresAt = codeData.expires_at.toDate();
-    if (now > expiresAt) {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Kóðinn er útrunninn', expired: true }) };
+    const codeExpiresAt = codeData.expires_at.toDate();
+    if (now > codeExpiresAt) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'Þessi kóði er of gamall til að innleysa', expired: true }) };
     }
 
-    // Skrá aðgang fyrir notandann í user_access collection
+    // Athuga hvort notandi hafi þegar gildan aðgang
     const accessRef = db.collection('user_access').doc(uid);
     const accessDoc = await accessRef.get();
-
     const accessData = accessDoc.exists ? accessDoc.data() : {};
 
-    // Bæta við eða uppfæra aðgang að þessum áfanga
+    if (accessData[course] && accessData[course].expires_at) {
+      const existingExpiry = accessData[course].expires_at.toDate();
+      if (now < existingExpiry) {
+        // Þegar með gildan aðgang - breyta engu
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            success: true,
+            expiresAt: existingExpiry.toISOString(),
+            alreadyActive: true,
+          })
+        };
+      }
+    }
+
+    // Fyrsta innleysting eða endurnýjun - 6 mánuðir frá NÚNA
+    const expiresAt = new Date(now);
+    expiresAt.setMonth(expiresAt.getMonth() + 6);
+
     accessData[course] = {
-      expires_at: codeData.expires_at,
+      expires_at: admin.firestore.Timestamp.fromDate(expiresAt),
       activated_at: admin.firestore.Timestamp.now(),
       code_used: code.trim().toUpperCase(),
     };
 
     await accessRef.set(accessData, { merge: true });
+
+    // Halda utan um hve oft kóðinn hefur verið notaður
+    await codeRef.update({
+      last_used_at: admin.firestore.Timestamp.now(),
+      use_count: admin.firestore.FieldValue.increment(1),
+    });
 
     return {
       statusCode: 200,
