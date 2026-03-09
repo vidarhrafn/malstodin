@@ -209,6 +209,9 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
       const [convs, setConvs] = useState(Array(DISCUSSION_QUESTIONS.length).fill(null).map(() => []));
       const [inputs, setInputs] = useState(Array(DISCUSSION_QUESTIONS.length).fill(''));
       const [chatLoading, setChatLoading] = useState(Array(DISCUSSION_QUESTIONS.length).fill(false));
+      const [turnCount, setTurnCount] = useState(Array(DISCUSSION_QUESTIONS.length).fill(0));
+      const [awaitingChoice, setAwaitingChoice] = useState(Array(DISCUSSION_QUESTIONS.length).fill(false));
+      const [closed, setClosed] = useState(Array(DISCUSSION_QUESTIONS.length).fill(false));
       const chatRefs = useRef(DISCUSSION_QUESTIONS.map(() => React.createRef()));
 
       const scrollChat = (i) => {
@@ -218,42 +221,72 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
         }, 100);
       };
 
+      const stopChat = (i) => {
+        setClosed(prev => { const a = [...prev]; a[i] = true; return a; });
+        setAwaitingChoice(prev => { const a = [...prev]; a[i] = false; return a; });
+        if (closed.filter(Boolean).length + 1 >= DISCUSSION_QUESTIONS.length) markDone(2);
+      };
+
+      const continueChat = (i) => {
+        setAwaitingChoice(prev => { const a = [...prev]; a[i] = false; return a; });
+      };
+
       const sendMessage = async (i) => {
         const msg = inputs[i].trim();
-        if (!msg) return;
+        if (!msg || closed[i] || awaitingChoice[i]) return;
+        const newTurn = turnCount[i] + 1;
+        const isPromptStop = newTurn === 4;
         const newConv = [...convs[i], { role: 'user', content: msg }];
         setConvs(prev => { const a = [...prev]; a[i] = newConv; return a; });
         setInputs(prev => { const a = [...prev]; a[i] = ''; return a; });
         setChatLoading(prev => { const a = [...prev]; a[i] = true; return a; });
+        setTurnCount(prev => { const a = [...prev]; a[i] = newTurn; return a; });
         scrollChat(i);
         try {
-          const isFirst = newConv.length === 1;
-          const sys = `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1–A2 nemanda.
-Textinn: "${READING_TEXT}"
-Spurning: "${DISCUSSION_QUESTIONS[i]}"
-${isFirst ? 'Gefðu hvetjandi endurgjöf á fyrsta svari og spyrðu einnar follow-up spurningar.' : 'Haltu áfram samtali á náttúrulegan, hvetjandi hátt.'}
-Haltu því stuttu (2–4 setningar). Einföld íslenska. Aldrei einkunn.
-Skilaðu JSON: {"grammar": "Málfarsendurgjöf ef gróf villa, annars null", "response": "Svarið þitt"}`;
-          const result = await callOpenAI(
-            [{ role: 'system', content: sys }, ...newConv.map(m => ({ role: m.role === 'grammar' ? 'assistant' : m.role, content: m.content }))],
-            300, 0.5
-          );
-          let clean = result.trim().replace(/^```json\n?|```$/g, '').trim();
-          const parsed = JSON.parse(clean);
+          const convHistory = newConv
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map(m => ({ role: m.role, content: m.content }));
+
+          const mainSys = isPromptStop
+            ? `Þú ert vingjarnlegur íslenskukennari.
+Svaraðu hlýlega og stuttlega (1-2 setningar) við því sem nemandinn sagði.
+Ljúktu síðan á þennan hátt: "Þetta var frábært hjá þér! Viltu stoppa núna eða halda áfram að spjalla? 😊"
+Á íslensku.`
+            : `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1–A2 nemanda.
+Svaraðu stuttlega (1-2 setningar) við því sem nemandinn sagði og settu fram eina náttúrulega eftirspurningu.
+Vertu hlýr og áhugasamur. Einföld íslenska.`;
+
+          const grammarSys = `Þú ert íslenskukennari sem gefur MJÖG stuttar og hlýjar málfarsábendingar til nemenda á A1-A2 stigi.
+Skoðaðu setninguna og athugaðu hvort það sé ein augljós villa (stafsetning, kyn orða, eintölu/fleirtölu eða beygingu).
+Ef það er villa: Svaraðu með einni stuttri setningu sem byrjar á "Mundu að..." og lagar villuna hlýlega.
+Dæmi: "Mundu að 'gaman' er hvorugkyn, svo við segjum 'það er gaman' 😊"
+Ef engin villa eða of flókið: Svaraðu EINUNGIS með "ENGIN".
+Aldrei nefna fleiri en eina villu.`;
+
+          const [result, grammarResult] = await Promise.all([
+            callOpenAI([{ role: 'system', content: mainSys }, ...convHistory], 150, 0.5),
+            callOpenAI([{ role: 'system', content: grammarSys }, { role: 'user', content: msg }], 80, 0.2)
+          ]);
+
           let updated = [...newConv];
-          if (parsed.grammar) {
-            updated = [...updated, { role: 'grammar', content: parsed.grammar }];
+          const grammarClean = grammarResult.trim();
+          if (grammarClean && !grammarClean.toUpperCase().startsWith('ENGIN')) {
+            updated = [...updated, { role: 'grammar', content: grammarClean }];
             setConvs(prev => { const a = [...prev]; a[i] = updated; return a; });
             scrollChat(i);
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, 300));
           }
-          updated = [...updated, { role: 'assistant', content: parsed.response }];
+          updated = [...updated, { role: 'assistant', content: result }];
           setConvs(prev => { const a = [...prev]; a[i] = updated; return a; });
           scrollChat(i);
-          markDone(2);
+
+          if (isPromptStop) {
+            setAwaitingChoice(prev => { const a = [...prev]; a[i] = true; return a; });
+          }
         } catch(e) {
           alert('Villa. Reyndu aftur.');
           setConvs(prev => { const a = [...prev]; a[i] = convs[i]; return a; });
+          setTurnCount(prev => { const a = [...prev]; a[i] = newTurn - 1; return a; });
         } finally {
           setChatLoading(prev => { const a = [...prev]; a[i] = false; return a; });
         }
@@ -404,19 +437,30 @@ Skilaðu JSON: {"grammar": "Málfarsendurgjöf ef gróf villa, annars null", "re
                   <div className="space-y-6">
                     {DISCUSSION_QUESTIONS.map((q, i) => (
                       <div key={i} className="border border-gray-100 rounded-xl p-5">
-                        <p className="font-medium text-gray-800 mb-3 text-sm">{i + 1}. {q}</p>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="font-medium text-gray-800 text-sm">{i + 1}. {q}</p>
+                          {closed[i] && (
+                            <span className="text-xs text-green-600 font-light flex items-center gap-1 flex-shrink-0 ml-2">
+                              <span>✔</span> Lokið
+                            </span>
+                          )}
+                        </div>
                         <div ref={chatRefs.current[i]}
                           style={{ minHeight: 80, maxHeight: 320, overflowY: 'auto' }}
                           className="space-y-2 mb-3">
                           {convs[i].map((msg, mi) => (
                             <div key={mi} className={`flex ${msg.role === 'user' ? 'justify-end' : msg.role === 'grammar' ? 'justify-center' : 'justify-start'}`}>
-                              <div className={`max-w-xs px-4 py-2 rounded-xl text-sm font-light
-                                ${msg.role === 'user' ? 'bg-blue-100 text-blue-900' :
-                                  msg.role === 'grammar' ? 'bg-red-50 text-red-700 border-2 border-red-200 italic text-xs' :
-                                  'bg-gray-100 text-gray-800'}`}>
-                                {msg.role === 'grammar' && <span className="mr-1 not-italic">📚</span>}
-                                {msg.content}
-                              </div>
+                              {msg.role === 'grammar' ? (
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-[90%] flex items-start gap-2">
+                                  <span className="text-amber-500 text-xs mt-0.5 flex-shrink-0">📌</span>
+                                  <p className="text-amber-800 font-light text-xs">{msg.content}</p>
+                                </div>
+                              ) : (
+                                <div className={`max-w-xs px-4 py-2 rounded-xl text-sm font-light
+                                  ${msg.role === 'user' ? 'bg-blue-100 text-blue-900' : 'bg-gray-100 text-gray-800'}`}>
+                                  {msg.content}
+                                </div>
+                              )}
                             </div>
                           ))}
                           {chatLoading[i] && (
@@ -425,24 +469,46 @@ Skilaðu JSON: {"grammar": "Málfarsendurgjöf ef gróf villa, annars null", "re
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2">
-                          <textarea
-                            value={inputs[i]}
-                            onChange={e => setInputs(prev => { const a = [...prev]; a[i] = e.target.value; return a; })}
-                            onKeyDown={e => handleKey(e, i)}
-                            disabled={chatLoading[i]}
-                            className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50 text-sm"
-                            rows={2}
-                            placeholder={convs[i].length === 0 ? 'Skrifaðu svarið þitt hér...' : 'Haltu áfram...'}
-                          />
-                          <button onClick={() => sendMessage(i)}
-                            disabled={chatLoading[i] || !inputs[i].trim()}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end">
-                            Senda
-                          </button>
-                        </div>
+
+                        {awaitingChoice[i] && (
+                          <div className="flex gap-3 justify-center mt-2 mb-3 fade-in">
+                            <button onClick={() => stopChat(i)}
+                              className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light text-sm">
+                              ✓ Já, ég er búinn/búin
+                            </button>
+                            <button onClick={() => continueChat(i)}
+                              className="px-5 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+                              Halda áfram →
+                            </button>
+                          </div>
+                        )}
+
+                        {!closed[i] && !awaitingChoice[i] && (
+                          <div className="flex gap-2">
+                            <textarea
+                              value={inputs[i]}
+                              onChange={e => setInputs(prev => { const a = [...prev]; a[i] = e.target.value; return a; })}
+                              onKeyDown={e => handleKey(e, i)}
+                              disabled={chatLoading[i]}
+                              className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50 text-sm"
+                              rows={2}
+                              placeholder={convs[i].length === 0 ? 'Skrifaðu svarið þitt hér...' : 'Haltu áfram...'}
+                            />
+                            <button onClick={() => sendMessage(i)}
+                              disabled={chatLoading[i] || !inputs[i].trim()}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end">
+                              Senda
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
+
+                    {closed.every(Boolean) && (
+                      <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center fade-in">
+                        <p className="text-green-700 font-light text-sm">🎉 Frábært! Þú kláraðir öll þrjú samtölin.</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
