@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Par í rúmi</title>
+  <title>Matur frá þínu landi</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -97,8 +97,8 @@
     );
 
 
-    const SpjallParIRumi = () => {
-      const FIRST_Q = 'Hæ! Sjáðu myndina. Hvað sérðu hér?';
+    const SpjallMatur = () => {
+      const FIRST_Q = 'Hæ! Getur þú sagt mér frá matarrétti frá þínu landi?';
 
       const [messages, setMessages] = useState([]);
       const [input, setInput] = useState('');
@@ -110,48 +110,75 @@
       const [userResponseCount, setUserResponseCount] = useState(0);
       const messagesEndRef = useRef(null);
 
-      const SYSTEM_PROMPT = `Þú ert íslenskukennari á A1 stigi. Nemandi sér mynd af pari sem situr saman í rúmi og horfir á mynd/sjónvarp. Þau eru undir teppi, með popp-korn og gosdrykkjum á borði fyrir framan þau. Herbergið er hlýlegt með ljósaseríum.
+      const SYSTEM_PROMPT = `Þú ert íslenskukennari á A1-A2 stigi. Nemandi á að tala um matarrétt frá sínu landi.
 
-MIKILVÆGT: Þú ert að spyrja spurninga um myndina.
+MIKILVÆGT: Þú ert að spyrja spurninga um matarréttinn.
 
-Notaðu þessi orð og SAMÞYKKJA öll afbrigði:
-- tveir, tvö, par, fólk
-- rúm, teppi, púði
-- að horfa, sjónvarp, mynd, tölva, laptop, fartölva
-- popp-korn, poppkorn, popp
-- gosdrykk, gosdrykkur, dós, dósir
-- borð, bakki
-- ljósaseríur, lights
-- hlýlegt, notalegt, kósí, cozy
-- glöð, glaður, ánægð, ánægður
-- heima
+SPURNINGAR Í RÖÐ (7 spurningar):
+1. "Getur þú sagt mér frá matarrétti frá þínu landi?"
+2. STAÐFESTA réttinn með stutt lýsingu: "Ah, [nafn]! Það er [stutt lýsing], er það rétt?"
+   Dæmi: "Ah, pierogi! Það eru deighnúðar með fyllingu frá Póllandi, er það rétt?"
+   Dæmi: "Hamborgari! Amerískur réttur með kjöti í brauði, já?"
+3. "Hvað er í þessum rétti? Hvaða hráefni þarftu?"
+4. "Og hvað borðar þú með honum? Eru einhver meðlæti?"
+5. "Hvernig eldar þú þennan rétt?"
+6. "Hvernig bragðast þetta? Er þetta heitt, kryddað, sætt...?"
+7. "Hefur þú sjálf/ur eldað þennan rétt? Hvenær borðar þú hann?"
+
+MIKILVÆGT fyrir spurningu 2 - Notaðu EINFÖLD, SKÝR íslensk orð:
+- "deighnúðar með fyllingu" (ekki "bolludúlkar")
+- "kjötréttur með kartöflum"
+- "hrísgrjónaréttur með sjávarmat"
+- "steiktur fiskur"
+- "bakaður réttur með osti"
+- Gefðu STUTTA (5-10 orð) lýsingu
+- Nefndu land ef þú veist það
+- Vertu viss og jákvæð!
+
+SAMÞYKKJA öll afbrigði á:
+- Hráefni: grænmeti, kjöt, fiskur, ávextir, krydd, ostur, mjólk, tómatar, laukur, hvítlaukur, kartöflur, hrísgrjón...
+- Meðlæti: kartöflur, hrísgrjón, salat, grænmeti, brauð, sósa...
+- Eldaaðgerðir: að sjóða, að steikja, að baka, að hræra, að skera, að dreifa, að setja í ofn...
+- Bragð: heitt, kryddað, sætt, súrt, salt, gott, ljúffengt, sterkt, millt...
+- Tími: á hátíðum, á jólum, um helgar, oft, sjaldan, alltaf, stundum...
 
 SKILAÐU aðeins EINNI stuttri spurningu á íslensku.
-Eftir svar: hrósaðu mjög stutt (t.d. "Frábært!" eða "Rétt!" eða "Já, einmitt!") og spurðu NÝJA spurningu.
-
-Spurningar í röð:
-1. Hvað sérðu á myndinni?
-2. Hvað eru þau að gera?
-3. Hvernig líður þeim?
-4. Hvað er á borðinu?
-5. Hvernig er herbergið?
+Eftir svar: hrósaðu mjög stutt (t.d. "Frábært!" eða "Áhugavert!" eða "Gott!") og spurðu NÝJA spurningu.
 
 SAMÞYKKJA öll afbrigði og vera hvetjandi!`;
 
-      const FEEDBACK_SYSTEM = `Þú ert íslenskukennari sem gefur ÖRSTUTTA endurgjöf á A1 stigi.
-- 1 lína, kurteis og hvetjandi.
-- Leiðréttu aðeins ef þú ert >80% viss.
-- Dæmi: "Gott! Setningin er rétt." eða "Flott – en segðu: 'þau eru glöð'."`;
+      const FEEDBACK_SYSTEM = `Þú ert íslenskukennari sem gefur MJÖG MILDA málfarsendurgjöf á A1-A2 stigi.
 
-      const SUMMARY_SYSTEM = `Þú ert íslenskukennari. Nemandi hefur svarað 5 spurningum um mynd af pari í rúmi.
+Nemandinn er að tala um matarrétt frá sínu landi og er að æfa sig að tala íslensku.
 
-Búðu til STUTTA (2-3 setningar) og HVETJANDI súmmeru á íslensku sem:
-1. Nefnir hvað nemandinn lýsti vel (t.d. "Þú lýsir fólkinu vel")
-2. Hvetur nemandann áfram
+MIKILVÆGT: Vera mjög VARKÁR með leiðréttingar! Leiðrétta AÐEINS ef:
+1. Nemandi skrifar á öðru tungumáli (t.d. "tomato" í stað "tómatar")
+2. Augljósar málfræðivillur (t.d. "ég steikja" í stað "ég steiki")
+3. Ritháttarvillur á íslenskum orðum
 
-Dæmi: "Þú lýsir myndinni mjög vel! Þú nefndir par, popp-korn og hlýlegt herbergi. Vel gert! 🎉"
+Gefðu STUTTA endurgjöf (1-2 setningar):
+- Byrjaðu með hrós: "Frábært!" eða "Gott!"
+- EF villa: Leiðréttu vinalega: "Á íslensku segjum við X í stað Y"
+- Lokaðu jákvætt: "Annars mjög gott!"
 
-SKILAÐU aðeins súmmeruna, ekkert annað.`;
+DÆMI:
+- Nemandi: "Jeg trenger tomat" → "Ég sé að þú skrifaðir á norsku! Á íslensku: tómatar. Annars flott!"
+- Nemandi: "Ég steikja kjötið" → "Næstum rétt! 'Ég steiki' eða 'ég er að steikja'. Vel gert!"
+- Nemandi: "Ég set tómata í pottinn" → "Frábært! Þetta er alveg rétt."
+
+ALDREI leiðrétta ef svarið er skiljanlegt og næstum rétt!`;
+
+      const SUMMARY_SYSTEM = `Þú ert íslenskukennari. Nemandi hefur lýst matarrétti frá sínu landi.
+
+Búðu til STUTTA (3-4 setningar) og HVETJANDI súmmeru á íslensku sem:
+1. Nefnir nafn réttar og land
+2. Nefnir nokkur hráefni og meðlæti
+3. Nefnir hvernig hann er eldaður
+4. Hrósar nemanda
+
+Dæmi: "Þú lýsir [rétti] frá [landi] mjög vel! Í honum er [hráefni] og hann er borðaður með [meðlæti]. Hann er [eldaður]. Mjög áhugavert! Vel gert að tala um matarrétt frá þínu landi! 🎉"
+
+SKILAÐU aðeins súmmeruna á íslensku, ekkert annað.`;
 
       useEffect(() => {
         if ('webkitSpeechRecognition' in window) {
@@ -169,20 +196,11 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
         }
       }, []);
 
-      useEffect(() => { 
+      useEffect(() => {
         if (messages.length > 0) {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        } 
+        }
       }, [messages, loading]);
-
-      const playAssistantAt = async (idx) => {
-        const msg = messages[idx];
-        if (!msg || msg.role !== 'assistant') return;
-        setSpeakingIndex(idx);
-        await playAudio(msg.content, (speaking) => {
-          if (!speaking) setSpeakingIndex(null);
-        });
-      };
 
       const handleListenClick = async () => {
         if (messages.length === 0) {
@@ -192,6 +210,15 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
           const lastIdx = messages.map((m, i) => ({ m, i })).filter(o => o.m.role === 'assistant').slice(-1)[0]?.i;
           if (lastIdx != null) await playAssistantAt(lastIdx);
         }
+      };
+
+      const playAssistantAt = async (idx) => {
+        const msg = messages[idx];
+        if (!msg || msg.role !== 'assistant') return;
+        setSpeakingIndex(idx);
+        await playAudio(msg.content, (speaking) => {
+          if (!speaking) setSpeakingIndex(null);
+        });
       };
 
       const toggleRecording = () => {
@@ -226,26 +253,26 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
             const feedback = await callOpenAI([
               { role: 'system', content: FEEDBACK_SYSTEM },
               { role: 'user', content: userMessage }
-            ], 60, 'gpt-4o-mini', 0.2);
+            ], 100, 'gpt-4o-mini', 0.2);
             if (feedback) setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
           } catch (e) { 
             console.warn('Feedback misheppnað:', e); 
           }
 
-          // Athuga hvort búið sé að svara öllum 5 spurningunum
-          if (newCount >= 5) {
+          // Athuga hvort búið sé að svara öllum 7 spurningunum
+          if (newCount >= 7) {
             // Búa til súmmeru
             const userAnswers = messages
               .filter(m => m.role === 'user')
               .map(m => m.content)
               .join(' · ');
             
-            const summaryPrompt = `Nemandinn svaraði spurningunum með: "${userAnswers}". Búðu til stutta súmmeru.`;
+            const summaryPrompt = `Nemandinn svaraði spurningunum með: "${userAnswers}". Búðu til stutta súmmeru um matarréttinn.`;
             
             const summary = await callOpenAI([
               { role: 'system', content: SUMMARY_SYSTEM },
               { role: 'user', content: summaryPrompt }
-            ], 120, 'gpt-4o-mini', 0.3);
+            ], 150, 'gpt-4o-mini', 0.3);
             
             if (summary) {
               setMessages(prev => [...prev, { role: 'assistant', content: summary }]);
@@ -268,12 +295,9 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
               { role: 'user', content: userMessage }
             ];
             
-            const nextQuestion = await callOpenAI(aiMessages, 160, 'gpt-4o-mini', 0.3);
+            const nextQuestion = await callOpenAI(aiMessages, 200, 'gpt-4o-mini', 0.3);
             if (nextQuestion) {
               setMessages(prev => [...prev, { role: 'assistant', content: nextQuestion }]);
-              await playAudio(nextQuestion, (speaking) => {
-                if (!speaking) setSpeakingIndex(null);
-              });
             }
           }
         } catch (e) { 
@@ -288,7 +312,7 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
           <header className="bg-white shadow-sm border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-6 py-8">
               <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
-              <h1 className="text-3xl font-light text-gray-800 mb-2">Vinir</h1>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Matur frá þínu landi</h1>
               <p className="text-gray-500 text-sm font-light">Tölum saman</p>
             </div>
           </header>
@@ -296,8 +320,8 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
           <main className="max-w-4xl mx-auto px-6 mt-8">
             <div className="rounded-lg overflow-hidden shadow-lg mb-6 mx-auto" style={{maxWidth:'500px'}}>
               <img
-                src="media/spjall5_par.png"
-                alt="Par í rúmi horfir á mynd með popp-korni"
+                src="../media/spjall2_matur.png"
+                alt="Matur frá ýmsum löndum"
                 className="w-full h-auto"
               />
             </div>
@@ -310,7 +334,7 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
                 <div className="flex justify-between items-center mb-2">
                   <ListenPill onClick={handleListenClick} speaking={speakingIndex !== null} />
                   <span className="text-xs text-gray-400">
-                    📍 Spurning {Math.min(userResponseCount + 1, 5)} af 5
+                    📍 Spurning {Math.min(userResponseCount + 1, 7)} af 7
                   </span>
                 </div>
 
@@ -326,8 +350,20 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
                       {msg.role === 'feedback' && (
                         <span className="font-normal text-red-800">📚 Málfar: </span>
                       )}
-
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      
+                      {msg.role !== 'assistant' && (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      )}
+                      
+                      {msg.role === 'assistant' && (
+                        <button
+                          onClick={() => playAssistantAt(i)}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors"
+                        >
+                          <SpeakerIcon isSpeaking={speakingIndex === i} />
+                          <span className="text-blue-800 font-normal">🎧 Hlustaðu</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -375,7 +411,7 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
                 <div className="border-t p-6 bg-green-50 text-center">
                   <div className="text-4xl mb-3">🎉</div>
                   <h3 className="text-xl font-normal text-gray-800 mb-2">Vel gert!</h3>
-                  <p className="text-gray-600 font-light">Þú hefur klárað spjallið!</p>
+                  <p className="text-gray-600 font-light">Þú hefur klárað spjallið um matarrétt frá þínu landi!</p>
                 </div>
               )}
             </section>
@@ -384,7 +420,7 @@ SKILAÐU aðeins súmmeruna, ekkert annað.`;
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallParIRumi />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallMatur />);
   </script>
 </body>
 </html>
