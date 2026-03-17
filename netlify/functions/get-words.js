@@ -1,5 +1,5 @@
 // netlify/functions/get-words.js
-// Sækir orðalista úr Google Sheets (CSV útgáfu)
+// Sækir orðalista úr Google Sheets (TSV) – styður marga kennara
 
 exports.handler = async (event) => {
   const headers = {
@@ -8,11 +8,17 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json',
   };
 
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
   try {
-    const SHEET_URL = process.env.GOOGLE_SHEET_URL;
+    // Lesa sheetUrl úr POST body
+    const body = JSON.parse(event.body || '{}');
+    const SHEET_URL = body.sheetUrl;
 
     if (!SHEET_URL) {
-      throw new Error('GOOGLE_SHEET_URL vantar í Netlify umhverfisbreytur');
+      throw new Error('sheetUrl vantar í beiðnina');
     }
 
     const response = await fetch(SHEET_URL);
@@ -23,7 +29,7 @@ exports.handler = async (event) => {
 
     const tsv = await response.text();
 
-    // Þátta TSV – eitt orð per lína, taka fyrsta dálkinn
+    // Þátta TSV – taka fyrsta dálkinn, sleppa fyrirsögn og tómum línum
     const lines = tsv.split('\n');
     const words = [];
 
