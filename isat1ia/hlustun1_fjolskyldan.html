@@ -202,13 +202,12 @@ Sigurður og Anna eru gift. Þau búa í Hafnarfirði í raðhúsi með litlum g
       // ── Flipi 0: Þýðingar ─────────────────────────────────────────────────
       const [vocabOpen, setVocabOpen] = useState(true);
       const [transAnswer, setTransAnswer] = useState('');
-      const [transLang, setTransLang] = useState('');
       const [transFeedback, setTransFeedback] = useState(null);
       const [transLoading, setTransLoading] = useState(false);
 
       const checkTranslation = async () => {
-        if (!transAnswer.trim() || !transLang.trim()) {
-          alert('Vinsamlegast fylltu út bæði reiti.');
+        if (!transAnswer.trim()) {
+          alert('Vinsamlegast skrifaðu þýðingu.');
           return;
         }
         setTransLoading(true);
@@ -218,19 +217,21 @@ Sigurður og Anna eru gift. Þau búa í Hafnarfirði í raðhúsi með litlum g
 ÍSLENSKA ORÐIÐ: "${TRANSLATION_WORD}"
 SVAR NEMANDA: "${transAnswer}"
 
+Greindu tungumálið sjálfkrafa og svaraðu á því tungumáli.
+
 SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
 {
   "correct": boolean,
-  "detected_language": "${transLang}",
+  "detected_language": "nafn tungumálsins (t.d. enska, pólska, spænska)",
   "feedback_is": "Endurgjöf á íslensku",
-  "feedback_native": "Endurgjöf á ${transLang}",
+  "feedback_native": "Endurgjöf á greinda tungumálinu",
   "correct_translation": "Góð þýðing ef rangt, annars null"
 }`;
           const r = await callOpenAI(
             [{ role: 'system', content: sys }, { role: 'user', content: 'Meta þýðingu.' }],
             200, 0.2
           );
-          const clean = r.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const clean = r.replace(new RegExp('```json\n?', 'g'), '').replace(new RegExp('```\n?', 'g'), '').trim();
           const data = JSON.parse(clean);
           setTransFeedback(data);
           markDone(4);
@@ -427,14 +428,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
                       <p className="font-medium text-gray-800 mb-4 text-sm">
                         Hvað þýðir <strong>„{TRANSLATION_WORD}"</strong> á þínu móðurmáli?
                       </p>
-                      <input
-                        type="text"
-                        value={transLang}
-                        onChange={e => setTransLang(e.target.value)}
-                        disabled={!!transFeedback}
-                        placeholder="Hvaða tungumál? (t.d. pólska, enska...)"
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-400 font-light text-sm mb-3 disabled:bg-gray-50"
-                      />
+
                       <textarea
                         value={transAnswer}
                         onChange={e => setTransAnswer(e.target.value)}
