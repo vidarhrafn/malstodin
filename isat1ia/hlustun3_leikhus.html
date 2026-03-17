@@ -70,7 +70,7 @@
 
     const AUDIO_SRC = 'media/hlustun3_leikhus.mp3';
 
-    const LISTENING_TEXT = `Sigurður og Anna ákveða að fara með börnin, Bjarka og Lilju, í leikhús á laugardaginn. Þetta er barnasýning í Borgarleikhúsinu sem heitir Litla ljónið. Lilja er mjög spennt því hún elskar söng og danssýningar. Fjölskyldan kaupir miða á netinu og prentar þá út. Þau fá líka afslátt því Anna vinnur á bókasafninu. Þegar þau koma í leikhúsið kaupa þau leikskrá til að sjá hverjir leika í sýningunni. Bjarki spyr: "Mamma, hvað er aðalleikari?" Anna útskýrir að það sé sá sem hefur stærsta hlutverkið í leikritinu. Þau sitja á fremsta bekk og sjá vel á sviðið. Lilja hvíslar: "Vá, leikararnir eru svo flottir!" Þegar tónlistin byrjar klappar hún taktinn og brosir allan tímann. Eftir sýninguna segja bæði börnin: "Þetta var frábært! Við viljum fara aftur í leikhús!" Sigurður brosir og segir: "Já, kannski förum við næst á annan söngleik.";`
+    const LISTENING_TEXT = `Sigurður og Anna ákveða að fara með börnin, Bjarka og Lilju, í leikhús á laugardaginn. Þetta er barnasýning í Borgarleikhúsinu sem heitir Litla ljónið. Lilja er mjög spennt því hún elskar söng og danssýningar. Fjölskyldan kaupir miða á netinu og prentar þá út. Þau fá líka afslátt því Anna vinnur á bókasafninu. Þegar þau koma í leikhúsið kaupa þau leikskrá til að sjá hverjir leika í sýningunni. Bjarki spyr: "Mamma, hvað er aðalleikari?" Anna útskýrir að það sé sá sem hefur stærsta hlutverkið í leikritinu. Þau sitja á fremsta bekk og sjá vel á sviðið. Lilja hvíslar: "Vá, leikararnir eru svo flottir!" Þegar tónlistin byrjar klappar hún taktinn og brosir allan tímann. Eftir sýninguna segja bæði börnin: "Þetta var frábært! Við viljum fara aftur í leikhús!" Sigurður brosir og segir: "Já, kannski förum við næst á annan söngleik."`;
 
     const VOCAB = [
       { w: 'leikhús', kyn: 'hk.', hint: 'hús þar sem leikarar sýna leikrit' },
@@ -100,26 +100,10 @@
 
     // Krossaspurningar
     const MC_RAW = [
-      {
-        question: 'Í hvaða leikhús fór fjölskyldan?',
-        options: ['Þjóðleikhúsið', 'Borgarleikhúsið', 'Tjarnarbíó', 'Gaflaraleikhúsið'],
-        correct: 1
-      },
-      {
-        question: 'Hvað heitir sýningin?',
-        options: ['Litla ljónið', 'Ljónið og músin', 'Ljónið syngur hátt', 'Stóra ljónið'],
-        correct: 0
-      },
-      {
-        question: 'Hvað keyptu þau þegar þau komu í leikhúsið?',
-        options: ['Leikskrá', 'Popp og kók', 'Bækur', 'Blóm'],
-        correct: 0
-      },
-      {
-        question: 'Hvar sátu þau í salnum?',
-        options: ['Á fremsta bekk', 'Í miðjunni', 'Aftast', 'Á svölum'],
-        correct: 0
-      },
+      { question: 'Í hvaða leikhús fór fjölskyldan?', options: ['Þjóðleikhúsið', 'Borgarleikhúsið', 'Tjarnarbíó', 'Gaflaraleikhúsið'], correct: 1 },
+      { question: 'Hvað heitir sýningin?', options: ['Litla ljónið', 'Ljónið og músin', 'Ljónið syngur hátt', 'Stóra ljónið'], correct: 0 },
+      { question: 'Hvað keyptu þau þegar þau komu í leikhúsið?', options: ['Leikskrá', 'Popp og kók', 'Bækur', 'Blóm'], correct: 0 },
+      { question: 'Hvar sátu þau í salnum?', options: ['Á fremsta bekk', 'Í miðjunni', 'Aftast', 'Á svölum'], correct: 0 },
     ];
 
     // Stuttar spurningar
@@ -202,13 +186,12 @@
       // ── Flipi 0: Þýðingar ─────────────────────────────────────────────────
       const [vocabOpen, setVocabOpen] = useState(true);
       const [transAnswer, setTransAnswer] = useState('');
-      const [transLang, setTransLang] = useState('');
       const [transFeedback, setTransFeedback] = useState(null);
       const [transLoading, setTransLoading] = useState(false);
 
       const checkTranslation = async () => {
-        if (!transAnswer.trim() || !transLang.trim()) {
-          alert('Vinsamlegast fylltu út bæði reiti.');
+        if (!transAnswer.trim()) {
+          alert('Vinsamlegast skrifaðu þýðingu.');
           return;
         }
         setTransLoading(true);
@@ -218,19 +201,23 @@
 ÍSLENSKA ORÐIÐ: "${TRANSLATION_WORD}"
 SVAR NEMANDA: "${transAnswer}"
 
+Greindu tungumálið sjálfkrafa og svaraðu á því tungumáli.
+
 SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
 {
   "correct": boolean,
-  "detected_language": "${transLang}",
+  "detected_language": "nafn tungumálsins (t.d. enska, pólska, spænska)",
   "feedback_is": "Endurgjöf á íslensku",
-  "feedback_native": "Endurgjöf á ${transLang}",
+  "feedback_native": "Endurgjöf á greinda tungumálinu",
   "correct_translation": "Góð þýðing ef rangt, annars null"
 }`;
           const r = await callOpenAI(
             [{ role: 'system', content: sys }, { role: 'user', content: 'Meta þýðingu.' }],
             200, 0.2
           );
-          const clean = r.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const clean = r.replace(/```json
+?/g, '').replace(/```
+?/g, '').trim();
           const data = JSON.parse(clean);
           setTransFeedback(data);
           markDone(4);
@@ -427,14 +414,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
                       <p className="font-medium text-gray-800 mb-4 text-sm">
                         Hvað þýðir <strong>„{TRANSLATION_WORD}"</strong> á þínu móðurmáli?
                       </p>
-                      <input
-                        type="text"
-                        value={transLang}
-                        onChange={e => setTransLang(e.target.value)}
-                        disabled={!!transFeedback}
-                        placeholder="Hvaða tungumál? (t.d. pólska, enska...)"
-                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-400 font-light text-sm mb-3 disabled:bg-gray-50"
-                      />
+
                       <textarea
                         value={transAnswer}
                         onChange={e => setTransAnswer(e.target.value)}
