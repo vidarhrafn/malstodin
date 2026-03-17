@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Leikhús</title>
+  <title>Skyndibitastaður</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,7 +12,6 @@
     body {font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%); min-height: 100vh;}
     .recording { animation: pulse 1.5s ease-in-out infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-    .image-transition { transition: opacity 0.5s ease-in-out; }
   </style>
 </head>
 <body>
@@ -97,7 +96,7 @@
       </button>
     );
 
-    const SpjallLeikhus = () => {
+    const SpjallSkyndibitastadur = () => {
       const FIRST_Q = 'Hæ! Sjáðu myndina. Hvað sérðu hér?';
 
       const [messages, setMessages] = useState([]);
@@ -107,37 +106,45 @@
       const [recognition, setRecognition] = useState(null);
       const [speakingIndex, setSpeakingIndex] = useState(null);
       const [finished, setFinished] = useState(false);
-      const [currentImage, setCurrentImage] = useState(1); // 1 eða 2
       const [userResponseCount, setUserResponseCount] = useState(0);
-      const [phase, setPhase] = useState(1); // 1 = mynd 1, 2 = mynd 2
+      const [phase, setPhase] = useState(1); // 1 = lýsing, 2 = pöntun
       const messagesEndRef = useRef(null);
 
-      const PHASE1_SYSTEM = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér mynd af fólki í leikhúsi sem situr í sætum og horfir á sýningu. Sumir hlæja, ein kona heldur á bók (leikskrá).
+      const PHASE1_SYSTEM = `Þú ert íslenskukennari á A1 stigi. Nemandi sér mynd af skyndibitastað þar sem starfsmaður er við kassa og tvær stelpur (viðskiptavinir) eru að panta. Á vegg eru stafrænn matseðill með hamborgara, frönskum og drykkjum.
 
-MIKILVÆGT: Þú ert í FYRSTA HLUTA samræðunnar (um áhorfendur).
+MIKILVÆGT: Þú ert í FYRSTA HLUTA samræðunnar (um lýsingu á myndinni).
 
-Notaðu þessi orð úr textanum: áhorfendur, leikhús, sal, sæti, leikskrá, hlæja, horfa.
+Notaðu þessi orð: skyndibitastaður, afgreiðslumaður/starfsmaður, viðskiptavinir, að panta, hamborgari, franskar (kartöflur), drykkur, matseðill, að hlæja, glaður/glöð.
 
 SKILAÐU aðeins EINNI stuttri spurningu á íslensku.
 Eftir svar: hrósaðu mjög stutt (t.d. "Frábært!" eða "Rétt!") og spurðu NÝJA spurningu.
 
-Hugmyndabanki: Hvað eru þau að gera? · Hvar eru þau? · Hvernig líður þeim? · Hvað heldur þú að þau séu að horfa á? · Sérðu bók? Hvað heldur þú að það sé? · Hversu margir eru í salnum?`;
+Hugmyndabanki: Hvað sérðu á myndinni? · Hvað er þetta fyrir staður? · Hvað eru stelpurnar að gera? · Hvað eru viðskiptavinirnir að gera? · Hvernig líður þeim? · Eru þær glaðar? · Hvað sérðu á skjánum? · Hvað er á matseðlinum?`;
 
-      const PHASE2_SYSTEM = `Þú ert íslenskukennari á A1–A2 stigi. Nemandi sér nú mynd af þremur leikurum á sviði í leikhúsi. Þau eru í fallegum búningum - strákur í grænum jakka til vinstri, tvær stelpur í kjólum (ein í bláum, önnur í brúnum).
+      const PHASE2_SYSTEM = `Þú ert afgreiðslumaður á skyndibitastað. Nemandi er viðskiptavinur sem er svangur/svöng og vill panta mat.
 
-MIKILVÆGT: Þú ert í ÖÐRUM HLUTA samræðunnar (um leikara á sviði).
+MIKILVÆGT: Þú ert í ÖÐRUM HLUTA samræðunnar (pöntunarsamtal).
 
-Notaðu þessi orð: svið, leikarar, búningur, kjóll, jakki, leikrit, sýning.
+Notaðu þessi orð: að panta, ég vil, hamborgari, samloka, franskar, drykkur, sterkt, milt, heitt, gott (á bragðið), að ilma, að smakka.
 
-SKILAÐU aðeins EINNI stuttri spurningu á íslensku.
-Eftir svar: hrósaðu mjög stutt og spurðu NÝJA spurningu um liti, föt, eða hvað þau eru að gera.
+SKILAÐU aðeins EINNI stuttri spurningu á íslensku. Notaðu "þú" formið.
+Þú ert vingjarnlegur afgreiðslumaður.
 
-Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráksins til vinstri? · Hvað heita föt eins og stelpurnar eru í? · Í hvaða lit er kjóll miðjustelpunnar? · Hvað eru þau að gera?`;
+Hugmyndabanki fyrir spurningar:
+- Góðan daginn! Hvað viltu fá?
+- Viltu hamborgara eða samloku?
+- Hvað viltu drekka?
+- Viltu franskar kartöflur líka?
+- Hvernig er maturinn?
+- Hvernig er bragðið?
+- Ilmar maturinn vel?
 
-      const FEEDBACK_SYSTEM = `Þú ert íslenskukennari sem gefur ÖRSTUTTA endurgjöf á A2–B1.
+Vertu náttúrulegur og hjálpsamur eins og afgreiðslumaður.`;
+
+      const FEEDBACK_SYSTEM = `Þú ert íslenskukennari sem gefur ÖRSTUTTA endurgjöf á A1 stigi.
 - 1 lína, kurteis og hvetjandi.
 - Leiðréttu aðeins ef þú ert >80% viss.
-- Dæmi: "Gott! Setningin er rétt." eða "Flott – en segðu: 'í grænum jakka'."`;
+- Dæmi: "Gott! Setningin er rétt." eða "Flott – en segðu: 'ég vil hamborgara'."`;
 
       useEffect(() => {
         if ('webkitSpeechRecognition' in window) {
@@ -185,23 +192,24 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
           alert('Vafrinn þinn styður ekki talgreiningu. Notaðu Chrome eða Edge.'); 
           return; 
         }
-        if (isRecording) { 
-          recognition.stop(); 
-          setIsRecording(false); 
-        } else { 
-          recognition.start(); 
-          setIsRecording(true); 
+        if (isRecording) {
+          recognition.stop();
+          setIsRecording(false);
+        } else {
+          setInput('');
+          recognition.start();
+          setIsRecording(true);
         }
       };
 
       const sendMessage = async () => {
         if (!input.trim() || loading) return;
+        
         const userMessage = input.trim();
+        setInput('');
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-        setInput(''); 
         setLoading(true);
 
-        // Auka teljara fyrir notendaskil
         const newCount = userResponseCount + 1;
         setUserResponseCount(newCount);
 
@@ -217,28 +225,27 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
             console.warn('Feedback misheppnað:', e); 
           }
 
-          // Athuga hvort skipta eigi um mynd
-          if (phase === 1 && newCount >= 4) {
-            // Skipta yfir í mynd 2
-            const transition = "Frábært! Þú hefur talað vel um áhorfendurna. Nú skaltu sjá aðra mynd...";
+          // Athuga hvort skipta eigi um hluta
+          if (phase === 1 && newCount >= 3) {
+            // Skipta yfir í pöntun
+            const transition = "Frábært! Nú skulum við æfa. ÞÚ ert á skyndibitastað og ert svangur/svöng. Ég er afgreiðslumaður.";
             setMessages(prev => [...prev, { role: 'assistant', content: transition }]);
             await playAudio(transition, (speaking) => {
               if (!speaking) setSpeakingIndex(null);
             });
             
-            setCurrentImage(2);
             setPhase(2);
             setUserResponseCount(0);
             
-            // Fyrsta spurning um mynd 2
-            const firstQ2 = "Hvað sérðu á þessari mynd?";
+            // Fyrsta spurning í hluta 2
+            const firstQ2 = "Góðan daginn! Hvað viltu fá?";
             setMessages(prev => [...prev, { role: 'assistant', content: firstQ2 }]);
             await playAudio(firstQ2, (speaking) => {
               if (!speaking) setSpeakingIndex(null);
             });
-          } else if (phase === 2 && newCount >= 4) {
+          } else if (phase === 2 && newCount >= 3) {
             // Klára samtalið
-            const goodbye = "Þakka þér fyrir frábært spjall! Þú gerðir mjög vel! 🎭";
+            const goodbye = "Frábært! Þú pantaðir mat og talaðir vel! Takk fyrir og verði þér að góðu! 🍔";
             setMessages(prev => [...prev, { role: 'assistant', content: goodbye }]);
             await playAudio(goodbye, (speaking) => {
               if (!speaking) setSpeakingIndex(null);
@@ -270,31 +277,22 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
         }
       };
 
-      const currentImageSrc = currentImage === 1 
-        ? 'media/spjall_ahorfendur.png' 
-        : 'media/spjall_leikarar.png';
-      
-      const currentImageAlt = currentImage === 1
-        ? 'Áhorfendur í leikhúsi'
-        : 'Leikarar á sviði';
-
       return (
         <div className="min-h-screen pb-12">
           <header className="bg-white shadow-sm border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-6 py-8">
               <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
-              <h1 className="text-3xl font-light text-gray-800 mb-2">Leikhús</h1>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">Skyndibitastaður</h1>
               <p className="text-gray-500 text-sm font-light">Tölum saman</p>
             </div>
           </header>
 
           <main className="max-w-4xl mx-auto px-6 mt-8">
-            <div className="rounded-lg overflow-hidden shadow-lg mb-6 mx-auto image-transition" style={{maxWidth:'500px'}}>
+            <div className="rounded-lg overflow-hidden shadow-lg mb-6 mx-auto" style={{maxWidth:'500px'}}>
               <img
-                src={currentImageSrc}
-                alt={currentImageAlt}
+                src="../media/spjall4_skyndibitastadur.png"
+                alt="Skyndibitastaður með starfsmanni og viðskiptavinum"
                 className="w-full h-auto"
-                key={currentImage}
               />
             </div>
 
@@ -306,10 +304,9 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
                 <div className="flex justify-between items-center mb-2">
                   <ListenPill onClick={handleListenClick} speaking={speakingIndex !== null} />
                   <span className="text-xs text-gray-400">
-                    {phase === 1 ? '📍 Mynd 1 af 2' : '📍 Mynd 2 af 2'}
+                    {phase === 1 ? '📍 Hluti 1: Lýsing' : '📍 Hluti 2: Pöntun'}
                   </span>
                 </div>
-
 
                 {messages.filter(msg => msg.role !== 'assistant').map((msg, i) => (
                   <div key={i} className={`flex ${msg.role==='user'?'justify-end': 'justify-start'}`}>
@@ -373,7 +370,7 @@ Hugmyndabanki: Hvað sérðu hér? · Hvar eru þau? · Hvernig eru föt stráks
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallLeikhus />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallSkyndibitastadur />);
   </script>
 </body>
 </html>
