@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hópasamhristari – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      70% { transform: scale(1.05); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop-in { animation: popIn 0.35s ease both; }
+  </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// ── localStorage helpers ──────────────────────────────────────────────────────
+const STORAGE_KEY = 'malstod_hopar_v1';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : { terms: {} };
+  } catch { return { terms: {} }; }
+}
+
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function pairKey(a, b) {
+  return [a, b].sort().join('|||');
+}
+
+function buildPairMatrix(students, sessions) {
+  // sessions: [{ date, groups: [[name,...], ...] }]
+  const matrix = {}; // pairKey -> { count, dates }
+  for (const s of students) {
+    for (const t of students) {
+      if (s !== t) {
+        const k = pairKey(s, t);
+        if (!matrix[k]) matrix[k] = { count: 0, dates: [] };
+      }
+    }
+  }
+  for (const session of sessions) {
+    for (const group of session.groups) {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const k = pairKey(group[i], group[j]);
+          if (!matrix[k]) matrix[k] = { count: 0, dates: [] };
+          matrix[k].count++;
+          matrix[k].dates.push(session.date);
+        }
+      }
+    }
+  }
+  return matrix;
+}
+
+function makeGroups(students, size) {
+  const shuffled = [...students].sort(() => Math.random() - 0.5);
+  const groups = [];
+  for (let i = 0; i < shuffled.length; i += size) {
+    groups.push(shuffled.slice(i, i + size));
+  }
+  // If last group has 1 person, merge with previous
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    const last = groups.pop();
+    groups[groups.length - 1].push(...last);
+  }
+  return groups;
+}
+
+function makeSmartGroups(students, size, matrix) {
+  // Try several random shuffles and pick the one minimising max pair-count
+  let best = null;
+  let bestScore = Infinity;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const groups = makeGroups(students, size);
+    let score = 0;
+    for (const g of groups) {
+      for (let i = 0; i < g.length; i++) {
+        for (let j = i + 1; j < g.length; j++) {
+          const k = pairKey(g[i], g[j]);
+          score += (matrix[k]?.count || 0);
+        }
+      }
+    }
+    if (score < bestScore) { bestScore = score; best = groups; }
+  }
+  return best;
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDate(d) {
+  const [y, m, day] = d.split('-');
+  return `${day}.${m}.${y}`;
+}
+
+// ── Components ────────────────────────────────────────────────────────────────
+
+const Badge = ({ color, children }) => {
+  const cls = {
+    green: 'bg-green-50 border-green-200 text-green-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    red:   'bg-red-50 border-red-200 text-red-700',
+    blue:  'bg-blue-50 border-blue-200 text-blue-700',
+    gray:  'bg-gray-50 border-gray-200 text-gray-600',
+  }[color] || 'bg-gray-50 border-gray-200 text-gray-600';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-xs font-light ${cls}`}>
+      {children}
+    </span>
+  );
+};
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+function App() {
+  const [data, setData]         = useState(loadData);
+  const [view, setView]         = useState('home'); // home | term | session
+  const [activeTerm, setActiveTerm] = useState(null);
+
+  const persist = (d) => { setData(d); saveData(d); };
+
+  // ── HOME: list of terms ────────────────────────────────────────────────────
+  if (view === 'home') {
+    return <HomeView
+      data={data}
+      persist={persist}
+      onOpenTerm={(termId) => { setActiveTerm(termId); setView('term'); }}
+    />;
+  }
+
+  if (view === 'term' && activeTerm) {
+    return <TermView
+      term={data.terms[activeTerm]}
+      termId={activeTerm}
+      data={data}
+      persist={persist}
+      onBack={() => setView('home')}
+      onOpenSession={() => setView('session')}
+    />;
+  }
+
+  if (view === 'session' && activeTerm) {
+    return <SessionView
+      term={data.terms[activeTerm]}
+      termId={activeTerm}
+      data={data}
+      persist={persist}
+      onBack={() => setView('term')}
+    />;
+  }
+
+  return null;
+}
+
+// ── HOME VIEW ─────────────────────────────────────────────────────────────────
+function HomeView({ data, persist, onOpenTerm }) {
+  const [newName, setNewName] = useState('');
+  const terms = Object.entries(data.terms);
+
+  const addTerm = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const id = 'term_' + Date.now();
+    const updated = { ...data, terms: { ...data.terms, [id]: { name, students: [], sessions: [] } } };
+    persist(updated);
+    setNewName('');
+  };
+
+  const deleteTerm = (id) => {
+    if (!confirm('Eyða þessari önn og öllum gögnum?')) return;
+    const t = { ...data.terms };
+    delete t[id];
+    persist({ ...data, terms: t });
+  };
+
+  return (
+    <div className="fade-in">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-2">🔀 Hópasamhristari</h1>
+          <p className="text-gray-500 text-sm font-light">Skipuleggðu spjallhópa – fylgstu með því að allir hitti alla</p>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 py-8">
+        {/* Add term */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 className="text-base font-medium text-gray-700 mb-4">Ný önn</h2>
+          <div className="flex gap-3">
+            <input
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+              placeholder="t.d. Haust 2025 – ÍSAT1ÍC"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addTerm()}
+            />
+            <button onClick={addTerm}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light whitespace-nowrap">
+              + Bæta við
+            </button>
+          </div>
+        </div>
+
+        {/* Terms list */}
+        {terms.length === 0 ? (
+          <div className="text-center py-16 text-gray-400 font-light">
+            <div className="text-4xl mb-3">📋</div>
+            <p>Engar annir enn. Búðu til fyrstu önnina!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {terms.map(([id, term]) => {
+              const sessions = term.sessions || [];
+              const students = term.students || [];
+              const neverMet = students.filter(s => {
+                const matrix = buildPairMatrix(students, sessions);
+                return students.some(t => t !== s && (matrix[pairKey(s, t)]?.count || 0) === 0);
+              });
+              const hasWarning = students.length > 1 && neverMet.length > 0 && sessions.length > 0;
+              return (
+                <div key={id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex items-center justify-between hover:shadow-md transition-shadow">
+                  <div className="flex-1 cursor-pointer" onClick={() => onOpenTerm(id)}>
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="font-medium text-gray-800">{term.name}</span>
+                      {hasWarning && <Badge color="amber">⚠️ Ekki allir hittir alla</Badge>}
+                    </div>
+                    <div className="flex gap-4 text-sm text-gray-500 font-light">
+                      <span>👤 {students.length} nemendur</span>
+                      <span>📅 {sessions.length} lotur</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <button onClick={() => onOpenTerm(id)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+                      Opna
+                    </button>
+                    <button onClick={() => deleteTerm(id)}
+                      className="px-3 py-2 border-2 border-gray-200 text-gray-400 rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors font-light text-sm">
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ── TERM VIEW ─────────────────────────────────────────────────────────────────
+function TermView({ term, termId, data, persist, onBack, onOpenSession }) {
+  const [newStudent, setNewStudent] = useState('');
+  const [bulkText, setBulkText]     = useState('');
+  const [showBulk, setShowBulk]     = useState(false);
+  const [tab, setTab]               = useState('nemendur'); // nemendur | yfirlit | lotur
+
+  const students = term.students || [];
+  const sessions = term.sessions || [];
+
+  const updateTerm = (patch) => {
+    persist({ ...data, terms: { ...data.terms, [termId]: { ...term, ...patch } } });
+  };
+
+  const addStudent = () => {
+    const name = newStudent.trim();
+    if (!name || students.includes(name)) return;
+    updateTerm({ students: [...students, name] });
+    setNewStudent('');
+  };
+
+  const bulkAdd = () => {
+    const names = bulkText.split('\n').map(n => n.trim()).filter(n => n && !students.includes(n));
+    if (names.length === 0) return;
+    updateTerm({ students: [...students, ...names] });
+    setBulkText('');
+    setShowBulk(false);
+  };
+
+  const removeStudent = (name) => {
+    if (!confirm(`Fjarlægja ${name}?`)) return;
+    updateTerm({ students: students.filter(s => s !== name) });
+  };
+
+  const matrix = buildPairMatrix(students, sessions);
+
+  // Meeting count for a student = min pairs count across all partners
+  const meetCount = (s) => students.filter(t => t !== s).map(t => matrix[pairKey(s, t)]?.count || 0);
+  const neverMet = (s) => students.filter(t => t !== s && (matrix[pairKey(s, t)]?.count || 0) === 0);
+
+  const deleteSession = (idx) => {
+    if (!confirm('Eyða þessari lotu?')) return;
+    const newSessions = sessions.filter((_, i) => i !== idx);
+    updateTerm({ sessions: newSessions });
+  };
+
+  return (
+    <div className="fade-in">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <button onClick={onBack}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-2">{term.name}</h1>
+          <p className="text-gray-500 text-sm font-light">{students.length} nemendur · {sessions.length} lotur</p>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 py-8">
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 shadow-sm border border-gray-100 w-fit">
+          {[['nemendur','👤 Nemendur'], ['yfirlit','📊 Yfirlit'], ['lotur','📅 Lotur']].map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-5 py-2 rounded-lg text-sm font-light transition-colors ${tab === t ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── NEMENDUR TAB ── */}
+        {tab === 'nemendur' && (
+          <div className="space-y-4 fade-in">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-medium text-gray-700">Bæta við nemendum</h2>
+                <button onClick={() => setShowBulk(!showBulk)}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-light">
+                  {showBulk ? '✕ Loka' : '📋 Líma lista'}
+                </button>
+              </div>
+              {!showBulk ? (
+                <div className="flex gap-3">
+                  <input
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light"
+                    placeholder="Nafn nemanda"
+                    value={newStudent}
+                    onChange={e => setNewStudent(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addStudent()}
+                  />
+                  <button onClick={addStudent}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                    + Bæta við
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <textarea
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none h-36"
+                    placeholder={"Límdu nöfn, eitt á hverri línu:\nAnna Sigríður\nBirkir Már\nCeleste Rodríguez"}
+                    value={bulkText}
+                    onChange={e => setBulkText(e.target.value)}
+                  />
+                  <button onClick={bulkAdd}
+                    className="mt-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                    Bæta við öllum
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {students.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-base font-medium text-gray-700 mb-4">
+                  Nemendur ({students.length})
+                </h2>
+                <div className="space-y-2">
+                  {students.map(s => {
+                    const nm = neverMet(s);
+                    const mc = meetCount(s);
+                    const minMeet = mc.length ? Math.min(...mc) : 0;
+                    return (
+                      <div key={s} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium">
+                            {s[0].toUpperCase()}
+                          </div>
+                          <span className="font-light text-gray-800">{s}</span>
+                          {sessions.length > 0 && nm.length > 0 && (
+                            <Badge color="amber">⚠️ Ekki hitt: {nm.join(', ')}</Badge>
+                          )}
+                          {sessions.length > 0 && nm.length === 0 && (
+                            <Badge color="green">✓ Hitti alla</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {sessions.length > 0 && (
+                            <span className="text-xs text-gray-400 font-light">min {minMeet}×</span>
+                          )}
+                          <button onClick={() => removeStudent(s)}
+                            className="text-gray-300 hover:text-red-400 transition-colors text-sm px-2">
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {students.length >= 2 && (
+                  <div className="mt-6 pt-4 border-t border-gray-100">
+                    <button onClick={onOpenSession}
+                      className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-base">
+                      🔀 Búa til nýja lotu
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── YFIRLIT TAB ── */}
+        {tab === 'yfirlit' && (
+          <div className="fade-in space-y-4">
+            {students.length < 2 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-400 font-light">
+                Þarf a.m.k. 2 nemendur til að sýna yfirlit.
+              </div>
+            ) : (
+              <>
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  {(() => {
+                    const pairs = Object.values(matrix);
+                    const metOnce = pairs.filter(p => p.count > 0).length;
+                    const total = pairs.length / 2;
+                    const pct = total > 0 ? Math.round(metOnce / total * 100) : 0;
+                    const neverPairs = students.flatMap((s, i) =>
+                      students.slice(i+1).filter(t => (matrix[pairKey(s,t)]?.count || 0) === 0).map(t => [s,t])
+                    );
+                    return [
+                      <div key="a" className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                        <div className="text-2xl font-light text-blue-600">{sessions.length}</div>
+                        <div className="text-xs text-gray-500 font-light mt-1">Lotur</div>
+                      </div>,
+                      <div key="b" className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                        <div className="text-2xl font-light text-green-600">{pct}%</div>
+                        <div className="text-xs text-gray-500 font-light mt-1">Para hafa histst</div>
+                      </div>,
+                      <div key="c" className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center">
+                        <div className={`text-2xl font-light ${neverPairs.length > 0 ? 'text-amber-500' : 'text-green-600'}`}>
+                          {neverPairs.length}
+                        </div>
+                        <div className="text-xs text-gray-500 font-light mt-1">Pör sem ekki hafa hist</div>
+                      </div>
+                    ];
+                  })()}
+                </div>
+
+                {/* Matrix table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 overflow-x-auto">
+                  <h2 className="text-base font-medium text-gray-700 mb-4">Hittingafjöldi milli nemenda</h2>
+                  <table className="text-xs border-collapse w-full">
+                    <thead>
+                      <tr>
+                        <th className="p-2 text-left font-light text-gray-400"></th>
+                        {students.map(s => (
+                          <th key={s} className="p-2 font-light text-gray-600 text-center" style={{minWidth:'60px'}}>
+                            <div style={{writingMode:'vertical-rl', transform:'rotate(180deg)', height:'60px'}} className="text-xs">
+                              {s.split(' ')[0]}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.map((s, si) => (
+                        <tr key={s} className="border-t border-gray-50">
+                          <td className="p-2 font-light text-gray-700 whitespace-nowrap pr-4">{s.split(' ')[0]}</td>
+                          {students.map((t, ti) => {
+                            if (s === t) return (
+                              <td key={t} className="p-2 text-center">
+                                <div className="w-7 h-7 mx-auto rounded bg-gray-100"></div>
+                              </td>
+                            );
+                            const count = matrix[pairKey(s, t)]?.count || 0;
+                            const bg = count === 0 ? 'bg-red-50 text-red-500 border border-red-100'
+                              : count === 1 ? 'bg-green-50 text-green-700 border border-green-100'
+                              : count === 2 ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                              : 'bg-purple-50 text-purple-700 border border-purple-100';
+                            return (
+                              <td key={t} className="p-2 text-center">
+                                <div className={`w-7 h-7 mx-auto rounded flex items-center justify-center font-medium text-xs ${bg}`}>
+                                  {count}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="flex gap-4 mt-4 flex-wrap">
+                    {[['bg-red-50 text-red-500 border border-red-100','0 – Aldrei histst'],
+                      ['bg-green-50 text-green-700 border border-green-100','1 – Einu sinni'],
+                      ['bg-blue-50 text-blue-700 border border-blue-100','2 – Tvisvar'],
+                      ['bg-purple-50 text-purple-700 border border-purple-100','3+ – Oft']
+                    ].map(([cls, label]) => (
+                      <div key={label} className="flex items-center gap-2">
+                        <div className={`w-5 h-5 rounded text-xs flex items-center justify-center font-medium ${cls}`}>
+                          {label[0]}
+                        </div>
+                        <span className="text-xs text-gray-500 font-light">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── LOTUR TAB ── */}
+        {tab === 'lotur' && (
+          <div className="fade-in space-y-4">
+            {sessions.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-400 font-light">
+                <div className="text-4xl mb-3">📅</div>
+                <p>Engar lotur enn. Búðu til fyrstu lotuna!</p>
+              </div>
+            ) : (
+              sessions.map((session, idx) => (
+                <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <span className="font-medium text-gray-800">Lota {idx + 1}</span>
+                      <span className="ml-3 text-sm text-gray-500 font-light">📅 {formatDate(session.date)}</span>
+                    </div>
+                    <button onClick={() => deleteSession(idx)}
+                      className="text-gray-300 hover:text-red-400 text-sm px-2">
+                      🗑
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {session.groups.map((group, gi) => (
+                      <div key={gi} className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                        <div className="text-xs text-blue-500 font-light mb-1">Hópur {gi + 1}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {group.map(name => (
+                            <span key={name} className="text-sm text-blue-800 font-light">{name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {session.absent && session.absent.length > 0 && (
+                      <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                        <div className="text-xs text-red-400 font-light mb-1">Fjarverandi</div>
+                        <div className="flex flex-wrap gap-1">
+                          {session.absent.map(name => (
+                            <span key={name} className="text-sm text-red-400 font-light line-through">{name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+            {students.length >= 2 && (
+              <button onClick={onOpenSession}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                🔀 Búa til nýja lotu
+              </button>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ── SESSION VIEW ──────────────────────────────────────────────────────────────
+function SessionView({ term, termId, data, persist, onBack }) {
+  const [groupSize, setGroupSize] = useState(2);
+  const [groups, setGroups]       = useState(null);
+  const [saved, setSaved]         = useState(false);
+  const [date, setDate]           = useState(todayStr);
+
+  const students = term.students || [];
+  const sessions = term.sessions || [];
+
+  // Attendance: default all present
+  const [absent, setAbsent] = useState(new Set());
+  const present = students.filter(s => !absent.has(s));
+
+  const toggleAbsent = (name) => {
+    setAbsent(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+    setGroups(null); // reset groups when attendance changes
+    setSaved(false);
+  };
+
+  const matrix = buildPairMatrix(students, sessions);
+
+  const generate = () => {
+    setSaved(false);
+    if (present.length < 2) return;
+    setGroups(makeSmartGroups(present, groupSize, matrix));
+  };
+
+  const saveSession = () => {
+    if (!groups || saved) return;
+    const newSession = { date, groups, absent: [...absent] };
+    const updated = { ...term, sessions: [...sessions, newSession] };
+    persist({ ...data, terms: { ...data.terms, [termId]: updated } });
+    setSaved(true);
+  };
+
+  // Score the current groups
+  const totalPairMeetings = groups
+    ? groups.reduce((sum, g) => {
+        let s = 0;
+        for (let i = 0; i < g.length; i++)
+          for (let j = i+1; j < g.length; j++)
+            s += (matrix[pairKey(g[i], g[j])]?.count || 0);
+        return sum + s;
+      }, 0)
+    : 0;
+
+  return (
+    <div className="fade-in">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <button onClick={onBack}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-2">🔀 Ný lota – {term.name}</h1>
+          <p className="text-gray-500 text-sm font-light">
+            {present.length} viðstaddir
+            {absent.size > 0 && <span className="text-amber-500 ml-2">· {absent.size} fjarverandi</span>}
+          </p>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-4">
+
+        {/* Attendance */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-medium text-gray-700">Mæting</h2>
+            <div className="flex gap-2">
+              <button onClick={() => { setAbsent(new Set()); setGroups(null); }}
+                className="text-xs text-gray-400 hover:text-gray-600 font-light px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">
+                Allir mættir
+              </button>
+              <button onClick={() => { setAbsent(new Set(students)); setGroups(null); }}
+                className="text-xs text-gray-400 hover:text-gray-600 font-light px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">
+                Hreinsa
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {students.map(name => {
+              const isAbsent = absent.has(name);
+              return (
+                <button key={name} onClick={() => toggleAbsent(name)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-left transition-all ${
+                    isAbsent
+                      ? 'border-red-200 bg-red-50 text-red-400 line-through'
+                      : 'border-green-200 bg-green-50 text-green-800 hover:border-green-300'
+                  }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ${
+                    isAbsent ? 'bg-red-200 text-red-500' : 'bg-green-200 text-green-700'
+                  }`}>
+                    {isAbsent ? '✕' : '✓'}
+                  </div>
+                  <span className="font-light text-sm truncate">{name}</span>
+                </button>
+              );
+            })}
+          </div>
+          {absent.size > 0 && (
+            <div className="mt-3 text-xs text-amber-600 font-light bg-amber-50 rounded-lg px-3 py-2 border border-amber-100">
+              Fjarverandi: {[...absent].join(', ')}
+            </div>
+          )}
+        </div>
+
+        {/* Settings */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-base font-medium text-gray-700 mb-4">Stillingar</h2>
+          <div className="flex flex-wrap gap-6 items-end">
+            <div>
+              <label className="block text-sm text-gray-500 font-light mb-2">Hópastærð</label>
+              <div className="flex gap-2">
+                {[2, 3].map(n => (
+                  <button key={n} onClick={() => { setGroupSize(n); setGroups(null); }}
+                    className={`px-5 py-2 rounded-lg border-2 font-light transition-colors ${groupSize === n ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    {n} í hóp
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-500 font-light mb-2">Dagsetning lotu</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-gray-700" />
+            </div>
+            <button onClick={generate} disabled={present.length < 2}
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+              🔀 Búa til hópa
+            </button>
+          </div>
+          {present.length < 2 && (
+            <p className="mt-3 text-sm text-red-400 font-light">Þarf a.m.k. 2 viðstadda nemendur.</p>
+          )}
+        </div>
+
+        {/* Generated groups */}
+        {groups && (
+          <div className="fade-in">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-medium text-gray-700">Hópar ({present.length} nemendur)</h2>
+                {totalPairMeetings === 0 && sessions.length > 0 && (
+                  <Badge color="green">✓ Öll ný pör</Badge>
+                )}
+                {totalPairMeetings > 0 && (
+                  <Badge color="amber">⚠️ {totalPairMeetings} pör sem hafa þegar histst</Badge>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                {groups.map((group, gi) => {
+                  const pairsMet = [];
+                  for (let i = 0; i < group.length; i++)
+                    for (let j = i+1; j < group.length; j++) {
+                      const c = matrix[pairKey(group[i], group[j])]?.count || 0;
+                      if (c > 0) pairsMet.push({ a: group[i], b: group[j], count: c });
+                    }
+                  return (
+                    <div key={gi} className={`rounded-xl p-4 border-2 pop-in ${pairsMet.length > 0 ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50'}`}
+                      style={{ animationDelay: `${gi * 0.06}s` }}>
+                      <div className={`text-xs font-light mb-2 ${pairsMet.length > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                        Hópur {gi + 1}
+                      </div>
+                      {group.map(name => (
+                        <div key={name} className="flex items-center gap-2 py-1">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${pairsMet.length > 0 ? 'bg-amber-200 text-amber-800' : 'bg-green-200 text-green-800'}`}>
+                            {name[0].toUpperCase()}
+                          </div>
+                          <span className="font-light text-gray-800 text-sm">{name}</span>
+                        </div>
+                      ))}
+                      {pairsMet.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-amber-200">
+                          {pairsMet.map(({a, b, count}) => (
+                            <div key={a+b} className="text-xs text-amber-600 font-light">
+                              {a.split(' ')[0]} + {b.split(' ')[0]}: {count}× áður
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={generate}
+                  className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+                  🔄 Reyna aftur
+                </button>
+                <button onClick={saveSession} disabled={saved}
+                  className={`flex-1 py-3 rounded-lg font-light transition-colors ${saved ? 'bg-green-100 text-green-700 border-2 border-green-200' : 'bg-green-600 text-white hover:bg-green-700'}`}>
+                  {saved ? '✓ Lota vistuð!' : '💾 Vista lotu'}
+                </button>
+              </div>
+              {saved && (
+                <div className="mt-3 text-center">
+                  <button onClick={onBack}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-light">
+                    ← Til baka í {term.name}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ── Mount ─────────────────────────────────────────────────────────────────────
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
