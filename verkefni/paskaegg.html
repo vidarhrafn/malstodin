@@ -99,48 +99,41 @@ function shuffle(arr) {
   return a;
 }
 
-// ── Hópatildeiling: einn af hverju stigi, extra úr fjölmennasta ──────────────
+// ── Hópatildeiling: einn af hverju stigi, extra dreift jafnt ─────────────────
 //
-// Reiknirit:
-// 1. Stokka hvern bekk fyrir sig
-// 2. Finna hve marga hópa þarf (= stærsti bekkurinn)
-// 3. Fylla hópa með round-robin yfir bekki
-// 4. Þegar listi bekkjar klárast → endurræsa hann (stokkaðan aftur)
-//    en merkja viðkomandi sem "tvítekin" svo sjáist í útliti
+// Fjöldi hópa = minnsti bekkurinn → allir bekkirnir gefa a.m.k. einn í hvern hóp.
+// Umframenemendur dreifist jafnt; enginn hópur verður með 1 mann.
 //
 function makeGroups(mættPerBekkur) {
-  // mættPerBekkur: [{ id, heiti, litir, nemendur:[] }]
-  // Búa til stokkaðar raðir
   const queues = mættPerBekkur.map(b => ({
     ...b,
-    queue: shuffle([...b.nemendur]),
-    extra: []   // þeir sem koma inn í annað sinn
+    queue: shuffle([...b.nemendur])
   }));
 
-  const totalMætt = queues.reduce((s, b) => s + b.nemendur.length, 0);
-  const fjoldiHopa = Math.ceil(totalMætt / queues.length);
+  // Fjöldi hópa = stærð minnsta bekkjar (tryggir a.m.k. einn úr hverjum bekk)
+  const fjoldiHopa = Math.min(...queues.map(b => b.queue.length));
 
   const groups = Array.from({ length: fjoldiHopa }, () => []);
 
-  // Round 1: einn af hverjum bekk í hvern hóp
+  // Einn úr hverjum bekk í hvern hóp
   queues.forEach(b => {
-    b.queue.forEach((nafn, i) => {
-      if (i < fjoldiHopa) groups[i].push({ nafn, litir: b.litir, heiti: b.heiti, extra: false });
-    });
-    // Það sem er umfram fjoldiHopa fer í extra pool
-    b.overflow = b.queue.slice(fjoldiHopa);
+    for (let i = 0; i < fjoldiHopa; i++) {
+      groups[i].push({ nafn: b.queue[i], litir: b.litir, heiti: b.heiti, extra: false });
+    }
   });
 
-  // Round 2: dreifa umframnemendum (4. stig o.fl.) jafnt yfir hópana
+  // Umframenemendur dreifist jafnt yfir hópana
   const overflow = [];
   queues.forEach(b => {
-    b.overflow.forEach(nafn => overflow.push({ nafn, litir: b.litir, heiti: b.heiti, extra: true }));
+    for (let i = fjoldiHopa; i < b.queue.length; i++) {
+      overflow.push({ nafn: b.queue[i], litir: b.litir, heiti: b.heiti, extra: true });
+    }
   });
   shuffle(overflow).forEach((nem, i) => {
     groups[i % fjoldiHopa].push(nem);
   });
 
-  return groups.filter(g => g.length > 0);
+  return groups;
 }
 
 // ── NemandaKort í mætingarlista ──────────────────────────────────────────────
@@ -287,6 +280,12 @@ function App() {
         {view === 'lista' && (
           <div className="fade-in">
             <BekkirListi bekkirnir={BEKKIRNIR} fjarverandi={fjarverandi} onToggle={toggle} />
+            <div className="mt-6 flex justify-center no-print">
+              <button onClick={hrista} disabled={totalMætt < 2}
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light flex items-center gap-2">
+                🎲 Hrista hópa
+              </button>
+            </div>
           </div>
         )}
 
