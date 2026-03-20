@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hópaskipting – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.85); }
+      70% { transform: scale(1.04); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .pop-in { animation: popIn 0.35s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useCallback } = React;
+
+// ── Gögn ──────────────────────────────────────────────────────────────────────
+const NEMENDUR_RAW = {
+  "1. stig": [
+    "Alejandro Vinicio Zurita Bravo","Anthrina Margret M. Baldoza","Bernadeta Iva Ramane",
+    "Christabel Boadi","Cong Duc Hoang","Dominiks Panovs","Fahima Jafari","Le Hai Thanh",
+    "Mohamed Abdirashid Mohamud","Oleksandra Udovychenko","Paulina Razvanaviciute",
+    "Phuc Hung Luong","Quynh Anh Le","Sarwar Babakir","Thi Bich Ngoc Pham",
+    "Victoria Jurian","Vitalii Dubovyk"
+  ],
+  "2. stig – 1": [
+    "Abuubakar Isse","Alma Hodi","Amir Ziyad Sharif Safadi","Crishil Atasha Sison Zoilon",
+    "Daria Melnyk","Duc Anh Tran","Fabiana Patricia Mendoza Izquier","Filipp Filippov",
+    "Gabriel Evaristo Goncalves","Ivan Kvachan","Marian Kamila Hernandez Perez",
+    "Mykola Opanasenko","Oscar Jose Gonzalez Bolivar","Roman Korshak",
+    "Santiago Daniel Da Silva Walls","Semen Filippov","Valeria Cristina Marin Vielma",
+    "Yen Nhi Tang","Yevhenii Mashkovskyi"
+  ],
+  "2. stig – 2": [
+    "Anh Tuan Duong","Anh Duc Nguyen","Dinh Hai Anh Ngo","Dmytro Diadenys",
+    "Elías Alonso Ramírez Bastidas","Jón Þórir Matthíasson","Juan Luis Lopez Figuera",
+    "Marwa Khaled Al Hamada Al Faraj","Phatcharapong Wohanluek","Shekofa Barati",
+    "Thuan Tien Nguyen","Tymofii Aheiev","Viktoriia Bilous","Vitalii Rusakov",
+    "Yasmin Yancarlet González Albarrán","Yorgleidys W. Ramirez Pulido"
+  ],
+  "3. stig": [
+    "Abdul Khaliq Naseri","Aden Mohamud Ahmed","Ahmad Seyar Jamali","Ayah Alhammadah",
+    "Bao Gia Trinh","Israe Qandyl","Malak Khaled Al Hamada Al Faraj","Mariuss Janitens",
+    "Mikolaj Gminski","Minh Quang Nguyen","Nga Thuy Pham","Paulina Batarunaite",
+    "Rami Charaf Din Nassr","Renato Egoavil Taboada","Shakib ahmed Ismail",
+    "Valentina Del Carmen I. Garcia","Wasim Omran","Yelyzaveta Bilous"
+  ],
+  "4. stig": [
+    "Afrika Dalila Mathison Ortiz","Ahmed Aloudah","Aisha Nuur Abdulle","Anh Tuan Ho",
+    "Anh Phuong Ta","Aron Nguyen Sigurðsson","Bao Gia Vu Nguyen","Carlanis Milanes Cruz",
+    "Carlenis Milanes Cruz","Duong Ðang Nguyen","Fabiola Nasser Rabah",
+    "Francis Izekor Ogbeiwi","Francisca Naa Amponsah Foli Sackey","Iliya Modanloo",
+    "Khadija Nuur Abdulle","Lan Hoang Vu","Luisana A. Alfonzo Quintero",
+    "Nasimmiguel Dareb Nasser","Nour B F Allahham","Sanela Knjisa","Sara A. A. Almassri",
+    "Trang Huyen Nguyen","Valeria B. Rodrigues Sanchez","Wisamismael Dareb Nasser",
+    "Yara Valentina Habib Dib"
+  ]
+};
+
+const STIG_COLORS = {
+  "1. stig":   { bg: "bg-sky-100",    text: "text-sky-800",    dot: "bg-sky-500",    border: "border-sky-200",   label: "A1" },
+  "2. stig – 1": { bg: "bg-blue-100",  text: "text-blue-800",  dot: "bg-blue-500",   border: "border-blue-200",  label: "A2" },
+  "2. stig – 2": { bg: "bg-indigo-100",text: "text-indigo-800",dot: "bg-indigo-500", border: "border-indigo-200",label: "A2+" },
+  "3. stig":   { bg: "bg-violet-100", text: "text-violet-800", dot: "bg-violet-500", border: "border-violet-200",label: "B1" },
+  "4. stig":   { bg: "bg-purple-100", text: "text-purple-800", dot: "bg-purple-500", border: "border-purple-200",label: "B2" },
+};
+
+// ── Fisher-Yates shuffle ──────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ── Hópatildeiling (blandat stig) ────────────────────────────────────────────
+function makeGroups(mætt) {
+  // mætt: { nafn, stig }[]
+  // Blandaðir hópar: dreifa stigum sem jafnast
+  const stigOrder = Object.keys(NEMENDUR_RAW);
+  const byStig = {};
+  stigOrder.forEach(s => { byStig[s] = shuffle(mætt.filter(n => n.stig === s)); });
+
+  // Round-robin eftir stigum til að mynda hópa
+  const ordered = [];
+  let anyLeft = true;
+  while (anyLeft) {
+    anyLeft = false;
+    for (const s of stigOrder) {
+      if (byStig[s].length) { ordered.push(byStig[s].shift()); anyLeft = true; }
+    }
+  }
+
+  const groups = [];
+  for (let i = 0; i < ordered.length; i += 5) {
+    groups.push(ordered.slice(i, i + 5));
+  }
+  return groups;
+}
+
+// ── NemandaKort ──────────────────────────────────────────────────────────────
+function NemandaKort({ nafn, stig, mættur, onClick }) {
+  const c = STIG_COLORS[stig];
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all duration-200 flex items-center gap-2.5
+        ${!mættur
+          ? 'bg-red-50 border-red-200 text-red-500'}`}
+    >
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 transition-all ${!mættur ? 'bg-red-400' : c.dot}`} />
+      <span className={`text-sm font-light leading-tight flex-1 ${!mættur ? 'line-through opacity-60' : ''}`}>{nafn}</span>
+      {!mættur
+        ? <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-500">fjarverandi</span>
+        : <span className={`text-xs font-medium px-1.5 py-0.5 rounded opacity-80 ${c.bg} ${c.text}`}>{c.label}</span>
+      }
+    </button>
+  );
+}
+
+// ── HópaKort ─────────────────────────────────────────────────────────────────
+function HópaKort({ hópur, nr }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 pop-in" style={{ animationDelay: `${nr * 0.06}s` }}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">
+          {nr}
+        </span>
+        <span className="text-sm text-gray-500 font-light">{hópur.length} meðlimir</span>
+      </div>
+      <div className="space-y-1.5">
+        {hópur.map((n, i) => {
+          const c = STIG_COLORS[n.stig];
+          return (
+            <div key={i} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${c.bg} ${c.border} border`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
+              <span className={`text-sm font-light flex-1 ${c.text}`}>{n.nafn}</span>
+              <span className={`text-xs font-medium ${c.text} opacity-70`}>{c.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Aðalforrit ───────────────────────────────────────────────────────────────
+function App() {
+  // Upphafsstaðan: allir mætt (true = mættur, false = fjarverandi)
+  const [mætt, setMætt] = useState(() => {
+    const s = {};
+    Object.entries(NEMENDUR_RAW).forEach(([stig, nefnd]) => {
+      nefnd.forEach(nafn => { s[nafn] = true; });
+    });
+    return s;
+  });
+  // fjarverandi = þeir sem eru EKKI mætt
+  const fjarverandi = allaNemendur ? allaNemendur.filter(n => !mætt[n.nafn]) : [];
+  const [hópar, setHópar] = useState(null);
+  const [view, setView] = useState("lista"); // "lista" | "hopar"
+  const [leit, setLeit] = useState("");
+  const [valinStig, setValinStig] = useState(new Set(Object.keys(NEMENDUR_RAW)));
+
+  const allaNemendur = Object.entries(NEMENDUR_RAW).flatMap(([stig, nefnd]) =>
+    nefnd.map(nafn => ({ nafn, stig }))
+  );
+
+  const mættCount = allaNemendur.filter(n => mætt[n.nafn]).length;
+
+  const toggle = useCallback((nafn) => {
+    setMætt(prev => ({ ...prev, [nafn]: !prev[nafn] }));
+    setHópar(null);
+  }, []);
+
+  const toggleAllInStig = (stig) => {
+    const nefnd = NEMENDUR_RAW[stig];
+    const allMætt = nefnd.every(n => mætt[n]);
+    setMætt(prev => {
+      const next = { ...prev };
+      nefnd.forEach(n => { next[n] = !allMætt; });
+      return next;
+    });
+    setHópar(null);
+  };
+
+  const hrista = () => {
+    const mættNemendur = allaNemendur.filter(n => mætt[n.nafn]);
+    if (mættNemendur.length < 2) return;
+    setHópar(makeGroups(mættNemendur));
+    setView("hopar");
+  };
+
+  const leita = leit.toLowerCase();
+  const synaNemendur = Object.entries(NEMENDUR_RAW).map(([stig, nefnd]) => ({
+    stig,
+    nemendur: nefnd.filter(nafn => !leita || nafn.toLowerCase().includes(leita))
+  })).filter(g => !leita || g.nemendur.length);
+
+  const allMætt = allaNemendur.every(n => mætt[n.nafn]);
+  const toggleAll = () => {
+    const next = !allMætt;
+    setMætt(prev => {
+      const s = { ...prev };
+      allaNemendur.forEach(n => { s[n.nafn] = next; });
+      return s;
+    });
+    setHópar(null);
+  };
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <h1 className="text-2xl font-light text-gray-800 mb-1">Hópaskipting</h1>
+          <p className="text-gray-500 text-sm font-light">Hakaðu við þá sem eru FJARVERANDI og hrista saman hópa</p>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-6 py-6">
+        {/* Takkastika */}
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <button
+            onClick={() => setView("lista")}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors font-light
+              ${view === "lista" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          >
+            ✓ Mætingarlisti
+          </button>
+          <button
+            onClick={() => setView("hopar")}
+            disabled={!hópar}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors font-light
+              ${view === "hopar" && hópar ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}
+              disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            👥 Hóparnir {hópar ? `(${hópar.length})` : ""}
+          </button>
+
+          <div className="flex-1" />
+
+          <span className="text-sm text-gray-500 font-light">
+            <span className="font-medium text-red-600">{allaNemendur.length - mættCount}</span> fjarverandi · <span className="font-medium text-gray-700">{mættCount}</span> mætt
+          </span>
+
+          <button
+            onClick={hrista}
+            disabled={mættCount < 2}
+            className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm flex items-center gap-2"
+          >
+            🎲 Hrista hópa
+          </button>
+        </div>
+
+        {/* Leitarreitur */}
+        {view === "lista" && (
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Leita að nemanda..."
+              value={leit}
+              onChange={e => setLeit(e.target.value)}
+              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg 
+                focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-sm bg-white"
+            />
+          </div>
+        )}
+
+        {/* Mætingarlisti */}
+        {view === "lista" && (
+          <div className="fade-in">
+            {/* Velja alla */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={toggleAll}
+                className="text-sm font-light text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                {allMætt ? "Merkja alla fjarverandi" : "Hreinsa allt"}
+              </button>
+              <span className="text-xs text-gray-400 font-light">Smelltu á nafn til að skipta um stöðu</span>
+            </div>
+
+            <div className="space-y-6">
+              {synaNemendur.map(({ stig, nemendur }) => {
+                const c = STIG_COLORS[stig];
+                const allInStig = nemendur.every(n => mætt[n]);
+                const anyInStig = nemendur.some(n => mætt[n]);
+                return (
+                  <div key={stig} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    {/* Stighausinn */}
+                    <div className={`flex items-center justify-between px-4 py-3 ${c.bg} border-b ${c.border}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
+                        <span className={`font-medium text-sm ${c.text}`}>{stig}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.text} opacity-70`}>
+                          {c.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-light ${c.text} opacity-70`}>
+                          {nemendur.filter(n => !mætt[n]).length} fjarverandi
+                        </span>
+                        <button
+                          onClick={() => toggleAllInStig(stig)}
+                          className={`text-xs font-light px-2 py-1 rounded transition-colors ${c.text} hover:opacity-80`}
+                        >
+                          {allInStig ? "Merkja alla fjarverandi" : "Hreinsa"}
+                        </button>
+                      </div>
+                    </div>
+                    {/* Nemendur */}
+                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {nemendur.map(nafn => (
+                        <NemandaKort
+                          key={nafn}
+                          nafn={nafn}
+                          stig={stig}
+                          mættur={mætt[nafn]}
+                          onClick={() => toggle(nafn)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Hóparnir */}
+        {view === "hopar" && hópar && (
+          <div className="fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm text-gray-500 font-light">
+                  <span className="font-medium text-gray-700">{mættCount}</span> mætt nemendur skipt í{" "}
+                  <span className="font-medium text-gray-700">{hópar.length}</span> hópa
+                </p>
+              </div>
+              <button
+                onClick={hrista}
+                className="px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg 
+                  hover:bg-gray-50 transition-colors font-light text-sm flex items-center gap-2"
+              >
+                🔄 Hrista aftur
+              </button>
+            </div>
+
+            {/* Stiga­lykill */}
+            <div className="flex flex-wrap gap-2 mb-5">
+              {Object.entries(STIG_COLORS).map(([stig, c]) => (
+                <span key={stig} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-light ${c.bg} ${c.text} border ${c.border}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                  {c.label} – {stig}
+                </span>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {hópar.map((hópur, i) => (
+                <HópaKort key={i} hópur={hópur} nr={i + 1} />
+              ))}
+            </div>
+
+            {/* Prentunartakki */}
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() => window.print()}
+                className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg 
+                  hover:bg-gray-50 transition-colors font-light text-sm flex items-center gap-2"
+              >
+                🖨️ Prenta hópalista
+              </button>
+            </div>
+          </div>
+        )}
+
+        {view === "hopar" && !hópar && (
+          <div className="text-center py-16 text-gray-400 font-light">
+            <p className="text-4xl mb-3">🎲</p>
+            <p>Veldu mætta nemendur og smelltu á „Hrista hópa"</p>
+          </div>
+        )}
+      </div>
+
+      {/* Print stíll */}
+      <style>{`
+        @media print {
+          header, button, input, .no-print { display: none !important; }
+          body { background: white !important; }
+          .pop-in { animation: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
