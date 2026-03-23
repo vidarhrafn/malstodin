@@ -110,14 +110,17 @@ function makeGroups(mættPerBekkur) {
     queue: shuffle([...b.nemendur])
   }));
 
-  // Fjöldi hópa = stærð minnsta bekkjar (tryggir a.m.k. einn úr hverjum bekk)
-  const fjoldiHopa = Math.min(...queues.map(b => b.queue.length));
+  // Fjöldi hópa = minnsti bekkurinn (tryggir a.m.k. einn úr hverjum bekk)
+  // En ef það myndar hópa > 5 þá fjölgum við hópum þar til max er 5
+  let fjoldiHopa = Math.min(...queues.map(b => b.queue.length));
+  const totalMætt = queues.reduce((s, b) => s + b.queue.length, 0);
+  while (Math.ceil(totalMætt / fjoldiHopa) > 5) fjoldiHopa++;
 
   const groups = Array.from({ length: fjoldiHopa }, () => []);
 
-  // Einn úr hverjum bekk í hvern hóp
+  // Einn úr hverjum bekk í hvern hóp (í fyrstu fjoldiHopa hópa)
   queues.forEach(b => {
-    for (let i = 0; i < fjoldiHopa; i++) {
+    for (let i = 0; i < Math.min(fjoldiHopa, b.queue.length); i++) {
       groups[i].push({ nafn: b.queue[i], litir: b.litir, heiti: b.heiti, extra: false });
     }
   });
