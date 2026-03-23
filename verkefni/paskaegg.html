@@ -99,44 +99,85 @@ function shuffle(arr) {
   return a;
 }
 
-// ── Hópatildeiling: einn af hverju stigi, extra dreift jafnt ─────────────────
+// ── Hópatildeiling ───────────────────────────────────────────────────────────
 //
-// Fjöldi hópa = minnsti bekkurinn → allir bekkirnir gefa a.m.k. einn í hvern hóp.
-// Umframenemendur dreifist jafnt; enginn hópur verður með 1 mann.
+// Reglur:
+//  • Max 5 í hóp, lágmark 4 (nema fáir mætir)
+//  • 2. stig hópur 1 og 2 eru sameind – nægir einn þeirra per hóp
+//  • Eitt stig per hóp að jafnaði: [1.stig, 2.stig, 3.stig, 4.stig]
+//  • Umframnemendur (einkum 4. stig) fá fimmta sætið í hóp
 //
 function makeGroups(mættPerBekkur) {
-  const queues = mættPerBekkur.map(b => ({
-    ...b,
-    queue: shuffle([...b.nemendur])
-  }));
+  // Sameina 2a og 2b í einn pool "2. stig"
+  const stig2Litir = { bg:"bg-blue-100", text:"text-blue-800", dot:"bg-blue-500", border:"border-blue-200" };
+  const stig2Nem = [];
+  const aðrirBekkirnir = [];
+  mættPerBekkur.forEach(b => {
+    if (b.id === 'stig2a' || b.id === 'stig2b') {
+      b.nemendur.forEach(n => stig2Nem.push({ nafn: n, litir: stig2Litir, heiti: b.heiti }));
+    } else {
+      aðrirBekkirnir.push(b);
+    }
+  });
 
-  // Fjöldi hópa = minnsti bekkurinn (tryggir a.m.k. einn úr hverjum bekk)
-  // En ef það myndar hópa > 5 þá fjölgum við hópum þar til max er 5
-  let fjoldiHopa = Math.min(...queues.map(b => b.queue.length));
-  const totalMætt = queues.reduce((s, b) => s + b.queue.length, 0);
-  while (Math.ceil(totalMætt / fjoldiHopa) > 5) fjoldiHopa++;
+  // Stigahópar: [1.stig, 2.stig(sameint), 3.stig, 4.stig]
+  const stigaHopar = [];
+  aðrirBekkirnir.forEach(b => {
+    stigaHopar.push({ heiti: b.heiti, litir: b.litir, queue: shuffle([...b.nemendur]) });
+  });
+  if (stig2Nem.length > 0) {
+    // Setja 2. stig á rétta stað (milli 1. og 3.)
+    stigaHopar.splice(1, 0, { heiti: '2. stig', litir: stig2Litir, queue: shuffle(stig2Nem) });
+  }
+
+  const totalMætt = stigaHopar.reduce((s, g) => s + g.queue.length, 0);
+
+  // Fjöldi hópa: ceiling(total/5) gefur max 5, en aldrei fleiri en minnsti stigahópur
+  const fjoldiHopa = Math.max(
+    Math.ceil(totalMætt / 5),
+    Math.ceil(totalMætt / 5)  // tryggir max 5
+  );
 
   const groups = Array.from({ length: fjoldiHopa }, () => []);
 
-  // Einn úr hverjum bekk í hvern hóp (í fyrstu fjoldiHopa hópa)
-  queues.forEach(b => {
-    for (let i = 0; i < Math.min(fjoldiHopa, b.queue.length); i++) {
-      groups[i].push({ nafn: b.queue[i], litir: b.litir, heiti: b.heiti, extra: false });
-    }
+  // Grunnur: einn úr hverju stigi í hvern hóp (round-robin)
+  stigaHopar.forEach(s => {
+    s.queue.forEach((nem, i) => {
+      if (i < fjoldiHopa) {
+        groups[i].push({ ...nem, extra: false });
+      }
+    });
   });
 
-  // Umframenemendur dreifist jafnt yfir hópana
+  // Umframnemendur (þeir sem eru umfram fjoldiHopa í stiga)
   const overflow = [];
-  queues.forEach(b => {
-    for (let i = fjoldiHopa; i < b.queue.length; i++) {
-      overflow.push({ nafn: b.queue[i], litir: b.litir, heiti: b.heiti, extra: true });
+  stigaHopar.forEach(s => {
+    for (let i = fjoldiHopa; i < s.queue.length; i++) {
+      overflow.push({ ...s.queue[i], extra: true });
     }
   });
-  shuffle(overflow).forEach((nem, i) => {
-    groups[i % fjoldiHopa].push(nem);
+
+  // Dreifa umframnemendum í hópa sem eru undir 5 - byrja á minnstu hópunum
+  shuffle(overflow).forEach(nem => {
+    // Finna hóp með minnsta fjölda sem er undir 5
+    let target = -1;
+    let minSize = 6;
+    for (let i = 0; i < groups.length; i++) {
+      if (groups[i].length < 5 && groups[i].length < minSize) {
+        minSize = groups[i].length;
+        target = i;
+      }
+    }
+    if (target === -1) {
+      // Allir hópar fullir - bæta við nýjum hóp (ætti ekki að gerast)
+      groups.push([nem]);
+    } else {
+      groups[target].push(nem);
+    }
   });
 
-  return groups;
+  // Sía út tóma hópa og skila
+  return groups.filter(g => g.length >= 2);
 }
 
 // ── NemandaKort í mætingarlista ──────────────────────────────────────────────
