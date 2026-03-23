@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>📖 Lestexti 1: Að spila á hljóðfæri – Málstöðin</title>
+  <title>📖 Aukahlustun: Að spila á hljóðfæri – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -43,29 +43,12 @@
       border-radius: 2px 2px 0 0;
     }
 
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+    .text-panel {
+      overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
     }
-    .modal-overlay.active { display: flex; }
-    .modal-content {
-      background: white;
-      border-radius: 12px;
-      max-width: 800px;
-      width: 100%;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.15);
-    }
-    .modal-content::-webkit-scrollbar { width: 8px; }
-    .modal-content::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-    .modal-content::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+    .text-panel.open   { max-height: 800px; opacity: 1; }
+    .text-panel.closed { max-height: 0;     opacity: 0; }
   </style>
 </head>
 <body>
@@ -87,22 +70,13 @@
     }
 
     // ── Gögn ────────────────────────────────────────────────────────────────
-    const READING_TEXT = `Margt fólk hefur áhuga á tónlist og vill læra að spila á hljóðfæri eða syngja.
-Sumir spila á gítar, píanó eða fiðlu, en aðrir velja trommur eða flautu.
-Það tekur tíma að læra, en það er mjög gaman.
-Þegar maður byrjar að spila á hljóðfæri þarf maður að æfa sig reglulega.
-Margir æfa sig nokkrum sinnum í viku, kannski hálftíma eða klukkutíma í einu.
-Þegar maður æfir sig oft, verður maður betri og betri.
-Það er gott að vera þolinmóður og ekki gefast upp þó að það gangi hægt í byrjun.
-Sumir læra í tónlistarskóla eða taka einkatíma, en aðrir læra sjálfir með myndböndum á netinu.
-Það þarf ekki alltaf að eiga dýrt hljóðfæri — stundum er hægt að kaupa notað eða fá lánað.
-Að spila á hljóðfæri getur verið bæði róandi og spennandi.
-Fólk getur spilað eitt eða með öðrum, til dæmis í hljómsveit.
-Það er líka skemmtilegt að spila á tónleikum eða fyrir fjölskylduna heima.
-Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
-Ég spila sjálfur á gítar og finnst það frábært áhugamál.
-Það hjálpar mér að slaka á eftir langan dag og gleðja aðra.
-Það er yndislegt þegar maður getur spilað uppáhaldslagið sitt og sungið með.`;
+    const READING_TEXT = [
+      { type: 'para', text: 'Margt fólk hefur áhuga á tónlist og vill læra að spila á hljóðfæri eða syngja. Sumir spila á gítar, píanó eða fiðlu, en aðrir velja trommur eða flautu. Það tekur tíma að læra, en það er mjög gaman.' },
+      { type: 'para', text: 'Þegar maður byrjar að spila á hljóðfæri þarf maður að æfa sig reglulega. Margir æfa sig nokkrum sinnum í viku, kannski hálftíma eða klukkutíma í einu. Þegar maður æfir sig oft, verður maður betri og betri.' },
+      { type: 'para', text: 'Það er gott að vera þolinmóður og ekki gefast upp þó að það gangi hægt í byrjun. Sumir læra í tónlistarskóla eða taka einkatíma, en aðrir læra sjálfir með myndböndum á netinu. Það þarf ekki alltaf að eiga dýrt hljóðfæri — stundum er hægt að kaupa notað eða fá lánað.' },
+      { type: 'para', text: 'Að spila á hljóðfæri getur verið bæði róandi og spennandi. Fólk getur spilað eitt eða með öðrum, til dæmis í hljómsveit. Það er líka skemmtilegt að spila á tónleikum eða fyrir fjölskylduna heima.' },
+      { type: 'para', text: 'Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi. Ég spila sjálfur á gítar og finnst það frábært áhugamál. Það hjálpar mér að slaka á eftir langan dag og gleðja aðra. Það er yndislegt þegar maður getur spilað uppáhaldslagið sitt og sungið með.' },
+    ];
 
     const MC_ORIGINAL = [
       {
@@ -135,15 +109,6 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         ],
         correct: 1,
       },
-    ];
-
-    const TF_ITEMS = [
-      { statement: 'Það er fljótlegt og auðvelt að læra að spila á hljóðfæri.', correct: false },
-      { statement: 'Margir æfa sig nokkrum sinnum í viku.', correct: true },
-      { statement: 'Sumir læra að spila með myndböndum á netinu.', correct: true },
-      { statement: 'Það er mikilvægt að vera þolinmóður þegar maður lærir.', correct: true },
-      { statement: 'Það er leiðinlegt að spila fyrir fjölskylduna heima.', correct: false },
-      { statement: 'Tónlist getur tengt fólk saman.', correct: true },
     ];
 
     const SHORT_QS = [
@@ -185,6 +150,31 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       );
     };
 
+    // ── TextPanel ────────────────────────────────────────────────────────────
+    const TextPanel = ({ open, onToggle }) => (
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-4xl mx-auto px-6">
+          <button onClick={onToggle}
+            className="w-full flex items-center justify-between py-4 text-left group">
+            <span className="flex items-center gap-2 text-gray-700 font-light group-hover:text-blue-600 transition-colors">
+              <span className="text-lg">📖</span>
+              <span>Textinn – <em className="font-light text-gray-500">Að spila á hljóðfæri</em></span>
+            </span>
+            <span className={`text-gray-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+          <div className={`text-panel ${open ? 'open' : 'closed'}`}>
+            <div className="pb-6 space-y-3">
+              {READING_TEXT.map((block, i) =>
+                block.type === 'heading'
+                  ? <h3 key={i} className="text-base font-medium text-gray-800 mt-4">{block.text}</h3>
+                  : <p key={i} className="text-gray-700 leading-relaxed font-light text-sm">{block.text}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
     // ── Flipar ──────────────────────────────────────────────────────────────
     const TABS = [
       { id: 'mc',    label: 'Krossaspurningar', emoji: '✓' },
@@ -192,11 +182,25 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       { id: 'disc',  label: 'Umræðuspurningar', emoji: '💬' },
     ];
 
+    // ── TabBar ───────────────────────────────────────────────────────────────
+    const TabBar = ({ active, done, onSelect }) => (
+      <div className="bg-white border-b border-gray-200 sticky top-[57px] z-10">
+        <div className="max-w-4xl mx-auto px-6 flex">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => onSelect(t.id)}
+              className={`tab-btn flex-1 text-sm font-light text-gray-600 ${active === t.id ? 'active' : ''}`}>
+              {done[t.id] ? `✓ ${t.label}` : `${t.emoji} ${t.label}`}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+
     // ════════════════════════════════════════════════════════════════════════
     const App = () => {
-      const [showModal, setShowModal]   = useState(false);
-      const [activeTab, setActiveTab]   = useState('mc');
-      const [tabDone, setTabDone]       = useState({ mc: false, short: false, disc: false });
+      const [textOpen, setTextOpen]   = useState(true);
+      const [activeTab, setActiveTab] = useState('mc');
+      const [tabDone, setTabDone]     = useState({ mc: false, short: false, disc: false });
 
       // MC
       const mcQ = useMemo(() => MC_ORIGINAL.map(q => {
@@ -204,16 +208,16 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
         const opts = shuffle(q.options);
         return { question: q.question, options: opts, correct: opts.indexOf(correctText) };
       }), []);
-      const [mcAns, setMcAns]         = useState({});
-      const [mcDone, setMcDone]       = useState(false);
+      const [mcAns, setMcAns]   = useState({});
+      const [mcDone, setMcDone] = useState(false);
 
       // Stuttar spurningar
-      const [shortAns, setShortAns]   = useState(Array(SHORT_QS.length).fill(''));
-      const [shortFb,  setShortFb]    = useState(Array(SHORT_QS.length).fill(null));
+      const [shortAns, setShortAns]         = useState(Array(SHORT_QS.length).fill(''));
+      const [shortFb,  setShortFb]          = useState(Array(SHORT_QS.length).fill(null));
       const [shortLoading, setShortLoading] = useState(Array(SHORT_QS.length).fill(false));
 
-      // Umræðuspurningar (frjáls svar, engin AI endurgjöf)
-      const [discAns, setDiscAns]     = useState(Array(DISC_QS.length).fill(''));
+      // Umræðuspurningar
+      const [discAns, setDiscAns] = useState(Array(DISC_QS.length).fill(''));
 
       // ── MC ──────────────────────────────────────────────────────────────
       const checkMC = () => {
@@ -225,9 +229,9 @@ Tónlist tengir fólk saman og hjálpar mörgum að tjá sig og vera skapandi.
       // ── Stuttar spurningar ──────────────────────────────────────────────
       const getShortFb = async (i) => {
         if (!shortAns[i].trim()) return;
-        const upd = arr => { const a = [...arr]; a[i] = true; return a; };
-        setShortLoading(prev => upd(prev));
+        setShortLoading(prev => { const a = [...prev]; a[i] = true; return a; });
         try {
+          const READING_FLAT = READING_TEXT.map(b => b.text).join('\n');
           const result = await callOpenAI([
             {
               role: 'system',
@@ -237,22 +241,18 @@ STIG: [tala 0-5]
 ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]
 
 Mettu svarið miðað við innihald og samræmi við textann.
-Textinn: "${READING_TEXT}"
+Textinn: "${READING_FLAT}"
 Spurningin: "${SHORT_QS[i]}"`,
             },
             { role: 'user', content: shortAns[i] },
           ], 120, 0.2);
 
-          const stigMatch = result.match(/STIG:\s*(\d)/);
+          const stigMatch     = result.match(/STIG:\s*(\d)/);
           const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/);
           const score = stigMatch ? parseInt(stigMatch[1]) : 0;
           const msg   = endurgjofMatch ? endurgjofMatch[1].trim() : result.trim();
 
           setShortFb(prev => { const a = [...prev]; a[i] = { score, msg }; return a; });
-
-          // Ef öll svör fengið endurgjöf → marka flipann lokinn
-          const allDone = shortFb.map((f, j) => j === i ? true : f !== null).every(Boolean);
-          if (allDone) setTabDone(prev => ({ ...prev, short: true }));
         } catch (e) {
           alert('Villa kom upp. Reyndu aftur.');
           console.error(e);
@@ -263,7 +263,6 @@ Spurningin: "${SHORT_QS[i]}"`,
 
       const allShortDone = shortFb.every(f => f !== null);
 
-      // Þegar síðasta stuttasvar fær endurgjöf, merkjum lokið
       React.useEffect(() => {
         if (allShortDone) setTabDone(prev => ({ ...prev, short: true }));
       }, [allShortDone]);
@@ -272,25 +271,7 @@ Spurningin: "${SHORT_QS[i]}"`,
       const mcCorrect = Object.entries(mcAns).filter(([i, v]) => v === mcQ[i]?.correct).length;
 
       return (
-        <>
-          {/* ── MODAL ── */}
-          <div
-            className={`modal-overlay ${showModal ? 'active' : ''}`}
-            onClick={() => setShowModal(false)}
-          >
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-              <div className="p-8">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-light text-gray-800">📖 Textinn</h2>
-                  <button onClick={() => setShowModal(false)}
-                    className="text-gray-400 hover:text-gray-600 text-3xl leading-none">×</button>
-                </div>
-                <div className="text-gray-800 font-light leading-relaxed space-y-3 text-base">
-                  {READING_TEXT.split('\n').map((p, i) => p.trim() && <p key={i}>{p}</p>)}
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="min-h-screen">
 
           {/* ── HEADER ── */}
           <header className="bg-white shadow-sm border-b border-gray-200">
@@ -300,11 +281,17 @@ Spurningin: "${SHORT_QS[i]}"`,
                 ← Til baka
               </button>
               <h1 className="text-3xl font-light text-gray-800 mb-2">
-                📖 Lestexti 1: Að spila á hljóðfæri
+                📖 Aukahlustun: Að spila á hljóðfæri
               </h1>
               <p className="text-gray-500 text-sm font-light">Lesskilningur · A1–A2</p>
             </div>
           </header>
+
+          {/* ── TEXTAPANELL (sticky) ── */}
+          <TextPanel open={textOpen} onToggle={() => setTextOpen(o => !o)} />
+
+          {/* ── FLIPASLÁR (sticky, rétt undir textapaneli) ── */}
+          <TabBar active={activeTab} done={tabDone} onSelect={setActiveTab} />
 
           <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-20">
 
@@ -318,30 +305,8 @@ Spurningin: "${SHORT_QS[i]}"`,
               </p>
             </div>
 
-            {/* ── Skoða textann ── */}
-            <button
-              onClick={() => setShowModal(true)}
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-base"
-            >
-              📖 Skoða textann
-            </button>
-
-            {/* ── Spjald með flipum ── */}
+            {/* ── Flipaefni ── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-
-              {/* Flipaslár – sticky */}
-              <div className="sticky top-0 z-40 bg-white border-b border-gray-200 flex">
-                {TABS.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setActiveTab(t.id)}
-                    className={`tab-btn flex-1 text-sm font-light text-gray-600 ${activeTab === t.id ? 'active' : ''}`}
-                  >
-                    {tabDone[t.id] ? `✓ ${t.label}` : `${t.emoji} ${t.label}`}
-                  </button>
-                ))}
-              </div>
-
               <div className="p-6 fade-in" key={activeTab}>
 
                 {/* ══ KROSSASPURNINGAR ══ */}
@@ -371,7 +336,6 @@ Spurningin: "${SHORT_QS[i]}"`,
                               return (
                                 <div key={oi} className={cls}
                                   onClick={() => !mcDone && setMcAns(prev => ({ ...prev, [qi]: oi }))}>
-                                  {/* Radio dot */}
                                   <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors
                                     ${mcDone && isCorrect ? 'border-green-500 bg-green-500'
                                       : mcDone && isSelected ? 'border-red-500 bg-red-500'
@@ -486,9 +450,7 @@ Spurningin: "${SHORT_QS[i]}"`,
 
                     <div className="text-center">
                       <button
-                        onClick={() => {
-                          setTabDone(prev => ({ ...prev, disc: true }));
-                        }}
+                        onClick={() => setTabDone(prev => ({ ...prev, disc: true }))}
                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
                         Ljúka verkefni ✓
                       </button>
@@ -523,7 +485,8 @@ Spurningin: "${SHORT_QS[i]}"`,
               ))}
             </div>
           </div>
-        </>
+
+        </div>
       );
     };
 
