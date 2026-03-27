@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🟩 Orðaleikur: Sumarvinna – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-6px); }
+      40%       { transform: translateX(6px); }
+      60%       { transform: translateX(-4px); }
+      80%       { transform: translateX(4px); }
+    }
+    .shake { animation: shake 0.4s ease both; }
+
+    @keyframes pop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .pop { animation: pop 0.15s ease both; }
+
+    @keyframes flipIn {
+      0%   { transform: rotateX(0deg); background: white; }
+      50%  { transform: rotateX(90deg); }
+      100% { transform: rotateX(0deg); }
+    }
+    .tile-correct   { background: #16a34a !important; color: white !important; border-color: #16a34a !important; }
+    .tile-present   { background: #d97706 !important; color: white !important; border-color: #d97706 !important; }
+    .tile-absent    { background: #6b7280 !important; color: white !important; border-color: #6b7280 !important; }
+    .tile-filled    { border-color: #9ca3af !important; }
+    .tile-current   { border-color: #374151 !important; }
+
+    .key-correct  { background: #16a34a !important; color: white !important; }
+    .key-present  { background: #d97706 !important; color: white !important; }
+    .key-absent   { background: #6b7280 !important; color: white !important; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Orðaforði ────────────────────────────────────────────────────────────────
+
+const WORDS = [
+  { orð: 'FERILSKRA',   skýring: 'Skjal þar sem þú lýsir menntun þinni og reynslu (CV)' },
+  { orð: 'UMSOKN',      skýring: 'Bréf eða eyðublað þar sem þú biður um vinnu' },
+  { orð: 'VIDTAL',      skýring: 'Fundur þar sem yfirmaður spyr þig um vinnuna (atvinnuviðtal)' },
+  { orð: 'STUNDVIS',    skýring: 'Kemur alltaf á réttum tíma' },
+  { orð: 'KURTEIS',     skýring: 'Er góður og vingjarnlegur við fólk' },
+  { orð: 'VAKT',        skýring: 'Tímabil þegar þú vinnur, t.d. morgunvakt eða kvöldvakt' },
+  { orð: 'TÍMASKRA',    skýring: 'Listi yfir hvenær þú vinnur' },
+  { orð: 'LAUN',        skýring: 'Peningar sem þú færð fyrir að vinna' },
+  { orð: 'KVITTUN',     skýring: 'Pappír sem sýnir hvað þú keyptir og hvað það kostaði' },
+  { orð: 'YFIRMAÐUR',   skýring: 'Sá sem stjórnar vinnu annarra' },
+  { orð: 'STARFID',     skýring: 'Vinnan sem þú færð – t.d. í verslun' },
+  { orð: 'HILLUR',      skýring: 'Þar sem vörur eru geymdar í búð (fleirtala)' },
+  { orð: 'AUGLYSING',   skýring: 'Þegar fyrirtæki lætur vita að það sé laus staða' },
+  { orð: 'LEIDBEINANDI',skýring: 'Sá sem kennir þér hvernig vinnan er unnin á fyrsta degi' },
+  { orð: 'BUDIN',       skýring: 'Verslunin (í þolfalli) – þar sem Verónika vann' },
+];
+
+const MAX_GUESSES = 6;
+
+// Normalize: fjarlægjum íslenska sérstafi til að nemandinn geti skrifað án þeirra
+function normalize(str) {
+  return str.toUpperCase()
+    .replace(/Á/g,'A').replace(/Ð/g,'D').replace(/É/g,'E')
+    .replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U')
+    .replace(/Ý/g,'Y').replace(/Þ/g,'TH').replace(/Æ/g,'AE')
+    .replace(/Ö/g,'O');
+}
+
+// Birta orðið með íslenskum stöfum aftur (víxla til baka)
+function displayLetter(ch) { return ch; }
+
+function evaluateGuess(guess, answer) {
+  const result = Array(answer.length).fill('absent');
+  const answerArr = answer.split('');
+  const guessArr  = guess.split('');
+  const used = Array(answer.length).fill(false);
+
+  // Fyrst: grænir (correct)
+  guessArr.forEach((ch, i) => {
+    if (ch === answerArr[i]) { result[i] = 'correct'; used[i] = true; }
+  });
+  // Svo: gulir (present)
+  guessArr.forEach((ch, i) => {
+    if (result[i] === 'correct') return;
+    const j = answerArr.findIndex((a, k) => a === ch && !used[k]);
+    if (j !== -1) { result[i] = 'present'; used[j] = true; }
+  });
+  return result;
+}
+
+// Lyklaborð íslenskt
+const KEYBOARD_ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P','Ö'],
+  ['A','S','D','F','G','H','J','K','L','Æ'],
+  ['ENTER','Z','X','C','V','B','N','M','Þ','⌫'],
+];
+
+// ── App ──────────────────────────────────────────────────────────────────────
+
+const App = () => {
+  const [wordIndex,   setWordIndex]   = useState(() => Math.floor(Math.random() * WORDS.length));
+  const [guesses,     setGuesses]     = useState([]);      // array of {letters, result}
+  const [current,     setCurrent]     = useState('');
+  const [status,      setStatus]      = useState('playing'); // playing | won | lost
+  const [shaking,     setShaking]     = useState(false);
+  const [score,       setScore]       = useState({ correct: 0, total: 0 });
+  const [showHint,    setShowHint]    = useState(false);
+  const [usedHint,    setUsedHint]    = useState(false);
+  const inputRef = useRef(null);
+
+  const wordObj  = WORDS[wordIndex];
+  const answer   = normalize(wordObj.orð);
+  const wordLen  = answer.length;
+
+  // Lyklaborð state
+  const keyColors = {};
+  guesses.forEach(g => {
+    g.letters.forEach((ch, i) => {
+      const r = g.result[i];
+      const prev = keyColors[ch];
+      if (prev === 'correct') return;
+      if (r === 'correct' || !prev) keyColors[ch] = r;
+      else if (r === 'present' && prev !== 'correct') keyColors[ch] = r;
+      else if (!prev) keyColors[ch] = r;
+    });
+  });
+
+  const submitGuess = useCallback(() => {
+    const g = current.trim().toUpperCase();
+    if (g.length !== wordLen) { setShaking(true); setTimeout(() => setShaking(false), 500); return; }
+    const normalG = normalize(g);
+    if (normalG.length !== wordLen) { setShaking(true); setTimeout(() => setShaking(false), 500); return; }
+    const result  = evaluateGuess(normalG, answer);
+    const newGuesses = [...guesses, { letters: normalG.split(''), result, raw: g }];
+    setGuesses(newGuesses);
+    setCurrent('');
+    if (result.every(r => r === 'correct')) {
+      setStatus('won');
+      setScore(s => ({ correct: s.correct + 1, total: s.total + 1 }));
+    } else if (newGuesses.length >= MAX_GUESSES) {
+      setStatus('lost');
+      setScore(s => ({ ...s, total: s.total + 1 }));
+    }
+  }, [current, guesses, answer, wordLen]);
+
+  const handleKey = useCallback((key) => {
+    if (status !== 'playing') return;
+    if (key === 'ENTER') { submitGuess(); return; }
+    if (key === '⌫' || key === 'BACKSPACE') {
+      setCurrent(c => c.slice(0, -1)); return;
+    }
+    if (current.length < wordLen && /^[A-ZÁÐÉÍÓÚÝÞÆÖ]$/i.test(key)) {
+      setCurrent(c => c + key.toUpperCase());
+    }
+  }, [status, current, wordLen, submitGuess]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      handleKey(e.key === 'Backspace' ? 'BACKSPACE' : e.key.toUpperCase());
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleKey]);
+
+  const nextWord = () => {
+    let next;
+    do { next = Math.floor(Math.random() * WORDS.length); } while (next === wordIndex);
+    setWordIndex(next);
+    setGuesses([]);
+    setCurrent('');
+    setStatus('playing');
+    setShowHint(false);
+    setUsedHint(false);
+  };
+
+  // Birta grid
+  const rows = [];
+  for (let r = 0; r < MAX_GUESSES; r++) {
+    const g = guesses[r];
+    const isActive = r === guesses.length && status === 'playing';
+    rows.push(
+      <div key={r} className={`flex justify-center gap-1.5 mb-1.5 ${isActive && shaking ? 'shake' : ''}`}>
+        {Array.from({ length: wordLen }).map((_, c) => {
+          let letter = '';
+          let tileClass = 'border-2 border-gray-200 bg-white';
+          if (g) {
+            letter = g.letters[c] || '';
+            tileClass = `border-2 tile-${g.result[c]}`;
+          } else if (isActive) {
+            letter = current[c] || '';
+            if (letter) tileClass = 'border-2 tile-current bg-white';
+          }
+          const size = wordLen <= 6 ? 'w-12 h-12 text-xl' :
+                       wordLen <= 9 ? 'w-10 h-10 text-base' : 'w-8 h-8 text-sm';
+          return (
+            <div key={c}
+              className={`${size} flex items-center justify-center font-bold rounded-md transition-all duration-300 ${tileClass}`}>
+              {letter}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">🟩 Orðaleikur – Sumarvinna</h1>
+              <p className="text-gray-500 text-sm font-light">Gissaðu orðið út frá skýringunni · A2</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-light text-gray-700">{score.correct}/{score.total}</div>
+              <div className="text-xs text-gray-400 font-light">rétt</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-lg mx-auto px-4 mt-6 pb-10">
+
+        {/* Skýring */}
+        <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-4 fade-in">
+          <p className="text-xs text-blue-500 font-medium uppercase tracking-wide mb-1">Skýring</p>
+          <p className="text-blue-900 font-light text-base leading-relaxed">{wordObj.skýring}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-blue-400 font-light">{wordLen} stafir</span>
+            {!usedHint && status === 'playing' && guesses.length >= 2 && (
+              <button onClick={() => { setShowHint(true); setUsedHint(true); }}
+                className="text-xs text-blue-500 underline font-light hover:text-blue-700">
+                Fá vísbendingu (–1 tilraun)
+              </button>
+            )}
+          </div>
+          {showHint && (
+            <p className="mt-2 text-xs text-blue-600 font-light fade-in">
+              💡 Fyrsti stafurinn er: <span className="font-bold">{wordObj.orð[0]}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Grid */}
+        <div className="mb-4">{rows}</div>
+
+        {/* Niðurstaða */}
+        {status !== 'playing' && (
+          <div className={`rounded-xl p-5 text-center mb-4 fade-in ${status === 'won' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            {status === 'won' ? (
+              <>
+                <div className="text-3xl mb-2">🎉</div>
+                <p className="font-medium text-green-800 mb-1">Rétt! Vel gert!</p>
+                <p className="text-green-700 font-light text-sm">
+                  Þú gissaðir <span className="font-medium">{wordObj.orð}</span> í {guesses.length} {guesses.length === 1 ? 'tilraun' : 'tilraunum'}.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl mb-2">😔</div>
+                <p className="font-medium text-red-800 mb-1">Ekki í þetta sinn!</p>
+                <p className="text-red-700 font-light text-sm">
+                  Orðið var: <span className="font-bold">{wordObj.orð}</span>
+                </p>
+              </>
+            )}
+            <button onClick={nextWord}
+              className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+              Næsta orð →
+            </button>
+          </div>
+        )}
+
+        {/* Lyklaborð */}
+        <div className="space-y-1.5">
+          {KEYBOARD_ROWS.map((row, ri) => (
+            <div key={ri} className="flex justify-center gap-1">
+              {row.map(key => {
+                const nk = normalize(key);
+                const color = keyColors[nk];
+                let cls = 'h-14 rounded-md text-sm font-medium transition-colors cursor-pointer select-none flex items-center justify-center ';
+                if (key === 'ENTER') cls += 'px-2 min-w-[56px] bg-blue-600 text-white hover:bg-blue-700 text-xs';
+                else if (key === '⌫') cls += 'px-2 min-w-[44px] bg-gray-200 text-gray-700 hover:bg-gray-300 text-base';
+                else {
+                  cls += 'w-9 ';
+                  if (color === 'correct') cls += 'key-correct';
+                  else if (color === 'present') cls += 'key-present';
+                  else if (color === 'absent') cls += 'key-absent';
+                  else cls += 'bg-gray-200 text-gray-800 hover:bg-gray-300';
+                }
+                return (
+                  <button key={key} className={cls}
+                    onClick={() => handleKey(key === 'ENTER' ? 'ENTER' : key === '⌫' ? 'BACKSPACE' : key)}>
+                    {key}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Leiðbeiningar */}
+        <div className="mt-6 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Hvernig á að spila</p>
+          <div className="flex gap-3 items-center mb-2">
+            <div className="w-7 h-7 rounded flex items-center justify-center text-white text-xs font-bold bg-green-600">K</div>
+            <p className="text-sm font-light text-gray-600">Réttur stafur á réttum stað</p>
+          </div>
+          <div className="flex gap-3 items-center mb-2">
+            <div className="w-7 h-7 rounded flex items-center justify-center text-white text-xs font-bold bg-amber-500">U</div>
+            <p className="text-sm font-light text-gray-600">Stafurinn er í orðinu en á röngum stað</p>
+          </div>
+          <div className="flex gap-3 items-center">
+            <div className="w-7 h-7 rounded flex items-center justify-center text-white text-xs font-bold bg-gray-500">X</div>
+            <p className="text-sm font-light text-gray-600">Stafurinn er ekki í orðinu</p>
+          </div>
+          <p className="text-xs text-gray-400 font-light mt-3">💡 Þú getur skrifað án íslenskra sérstafa – t.d. „a" í stað „á"</p>
+        </div>
+
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
