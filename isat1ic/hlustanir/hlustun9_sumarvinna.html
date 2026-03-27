@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎧 Hlustun: Sumarvinnan hans Alex – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    .sticky-player {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: white;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08);
+    }
+    .progress-bar {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #d1d5db;
+      outline: none;
+      cursor: pointer;
+    }
+    .progress-bar::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #16a34a;
+      cursor: pointer;
+    }
+    .progress-bar::-moz-range-thumb {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #16a34a;
+      cursor: pointer;
+      border: none;
+    }
+    .tab-btn { transition: all 0.2s; position: relative; }
+    .tab-btn:not(.active):hover { background: #f3f4f6; }
+    .tab-btn.active { background: white; color: #16a34a; font-weight: 500; }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 3px;
+      background: #16a34a;
+      border-radius: 2px 2px 0 0;
+    }
+    .answer-option {
+      border: 2px solid #e5e7eb;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.opt-disabled) { border-color: #86efac; background: #f0fdf4; }
+    .answer-option.opt-selected  { border-color: #16a34a; background: #f0fdf4; }
+    .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; }
+    .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; }
+    .answer-option.opt-disabled  { cursor: default; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useMemo } = React;
+
+// ── Gögn ────────────────────────────────────────────────────────────────────
+
+const TRANSCRIPT = `Alex er tvítugur og vill fá sumarvinnu. Hann ákveður að sækja um vinnu í næstu matvöruverslun. Hann skrifar ferilskrá og umsókn og sendir á netfang verslunarinnar. Eftir nokkra daga fær hann símtal. Hann á að koma í atvinnuviðtal.
+
+Alex undirbýr sig vel. Hann er stundvís og mætir á réttum tíma. Hann reynir að vera kurteis í viðtalinu. Hann segir frá sjálfum sér og útskýrir af hverju hann vill fá vinnuna. Nokkrum dögum síðar fær hann jákvætt svar – hann fær starfið.
+
+Í vinnunni þarf Alex að vinna á mismunandi vöktum. Stundum byrjar vaktin klukkan átta á morgnana og stundum klukkan fjögur síðdegis. Hann skrifar vinnutímann sinn í tímaskrá. Hann fær greidd laun í lok mánaðar.
+
+Alex afgreiðir viðskiptavini og er kurteis. Hann hjálpar fólki að finna vörur og svarar spurningum. Stundum skilar fólk vörum, og þá þarf Alex að skoða kvittunina og setja vöruna aftur í hilluna. Einnig þarf hann að fylla á hillurnar með nýjum vörum.
+
+Yfirmaður hans segir honum hvaða verkefni hann á að vinna á hverri vakt. Alex getur unnið sjálfstætt þegar þarf. Stundum fær hann frídag og þá fer hann út með vinum sínum eða hvílir sig. Honum finnst gott að vera í vinnu og læra nýja hluti. Svo eru launin líka ágæt og Alex er að safna fyrir PlayStation 5.`;
+
+const KEYWORDS = [
+  { orð: 'ferilskrá',      kyn: 'kvk.',    skýring: 'skjal þar sem þú lýsir menntun þinni og reynslu – CV' },
+  { orð: 'umsókn',         kyn: 'kvk.',    skýring: 'bréf eða eyðublað þar sem þú biður um vinnu' },
+  { orð: 'atvinnuviðtal',  kyn: 'hk.',     skýring: 'fundur þar sem yfirmaður spyr þig um vinnuna' },
+  { orð: 'stundvís',       kyn: 'lo.',     skýring: 'kemur alltaf á réttum tíma' },
+  { orð: 'kurteis',        kyn: 'lo.',     skýring: 'er góður og vingjarnlegur við fólk' },
+  { orð: 'vakt',           kyn: 'kvk.',    skýring: 'tímabil þegar þú vinnur, t.d. morgunvakt eða kvöldvakt' },
+  { orð: 'tímaskrá',       kyn: 'kvk.',    skýring: 'listi yfir hvenær þú vinnur' },
+  { orð: 'laun',           kyn: 'hk. ft.', skýring: 'peningar sem þú færð fyrir að vinna' },
+  { orð: 'viðskiptavinur', kyn: 'kk.',     skýring: 'einstaklingur sem kaupir eitthvað í búðinni' },
+  { orð: 'kvittun',        kyn: 'kvk.',    skýring: 'pappír sem sýnir hvað þú keyptir og hvað það kostaði' },
+];
+
+const TRANSLATION_WORDS = [
+  { orð: 'stundvís', skýring: 'kemur alltaf á réttum tíma' },
+  { orð: 'vakt',     skýring: 'tímabil þegar þú vinnur, t.d. morgunvakt eða kvöldvakt' },
+];
+
+const TF_QUESTIONS = [
+  { spurning: 'Alex sótti um vinnu með því að fara beint í verslunina.', svar: false },
+  { spurning: 'Alex fékk jákvætt svar eftir atvinnuviðtalið.', svar: true },
+  { spurning: 'Alex fær greidd laun á hverri viku.', svar: false },
+  { spurning: 'Alex þarf stundum að fylla á hillurnar með nýjum vörum.', svar: true },
+  { spurning: 'Alex er að safna fyrir PlayStation 5.', svar: true },
+];
+
+const MC_RAW = [
+  {
+    spurning: 'Hvernig sótti Alex um sumarvinnu?',
+    rett: 'Hann skrifaði ferilskrá og umsókn og sendi á netfang verslunarinnar.',
+    rangt: [
+      'Hann fór beint í verslunina og talaði við yfirmanninn.',
+      'Hann hringdi í verslunina og spurði um vinnu.',
+      'Hann bað vin sinn um að tala við yfirmanninn.',
+    ],
+  },
+  {
+    spurning: 'Hvenær fær Alex greidd laun?',
+    rett: 'Í lok mánaðar.',
+    rangt: [
+      'Eftir hverja viku.',
+      'Á hverjum degi eftir vaktina.',
+      'Þegar hann biður um það.',
+    ],
+  },
+  {
+    spurning: 'Hverju er Alex að safna fyrir?',
+    rett: 'PlayStation 5.',
+    rangt: [
+      'Nýrri fartölvu.',
+      'Ferðalagi til útlanda.',
+      'Bíl.',
+    ],
+  },
+];
+
+const SHORT_QUESTIONS = [
+  { spurning: 'Hvar fékk Alex sumarvinnu?' },
+  { spurning: 'Hvernig er vinnutími Alex skipulagður?' },
+  { spurning: 'Nefndu eitt verkefni sem Alex þarf að vinna í vinnunni.' },
+];
+
+// ── Hjálparföll ──────────────────────────────────────────────────────────────
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+async function callOpenAI(messages, maxTokens = 150, temperature = 0.2, model = 'gpt-4o-mini') {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens: maxTokens, model, temperature }),
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+// ── FeedbackBadge ────────────────────────────────────────────────────────────
+
+const FeedbackBadge = ({ score, message, feedbackNative, correctTranslation }) => {
+  const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+  const colors = {
+    green: 'bg-green-50 border-green-200 text-green-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    red:   'bg-red-50 border-red-200 text-red-700',
+  };
+  return (
+    <div className={`mt-3 p-3 rounded-lg border fade-in ${colors[color]}`}>
+      <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+      <p className="text-sm font-light">{message}</p>
+      {feedbackNative && <p className="text-xs italic mt-1 opacity-80">{feedbackNative}</p>}
+      {correctTranslation && <p className="text-xs mt-1 font-medium">✓ {correctTranslation}</p>}
+    </div>
+  );
+};
+
+// ── Rétt/Rangt ───────────────────────────────────────────────────────────────
+
+const TFTab = ({ onDone, done }) => {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+  const allAnswered = TF_QUESTIONS.every((_, i) => answers[i] !== undefined);
+  const score = checked ? TF_QUESTIONS.filter((q, i) => answers[i] === q.svar).length : 0;
+
+  const handleCheck = () => { if (!allAnswered) return; setChecked(true); onDone(); };
+
+  return (
+    <div className="fade-in space-y-4">
+      <p className="text-sm text-gray-500 font-light mb-4">
+        Segjið hvort setningarnar hér að neðan eru réttar eða rangar samkvæmt frásögninni.
+      </p>
+      {TF_QUESTIONS.map((q, i) => (
+        <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-sm font-light text-gray-800 mb-3">{i + 1}. {q.spurning}</p>
+          <div className="flex gap-3">
+            {[true, false].map(val => {
+              let cls = 'answer-option flex-1 py-2 px-4 rounded-lg text-sm font-light text-center ';
+              if (checked) {
+                cls += 'opt-disabled ';
+                if (val === q.svar) cls += 'opt-correct ';
+                else if (answers[i] === val) cls += 'opt-incorrect ';
+              } else {
+                if (answers[i] === val) cls += 'opt-selected ';
+              }
+              return (
+                <button key={String(val)} className={cls}
+                  onClick={() => !checked && setAnswers(p => ({ ...p, [i]: val }))}>
+                  {val ? '✓ Rétt' : '✗ Rangt'}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {!done && (
+        <button onClick={handleCheck} disabled={!allAnswered}
+          className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700
+            disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+          Athuga svör
+        </button>
+      )}
+      {checked && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center fade-in">
+          <p className="text-green-700 font-light text-sm">
+            Þú fékkst <span className="font-medium">{score} af {TF_QUESTIONS.length}</span> rétt!
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Krossaspurningar ─────────────────────────────────────────────────────────
+
+const MCTab = ({ onDone, done }) => {
+  const questions = useMemo(() =>
+    MC_RAW.map(q => ({ ...q, options: shuffleArray([q.rett, ...q.rangt]) })), []);
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+  const allAnswered = questions.every((_, i) => answers[i] !== undefined);
+  const score = checked ? questions.filter((q, i) => answers[i] === q.rett).length : 0;
+
+  const handleCheck = () => { if (!allAnswered) return; setChecked(true); onDone(); };
+
+  return (
+    <div className="fade-in space-y-5">
+      <p className="text-sm text-gray-500 font-light mb-2">Veldu réttan valkost fyrir hverja spurningu.</p>
+      {questions.map((q, qi) => (
+        <div key={qi} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-sm font-medium text-gray-800 mb-3">{qi + 1}. {q.spurning}</p>
+          <div className="space-y-2">
+            {q.options.map((opt, oi) => {
+              let cls = 'answer-option w-full text-left px-4 py-2.5 rounded-lg text-sm font-light ';
+              if (checked) {
+                cls += 'opt-disabled ';
+                if (opt === q.rett) cls += 'opt-correct ';
+                else if (answers[qi] === opt) cls += 'opt-incorrect ';
+              } else {
+                if (answers[qi] === opt) cls += 'opt-selected ';
+              }
+              return (
+                <button key={oi} className={cls}
+                  onClick={() => !checked && setAnswers(p => ({ ...p, [qi]: opt }))}>
+                  <span className="flex items-center justify-between">
+                    {opt}
+                    {checked && opt === q.rett && <span className="text-green-600 ml-2">✓</span>}
+                    {checked && answers[qi] === opt && opt !== q.rett && <span className="text-red-500 ml-2">✗</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {!done && (
+        <button onClick={handleCheck} disabled={!allAnswered}
+          className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700
+            disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+          Athuga svör
+        </button>
+      )}
+      {checked && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center fade-in">
+          <p className="text-green-700 font-light text-sm">
+            Þú fékkst <span className="font-medium">{score} af {questions.length}</span> rétt!
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Stuttar spurningar ───────────────────────────────────────────────────────
+
+const ShortTab = ({ onDone, done }) => {
+  const [answers,   setAnswers]   = useState(SHORT_QUESTIONS.map(() => ''));
+  const [feedbacks, setFeedbacks] = useState(SHORT_QUESTIONS.map(() => null));
+  const [loading,   setLoading]   = useState(SHORT_QUESTIONS.map(() => false));
+  const [checked,   setChecked]   = useState(SHORT_QUESTIONS.map(() => false));
+
+  const checkOne = async (i) => {
+    const ans = answers[i].trim();
+    if (!ans) return;
+    const nl = [...loading]; nl[i] = true; setLoading(nl);
+    try {
+      const result = await callOpenAI([{ role: 'user', content:
+        `Þú ert íslenskukennari sem metur stuttar spurningar um hlustunarverkefni.
+Spurningin er: "${SHORT_QUESTIONS[i].spurning}"
+Svar nemanda: "${ans}"
+Rétt svar á að vera byggt á þessum texta: Alex vinnur í matvöruverslun. Hann mætir á atvinnuviðtal, fær starfið og vinnur á mismunandi vöktum (klukkan 8 á morgnana eða klukkan 4 síðdegis). Verkefni hans eru: afgreiðsla viðskiptavina, hjálpa fólki að finna vörur, skoða kvittanir þegar fólk skilar, og fylla á hillurnar.
+Gefðu stig (0–5) og stuttan hvetjandi komment á íslensku.
+Svaraðu EINUNGIS á þessu formi:
+STIG: [0-5]
+ENDURGJÖF: [ein setning]` }]);
+      const score = parseInt((result.match(/STIG:\s*(\d)/) || [])[1] ?? '0');
+      const msg   = ((result.match(/ENDURGJÖF:\s*(.+)/) || [])[1] ?? result).trim();
+      const nf = [...feedbacks]; nf[i] = { score, message: msg }; setFeedbacks(nf);
+      const nc = [...checked];   nc[i] = true;                    setChecked(nc);
+    } catch {
+      const nf = [...feedbacks]; nf[i] = { score: 0, message: 'Villa kom upp. Reyndu aftur.' }; setFeedbacks(nf);
+    }
+    const nl2 = [...loading]; nl2[i] = false; setLoading(nl2);
+  };
+
+  useEffect(() => { if (checked.every(Boolean)) onDone(); }, [checked]);
+
+  return (
+    <div className="fade-in space-y-5">
+      <p className="text-sm text-gray-500 font-light mb-2">Svaraðu spurningunum með heilum setningum.</p>
+      {SHORT_QUESTIONS.map((q, i) => (
+        <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+            <p className="text-sm font-light text-blue-800">{i + 1}. {q.spurning}</p>
+          </div>
+          <textarea
+            rows={2}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none
+              focus:border-green-400 font-light resize-none disabled:bg-gray-50 text-sm"
+            value={answers[i]} disabled={checked[i]} placeholder="Skrifaðu svar hér..."
+            onChange={e => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }}
+          />
+          {!checked[i] && (
+            <button onClick={() => checkOne(i)} disabled={!answers[i].trim() || loading[i]}
+              className="mt-2 px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+              {loading[i] ? 'Hinkraðu...' : 'Athuga'}
+            </button>
+          )}
+          {feedbacks[i] && <FeedbackBadge score={feedbacks[i].score} message={feedbacks[i].message} />}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Þýðingar ─────────────────────────────────────────────────────────────────
+
+const TranslationTab = ({ onDone, done }) => {
+  const [answers,   setAnswers]   = useState(TRANSLATION_WORDS.map(() => ''));
+  const [feedbacks, setFeedbacks] = useState(TRANSLATION_WORDS.map(() => null));
+  const [loading,   setLoading]   = useState(TRANSLATION_WORDS.map(() => false));
+  const [checked,   setChecked]   = useState(TRANSLATION_WORDS.map(() => false));
+
+  const checkOne = async (i) => {
+    const ans = answers[i].trim();
+    if (!ans) return;
+    const nl = [...loading]; nl[i] = true; setLoading(nl);
+    try {
+      const result = await callOpenAI([{ role: 'user', content:
+        `Þú ert íslenskukennari sem metur þýðingar nemenda.
+
+ÍSLENSKA ORÐIÐ: "${TRANSLATION_WORDS[i].orð}"
+SVAR NEMANDA: "${ans}"
+
+SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+{
+  "correct": true/false,
+  "score": 0-5,
+  "detected_language": "nafn tungumálsins á íslensku (t.d. enska, pólska, spænska)",
+  "feedback_is": "Endurgjöf á íslensku, ein setning, vingjarnleg",
+  "feedback_native": "Endurgjöf á greinda tungumálinu, ein setning",
+  "correct_translation": "Góð þýðing á greinda tungumálinu ef rangt, annars null"
+}` }], 200, 0.2, 'gpt-4o');
+
+      let parsed = null;
+      try {
+        const clean = result.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch {}
+
+      let fb;
+      if (parsed) {
+        fb = {
+          score: parsed.score ?? (parsed.correct ? 5 : 1),
+          message: parsed.feedback_is || '',
+          feedbackNative: parsed.feedback_native || null,
+          correctTranslation: parsed.correct_translation || null,
+        };
+      } else {
+        const score = parseInt((result.match(/STIG:\s*(\d)/) || [])[1] ?? '0');
+        const msg   = ((result.match(/ENDURGJÖF:\s*(.+)/) || [])[1] ?? result).trim();
+        fb = { score, message: msg };
+      }
+      const nf = [...feedbacks]; nf[i] = fb;   setFeedbacks(nf);
+      const nc = [...checked];   nc[i] = true;  setChecked(nc);
+    } catch {
+      const nf = [...feedbacks]; nf[i] = { score: 0, message: 'Villa kom upp. Reyndu aftur.' }; setFeedbacks(nf);
+    }
+    const nl2 = [...loading]; nl2[i] = false; setLoading(nl2);
+  };
+
+  useEffect(() => { if (checked.every(Boolean)) onDone(); }, [checked]);
+
+  return (
+    <div className="fade-in space-y-5">
+      <p className="text-sm text-gray-500 font-light mb-2">
+        Þýddu orðin hér að neðan yfir á þitt eigið mál.
+      </p>
+      {TRANSLATION_WORDS.map((w, i) => (
+        <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 mb-3">
+            <p className="text-base font-medium text-gray-800">{w.orð}</p>
+            <p className="text-xs text-gray-500 font-light mt-0.5">{w.skýring}</p>
+          </div>
+          <input type="text"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none
+              focus:border-green-400 font-light disabled:bg-gray-50 text-sm"
+            value={answers[i]} disabled={checked[i]} placeholder="Þýðing á þínu máli..."
+            onChange={e => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }}
+            onKeyDown={e => e.key === 'Enter' && !checked[i] && checkOne(i)}
+          />
+          {!checked[i] && (
+            <button onClick={() => checkOne(i)} disabled={!answers[i].trim() || loading[i]}
+              className="mt-2 px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+              {loading[i] ? 'Hinkraðu...' : 'Athuga'}
+            </button>
+          )}
+          {feedbacks[i] && (
+            <FeedbackBadge
+              score={feedbacks[i].score}
+              message={feedbacks[i].message}
+              feedbackNative={feedbacks[i].feedbackNative}
+              correctTranslation={feedbacks[i].correctTranslation}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Aðalforritið ─────────────────────────────────────────────────────────────
+
+const App = () => {
+  const audioRef = useRef(null);
+  const [isPlaying,    setIsPlaying]    = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [currentTime,  setCurrentTime]  = useState(0);
+  const [duration,     setDuration]     = useState(0);
+  const [activeTab,    setActiveTab]    = useState('tf');
+  const [tabsDone,     setTabsDone]     = useState({ tf: false, mc: false, short: false, trans: false });
+  const [showKeywords, setShowKeywords] = useState(true);
+  const [showText,     setShowText]     = useState(false);
+
+  const allDone = Object.values(tabsDone).every(Boolean);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+  }, [playbackRate]);
+
+  const formatTime = (sec) => {
+    if (!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) audioRef.current.pause(); else audioRef.current.play();
+  };
+
+  const handleSeek = (e) => {
+    const t = parseFloat(e.target.value);
+    if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t); }
+  };
+
+  const markDone = (tab) => setTabsDone(prev => ({ ...prev, [tab]: true }));
+
+  const tabs = [
+    { key: 'tf',    label: 'Rétt/Rangt' },
+    { key: 'mc',    label: 'Krossaspurningar' },
+    { key: 'short', label: 'Stuttar spurningar' },
+    { key: 'trans', label: 'Þýðingar' },
+  ];
+
+  return (
+    <div>
+      {/* Haus */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="flex items-start justify-between">
+            <div>
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">🎧 Hlustun: Sumarvinnan hans Alex</h1>
+              <p className="text-gray-500 text-sm font-light">Hlustunarverkefni · A1–A2</p>
+            </div>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-6">
+              Alex
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-24">
+
+        {/* Leiðbeiningabox */}
+        <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+          <ul className="space-y-1 text-sm font-light text-green-800">
+            <li>📘 Lestu lykilorðin hér að neðan fyrst</li>
+            <li>🎧 Hlustaðu á frásögnina 2–3 sinnum</li>
+            <li>✏️ Svaraðu öllum flokkum spurninga</li>
+            <li>🔓 Þegar allt er lokið opnast textinn</li>
+          </ul>
+        </div>
+
+        {/* Lykilorð */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <button onClick={() => setShowKeywords(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors">
+            <span className="text-sm font-medium text-gray-700">📘 Lykilorð</span>
+            <span className={`text-gray-400 transition-transform duration-300 ${showKeywords ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+          {showKeywords && (
+            <div className="px-5 pb-5 fade-in">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {KEYWORDS.map((k, i) => (
+                  <div key={i} className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div className="font-medium text-sm">{k.orð} <span className="text-gray-400 font-light">({k.kyn})</span></div>
+                    <div className="text-xs text-gray-600 font-light mt-0.5">{k.skýring}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Hljóðspilari */}
+        <div className="sticky-player rounded-xl">
+          <div className="max-w-4xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button onClick={togglePlay}
+                className="bg-green-600 text-white w-11 h-11 rounded-full flex items-center
+                  justify-center hover:bg-green-700 transition-colors flex-shrink-0 shadow-sm"
+                aria-label={isPlaying ? 'Pása' : 'Spila'}>
+                {isPlaying
+                  ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="4" width="4" height="16"/>
+                      <rect x="14" y="4" width="4" height="16"/>
+                    </svg>
+                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                }
+              </button>
+              <div className="flex-1">
+                <p className="text-sm font-light text-gray-700 mb-2">🎧 Hlustaðu á frásögnina</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-light w-8 text-right">{formatTime(currentTime)}</span>
+                  <input type="range" min="0" max={duration || 0} value={currentTime}
+                    onChange={handleSeek} className="progress-bar flex-1" />
+                  <span className="text-xs text-gray-500 font-light w-8">{formatTime(duration)}</span>
+                </div>
+                <audio ref={audioRef} src="media/hlustun9_sumarvinna.mp3" preload="metadata"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                  onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+                  onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
+                />
+              </div>
+              <div className="flex gap-1.5">
+                {[0.75, 1, 1.25].map(rate => (
+                  <button key={rate} onClick={() => setPlaybackRate(rate)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-light transition-colors
+                      ${playbackRate === rate
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}>
+                    {rate}×
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Flipar */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex border-b border-gray-200 sticky top-0 z-40 bg-white">
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => setActiveTab(t.key)}
+                className={`tab-btn flex-1 py-3 text-xs sm:text-sm font-light text-gray-600 ${activeTab === t.key ? 'active' : ''}`}>
+                {tabsDone[t.key] ? '✓ ' : ''}{t.label}
+              </button>
+            ))}
+          </div>
+          <div className="p-5">
+            {activeTab === 'tf'    && <TFTab          onDone={() => markDone('tf')}    done={tabsDone.tf} />}
+            {activeTab === 'mc'    && <MCTab          onDone={() => markDone('mc')}    done={tabsDone.mc} />}
+            {activeTab === 'short' && <ShortTab       onDone={() => markDone('short')} done={tabsDone.short} />}
+            {activeTab === 'trans' && <TranslationTab onDone={() => markDone('trans')} done={tabsDone.trans} />}
+          </div>
+        </div>
+
+        {/* Lokakassi */}
+        {allDone && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center fade-in">
+            <div className="text-4xl mb-3">🎉</div>
+            <h3 className="text-xl font-light text-green-800 mb-2">Vel gert!</h3>
+            <p className="text-green-700 font-light text-sm mb-4">
+              Þú hefur lokið öllum verkefnum. Nú getur þú lesið frásögnina.
+            </p>
+            <button onClick={() => setShowText(v => !v)}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                transition-colors font-light text-sm">
+              {showText ? '▲ Fela frásögnina' : '📖 Lesa frásögnina'}
+            </button>
+            {showText && (
+              <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100 fade-in">
+                <h3 className="font-light text-gray-500 mb-4 text-sm">📖 Sumarvinnan hans Alex</h3>
+                {TRANSCRIPT.split('\n\n').map((para, i) => (
+                  <p key={i} className="text-gray-700 leading-relaxed font-light text-sm mb-3">{para}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </main>
+
+      {/* Framvindusika */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+        <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-light transition-colors
+                ${tabsDone[t.key]
+                  ? 'bg-green-600 text-white'
+                  : activeTab === t.key
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-gray-100 text-gray-500'}`}>
+              {tabsDone[t.key] ? '✓ ' : ''}{t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
