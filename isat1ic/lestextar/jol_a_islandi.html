@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🎅 Jól á Íslandi – Málstöðin</title>
+  <title>📖 Lestexti: Jól á Íslandi – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,78 +14,87 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+
     .answer-option {
-      border: 2px solid #e0e0e0;
+      border: 2px solid #e5e7eb;
       transition: all 0.2s;
       cursor: pointer;
     }
-    .answer-option:hover:not(.disabled) {
-      border-color: #2196f3;
-      background: #e3f2fd;
+    .answer-option:hover:not(.opt-disabled) { border-color: #93c5fd; background: #eff6ff; }
+    .answer-option.opt-selected  { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; }
+    .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; }
+    .answer-option.opt-disabled  { cursor: default; }
+
+    .tab-btn { transition: all 0.2s; position: relative; }
+    .tab-btn:not(.active):hover { background: #f3f4f6; }
+    .tab-btn.active { background: white; color: #2563eb; font-weight: 500; }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 3px;
+      background: #2563eb;
+      border-radius: 2px 2px 0 0;
     }
-    .answer-option.selected {
-      border-color: #2196f3;
-      background: #e3f2fd;
-    }
-    .answer-option.correct {
-      border-color: #4caf50;
-      background: #e8f5e9;
-    }
-    .answer-option.incorrect {
-      border-color: #f44336;
-      background: #ffebee;
-    }
-    .answer-option.disabled {
-      cursor: default;
-    }
-    .chat-container {
-      max-height: 500px;
-      overflow-y: auto;
-    }
-    .chat-container::-webkit-scrollbar {
-      width: 6px;
-    }
-    .chat-container::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 10px;
-    }
-    .chat-container::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 10px;
-    }
+
+    .text-panel { overflow: hidden; transition: max-height 0.4s ease, opacity 0.3s ease; }
+    .text-panel.open   { max-height: 1200px; opacity: 1; }
+    .text-panel.closed { max-height: 0; opacity: 0; }
+
+    .chat-box { overflow-y: auto; }
+    .chat-box::-webkit-scrollbar { width: 6px; }
+    .chat-box::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .chat-box::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useMemo, useRef, useCallback } = React;
 
-    async function callOpenAI(payload) {
+    /* ── API ─────────────────────────────────────────────────────── */
+    async function callOpenAI(messages, maxTokens = 120, temperature = 0.2) {
       const r = await fetch('/.netlify/functions/openai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ messages, max_tokens: maxTokens, model: 'gpt-4o-mini', temperature }),
       });
       const data = await r.json();
       if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
       return data.content;
     }
 
-    const READING_TEXT = `Jól eru stór og mikilvæg hátíð á Íslandi. Margir elska jólin og undirbúa þau lengi. Fólk skreytir heimili sín með ljósum, skrauti, jólakortum og jólatrjám. Það kveikir á kertum og hengir upp ljósaseríur. Það er notalegt inni þegar dimmt og kalt er úti. Jól hafa kristinn uppruna. Kristið fólk fagnar því að Jesús Kristur hafi fæðst á þessum tíma. Margir fara í kirkju á jólum. Í dag halda þó margir upp á jólin, líka þeir sem eru ekki trúaðir. Fyrir flesta eru jólin tími friðar og samveru. Jólafrí hefst oft fyrir jól. Þá eru skólarnir lokaðir og fólk fær frí í vinnu. Margir baka smákökur og elda góðan mat fyrir jólin. Það er líka vinsælt að hlusta á jólalög og skapa góða jólastemmningu.
+    /* ── Gögn ────────────────────────────────────────────────────── */
+    const READING_TEXT = [
+      { type: 'para', text: 'Jól eru stór og mikilvæg hátíð á Íslandi. Margir elska jólin og undirbúa þau lengi. Fólk skreytir heimili sín með ljósum, skrauti, jólakortum og jólatrjám. Það kveikir á kertum og hengir upp ljósaseríur. Það er notalegt inni þegar dimmt og kalt er úti.' },
+      { type: 'para', text: 'Jól hafa kristinn uppruna. Kristið fólk fagnar því að Jesús Kristur hafi fæðst á þessum tíma. Margir fara í kirkju á jólum. Í dag halda þó margir upp á jólin, líka þeir sem eru ekki trúaðir. Fyrir flesta eru jólin tími friðar og samveru.' },
+      { type: 'para', text: 'Jólafrí hefst oft fyrir jól. Þá eru skólarnir lokaðir og fólk fær frí í vinnu. Margir baka smákökur og elda góðan mat fyrir jólin. Það er líka vinsælt að hlusta á jólalög og skapa góða jólastemmningu.' },
+      { type: 'para', text: 'Jólin byrja á Þorláksmessu, 23. desember. Þá klára margir að skreyta og kaupa síðustu jólagjafir. Á Þorláksmessu borða sumir skötu. Sú lykt finnst ekki öllum góð! Það kvöld hittast margir í bænum til að spjalla og njóta jólaljósanna.' },
+      { type: 'para', text: 'Á aðfangadagskvöld, 24. desember, hittist fjölskyldan í veislu. Fólk klæðir sig í spariföt. Það borðar góðan mat og opnar svo gjafir undir jólatrénu.' },
+      { type: 'para', text: 'Í desember koma jólasveinarnir. Þeir eru 13 bræður og koma einn á dag fyrir jól. Börn setja skó í gluggann á kvöldin. Ef þau hafa verið góð, fá þau gjöf. Ef þau hafa verið óþekk, fá þau stundum kartöflu.' },
+      { type: 'para', text: 'Jól eru líka tími fjölskylduboða. Margir hitta ættingja og vini. Það er tími gleði, friðar og samveru. Fólk vonar oft að það sé snjór – margir vilja „hvít jól".' },
+    ];
 
-Jólin byrja á Þorláksmessu, 23. desember. Þá klára margir að skreyta og kaupa síðustu jólagjafir. Á Þorláksmessu borða sumir skötu. Sú lykt finnst ekki öllum góð! Það kvöld hittast margir í bænum til að spjalla og njóta jólaljósanna. Á aðfangadagskvöld, 24. desember, hittist fjölskyldan í veislu. Fólk klæðir sig í spariföt. Það borðar góðan mat og opnar svo gjafir undir jólatrénu. Í desember koma jólasveinarnir. Þeir eru 13 bræður og koma einn á dag fyrir jól. Börn setja skó í gluggann á kvöldin. Ef þau hafa verið góð, fá þau gjöf. Ef þau hafa verið óþekk, fá þau stundum kartöflu. Jól eru líka tími fjölskylduboða. Margir hitta ættingja og vini. Það er tími gleði, friðar og samveru. Fólk vonar oft að það sé snjór – margir vilja „hvít jól".`;
+    const READING_TEXT_STR = READING_TEXT.map(b => b.text).join('\n\n');
 
-    const MULTIPLE_CHOICE = [
+    const MC_RAW = [
       {
         question: 'Hvenær byrja jólin á Íslandi samkvæmt textanum?',
         options: [
           'Á aðfangadag, þegar fjölskyldur hittast í veislu.',
           'Á Þorláksmessu, 23. desember, þegar margir klára að skreyta.',
           'Í desember, þegar jólasveinarnir byrja að koma.',
-          'Þegar skólarnir loka og fólk fær frí í vinnu.'
+          'Þegar skólarnir loka og fólk fær frí í vinnu.',
         ],
-        correct: 1
+        correct: 1,
       },
       {
         question: 'Hvað gera börn á Íslandi á kvöldin í desember samkvæmt textanum?',
@@ -93,9 +102,9 @@ Jólin byrja á Þorláksmessu, 23. desember. Þá klára margir að skreyta og 
           'Þau fara í kirkju með fjölskyldum sínum.',
           'Þau setja skóinn sinn í gluggann og vonast eftir gjöf frá jólasveinunum.',
           'Þau borða skötu með fjölskyldum sínum.',
-          'Þau hittast í bænum til að spjalla og njóta jólaljósanna.'
+          'Þau hittast í bænum til að spjalla og njóta jólaljósanna.',
         ],
-        correct: 1
+        correct: 1,
       },
       {
         question: 'Hvað vonast margir Íslendingar eftir um jólin samkvæmt textanum?',
@@ -103,559 +112,416 @@ Jólin byrja á Þorláksmessu, 23. desember. Þá klára margir að skreyta og 
           'Að fá kartöflu í skóinn ef þau hafa verið óþekk.',
           'Að allir fái frí í vinnu.',
           'Að það snjói um jólin.',
-          'Að allir geti borðað góðan mat.'
+          'Að allir geti borðað skötu.',
         ],
-        correct: 2
-      }
+        correct: 2,
+      },
     ];
 
-    const SHORT_OPEN_QUESTIONS = [
+    const SHORT_QUESTIONS = [
       'Hvernig skreyta Íslendingar heimili sín fyrir jólin samkvæmt textanum?',
       'Hvað borða sumir á Þorláksmessu samkvæmt textanum?',
-      'Hvað gerir fólk á aðfangadagskvöld samkvæmt textanum?'
+      'Hvað gerir fólk á aðfangadagskvöld samkvæmt textanum?',
     ];
 
     const DISCUSSION_QUESTIONS = [
       'Hvernig heldur þú upp á jólin með fjölskyldunni þinni? Eru einhverjar sérstakar hefðir sem þið fylgið?',
       'Hvað finnst þér skemmtilegast við jólin og hvers vegna? Er eitthvað sem þú hlakkar sérstaklega til?',
-      'Hvaða þýðingu hafa jólin fyrir þig og þína nánustu? Hvað gerir þú til að skapa góða jólastemningu?'
+      'Hvaða þýðingu hafa jólin fyrir þig og þína nánustu? Hvað gerir þú til að skapa góða jólastemmningu?',
     ];
 
-    const JolAIslandi = () => {
-      const [stage, setStage] = useState('reading');
-      const [mcAnswers, setMcAnswers] = useState([]);
-      const [showMcFeedback, setShowMcFeedback] = useState(false);
-      
-      const [shortAnswers, setShortAnswers] = useState(['', '', '']);
-      const [shortFeedback, setShortFeedback] = useState([null, null, null]);
-      const [shortLoading, setShortLoading] = useState([false, false, false]);
-      
-      const [conversations, setConversations] = useState([[], [], []]);
-      const [currentInputs, setCurrentInputs] = useState(['', '', '']);
-      const [loadingStates, setLoadingStates] = useState([false, false, false]);
-      
-      const chatRefs = [useRef(null), useRef(null), useRef(null)];
+    /* ── Hjálparföll ─────────────────────────────────────────────── */
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
 
-      const handleMcAnswer = (questionIndex, optionIndex) => {
-        if (showMcFeedback) return;
-        const newAnswers = [...mcAnswers];
-        newAnswers[questionIndex] = optionIndex;
-        setMcAnswers(newAnswers);
+    /* ── Íhlutir ─────────────────────────────────────────────────── */
+    const FeedbackBadge = ({ score, message }) => {
+      const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+      const colors = {
+        green: 'bg-green-50 border-green-200 text-green-700',
+        amber: 'bg-amber-50 border-amber-200 text-amber-700',
+        red:   'bg-red-50 border-red-200 text-red-700',
       };
-
-      const checkMcAnswers = () => {
-        if (mcAnswers.length < MULTIPLE_CHOICE.length) {
-          alert('Vinsamlegast svaraðu öllum spurningum!');
-          return;
-        }
-        setShowMcFeedback(true);
-      };
-
-      const continueToShortQuestions = () => {
-        setStage('short');
-      };
-
-      const continueToDiscussion = () => {
-        setStage('discussion');
-      };
-
-      const handleShortAnswerChange = (index, value) => {
-        const newAnswers = [...shortAnswers];
-        newAnswers[index] = value;
-        setShortAnswers(newAnswers);
-      };
-
-      const getShortFeedback = async (questionIndex) => {
-        const question = SHORT_OPEN_QUESTIONS[questionIndex];
-        const answer = shortAnswers[questionIndex];
-
-        if (!answer.trim() || answer.trim().length < 3) {
-          alert('Vinsamlegast skrifaðu svar (að minnsta kosti nokkur orð)');
-          return;
-        }
-
-        const newLoading = [...shortLoading];
-        newLoading[questionIndex] = true;
-        setShortLoading(newLoading);
-
-        try {
-          const sys = `Þú ert vingjarnlegur íslenskukennari sem er að fara yfir stutt svör nemanda (A1-A2 stig).
-
-TEXTINN SEM NEMANDINN LAS:
-"${READING_TEXT}"
-
-SPURNINGIN:
-"${question}"
-
-SVAR NEMANDANS:
-"${answer}"
-
-VERKEFNI:
-Gefðu hvetjandi endurgjöf (2-3 setningar á íslensku):
-1. Byrjaðu með jákvæðu (t.d. "Gott!", "Frábært!")
-2. Ef svarið er rétt eða nálægt því - hrósaðu og staðfestu
-3. Ef svarið er rangt eða ónákvæmt - leiðréttu á mjúkan hátt og útskýrðu rétta svarið út frá textanum
-
-DÆMI:
-Ef svar er rétt: "Frábært! Þú hefur alveg rétt fyrir þér - í textanum segir að Íslendingar skreyti heimili sín með ljósum, skrauti, jólakortum og jólatrjám!"
-Ef svar er rangt: "Góð tilraun! En í textanum segir að sumir borði skötu á Þorláksmessu."
-
-REGLUR:
-- Alltaf jákvæður og hvetjandi tónn
-- Einföld íslenska (A1-A2)
-- Vísa alltaf í textann
-- 2-3 setningar
-
-SKILAÐU BARA TEXTANUM, ekkert JSON eða annað.`.trim();
-
-          const response = await callOpenAI({
-            model: 'gpt-4o',
-            temperature: 0.5,
-            max_tokens: 150,
-            messages: [
-              { role: 'system', content: sys },
-              { role: 'user', content: 'Gefðu endurgjöf' }
-            ]
-          });
-
-          const newFeedback = [...shortFeedback];
-          newFeedback[questionIndex] = response.trim();
-          setShortFeedback(newFeedback);
-        } catch (e) {
-          console.error('Short feedback error:', e);
-          alert('Villa við að fá endurgjöf. Reyndu aftur.');
-        } finally {
-          const newLoading = [...shortLoading];
-          newLoading[questionIndex] = false;
-          setShortLoading(newLoading);
-        }
-      };
-
-      const scrollToBottom = (index) => {
-        setTimeout(() => {
-          if (chatRefs[index].current) {
-            chatRefs[index].current.scrollTop = chatRefs[index].current.scrollHeight;
-          }
-        }, 100);
-      };
-
-      const handleInputChange = (index, value) => {
-        const newInputs = [...currentInputs];
-        newInputs[index] = value;
-        setCurrentInputs(newInputs);
-      };
-
-      const sendMessage = async (questionIndex) => {
-        const message = currentInputs[questionIndex].trim();
-        if (!message) return;
-
-        const newConversations = [...conversations];
-        newConversations[questionIndex] = [
-          ...newConversations[questionIndex],
-          { role: 'user', content: message }
-        ];
-        setConversations(newConversations);
-
-        const newInputs = [...currentInputs];
-        newInputs[questionIndex] = '';
-        setCurrentInputs(newInputs);
-
-        const newLoading = [...loadingStates];
-        newLoading[questionIndex] = true;
-        setLoadingStates(newLoading);
-
-        scrollToBottom(questionIndex);
-
-        try {
-          const question = DISCUSSION_QUESTIONS[questionIndex];
-          const isFirstMessage = newConversations[questionIndex].length === 1;
-
-          const systemPrompt = `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1-A2 nemanda um jól á Íslandi.
-
-TEXTINN SEM NEMANDINN LAS:
-"${READING_TEXT}"
-
-UPPRUNALEGA SPURNINGIN:
-"${question}"
-
-VERKEFNI:
-${isFirstMessage ? `1. Lestu fyrsta svar nemandans og gefðu hvetjandi, jákvæða endurgjöf
-2. Kommentaðu á efninu - hvað er áhugavert?
-3. Spyrðu einfalda follow-up spurningu` : `1. Haltu áfram samtali við nemandann
-2. Svaraðu spurningum hans á náttúrulegan hátt
-3. Vertu hvetjandi og hjálpsamur`}
-
-REGLUR:
-- Vertu ALLTAF jákvæður og hvetjandi
-- Haltu því stuttu (2-4 setningar)
-- Notaðu einfalda íslensku (A1-A2 stig)
-- Notaðu bara íslensku
-- ALDREI gefa einkunn
-
-SVARAÐU MEÐ JSON Á ÞESSU FORMI:
-{
-  "grammar": "Málfarsendurgjöf BARA ef það eru GRÓFAR villur (beygingarvillur, rangt orðval). Vertu mjög mild og hvetjandi (1-2 setningar). Ef ekkert athugavert, settu null.",
-  "response": "Aðal svarið þitt hér"
-}
-
-DÆMI á grammar:
-- Gott: "Frábært! *'Ég fer í sund' er réttara en 'ég fer á sund'.*"
-- Slæmt: "Rangur punktur", "Vantar kommu"
-- ALDREI pikka í greinarmerki eða smávillur
-- ALDREI ef setningin er eðlileg í samhengi`;
-
-          const messages = [
-            { role: 'system', content: systemPrompt },
-            ...newConversations[questionIndex]
-              .filter(msg => msg.role === 'user' || msg.role === 'assistant')
-              .map(msg => ({
-                role: msg.role,
-                content: msg.role === 'assistant' ? msg.content : msg.content
-              }))
-          ];
-
-          const response = await callOpenAI({
-            model: 'gpt-4o',
-            temperature: 0.7,
-            max_tokens: 300,
-            messages: messages
-          });
-
-          let cleanResult = response.trim();
-          if (cleanResult.startsWith('```')) {
-            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          }
-          
-          const parsed = JSON.parse(cleanResult);
-
-          let currentConversations = [...newConversations];
-          if (parsed.grammar) {
-            currentConversations[questionIndex] = [
-              ...currentConversations[questionIndex],
-              { role: 'grammar', content: parsed.grammar }
-            ];
-            setConversations(currentConversations);
-            scrollToBottom(questionIndex);
-            
-            await new Promise(resolve => setTimeout(resolve, 400));
-          }
-
-          const updatedConversations = [...currentConversations];
-          updatedConversations[questionIndex] = [
-            ...updatedConversations[questionIndex],
-            { role: 'assistant', content: parsed.response }
-          ];
-          setConversations(updatedConversations);
-          
-          scrollToBottom(questionIndex);
-
-        } catch (e) {
-          console.error('Chat error:', e);
-          alert('Villa við að senda skilaboð. Reyndu aftur.');
-          
-          const rollbackConversations = [...conversations];
-          rollbackConversations[questionIndex] = newConversations[questionIndex].slice(0, -1);
-          setConversations(rollbackConversations);
-        } finally {
-          const newLoading = [...loadingStates];
-          newLoading[questionIndex] = false;
-          setLoadingStates(newLoading);
-        }
-      };
-
-      const handleKeyPress = (e, questionIndex) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage(questionIndex);
-        }
-      };
-
-      const allShortQuestionsAnswered = shortFeedback.every(f => f !== null);
-
       return (
-        <div className="min-h-screen pb-12">
-          <header className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-4xl mx-auto px-6 py-8">
-              <button 
-                onClick={() => window.history.back()} 
-                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
-              >
-                ← Til baka
-              </button>
-              <h1 className="text-3xl font-light text-gray-800 mb-2">Jól á Íslandi</h1>
-              <p className="text-gray-500 text-sm font-light">Lesskilningur og umræða · A1-A2</p>
-            </div>
-          </header>
-
-          <main className="max-w-4xl mx-auto px-6 mt-8">
-            {stage === 'reading' && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-lg shadow-sm p-8">
-                  <div className="text-center mb-8">
-                    <div className="text-6xl mb-4">🎅</div>
-                    <h2 className="text-2xl font-light text-gray-800 mb-4">Lestu textann</h2>
-                  </div>
-
-                  <div className="prose max-w-none mb-8">
-                    {READING_TEXT.split('\n\n').map((para, i) => (
-                      <p key={i} className="text-gray-700 leading-relaxed mb-4 font-light">
-                        {para}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-lg shadow-sm p-8">
-                  <h2 className="text-2xl font-light text-gray-800 mb-6">Krossaspurningar</h2>
-
-                  <div className="space-y-8">
-                    {MULTIPLE_CHOICE.map((q, qIndex) => (
-                      <div key={qIndex} className="border-2 border-gray-100 rounded-lg p-6">
-                        <p className="font-normal text-gray-800 mb-4 text-lg">
-                          {qIndex + 1}. {q.question}
-                        </p>
-                        <div className="space-y-3">
-                          {q.options.map((option, oIndex) => {
-                            const isSelected = mcAnswers[qIndex] === oIndex;
-                            const isCorrect = oIndex === q.correct;
-                            const showAsCorrect = showMcFeedback && isCorrect;
-                            const showAsIncorrect = showMcFeedback && isSelected && !isCorrect;
-
-                            return (
-                              <div
-                                key={oIndex}
-                                onClick={() => handleMcAnswer(qIndex, oIndex)}
-                                className={`answer-option p-4 rounded-lg ${
-                                  isSelected && !showMcFeedback ? 'selected' : ''
-                                } ${showAsCorrect ? 'correct' : ''} ${showAsIncorrect ? 'incorrect' : ''} ${
-                                  showMcFeedback ? 'disabled' : ''
-                                }`}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 ${
-                                    isSelected && !showMcFeedback ? 'border-blue-500 bg-blue-500' : 
-                                    showAsCorrect ? 'border-green-500 bg-green-500' :
-                                    showAsIncorrect ? 'border-red-500 bg-red-500' :
-                                    'border-gray-300'
-                                  }`}>
-                                    {(isSelected || showAsCorrect) && (
-                                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                                    )}
-                                  </div>
-                                  <span className="font-light flex-1">{option}</span>
-                                  {showAsCorrect && <span className="text-green-600 text-xl">✓</span>}
-                                  {showAsIncorrect && <span className="text-red-600 text-xl">✗</span>}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {!showMcFeedback ? (
-                    <div className="text-center mt-8">
-                      <button
-                        onClick={checkMcAnswers}
-                        className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
-                      >
-                        Athuga svör
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-8">
-                      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
-                        <div className="flex items-start gap-3">
-                          <span className="text-3xl">
-                            {mcAnswers.every((a, i) => a === MULTIPLE_CHOICE[i].correct) ? '🎉' : '💪'}
-                          </span>
-                          <div>
-                            <h3 className="font-normal text-gray-800 mb-2">
-                              {mcAnswers.every((a, i) => a === MULTIPLE_CHOICE[i].correct) 
-                                ? 'Frábært! Öll svörin eru rétt!' 
-                                : 'Góð tilraun! Skoðaðu svörin og reyndu aftur ef þú vilt.'}
-                            </h3>
-                            <p className="text-sm text-gray-600 font-light">
-                              Þú fékkst {mcAnswers.filter((a, i) => a === MULTIPLE_CHOICE[i].correct).length} af {MULTIPLE_CHOICE.length} rétt.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <button
-                          onClick={continueToShortQuestions}
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
-                        >
-                          Halda áfram →
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {stage === 'short' && (
-              <div className="bg-white rounded-lg shadow-sm p-8">
-                <div className="text-center mb-8">
-                  <div className="text-6xl mb-4">📝</div>
-                  <h2 className="text-2xl font-light text-gray-800 mb-4">Stuttar spurningar</h2>
-                  <p className="text-gray-600 font-light">
-                    Svaraðu spurningunum út frá textanum
-                  </p>
-                </div>
-
-                <div className="space-y-8">
-                  {SHORT_OPEN_QUESTIONS.map((question, index) => (
-                    <div key={index} className="border-2 border-gray-100 rounded-lg p-6">
-                      <p className="font-normal text-gray-800 mb-4 text-lg">
-                        {index + 1}. {question}
-                      </p>
-                      <textarea
-                        value={shortAnswers[index]}
-                        onChange={(e) => handleShortAnswerChange(index, e.target.value)}
-                        disabled={shortFeedback[index] !== null}
-                        className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base mb-4 disabled:bg-gray-50"
-                        rows="3"
-                        placeholder="Skrifaðu svarið þitt hér..."
-                      />
-
-                      {!shortFeedback[index] ? (
-                        <button
-                          onClick={() => getShortFeedback(index)}
-                          disabled={shortLoading[index] || shortAnswers[index].trim().length < 3}
-                          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
-                        >
-                          {shortLoading[index] ? 'Bíð...' : 'Fá endurgjöf'}
-                        </button>
-                      ) : (
-                        <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                          <div className="flex items-start gap-3">
-                            <span className="text-2xl">✨</span>
-                            <div className="flex-1">
-                              <p className="text-gray-800 font-light leading-relaxed">
-                                {shortFeedback[index]}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {allShortQuestionsAnswered && (
-                  <div className="text-center mt-8">
-                    <button
-                      onClick={continueToDiscussion}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-md hover:from-blue-600 hover:to-blue-700 transition-all font-light text-lg"
-                    >
-                      Halda áfram í umræðuspurningar →
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {stage === 'discussion' && (
-              <div className="space-y-6">
-                <div className="text-center mb-8 bg-white rounded-lg shadow-sm p-8">
-                  <div className="text-6xl mb-4">💬</div>
-                  <h2 className="text-2xl font-light text-gray-800 mb-4">Umræðuspurningar</h2>
-                  <p className="text-gray-600 font-light">
-                    Svaraðu spurningunum og haltu samtali áfram!
-                  </p>
-                </div>
-
-                {DISCUSSION_QUESTIONS.map((question, index) => (
-                  <div key={index} className="bg-white rounded-lg shadow-sm p-6">
-                    <p className="font-normal text-gray-800 mb-4 text-lg">
-                      {index + 1}. {question}
-                    </p>
-
-                    <div 
-                      ref={chatRefs[index]}
-                      className="chat-container mb-4 space-y-3"
-                    >
-                      {conversations[index].map((msg, msgIndex) => (
-                        <div key={msgIndex}>
-                          {msg.role === 'user' ? (
-                            <div className="flex justify-end">
-                              <div className="bg-blue-50 rounded-lg p-4 max-w-[80%]">
-                                <p className="text-gray-800 font-light">{msg.content}</p>
-                              </div>
-                            </div>
-                          ) : msg.role === 'grammar' ? (
-                            <div className="flex justify-center">
-                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-[85%]">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-lg">📚</span>
-                                  <p className="text-sm text-gray-700 font-light">
-                                    <span className="font-normal">Málfar:</span> {msg.content}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex justify-start">
-                              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-[80%]">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-xl">✨</span>
-                                  <p className="text-gray-800 font-light">{msg.content}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      
-                      {loadingStates[index] && (
-                        <div className="flex justify-start">
-                          <div className="bg-gray-100 rounded-lg p-4">
-                            <p className="text-gray-500 font-light">Bíð...</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <textarea
-                        value={currentInputs[index]}
-                        onChange={(e) => handleInputChange(index, e.target.value)}
-                        onKeyPress={(e) => handleKeyPress(e, index)}
-                        disabled={loadingStates[index]}
-                        className="flex-1 p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none font-light text-base disabled:bg-gray-50"
-                        rows="2"
-                        placeholder={conversations[index].length === 0 ? "Skrifaðu svarið þitt hér..." : "Haltu áfram að spjalla..."}
-                      />
-                      <button
-                        onClick={() => sendMessage(index)}
-                        disabled={loadingStates[index] || !currentInputs[index].trim()}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light self-end"
-                      >
-                        {conversations[index].length === 0 ? 'Fá endurgjöf' : 'Senda'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="text-center mt-8">
-                  <button
-                    onClick={() => window.history.back()}
-                    className="bg-gray-800 text-white px-8 py-3 rounded-md hover:bg-gray-700 transition-colors font-light text-lg"
-                  >
-                    ← Til baka
-                  </button>
-                </div>
-              </div>
-            )}
-          </main>
+        <div className={`mt-3 p-3 rounded-lg border fade-in ${colors[color]}`}>
+          <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+          <p className="text-sm font-light">{message}</p>
         </div>
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<JolAIslandi />);
+    /* ── Krossaspurningaflipinn ───────────────────────────────────── */
+    const KrossaTab = ({ onDone }) => {
+      const shuffledMC = useMemo(() => MC_RAW.map(q => {
+        const indexed = q.options.map((opt, i) => ({ opt, isCorrect: i === q.correct }));
+        const s = shuffle(indexed);
+        return { question: q.question, options: s.map(x => x.opt), correct: s.findIndex(x => x.isCorrect) };
+      }), []);
+
+      const [answers, setAnswers] = useState({});
+      const [checked, setChecked] = useState(false);
+
+      const handlePick = (qi, oi) => { if (checked) return; setAnswers(a => ({ ...a, [qi]: oi })); };
+
+      const handleCheck = () => {
+        if (Object.keys(answers).length < shuffledMC.length) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
+        setChecked(true);
+        onDone();
+      };
+
+      const score = shuffledMC.filter((q, i) => answers[i] === q.correct).length;
+
+      return (
+        <div className="fade-in space-y-6">
+          {shuffledMC.map((q, qi) => (
+            <div key={qi} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <p className="font-medium text-gray-800 mb-4">{qi + 1}. {q.question}</p>
+              <div className="space-y-3">
+                {q.options.map((opt, oi) => {
+                  const sel = answers[qi] === oi;
+                  const isCorrect = oi === q.correct;
+                  const showCorrect = checked && isCorrect;
+                  const showWrong = checked && sel && !isCorrect;
+                  return (
+                    <div key={oi}
+                      onClick={() => handlePick(qi, oi)}
+                      className={`answer-option p-4 rounded-lg
+                        ${sel && !checked ? 'opt-selected' : ''}
+                        ${showCorrect ? 'opt-correct' : ''}
+                        ${showWrong ? 'opt-incorrect' : ''}
+                        ${checked ? 'opt-disabled' : ''}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0
+                          ${sel && !checked ? 'border-blue-500 bg-blue-500' :
+                            showCorrect ? 'border-green-500 bg-green-500' :
+                            showWrong   ? 'border-red-500 bg-red-500' :
+                            'border-gray-300'}`}>
+                          {(sel || showCorrect) && <div className="w-2 h-2 bg-white rounded-full" />}
+                        </div>
+                        <span className="font-light flex-1">{opt}</span>
+                        {showCorrect && <span className="text-green-600 text-lg">✓</span>}
+                        {showWrong   && <span className="text-red-600 text-lg">✗</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {!checked ? (
+            <div className="text-center">
+              <button onClick={handleCheck}
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                Athuga svör
+              </button>
+            </div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 fade-in flex items-start gap-3">
+              <span className="text-3xl">{score === shuffledMC.length ? '🎉' : '💪'}</span>
+              <div>
+                <p className="font-medium text-gray-800">
+                  {score === shuffledMC.length ? 'Frábært! Öll svörin eru rétt!' : 'Gott! Skoðaðu svörin hér að ofan.'}
+                </p>
+                <p className="text-sm text-gray-600 font-light mt-1">
+                  Þú fékkst {score} af {shuffledMC.length} rétt.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ── Stuttar spurningar ──────────────────────────────────────── */
+    const StuttarTab = ({ onDone }) => {
+      const [answers, setAnswers] = useState(SHORT_QUESTIONS.map(() => ''));
+      const [feedback, setFeedback] = useState(SHORT_QUESTIONS.map(() => null));
+      const [loading, setLoading] = useState(SHORT_QUESTIONS.map(() => false));
+
+      const allDone = feedback.every(f => f !== null);
+
+      const getFeedback = async (i) => {
+        const ans = answers[i].trim();
+        if (ans.length < 3) return;
+        setLoading(l => l.map((v, idx) => idx === i ? true : v));
+        try {
+          const sys = `Þú ert íslenskukennari sem metur stutt svör nemenda (A1-A2 stig).
+
+TEXTINN: "${READING_TEXT_STR}"
+SPURNING: "${SHORT_QUESTIONS[i]}"
+
+Mettu svar nemanda og svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein setning á íslensku, vinaleg og hvetjandi, með vísan í textann]`;
+
+          const result = await callOpenAI(
+            [{ role: 'system', content: sys }, { role: 'user', content: ans }],
+            120, 0.2
+          );
+          const stigM = result.match(/STIG:\s*(\d)/);
+          const endM  = result.match(/ENDURGJÖF:\s*(.+)/);
+          const score = stigM ? parseInt(stigM[1]) : 0;
+          const msg   = endM  ? endM[1].trim() : result.trim();
+          setFeedback(f => f.map((v, idx) => idx === i ? { score, msg } : v));
+          if (feedback.filter(f => f !== null).length + 1 === SHORT_QUESTIONS.length) onDone();
+        } catch (e) {
+          console.error(e);
+          alert('Villa við mat. Reyndu aftur.');
+        } finally {
+          setLoading(l => l.map((v, idx) => idx === i ? false : v));
+        }
+      };
+
+      // check if all done after feedback update
+      React.useEffect(() => {
+        if (feedback.every(f => f !== null)) onDone();
+      }, [feedback]);
+
+      return (
+        <div className="fade-in space-y-6">
+          {SHORT_QUESTIONS.map((q, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <p className="font-medium text-gray-800 mb-4">{i + 1}. {q}</p>
+              <textarea
+                value={answers[i]}
+                onChange={e => setAnswers(a => a.map((v, idx) => idx === i ? e.target.value : v))}
+                disabled={feedback[i] !== null}
+                rows={3}
+                placeholder="Skrifaðu svarið þitt hér..."
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50"
+              />
+              {feedback[i] === null ? (
+                <button
+                  onClick={() => getFeedback(i)}
+                  disabled={loading[i] || answers[i].trim().length < 3}
+                  className="mt-3 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                  {loading[i] ? 'Bíð...' : 'Fá endurgjöf'}
+                </button>
+              ) : (
+                <FeedbackBadge score={feedback[i].score} message={feedback[i].msg} />
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    /* ── Umræðuspurningar (Tólum saman) ─────────────────────────── */
+    const TolumSamanTab = ({ onDone }) => {
+      const [convos, setConvos]   = useState(DISCUSSION_QUESTIONS.map(() => []));
+      const [inputs, setInputs]   = useState(DISCUSSION_QUESTIONS.map(() => ''));
+      const [loading, setLoading] = useState(DISCUSSION_QUESTIONS.map(() => false));
+      const chatRefs = DISCUSSION_QUESTIONS.map(() => useRef(null));
+
+      const scrollDown = (i) => {
+        setTimeout(() => { chatRefs[i].current?.scrollTo({ top: 99999, behavior: 'smooth' }); }, 80);
+      };
+
+      const send = async (i) => {
+        const msg = inputs[i].trim();
+        if (!msg) return;
+        const next = [...convos[i], { role: 'user', content: msg }];
+        setConvos(c => c.map((v, idx) => idx === i ? next : v));
+        setInputs(inp => inp.map((v, idx) => idx === i ? '' : v));
+        setLoading(l => l.map((v, idx) => idx === i ? true : v));
+        scrollDown(i);
+
+        try {
+          const isFirst = next.length === 1;
+          const sys = `Þú ert vingjarnlegur íslenskukennari sem ræðir við A1-A2 nemanda um jól á Íslandi.
+
+UPPRUNALEGA SPURNINGIN: "${DISCUSSION_QUESTIONS[i]}"
+
+REGLUR:
+- Vertu ALLTAF jákvæður og hvetjandi
+- Haltu þér stuttu (2-3 setningar)
+- Notaðu einfalda íslensku (A1-A2 stig)
+- ${isFirst ? 'Gefðu hvetjandi endurgjöf á fyrsta svar og spyrðu einnar einföldrar fylgispurningar.' : 'Haltu áfram náttúrlegu samtali og bregðstu við því sem nemandinn sagði.'}
+- Svaraðu BARA með texta, ekkert JSON`;
+
+          const messages = [
+            { role: 'system', content: sys },
+            ...next.map(m => ({ role: m.role, content: m.content }))
+          ];
+          const result = await callOpenAI(messages, 200, 0.5);
+          setConvos(c => c.map((v, idx) => idx === i ? [...next, { role: 'assistant', content: result.trim() }] : v));
+          scrollDown(i);
+
+          // Mark done when all questions have at least one exchange
+          setConvos(cur => {
+            if (cur.every(c => c.some(m => m.role === 'assistant'))) onDone();
+            return cur;
+          });
+        } catch (e) {
+          console.error(e);
+          setConvos(c => c.map((v, idx) => idx === i ? convos[i] : v));
+          alert('Villa. Reyndu aftur.');
+        } finally {
+          setLoading(l => l.map((v, idx) => idx === i ? false : v));
+        }
+      };
+
+      const handleKey = (e, i) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(i); }
+      };
+
+      return (
+        <div className="fade-in space-y-6">
+          {DISCUSSION_QUESTIONS.map((q, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <p className="font-medium text-gray-800 mb-4">{i + 1}. {q}</p>
+
+              <div ref={chatRefs[i]} className="chat-box mb-4 space-y-3" style={{ minHeight: 80, maxHeight: 300 }}>
+                {convos[i].map((m, mi) => (
+                  <div key={mi} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-xs px-4 py-2 rounded-xl text-sm font-light
+                      ${m.role === 'user' ? 'bg-blue-100 text-blue-900' : 'bg-gray-100 text-gray-800'}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+                {loading[i] && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-xl px-4 py-2 text-sm text-gray-400 font-light">Bíð…</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <textarea
+                  value={inputs[i]}
+                  onChange={e => setInputs(inp => inp.map((v, idx) => idx === i ? e.target.value : v))}
+                  onKeyPress={e => handleKey(e, i)}
+                  disabled={loading[i]}
+                  rows={2}
+                  placeholder={convos[i].length === 0 ? 'Skrifaðu svarið þitt hér…' : 'Haltu áfram…'}
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50 text-sm"
+                />
+                <button
+                  onClick={() => send(i)}
+                  disabled={loading[i] || !inputs[i].trim()}
+                  className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm self-end">
+                  {convos[i].length === 0 ? 'Senda' : 'Senda'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    /* ── Aðalforritið ─────────────────────────────────────────────── */
+    const App = () => {
+      const [textOpen, setTextOpen] = useState(true);
+      const [activeTab, setActiveTab] = useState(0);
+      const [tabsDone, setTabsDone] = useState([false, false, false]);
+
+      const markDone = (i) => setTabsDone(d => d.map((v, idx) => idx === i ? true : v));
+
+      const TABS = [
+        { label: 'Krossaspurningar', emoji: '✏️' },
+        { label: 'Stuttar spurningar', emoji: '📝' },
+        { label: 'Umræðuspurningar', emoji: '💬' },
+      ];
+
+      return (
+        <div className="min-h-screen pb-20">
+
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">📖 Lestexti: Jól á Íslandi</h1>
+              <p className="text-gray-500 text-sm font-light">Lesskilningur · A1–A2</p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4">
+
+            {/* Leiðbeiningabox */}
+            <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4">
+              <ul className="space-y-1 text-sm font-light text-blue-800">
+                <li>📖 Lestu textann hægt og rólega</li>
+                <li>✏️ Svaraðu krossaspurningunum</li>
+                <li>📝 Svaraðu stuttum spurningum með heilum setningum</li>
+                <li>💬 Ræddu spurningarnar með AI-kennaranum</li>
+              </ul>
+            </div>
+
+            {/* TextPanel – sticky */}
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm rounded-xl">
+              <div className="max-w-4xl mx-auto px-6">
+                <button onClick={() => setTextOpen(o => !o)}
+                  className="w-full flex items-center justify-between py-4 text-left group">
+                  <span className="flex items-center gap-2 text-gray-700 font-light group-hover:text-blue-600 transition-colors">
+                    <span className="text-lg">📖</span>
+                    <span>Textinn – <em className="font-light text-gray-500">Jól á Íslandi</em></span>
+                  </span>
+                  <span className={`text-gray-400 transition-transform duration-300 ${textOpen ? 'rotate-180' : ''}`}>▼</span>
+                </button>
+                <div className={`text-panel ${textOpen ? 'open' : 'closed'}`}>
+                  <div className="pb-6 space-y-3">
+                    {READING_TEXT.map((block, i) => (
+                      <p key={i} className="text-gray-700 leading-relaxed font-light text-sm">{block.text}</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* TabBar – sticky fyrir neðan TextPanel */}
+            <div className="bg-white border-b border-gray-200 sticky top-[57px] z-10 shadow-sm rounded-t-xl -mb-4">
+              <div className="max-w-4xl mx-auto px-6">
+                <div className="flex border-b border-gray-200">
+                  {TABS.map((tab, i) => (
+                    <button key={i}
+                      onClick={() => setActiveTab(i)}
+                      className={`tab-btn px-4 py-3 text-sm font-light text-gray-600 ${activeTab === i ? 'active' : ''}`}>
+                      {tabsDone[i] ? '✓ ' : `${tab.emoji} `}{tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Tab-efni */}
+            <div className="pt-4">
+              {activeTab === 0 && <KrossaTab onDone={() => markDone(0)} />}
+              {activeTab === 1 && <StuttarTab onDone={() => markDone(1)} />}
+              {activeTab === 2 && <TolumSamanTab onDone={() => markDone(2)} />}
+            </div>
+
+          </main>
+
+          {/* Föst framvindusía neðst */}
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+            <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
+              {TABS.map((tab, i) => (
+                <button key={i}
+                  onClick={() => setActiveTab(i)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-light transition-colors
+                    ${tabsDone[i] ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                  {tabsDone[i] ? '✓ ' : ''}{tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
