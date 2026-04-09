@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>✍️ Hljóðritun 10: Í skólanum – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+
+    .gap-input {
+      display: inline-block;
+      border-bottom: 2px solid #9ca3af;
+      min-width: 60px;
+      padding: 2px 6px;
+      font-size: 0.9rem;
+      outline: none;
+      background: transparent;
+      text-align: center;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .gap-input:focus { border-color: #16a34a; }
+    .gap-input.correct { border-color: #16a34a; color: #15803d; font-weight: 500; }
+    .gap-input.wrong   { border-color: #dc2626; color: #dc2626; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+const SENTENCES = [
+  {
+    id: 1,
+    text: "Hulda og Halima eru í sama skóla.",
+    audio: "/isat1ia/media/hljodritun/k10_s01.mp3",
+  },
+  {
+    id: 2,
+    text: "Þær eru í smíði og heimilisfræði.",
+    audio: "/isat1ia/media/hljodritun/k10_s02.mp3",
+  },
+  {
+    id: 3,
+    text: "Í smíði búa þær til hluti úr við.",
+    audio: "/isat1ia/media/hljodritun/k10_s03.mp3",
+  },
+  {
+    id: 4,
+    text: "Í heimilisfræði læra þær að baka.",
+    audio: "/isat1ia/media/hljodritun/k10_s04.mp3",
+  },
+  {
+    id: 5,
+    text: "Þær þvo hendur áður en þær byrja að elda.",
+    audio: "/isat1ia/media/hljodritun/k10_s05.mp3",
+  },
+];
+
+function playMP3(audioPath, onEnd, onStart) {
+  try {
+    onStart && onStart();
+    const audio = new Audio(audioPath);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    audio.play().catch(() => onEnd && onEnd());
+  } catch (e) {
+    console.error(e);
+    onEnd && onEnd();
+  }
+}
+
+const normalize = s => s.toLowerCase().replace(/[.,!?;:]/g, '').trim();
+
+function tokenize(sentence) {
+  const tokens = [];
+  const regex = /(\S+)/g;
+  let match;
+  while ((match = regex.exec(sentence)) !== null) {
+    const raw = match[1];
+    const punct = (raw.match(/([.,!?;:]+)$/) || [''])[0];
+    const word = raw.slice(0, raw.length - punct.length);
+    tokens.push({ word, punct });
+  }
+  return tokens;
+}
+
+function computeWrongIndices(userInput, tokens, alternates) {
+  const userWords = userInput.trim().split(/\s+/).filter(Boolean);
+  return tokens.map((token, i) => {
+    const u = userWords[i] ? normalize(userWords[i]) : '';
+    const c = normalize(token.word);
+    if (u === c) return false;
+    const alts = alternates && alternates[c] ? alternates[c] : [];
+    return !alts.map(a => normalize(a)).includes(u);
+  });
+}
+
+function isGapCorrect(val, tokenWord, alternates) {
+  const u = normalize(val || '');
+  const c = normalize(tokenWord);
+  if (u === c) return true;
+  const alts = alternates && alternates[c] ? alternates[c] : [];
+  return alts.map(a => normalize(a)).includes(u);
+}
+
+const SentenceCard = ({ sentence, index, total }) => {
+  const tokens = tokenize(sentence.text);
+  const alternates = sentence.alternates || {};
+
+  const [speaking, setSpeaking]     = useState(false);
+  const [p1Input, setP1Input]       = useState('');
+  const [p1Done, setP1Done]         = useState(false);
+  const [wrongIdx, setWrongIdx]     = useState([]);
+
+  const [gapVals, setGapVals]       = useState({});
+  const [p2Done, setP2Done]         = useState(false);
+  const [gapResults, setGapResults] = useState({});
+  const [allOk2, setAllOk2]         = useState(false);
+
+  const wrongTokenIdx = tokens.map((_, i) => i).filter(i => wrongIdx[i]);
+  const allOk1 = p1Done && wrongIdx.every(w => !w);
+  const firstGapRef = useRef(null);
+
+  useEffect(() => {
+    if (p1Done && !allOk1) {
+      setTimeout(() => firstGapRef.current?.focus(), 150);
+    }
+  }, [p1Done]);
+
+  const handleListen = () => {
+    if (speaking) return;
+    playMP3(sentence.audio, () => setSpeaking(false), () => setSpeaking(true));
+  };
+
+  const handleCheck1 = () => {
+    setWrongIdx(computeWrongIndices(p1Input, tokens, alternates));
+    setP1Done(true);
+  };
+
+  const handleCheck2 = () => {
+    const results = {};
+    let ok = true;
+    wrongTokenIdx.forEach(i => {
+      const correct = isGapCorrect(gapVals[i], tokens[i].word, alternates);
+      results[i] = correct;
+      if (!correct) ok = false;
+    });
+    setGapResults(results);
+    setAllOk2(ok);
+    setP2Done(true);
+  };
+
+  const ListenBtn = () => (
+    <button
+      onClick={handleListen}
+      disabled={speaking}
+      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border
+        transition-all ${speaking
+          ? 'bg-green-50 text-green-700 border-green-200 cursor-wait'
+          : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+      <span className="opacity-70">🎧</span>
+      <span className="font-light">Hlustaðu á setninguna</span>
+      <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+    </button>
+  );
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+
+      <div className="flex items-center justify-between mb-4">
+        <span className="w-7 h-7 rounded-full bg-green-600 text-white text-sm
+          flex items-center justify-center font-medium">{index + 1}</span>
+        <span className="text-xs text-gray-400 font-light">{index + 1} af {total}</span>
+      </div>
+
+      <div className="mb-5">
+        <ListenBtn />
+        {speaking && <p className="text-xs text-green-600 font-light mt-1 ml-1">Les upp...</p>}
+      </div>
+
+      {!p1Done && (
+        <div className="fade-in">
+          <label className="block text-sm font-light text-gray-600 mb-2">
+            Skrifaðu nákvæmlega það sem þú heyrðir:
+          </label>
+          <textarea
+            value={p1Input}
+            onChange={e => setP1Input(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (p1Input.trim()) handleCheck1();
+              }
+            }}
+            rows={2}
+            placeholder="Skrifaðu setninguna hér..."
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+              focus:outline-none focus:ring-2 focus:ring-green-500 font-light resize-none text-sm mb-3"
+          />
+          <button
+            onClick={handleCheck1}
+            disabled={!p1Input.trim()}
+            className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+            Athuga ✓
+          </button>
+        </div>
+      )}
+
+      {p1Done && allOk1 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center fade-in">
+          <p className="text-2xl mb-1">🎉</p>
+          <p className="text-green-700 font-medium">Fullkomið! Allt rétt í fyrstu tilraun!</p>
+          <p className="text-green-600 font-light text-sm mt-2">{sentence.text}</p>
+        </div>
+      )}
+
+      {p1Done && !allOk1 && (
+        <div className="fade-in">
+          <p className="text-sm font-light text-gray-500 mb-3">
+            Rétt orð standa – fylltu inn í eyðurnar:
+          </p>
+
+          <div className="bg-gray-50 rounded-lg px-5 py-4 mb-4 leading-[2.2rem] text-sm">
+            {tokens.map((token, i) => {
+              if (!wrongIdx[i]) {
+                return (
+                  <span key={i} className="text-gray-700 font-light">
+                    {token.word}{token.punct}{' '}
+                  </span>
+                );
+              }
+              const isFirst = i === wrongTokenIdx[0];
+              let cls = 'gap-input';
+              if (p2Done) cls += gapResults[i] ? ' correct' : ' wrong';
+
+              return (
+                <span key={i}>
+                  <input
+                    ref={isFirst ? firstGapRef : null}
+                    type="text"
+                    value={gapVals[i] || ''}
+                    onChange={e => setGapVals(prev => ({ ...prev, [i]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') handleCheck2(); }}
+                    disabled={p2Done}
+                    className={cls}
+                    style={{ width: Math.max(60, token.word.length * 12) + 'px' }}
+                    autoComplete="off"
+                    spellCheck="false"
+                  />
+                  {token.punct}{' '}
+                </span>
+              );
+            })}
+          </div>
+
+          {!p2Done && (
+            <button
+              onClick={handleCheck2}
+              disabled={wrongTokenIdx.some(i => !(gapVals[i] || '').trim())}
+              className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+              Athuga ✓
+            </button>
+          )}
+
+          {p2Done && (
+            <div className="fade-in mt-3 space-y-3">
+              {allOk2 ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <p className="text-xl mb-1">✓</p>
+                  <p className="text-green-700 font-medium">Vel gert! Allar eyður réttar!</p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-amber-700 font-medium text-sm mb-2">Rétta setningin:</p>
+                  <p className="text-gray-700 font-light text-sm">{sentence.text}</p>
+                </div>
+              )}
+              <button
+                onClick={handleListen}
+                disabled={speaking}
+                className="px-4 py-1.5 border-2 border-green-200 text-green-700 rounded-lg
+                  hover:bg-green-50 transition-colors font-light text-sm">
+                🔊 Hlustaðu aftur
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const App = () => (
+  <div>
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <button onClick={() => window.history.back()}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+          ← Til baka
+        </button>
+        <h1 className="text-3xl font-light text-gray-800 mb-2">✍️ Hljóðritun 10: Í skólanum</h1>
+        <p className="text-gray-500 text-sm font-light">Hljóðritunarverkefni · A1–A2</p>
+      </div>
+    </header>
+
+    <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-12">
+      <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+        <div className="space-y-1 text-sm font-light text-green-800">
+          <p>🎧 Ýttu á „Hlustaðu" og hlustaðu vel á setninguna</p>
+          <p>✍️ Skrifaðu nákvæmlega það sem þú heyrðir</p>
+          <p>🔄 Þú mátt hlusta eins oft og þú vilt</p>
+          <p>✓ Rétt orð standa – röng orð verða eyður sem þú fyllir inn</p>
+        </div>
+      </div>
+
+      {SENTENCES.map((s, i) => (
+        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} />
+      ))}
+    </main>
+  </div>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
