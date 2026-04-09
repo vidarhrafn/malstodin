@@ -43,27 +43,44 @@
 const { useState, useRef, useEffect } = React;
 
 // --- Gögn ---
+// alternates: önnur gilt form af orði (t.d. tölustafir = orð)
 const SENTENCES = [
-  { id: 1, text: "Árni og Elsa búa í Hlíðunum í Reykjavík." },
-  { id: 2, text: "Elsa vinnur á sjúkrahúsi." },
-  { id: 3, text: "Hulda er tólf ára og er í Austurbæjarskóla." },
+  {
+    id: 1,
+    text: "Árni og Elsa eru gift og búa í Reykjavík.",
+    audio: "/media/hljodritun/k1_s01.mp3",
+  },
+  {
+    id: 2,
+    text: "Elsa vinnur á sjúkrahúsi.",
+    audio: "/media/hljodritun/k1_s02.mp3",
+  },
+  {
+    id: 3,
+    text: "Harpa er sautján ára og er í Tækniskólanum.",
+    audio: "/media/hljodritun/k1_s03.mp3",
+    alternates: { "sautján": ["17"], "17": ["sautján"] },
+  },
+  {
+    id: 4,
+    text: "Hulda sækir systur sína í skólann.",
+    audio: "/media/hljodritun/k1_s04.mp3",
+  },
+  {
+    id: 5,
+    text: "Stundum fara þær á kaffihús eða á bókasafn.",
+    audio: "/media/hljodritun/k1_s05.mp3",
+  },
 ];
 
-// --- Azure TTS ---
-async function playAudio(text, onEnd, onStart) {
+// --- MP3 spilari ---
+function playMP3(audioPath, onEnd, onStart) {
   try {
     onStart && onStart();
-    const r = await fetch('/.netlify/functions/speak', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text_to_speak: text }),
-    });
-    const data = await r.json();
-    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
-    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    const audio = new Audio(audioPath);
     audio.onended = () => onEnd && onEnd();
     audio.onerror = () => onEnd && onEnd();
-    await audio.play().catch(() => onEnd && onEnd());
+    audio.play().catch(() => onEnd && onEnd());
   } catch (e) {
     console.error(e);
     onEnd && onEnd();
@@ -73,7 +90,7 @@ async function playAudio(text, onEnd, onStart) {
 // --- Normalize til samanburðar ---
 const normalize = s => s.toLowerCase().replace(/[.,!?;:]/g, '').trim();
 
-// --- Splitta setningu í tokens með greinarmerki ---
+// --- Splitta setningu í tokens ---
 function tokenize(sentence) {
   const tokens = [];
   const regex = /(\S+)/g;
@@ -88,33 +105,45 @@ function tokenize(sentence) {
 }
 
 // --- Reikna hvaða token-index eru röng ---
-function computeWrongIndices(userInput, tokens) {
+// Tekur tillit til alternates (t.d. 17 = sautján)
+function computeWrongIndices(userInput, tokens, alternates) {
   const userWords = userInput.trim().split(/\s+/).filter(Boolean);
   return tokens.map((token, i) => {
     const u = userWords[i] ? normalize(userWords[i]) : '';
-    return u !== normalize(token.word);
+    const c = normalize(token.word);
+    if (u === c) return false;
+    // Athuga alternates
+    const alts = alternates && alternates[c] ? alternates[c] : [];
+    return !alts.includes(u);
   });
+}
+
+// --- Athuga eyðu (fasi 2) með alternates ---
+function isGapCorrect(val, tokenWord, alternates) {
+  const u = normalize(val || '');
+  const c = normalize(tokenWord);
+  if (u === c) return true;
+  const alts = alternates && alternates[c] ? alternates[c] : [];
+  return alts.includes(u);
 }
 
 // --- Setningarkort ---
 const SentenceCard = ({ sentence, index, total }) => {
   const tokens = tokenize(sentence.text);
-  const [speaking, setSpeaking]       = useState(false);
+  const alternates = sentence.alternates || {};
 
-  // Fasi 1
-  const [p1Input, setP1Input]         = useState('');
-  const [p1Done, setP1Done]           = useState(false);
-  const [wrongIdx, setWrongIdx]       = useState([]);  // boolean[] per token
+  const [speaking, setSpeaking]     = useState(false);
+  const [p1Input, setP1Input]       = useState('');
+  const [p1Done, setP1Done]         = useState(false);
+  const [wrongIdx, setWrongIdx]     = useState([]);
 
-  // Fasi 2
-  const [gapVals, setGapVals]         = useState({});  // { i: string }
-  const [p2Done, setP2Done]           = useState(false);
-  const [gapResults, setGapResults]   = useState({});  // { i: bool }
-  const [allOk2, setAllOk2]           = useState(false);
+  const [gapVals, setGapVals]       = useState({});
+  const [p2Done, setP2Done]         = useState(false);
+  const [gapResults, setGapResults] = useState({});
+  const [allOk2, setAllOk2]         = useState(false);
 
   const wrongTokenIdx = tokens.map((_, i) => i).filter(i => wrongIdx[i]);
   const allOk1 = p1Done && wrongIdx.every(w => !w);
-
   const firstGapRef = useRef(null);
 
   useEffect(() => {
@@ -125,11 +154,11 @@ const SentenceCard = ({ sentence, index, total }) => {
 
   const handleListen = () => {
     if (speaking) return;
-    playAudio(sentence.text, () => setSpeaking(false), () => setSpeaking(true));
+    playMP3(sentence.audio, () => setSpeaking(false), () => setSpeaking(true));
   };
 
   const handleCheck1 = () => {
-    setWrongIdx(computeWrongIndices(p1Input, tokens));
+    setWrongIdx(computeWrongIndices(p1Input, tokens, alternates));
     setP1Done(true);
   };
 
@@ -137,7 +166,7 @@ const SentenceCard = ({ sentence, index, total }) => {
     const results = {};
     let ok = true;
     wrongTokenIdx.forEach(i => {
-      const correct = normalize(gapVals[i] || '') === normalize(tokens[i].word);
+      const correct = isGapCorrect(gapVals[i], tokens[i].word, alternates);
       results[i] = correct;
       if (!correct) ok = false;
     });
@@ -163,20 +192,18 @@ const SentenceCard = ({ sentence, index, total }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
 
-      {/* Fyrirsögn */}
       <div className="flex items-center justify-between mb-4">
         <span className="w-7 h-7 rounded-full bg-green-600 text-white text-sm
           flex items-center justify-center font-medium">{index + 1}</span>
         <span className="text-xs text-gray-400 font-light">{index + 1} af {total}</span>
       </div>
 
-      {/* Hlustunartakki */}
       <div className="mb-5">
         <ListenBtn />
         {speaking && <p className="text-xs text-green-600 font-light mt-1 ml-1">Les upp...</p>}
       </div>
 
-      {/* ===== FASI 1: Heila setningin ===== */}
+      {/* FASI 1 */}
       {!p1Done && (
         <div className="fade-in">
           <label className="block text-sm font-light text-gray-600 mb-2">
@@ -206,7 +233,7 @@ const SentenceCard = ({ sentence, index, total }) => {
         </div>
       )}
 
-      {/* ===== NIÐURSTAÐA 1: Allt rétt ===== */}
+      {/* NIÐURSTAÐA 1: Allt rétt */}
       {p1Done && allOk1 && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center fade-in">
           <p className="text-2xl mb-1">🎉</p>
@@ -215,25 +242,22 @@ const SentenceCard = ({ sentence, index, total }) => {
         </div>
       )}
 
-      {/* ===== FASI 2: Eyður ===== */}
+      {/* FASI 2: Eyður */}
       {p1Done && !allOk1 && (
         <div className="fade-in">
           <p className="text-sm font-light text-gray-500 mb-3">
             Rétt orð standa – fylltu inn í eyðurnar:
           </p>
 
-          {/* Setning með eyðum */}
           <div className="bg-gray-50 rounded-lg px-5 py-4 mb-4 leading-[2.2rem] text-sm">
             {tokens.map((token, i) => {
               if (!wrongIdx[i]) {
-                // Rétt orð – sýnt
                 return (
                   <span key={i} className="text-gray-700 font-light">
                     {token.word}{token.punct}{' '}
                   </span>
                 );
               }
-              // Eyða
               const isFirst = i === wrongTokenIdx[0];
               let cls = 'gap-input';
               if (p2Done) cls += gapResults[i] ? ' correct' : ' wrong';
@@ -258,7 +282,6 @@ const SentenceCard = ({ sentence, index, total }) => {
             })}
           </div>
 
-          {/* Athuga takki fasi 2 */}
           {!p2Done && (
             <button
               onClick={handleCheck2}
@@ -269,7 +292,6 @@ const SentenceCard = ({ sentence, index, total }) => {
             </button>
           )}
 
-          {/* Niðurstaða fasi 2 */}
           {p2Done && (
             <div className="fade-in mt-3 space-y-3">
               {allOk2 ? (
