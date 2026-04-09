@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>✍️ Hljóðritun 1: Fjölskyldan – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+
+    /* Diff highlighting */
+    .word-correct { color: #15803d; font-weight: 500; }
+    .word-wrong   { color: #dc2626; text-decoration: line-through; font-weight: 500; }
+    .word-missing { color: #d97706; font-style: italic; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+// --- Gögn ---
+const SENTENCES = [
+  {
+    id: 1,
+    text: "Árni og Elsa búa í Hlíðunum í Reykjavík.",
+  },
+  {
+    id: 2,
+    text: "Elsa vinnur á sjúkrahúsi.",
+  },
+  {
+    id: 3,
+    text: "Hulda er tólf ára og er í Austurbæjarskóla.",
+  },
+];
+
+// --- Azure TTS ---
+async function playAudio(text, onEnd, onStart) {
+  try {
+    onStart && onStart();
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) {
+      onEnd && onEnd();
+      return;
+    }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended  = () => onEnd && onEnd();
+    audio.onerror  = () => onEnd && onEnd();
+    await audio.play().catch(() => onEnd && onEnd());
+    return audio;
+  } catch (e) {
+    console.error(e);
+    onEnd && onEnd();
+  }
+}
+
+// --- Diff fallið ---
+function computeDiff(userInput, correct) {
+  const normalize = (s) =>
+    s.toLowerCase()
+      .replace(/[.,!?;:]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const userWords    = normalize(userInput).split(' ').filter(Boolean);
+  const correctWords = normalize(correct).split(' ').filter(Boolean);
+
+  // Reikna hvort sérhvert orð nemanda sé rétt á réttum stað
+  const maxLen = Math.max(userWords.length, correctWords.length);
+  const result = [];
+
+  for (let i = 0; i < maxLen; i++) {
+    const u = userWords[i];
+    const c = correctWords[i];
+
+    if (u === undefined) {
+      // Vantar orð
+      result.push({ type: 'missing', word: c });
+    } else if (c === undefined) {
+      // Auka orð
+      result.push({ type: 'wrong', word: u });
+    } else if (u === c) {
+      result.push({ type: 'correct', word: u });
+    } else {
+      result.push({ type: 'wrong', word: u, expected: c });
+    }
+  }
+
+  const correctCount = result.filter(r => r.type === 'correct').length;
+  const isFullyCorrect = result.every(r => r.type === 'correct') && userWords.length === correctWords.length;
+
+  return { tokens: result, correctCount, total: correctWords.length, isFullyCorrect };
+}
+
+// --- DiffDisplay íhlutur ---
+const DiffDisplay = ({ tokens, isFullyCorrect }) => {
+  if (isFullyCorrect) {
+    return (
+      <div className="mt-3 p-3 rounded-lg border bg-green-50 border-green-200 fade-in">
+        <p className="text-green-700 font-medium text-sm">✓ Fullkomið!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 p-3 rounded-lg border bg-amber-50 border-amber-200 fade-in">
+      <p className="text-xs text-amber-700 font-medium mb-2">Þitt svar orð fyrir orð:</p>
+      <p className="text-sm leading-relaxed">
+        {tokens.map((t, i) => {
+          if (t.type === 'correct') {
+            return <span key={i} className="word-correct">{t.word} </span>;
+          } else if (t.type === 'wrong') {
+            return (
+              <span key={i}>
+                <span className="word-wrong">{t.word}</span>
+                {t.expected && (
+                  <span className="text-green-700 font-medium"> ({t.expected}) </span>
+                )}
+              </span>
+            );
+          } else {
+            return (
+              <span key={i} className="word-missing">[{t.word}] </span>
+            );
+          }
+        })}
+      </p>
+      <p className="text-xs text-amber-600 mt-2 font-light">
+        🟢 Rétt  🔴 Rangt (rétta orðið í sviga)  🟡 Vantar
+      </p>
+    </div>
+  );
+};
+
+// --- Eitt setningarkort ---
+const SentenceCard = ({ sentence, index, total }) => {
+  const [speaking, setSpeaking]   = useState(false);
+  const [userInput, setUserInput] = useState('');
+  const [checked, setChecked]     = useState(false);
+  const [diff, setDiff]           = useState(null);
+  const audioRef = useRef(null);
+
+  const handleListen = () => {
+    if (speaking) return;
+    playAudio(
+      sentence.text,
+      () => setSpeaking(false),
+      () => setSpeaking(true)
+    );
+  };
+
+  const handleCheck = () => {
+    if (!userInput.trim()) return;
+    const result = computeDiff(userInput, sentence.text);
+    setDiff(result);
+    setChecked(true);
+  };
+
+  const handleRetry = () => {
+    setUserInput('');
+    setChecked(false);
+    setDiff(null);
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+      {/* Númer og hlustun */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="w-7 h-7 rounded-full bg-green-600 text-white text-sm
+          flex items-center justify-center font-medium">
+          {index + 1}
+        </span>
+        <span className="text-xs text-gray-400 font-light">{index + 1} af {total}</span>
+      </div>
+
+      {/* Hlustunartakki */}
+      <div className="mb-5">
+        <button
+          onClick={handleListen}
+          disabled={speaking}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border
+            transition-all ${speaking
+              ? 'bg-green-50 text-green-700 border-green-200 cursor-wait'
+              : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200 cursor-pointer'}`}>
+          <span className="opacity-70">🎧</span>
+          <span className="font-light">Hlustaðu á setninguna</span>
+          <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+        </button>
+        {speaking && (
+          <p className="text-xs text-green-600 font-light mt-1 ml-1">Les upp...</p>
+        )}
+      </div>
+
+      {/* Innsláttarreitur */}
+      <div className="mb-4">
+        <label className="block text-sm font-light text-gray-600 mb-2">
+          Skrifaðu það sem þú heyrðir:
+        </label>
+        <textarea
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (!checked) handleCheck();
+            }
+          }}
+          disabled={checked}
+          rows={2}
+          placeholder="Skrifaðu setninguna hér..."
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+            focus:outline-none focus:ring-2 focus:ring-green-500 font-light
+            disabled:bg-gray-50 resize-none text-sm"
+        />
+      </div>
+
+      {/* Takkar */}
+      {!checked ? (
+        <button
+          onClick={handleCheck}
+          disabled={!userInput.trim()}
+          className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+            disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+          Athuga ✓
+        </button>
+      ) : (
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={handleRetry}
+            className="px-5 py-2 border-2 border-gray-200 text-gray-600 rounded-lg
+              hover:bg-gray-50 transition-colors font-light text-sm">
+            ↺ Reyna aftur
+          </button>
+          <button
+            onClick={handleListen}
+            disabled={speaking}
+            className="px-5 py-2 border-2 border-green-200 text-green-700 rounded-lg
+              hover:bg-green-50 transition-colors font-light text-sm">
+            🔊 Hlustaðu aftur
+          </button>
+        </div>
+      )}
+
+      {/* Diff niðurstaða */}
+      {diff && (
+        <>
+          <DiffDisplay tokens={diff.tokens} isFullyCorrect={diff.isFullyCorrect} />
+          {!diff.isFullyCorrect && (
+            <div className="mt-3 p-3 rounded-lg border bg-gray-50 border-gray-200 fade-in">
+              <p className="text-xs text-gray-500 font-medium mb-1">Rétta setningin:</p>
+              <p className="text-sm text-gray-700 font-light">{sentence.text}</p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+// --- Aðalforrit ---
+const App = () => {
+  return (
+    <div>
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <button
+            onClick={() => window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-2">
+            ✍️ Hljóðritun 1: Fjölskyldan
+          </h1>
+          <p className="text-gray-500 text-sm font-light">Hljóðritunarverkefni · A1–A2</p>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-12">
+        {/* Leiðbeiningabox */}
+        <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+          <div className="space-y-1 text-sm font-light text-green-800">
+            <p>🎧 Ýttu á „Hlustaðu" og hlustaðu vel á setninguna</p>
+            <p>✍️ Skrifaðu nákvæmlega það sem þú heyrðir</p>
+            <p>🔄 Þú mátt hlusta eins oft og þú vilt</p>
+            <p>✓ Ýttu á „Athuga" til að sjá hvað gekk</p>
+          </div>
+        </div>
+
+        {/* Setningar */}
+        {SENTENCES.map((s, i) => (
+          <SentenceCard
+            key={s.id}
+            sentence={s}
+            index={i}
+            total={SENTENCES.length}
+          />
+        ))}
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
