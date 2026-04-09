@@ -20,31 +20,33 @@
     }
     .fade-in { animation: fadeIn 0.4s ease both; }
 
-    /* Diff highlighting */
-    .word-correct { color: #15803d; font-weight: 500; }
-    .word-wrong   { color: #dc2626; text-decoration: line-through; font-weight: 500; }
-    .word-missing { color: #d97706; font-style: italic; }
+    .gap-input {
+      display: inline-block;
+      border-bottom: 2px solid #9ca3af;
+      min-width: 60px;
+      padding: 2px 6px;
+      font-size: 0.9rem;
+      outline: none;
+      background: transparent;
+      text-align: center;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .gap-input:focus { border-color: #16a34a; }
+    .gap-input.correct { border-color: #16a34a; color: #15803d; font-weight: 500; }
+    .gap-input.wrong   { border-color: #dc2626; color: #dc2626; }
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useRef } = React;
+const { useState, useRef, useEffect } = React;
 
 // --- Gögn ---
 const SENTENCES = [
-  {
-    id: 1,
-    text: "Árni og Elsa búa í Hlíðunum í Reykjavík.",
-  },
-  {
-    id: 2,
-    text: "Elsa vinnur á sjúkrahúsi.",
-  },
-  {
-    id: 3,
-    text: "Hulda er tólf ára og er í Austurbæjarskóla.",
-  },
+  { id: 1, text: "Árni og Elsa búa í Hlíðunum í Reykjavík." },
+  { id: 2, text: "Elsa vinnur á sjúkrahúsi." },
+  { id: 3, text: "Hulda er tólf ára og er í Austurbæjarskóla." },
 ];
 
 // --- Azure TTS ---
@@ -57,267 +59,275 @@ async function playAudio(text, onEnd, onStart) {
       body: JSON.stringify({ text_to_speak: text }),
     });
     const data = await r.json();
-    if (!r.ok || data.error || !data.audio_base64) {
-      onEnd && onEnd();
-      return;
-    }
+    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
     const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
-    audio.onended  = () => onEnd && onEnd();
-    audio.onerror  = () => onEnd && onEnd();
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
     await audio.play().catch(() => onEnd && onEnd());
-    return audio;
   } catch (e) {
     console.error(e);
     onEnd && onEnd();
   }
 }
 
-// --- Diff fallið ---
-function computeDiff(userInput, correct) {
-  const normalize = (s) =>
-    s.toLowerCase()
-      .replace(/[.,!?;:]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+// --- Normalize til samanburðar ---
+const normalize = s => s.toLowerCase().replace(/[.,!?;:]/g, '').trim();
 
-  const userWords    = normalize(userInput).split(' ').filter(Boolean);
-  const correctWords = normalize(correct).split(' ').filter(Boolean);
-
-  // Reikna hvort sérhvert orð nemanda sé rétt á réttum stað
-  const maxLen = Math.max(userWords.length, correctWords.length);
-  const result = [];
-
-  for (let i = 0; i < maxLen; i++) {
-    const u = userWords[i];
-    const c = correctWords[i];
-
-    if (u === undefined) {
-      // Vantar orð
-      result.push({ type: 'missing', word: c });
-    } else if (c === undefined) {
-      // Auka orð
-      result.push({ type: 'wrong', word: u });
-    } else if (u === c) {
-      result.push({ type: 'correct', word: u });
-    } else {
-      result.push({ type: 'wrong', word: u, expected: c });
-    }
+// --- Splitta setningu í tokens með greinarmerki ---
+function tokenize(sentence) {
+  const tokens = [];
+  const regex = /(\S+)/g;
+  let match;
+  while ((match = regex.exec(sentence)) !== null) {
+    const raw = match[1];
+    const punct = (raw.match(/([.,!?;:]+)$/) || [''])[0];
+    const word = raw.slice(0, raw.length - punct.length);
+    tokens.push({ word, punct });
   }
-
-  const correctCount = result.filter(r => r.type === 'correct').length;
-  const isFullyCorrect = result.every(r => r.type === 'correct') && userWords.length === correctWords.length;
-
-  return { tokens: result, correctCount, total: correctWords.length, isFullyCorrect };
+  return tokens;
 }
 
-// --- DiffDisplay íhlutur ---
-const DiffDisplay = ({ tokens, isFullyCorrect }) => {
-  if (isFullyCorrect) {
-    return (
-      <div className="mt-3 p-3 rounded-lg border bg-green-50 border-green-200 fade-in">
-        <p className="text-green-700 font-medium text-sm">✓ Fullkomið!</p>
-      </div>
-    );
-  }
+// --- Reikna hvaða token-index eru röng ---
+function computeWrongIndices(userInput, tokens) {
+  const userWords = userInput.trim().split(/\s+/).filter(Boolean);
+  return tokens.map((token, i) => {
+    const u = userWords[i] ? normalize(userWords[i]) : '';
+    return u !== normalize(token.word);
+  });
+}
 
-  return (
-    <div className="mt-3 p-3 rounded-lg border bg-amber-50 border-amber-200 fade-in">
-      <p className="text-xs text-amber-700 font-medium mb-2">Þitt svar orð fyrir orð:</p>
-      <p className="text-sm leading-relaxed">
-        {tokens.map((t, i) => {
-          if (t.type === 'correct') {
-            return <span key={i} className="word-correct">{t.word} </span>;
-          } else if (t.type === 'wrong') {
-            return (
-              <span key={i}>
-                <span className="word-wrong">{t.word}</span>
-                {t.expected && (
-                  <span className="text-green-700 font-medium"> ({t.expected}) </span>
-                )}
-              </span>
-            );
-          } else {
-            return (
-              <span key={i} className="word-missing">[{t.word}] </span>
-            );
-          }
-        })}
-      </p>
-      <p className="text-xs text-amber-600 mt-2 font-light">
-        🟢 Rétt  🔴 Rangt (rétta orðið í sviga)  🟡 Vantar
-      </p>
-    </div>
-  );
-};
-
-// --- Eitt setningarkort ---
+// --- Setningarkort ---
 const SentenceCard = ({ sentence, index, total }) => {
-  const [speaking, setSpeaking]   = useState(false);
-  const [userInput, setUserInput] = useState('');
-  const [checked, setChecked]     = useState(false);
-  const [diff, setDiff]           = useState(null);
-  const audioRef = useRef(null);
+  const tokens = tokenize(sentence.text);
+  const [speaking, setSpeaking]       = useState(false);
+
+  // Fasi 1
+  const [p1Input, setP1Input]         = useState('');
+  const [p1Done, setP1Done]           = useState(false);
+  const [wrongIdx, setWrongIdx]       = useState([]);  // boolean[] per token
+
+  // Fasi 2
+  const [gapVals, setGapVals]         = useState({});  // { i: string }
+  const [p2Done, setP2Done]           = useState(false);
+  const [gapResults, setGapResults]   = useState({});  // { i: bool }
+  const [allOk2, setAllOk2]           = useState(false);
+
+  const wrongTokenIdx = tokens.map((_, i) => i).filter(i => wrongIdx[i]);
+  const allOk1 = p1Done && wrongIdx.every(w => !w);
+
+  const firstGapRef = useRef(null);
+
+  useEffect(() => {
+    if (p1Done && !allOk1) {
+      setTimeout(() => firstGapRef.current?.focus(), 150);
+    }
+  }, [p1Done]);
 
   const handleListen = () => {
     if (speaking) return;
-    playAudio(
-      sentence.text,
-      () => setSpeaking(false),
-      () => setSpeaking(true)
-    );
+    playAudio(sentence.text, () => setSpeaking(false), () => setSpeaking(true));
   };
 
-  const handleCheck = () => {
-    if (!userInput.trim()) return;
-    const result = computeDiff(userInput, sentence.text);
-    setDiff(result);
-    setChecked(true);
+  const handleCheck1 = () => {
+    setWrongIdx(computeWrongIndices(p1Input, tokens));
+    setP1Done(true);
   };
 
-  const handleRetry = () => {
-    setUserInput('');
-    setChecked(false);
-    setDiff(null);
+  const handleCheck2 = () => {
+    const results = {};
+    let ok = true;
+    wrongTokenIdx.forEach(i => {
+      const correct = normalize(gapVals[i] || '') === normalize(tokens[i].word);
+      results[i] = correct;
+      if (!correct) ok = false;
+    });
+    setGapResults(results);
+    setAllOk2(ok);
+    setP2Done(true);
   };
+
+  const ListenBtn = () => (
+    <button
+      onClick={handleListen}
+      disabled={speaking}
+      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border
+        transition-all ${speaking
+          ? 'bg-green-50 text-green-700 border-green-200 cursor-wait'
+          : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+      <span className="opacity-70">🎧</span>
+      <span className="font-light">Hlustaðu á setninguna</span>
+      <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+    </button>
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
-      {/* Númer og hlustun */}
+
+      {/* Fyrirsögn */}
       <div className="flex items-center justify-between mb-4">
         <span className="w-7 h-7 rounded-full bg-green-600 text-white text-sm
-          flex items-center justify-center font-medium">
-          {index + 1}
-        </span>
+          flex items-center justify-center font-medium">{index + 1}</span>
         <span className="text-xs text-gray-400 font-light">{index + 1} af {total}</span>
       </div>
 
       {/* Hlustunartakki */}
       <div className="mb-5">
-        <button
-          onClick={handleListen}
-          disabled={speaking}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border
-            transition-all ${speaking
-              ? 'bg-green-50 text-green-700 border-green-200 cursor-wait'
-              : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200 cursor-pointer'}`}>
-          <span className="opacity-70">🎧</span>
-          <span className="font-light">Hlustaðu á setninguna</span>
-          <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
-        </button>
-        {speaking && (
-          <p className="text-xs text-green-600 font-light mt-1 ml-1">Les upp...</p>
-        )}
+        <ListenBtn />
+        {speaking && <p className="text-xs text-green-600 font-light mt-1 ml-1">Les upp...</p>}
       </div>
 
-      {/* Innsláttarreitur */}
-      <div className="mb-4">
-        <label className="block text-sm font-light text-gray-600 mb-2">
-          Skrifaðu það sem þú heyrðir:
-        </label>
-        <textarea
-          value={userInput}
-          onChange={(e) => setUserInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              if (!checked) handleCheck();
-            }
-          }}
-          disabled={checked}
-          rows={2}
-          placeholder="Skrifaðu setninguna hér..."
-          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
-            focus:outline-none focus:ring-2 focus:ring-green-500 font-light
-            disabled:bg-gray-50 resize-none text-sm"
-        />
-      </div>
-
-      {/* Takkar */}
-      {!checked ? (
-        <button
-          onClick={handleCheck}
-          disabled={!userInput.trim()}
-          className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
-            disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
-          Athuga ✓
-        </button>
-      ) : (
-        <div className="flex gap-3 items-center">
+      {/* ===== FASI 1: Heila setningin ===== */}
+      {!p1Done && (
+        <div className="fade-in">
+          <label className="block text-sm font-light text-gray-600 mb-2">
+            Skrifaðu nákvæmlega það sem þú heyrðir:
+          </label>
+          <textarea
+            value={p1Input}
+            onChange={e => setP1Input(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (p1Input.trim()) handleCheck1();
+              }
+            }}
+            rows={2}
+            placeholder="Skrifaðu setninguna hér..."
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+              focus:outline-none focus:ring-2 focus:ring-green-500 font-light resize-none text-sm mb-3"
+          />
           <button
-            onClick={handleRetry}
-            className="px-5 py-2 border-2 border-gray-200 text-gray-600 rounded-lg
-              hover:bg-gray-50 transition-colors font-light text-sm">
-            ↺ Reyna aftur
-          </button>
-          <button
-            onClick={handleListen}
-            disabled={speaking}
-            className="px-5 py-2 border-2 border-green-200 text-green-700 rounded-lg
-              hover:bg-green-50 transition-colors font-light text-sm">
-            🔊 Hlustaðu aftur
+            onClick={handleCheck1}
+            disabled={!p1Input.trim()}
+            className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+            Athuga ✓
           </button>
         </div>
       )}
 
-      {/* Diff niðurstaða */}
-      {diff && (
-        <>
-          <DiffDisplay tokens={diff.tokens} isFullyCorrect={diff.isFullyCorrect} />
-          {!diff.isFullyCorrect && (
-            <div className="mt-3 p-3 rounded-lg border bg-gray-50 border-gray-200 fade-in">
-              <p className="text-xs text-gray-500 font-medium mb-1">Rétta setningin:</p>
-              <p className="text-sm text-gray-700 font-light">{sentence.text}</p>
+      {/* ===== NIÐURSTAÐA 1: Allt rétt ===== */}
+      {p1Done && allOk1 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center fade-in">
+          <p className="text-2xl mb-1">🎉</p>
+          <p className="text-green-700 font-medium">Fullkomið! Allt rétt í fyrstu tilraun!</p>
+          <p className="text-green-600 font-light text-sm mt-2">{sentence.text}</p>
+        </div>
+      )}
+
+      {/* ===== FASI 2: Eyður ===== */}
+      {p1Done && !allOk1 && (
+        <div className="fade-in">
+          <p className="text-sm font-light text-gray-500 mb-3">
+            Rétt orð standa – fylltu inn í eyðurnar:
+          </p>
+
+          {/* Setning með eyðum */}
+          <div className="bg-gray-50 rounded-lg px-5 py-4 mb-4 leading-[2.2rem] text-sm">
+            {tokens.map((token, i) => {
+              if (!wrongIdx[i]) {
+                // Rétt orð – sýnt
+                return (
+                  <span key={i} className="text-gray-700 font-light">
+                    {token.word}{token.punct}{' '}
+                  </span>
+                );
+              }
+              // Eyða
+              const isFirst = i === wrongTokenIdx[0];
+              let cls = 'gap-input';
+              if (p2Done) cls += gapResults[i] ? ' correct' : ' wrong';
+
+              return (
+                <span key={i}>
+                  <input
+                    ref={isFirst ? firstGapRef : null}
+                    type="text"
+                    value={gapVals[i] || ''}
+                    onChange={e => setGapVals(prev => ({ ...prev, [i]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') handleCheck2(); }}
+                    disabled={p2Done}
+                    className={cls}
+                    style={{ width: Math.max(60, token.word.length * 12) + 'px' }}
+                    autoComplete="off"
+                    spellCheck="false"
+                  />
+                  {token.punct}{' '}
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Athuga takki fasi 2 */}
+          {!p2Done && (
+            <button
+              onClick={handleCheck2}
+              disabled={wrongTokenIdx.some(i => !(gapVals[i] || '').trim())}
+              className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+              Athuga ✓
+            </button>
+          )}
+
+          {/* Niðurstaða fasi 2 */}
+          {p2Done && (
+            <div className="fade-in mt-3 space-y-3">
+              {allOk2 ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <p className="text-xl mb-1">✓</p>
+                  <p className="text-green-700 font-medium">Vel gert! Allar eyður réttar!</p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-amber-700 font-medium text-sm mb-2">Rétta setningin:</p>
+                  <p className="text-gray-700 font-light text-sm">{sentence.text}</p>
+                </div>
+              )}
+              <button
+                onClick={handleListen}
+                disabled={speaking}
+                className="px-4 py-1.5 border-2 border-green-200 text-green-700 rounded-lg
+                  hover:bg-green-50 transition-colors font-light text-sm">
+                🔊 Hlustaðu aftur
+              </button>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
 };
 
-// --- Aðalforrit ---
-const App = () => {
-  return (
-    <div>
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          <button
-            onClick={() => window.history.back()}
-            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
-            ← Til baka
-          </button>
-          <h1 className="text-3xl font-light text-gray-800 mb-2">
-            ✍️ Hljóðritun 1: Fjölskyldan
-          </h1>
-          <p className="text-gray-500 text-sm font-light">Hljóðritunarverkefni · A1–A2</p>
-        </div>
-      </header>
+// --- App ---
+const App = () => (
+  <div>
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <button onClick={() => window.history.back()}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+          ← Til baka
+        </button>
+        <h1 className="text-3xl font-light text-gray-800 mb-2">✍️ Hljóðritun 1: Fjölskyldan</h1>
+        <p className="text-gray-500 text-sm font-light">Hljóðritunarverkefni · A1–A2</p>
+      </div>
+    </header>
 
-      <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-12">
-        {/* Leiðbeiningabox */}
-        <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
-          <div className="space-y-1 text-sm font-light text-green-800">
-            <p>🎧 Ýttu á „Hlustaðu" og hlustaðu vel á setninguna</p>
-            <p>✍️ Skrifaðu nákvæmlega það sem þú heyrðir</p>
-            <p>🔄 Þú mátt hlusta eins oft og þú vilt</p>
-            <p>✓ Ýttu á „Athuga" til að sjá hvað gekk</p>
-          </div>
+    <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-12">
+      <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+        <div className="space-y-1 text-sm font-light text-green-800">
+          <p>🎧 Ýttu á „Hlustaðu" og hlustaðu vel á setninguna</p>
+          <p>✍️ Skrifaðu nákvæmlega það sem þú heyrðir</p>
+          <p>🔄 Þú mátt hlusta eins oft og þú vilt</p>
+          <p>✓ Rétt orð standa – röng orð verða eyður sem þú fyllir inn</p>
         </div>
+      </div>
 
-        {/* Setningar */}
-        {SENTENCES.map((s, i) => (
-          <SentenceCard
-            key={s.id}
-            sentence={s}
-            index={i}
-            total={SENTENCES.length}
-          />
-        ))}
-      </main>
-    </div>
-  );
-};
+      {SENTENCES.map((s, i) => (
+        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} />
+      ))}
+    </main>
+  </div>
+);
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
