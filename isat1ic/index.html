@@ -2,8 +2,8 @@
 <html lang="is">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ÍSAT1ÍC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>✍️ Hljóðritun 2: Líkamsrækt – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,291 +14,367 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
-    .accordion-body {
-      overflow: hidden;
-      transition: max-height 0.35s ease, opacity 0.25s ease;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .accordion-body.open  { max-height: 600px; opacity: 1; }
-    .accordion-body.closed { max-height: 0; opacity: 0; }
-    .sub-item { transition: transform 0.15s ease; }
-    .sub-item:hover { transform: translateX(3px); }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+
+    .gap-input {
+      display: inline-block;
+      border-bottom: 2px solid #9ca3af;
+      min-width: 60px;
+      padding: 2px 6px;
+      font-size: 0.9rem;
+      outline: none;
+      background: transparent;
+      text-align: center;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .gap-input:focus { border-color: #16a34a; }
+    .gap-input.correct { border-color: #16a34a; color: #15803d; font-weight: 500; }
+    .gap-input.wrong   { border-color: #dc2626; color: #dc2626; }
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-  const { useState } = React;
+const { useState, useRef, useEffect } = React;
 
-  const SECTIONS = [
-    {
-      title: '🎨 Áhugamál & Tómstundir',
-      topics: [
-        {
-          id: 'ahugamal',
-          emoji: '🎯',
-          title: 'Áhugamál',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',           href: '/isat1ic/lestextar/ahugamal',               level: 'A1–A2' },
-            { emoji: '🎧', title: 'Hlustun 1 – Áhugamál',   href: '/isat1ic/hlustanir/hlustun1_ahugamal',       level: 'A1–A2' },
-            { emoji: '💬', title: 'Spjall – Áhugamál',       href: '/isat1ic/spjall/spjall1_ahugamal',           level: 'A1–A2' },
-          ]
-        },
-        {
-          id: 'likamsraekt',
-          emoji: '🏋️',
-          title: 'Líkamsrækt',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',                href: '/isat1ic/lestextar/likamsraekt',          level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 2 – Líkamsrækt',      href: '/isat1ic/hlustanir/hlustun2_likamsraekt', level: 'A2' },
-          ]
-        },
-        {
-          id: 'bjorgun',
-          emoji: '🆘',
-          title: 'Björgunarsveitir',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',              href: '/isat1ic/lestextar/bjorgunarsveitir',       level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 3 – Björgunarsveitir', href: '/isat1ic/hlustanir/hlustun3_bjorgunarsveit', level: 'A2' },
-            { emoji: '💬', title: 'Spjall – Björgunarsveitir',  href: '/isat1ic/spjall/spjall3_bjorgunarsveitir', level: 'A2' },
-          ]
-        },
-      ]
-    },
-    {
-      title: '🎉 Merkisdagar & Hefðir',
-      topics: [
-        {
-          id: 'jol',
-          emoji: '🎄',
-          title: 'Jólahefðir',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',           href: '/isat1ic/lestextar/jol_a_islandi',          level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 4 – Jól',        href: '/isat1ic/hlustanir/hlustun4_jol',           level: 'A1–A2' },
-            { emoji: '✍️', title: 'Hljóðritun 4 – Jól',    href: '/isat1ic/hljodritun/k4.html',               level: 'A1–A2' },
-          ]
-        },
-        {
-          id: 'paskar',
-          emoji: '🐣',
-          title: 'Páskar',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',           href: '/isat1ic/lestextar/paskar',                 level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 5 – Páskar',     href: '/isat1ic/hlustanir/hlustun5_paskar',        level: 'A1–A2' },
-            { emoji: '✍️', title: 'Hljóðritun 5 – Páskar', href: '/isat1ic/hljodritun/k5.html',               level: 'A1–A2' },
-          ]
-        },
-        {
-          id: 'sumar',
-          emoji: '☀️',
-          title: 'Sumardagurinn fyrsti',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',                       href: '/isat1ic/lestextar/sumardagurinn_fyrsti',              level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 6 – Sumardagurinn fyrsti',   href: '/isat1ic/hlustanir/hlustun6_sumardagurinn_fyrsti',     level: 'A2' },
-            { emoji: '✍️', title: 'Hljóðritun 6 – Sumardagurinn fyrsti', href: '/isat1ic/hljodritun/k6.html',                        level: 'A2' },
-          ]
-        },
-        {
-          id: 'divali',
-          emoji: '🪔',
-          title: 'Dívali',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',           href: '/isat1ic/lestextar/divali_ljosahatid',      level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 7 – Dívalí',     href: '/isat1ic/hlustanir/hlustun7_divali',        level: 'A2' },
-            { emoji: '✍️', title: 'Hljóðritun 7 – Dívalí', href: '/isat1ic/hljodritun/k7.html',               level: 'A2' },
-          ]
-        },
-        {
-          id: 'juni',
-          emoji: '🇮🇸',
-          title: '17. júní',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',            href: '/isat1ic/lestextar/17_juni',               level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun 8 – 17. júní',   href: '/isat1ic/hlustanir/hlustun8_17juni',        level: 'A2' },
-            { emoji: '✍️', title: 'Hljóðritun 8 – 17. júní', href: '/isat1ic/hljodritun/k8.html',             level: 'A2' },
-          ]
-        },
-      ]
-    },
-    {
-      title: '💼 Vinna',
-      topics: [
-        {
-          id: 'sumarvinna',
-          emoji: '💼',
-          title: 'Sumarvinna',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur – Sumarvinnan hennar Veroniku', href: '/isat1ic/lestextar/sumarvinna_veroniku', level: 'A2–B1' },
-            { emoji: '✍️', title: 'Hljóðritun 9 – Sumarvinna Veróníku',         href: '/isat1ic/hljodritun/k9.html',            level: 'A2–B1' },
-            { emoji: '🎧', title: 'Hlustun 9 – Sumarvinnan hans Alex',           href: '/isat1ic/hlustanir/hlustun9_sumarvinna', level: 'A2' },
-          ]
-        },
-      ]
-    },
-    {
-      title: '📖 Annað',
-      topics: [
-        {
-          id: 'fallhrifin',
-          emoji: '🪂',
-          title: 'Fallhlífin opnaðist ekki',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',              href: '/isat1ic/lestextar/fallhlifin.html',    level: 'A2–B1' },
-            { emoji: '✍️', title: 'Hljóðritun 10 – Victoria',  href: '/isat1ic/hljodritun/k10.html',          level: 'A2–B1' },
-          ]
-        },
-        {
-          id: 'dbcooper',
-          emoji: '✈️',
-          title: 'D.B. Cooper',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur', href: '/isat1ic/lestextar/db_cooper',              level: 'A2–B1' },
-          ]
-        },
-        {
-          id: 'monalisa',
-          emoji: '🖼️',
-          title: 'Mona Lisa',
-          items: [
-            { emoji: '📖', title: 'Lesskilningur',          href: '/isat1ic/lestextar/mona_lisa',            level: 'A2–B1' },
-            { emoji: '🎧', title: 'Hlustun 13 – Mona Lisa', href: '/isat1ic/hlustanir/hlustun13_mona_lisa',  level: 'A2–B1' },
-          ]
-        },
-      ]
-    },
-    {
-      title: '🎮 Aukaæfingar og leikir',
-      topics: [
-        {
-          id: 'aukaafingar',
-          emoji: '📚',
-          title: 'Aukaæfingar',
-          items: [
-            { emoji: '📖', title: 'Áhugamál – Hljóðfæri',             href: '/isat1ic/lestextar/aukatexti_hljodfaeri.html', level: 'A1–A2' },
-            { emoji: '🎧', title: 'Hlustun – sund',                    href: '/isat1ic/hlustanir/aukahlustun_sund',          level: 'A1–A2' },
-            { emoji: '🎧', title: 'Hlustun – áhugamál',                href: '/isat1ic/hlustanir/aukahlustun_ahugamal',      level: 'A1–A2' },
-            { emoji: '🎧', title: 'Hlustun – Jónas rífur sig upp',     href: '/isat1ic/hlustanir/aukahlustun_latur',         level: 'A1–A2' },
-            { emoji: '🎧', title: 'Hlustun – Útkall í björgunarsveit', href: '/isat1ic/hlustanir/aukahlustun_bjorgun',       level: 'A2' },
-            { emoji: '🎧', title: 'Hlustun – Karnival',                href: '/isat1ic/hlustanir/aukahlustun_karnival',      level: 'A1–A2' },
-          ]
-        },
-        {
-          id: 'leikir',
-          emoji: '🎮',
-          title: 'Orðaleikir',
-          items: [
-            { emoji: '🎨', title: 'Teiknileikur – kaflar 1–3', href: '/isat1ic/leikir/teiknileikur1-3.html', level: 'A1–A2' },
-            { emoji: '🃏', title: 'Flash kort – kaflar 1–3',   href: '/isat1ic/leikir/flash1-3.html',        level: 'A1–A2' },
-            { emoji: '🎧', title: 'Orðagáta – kaflar 1–3',     href: '/isat1ic/leikir/ordagata1-3.html',     level: 'A1–A2' },
-            { emoji: '🎨', title: 'Teiknileikur – kaflar 4–6', href: '/isat1ic/leikir/teiknileikur4-6.html', level: 'A1–A2' },
-            { emoji: '🃏', title: 'Flash kort – kaflar 4–6',   href: '/isat1ic/leikir/flash4-6.html',        level: 'A1–A2' },
-            { emoji: '🎧', title: 'Orðagáta – kaflar 4–6',     href: '/isat1ic/leikir/ordagata4-6.html',     level: 'A1–A2' },
-            { emoji: '🀄', title: 'Mahjong – áhugamál',        href: '/isat1ic/leikir/mahjong1_ahugamal.html', level: 'A1–B1' },
-            { emoji: '💬', title: 'Spjall – safnæfing',        href: '/isat1ic/spjall/spjall_ahugamal',        level: 'A1–A2' },
-          ]
-        },
-      ]
-    },
-  ];
+const SENTENCES = [
+  {
+    id: 1,
+    text: "Margir horfa á fótbolta í sjónvarpinu og styðja sitt lið.",
+    audio: "/isat1ic/media/k2_s01.mp3",
+  },
+  {
+    id: 2,
+    text: "Sumir fara í ræktina og lyfta lóðum.",
+    audio: "/isat1ic/media/k2_s02.mp3",
+  },
+  {
+    id: 3,
+    text: "Þú getur stillt hraðann á hlaupabretti.",
+    audio: "/isat1ic/media/k2_s03.mp3",
+  },
+  {
+    id: 4,
+    text: "Til að fara í ræktina þarf að pakka niður í íþróttatösku.",
+    audio: "/isat1ic/media/k2_s04.mp3",
+  },
+  {
+    id: 5,
+    text: "Þú getur hjólað, synt eða dansað til að hreyfa þig.",
+    audio: "/isat1ic/media/k2_s05.mp3",
+  },
+];
 
-  const LEVEL_COLORS = {
-    'A1–A2': 'bg-blue-100 text-blue-700',
-    'A1–B1': 'bg-purple-100 text-purple-700',
-    'A2':    'bg-sky-100 text-sky-700',
-    'A2–B1': 'bg-amber-100 text-amber-700',
+async function callOpenAI(messages, max_tokens = 80, model = 'gpt-4o-mini', temperature = 0.1) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens, model, temperature }),
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+function playMP3(audioPath, onEnd, onStart) {
+  try {
+    onStart && onStart();
+    const audio = new Audio(audioPath);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    audio.play().catch(() => onEnd && onEnd());
+  } catch (e) {
+    console.error(e);
+    onEnd && onEnd();
+  }
+}
+
+const normalize = s => s.toLowerCase()
+  .replace(/[.,!?;:]/g, '')
+  .trim();
+
+function tokenize(sentence) {
+  const tokens = [];
+  const regex = /(\S+)/g;
+  let match;
+  while ((match = regex.exec(sentence)) !== null) {
+    const raw = match[1];
+    const punct = (raw.match(/([.,!?;:]+)$/) || [''])[0];
+    const word = raw.slice(0, raw.length - punct.length);
+    tokens.push({ word, punct });
+  }
+  return tokens;
+}
+
+function computeWrongIndices(userInput, tokens, alternates) {
+  const userWords = userInput.trim().split(/\s+/).filter(Boolean);
+  return tokens.map((token, i) => {
+    const u = userWords[i] ? normalize(userWords[i]) : '';
+    const c = normalize(token.word);
+    if (u === c) return false;
+    const alts = (alternates && alternates[c]) ? alternates[c].map(a => normalize(a)) : [];
+    return !alts.includes(u);
+  });
+}
+
+function isGapCorrect(val, tokenWord, alternates) {
+  const u = normalize(val || '');
+  const c = normalize(tokenWord);
+  if (u === c) return true;
+  const alts = (alternates && alternates[c]) ? alternates[c].map(a => normalize(a)) : [];
+  return alts.includes(u);
+}
+
+// AI mat á einstaka orði þegar exact match tekst ekki
+async function checkWordWithAI(userWord, correctWord) {
+  const prompt = `Þú ert íslenskukennari. Nemandi á að skrifa orðið „${correctWord}" en skrifaði „${userWord}".
+Er þetta í grundvallaratriðum rétt (t.d. sömu merkingu, önnur stafsetning, löglegt samheiti)?
+Svaraðu EINUNGIS: RÉTT eða RANGT`;
+  try {
+    const result = await callOpenAI([{ role: 'user', content: prompt }], 10, 'gpt-4o-mini', 0.1);
+    return result.trim().startsWith('RÉTT');
+  } catch {
+    return false;
+  }
+}
+
+const SentenceCard = ({ sentence, index, total }) => {
+  const tokens = tokenize(sentence.text);
+  const alternates = sentence.alternates || {};
+
+  const [speaking, setSpeaking]     = useState(false);
+  const [p1Input, setP1Input]       = useState('');
+  const [p1Done, setP1Done]         = useState(false);
+  const [wrongIdx, setWrongIdx]     = useState([]);
+
+  const [gapVals, setGapVals]       = useState({});
+  const [p2Done, setP2Done]         = useState(false);
+  const [gapResults, setGapResults] = useState({});
+  const [allOk2, setAllOk2]         = useState(false);
+  const [aiChecking, setAiChecking] = useState(false);
+
+  const wrongTokenIdx = tokens.map((_, i) => i).filter(i => wrongIdx[i]);
+  const allOk1 = p1Done && wrongIdx.every(w => !w);
+  const firstGapRef = useRef(null);
+
+  useEffect(() => {
+    if (p1Done && !allOk1) {
+      setTimeout(() => firstGapRef.current?.focus(), 150);
+    }
+  }, [p1Done]);
+
+  const handleListen = () => {
+    if (speaking) return;
+    playMP3(sentence.audio, () => setSpeaking(false), () => setSpeaking(true));
   };
 
-  const ITEM_BORDER = {
-    '📖': 'border-l-blue-400',
-    '🎧': 'border-l-green-500',
-    '💬': 'border-l-purple-400',
-    '✍️': 'border-l-orange-400',
-    '🀄': 'border-l-amber-400',
-    '🎨': 'border-l-pink-400',
+  const handleCheck1 = () => {
+    setWrongIdx(computeWrongIndices(p1Input, tokens, alternates));
+    setP1Done(true);
   };
 
-  const Topic = ({ topic }) => {
-    const [open, setOpen] = useState(false);
-    return (
-      <div className="border border-gray-100 rounded-lg overflow-hidden mb-2 bg-white">
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors text-left"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl">{topic.emoji}</span>
-            <span className="text-gray-800 font-light text-base">{topic.title}</span>
-          </div>
-          <span className={`text-gray-400 transition-transform duration-300 inline-block ${open ? 'rotate-180' : ''}`}>
-            ▾
-          </span>
-        </button>
+  const handleCheck2 = async () => {
+    setAiChecking(true);
+    const results = {};
+    let ok = true;
 
-        <div className={`accordion-body ${open ? 'open' : 'closed'}`}>
-          <div className="bg-gray-50 px-3 pb-3 pt-1 space-y-1.5">
-            {topic.items.map((item, i) => (
-              <a key={i} href={item.href}
-                className={`sub-item flex items-center gap-3 px-3 py-2.5 bg-white rounded-lg border-l-4 ${ITEM_BORDER[item.emoji] || 'border-l-gray-200'} hover:bg-blue-50 transition-colors block`}
-              >
-                <span className="text-base flex-shrink-0">{item.emoji}</span>
-                <span className="flex-1 text-gray-700 font-light text-sm">{item.title}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-light ${LEVEL_COLORS[item.level] || 'bg-gray-100 text-gray-500'}`}>
-                  {item.level}
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    await Promise.all(wrongTokenIdx.map(async i => {
+      const val = gapVals[i] || '';
+      // Exact / alternates match
+      if (isGapCorrect(val, tokens[i].word, alternates)) {
+        results[i] = true;
+      } else {
+        // AI fallback
+        const aiOk = await checkWordWithAI(normalize(val), normalize(tokens[i].word));
+        results[i] = aiOk;
+        if (!aiOk) ok = false;
+      }
+    }));
+
+    setGapResults(results);
+    setAllOk2(ok);
+    setP2Done(true);
+    setAiChecking(false);
   };
 
-  const App = () => (
-    <div className="min-h-screen pb-16">
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-6 py-8">
-          <button onClick={() => window.history.back()}
-            className="text-sm text-gray-500 hover:text-gray-700 mb-3 inline-block font-light">
-            ← Til baka
-          </button>
-          <h1 className="text-4xl font-light text-gray-800 mb-1">ÍSAT1ÍC</h1>
-          <p className="text-gray-500 text-sm font-light">Út og suður · Tækniskólinn</p>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 mt-6 space-y-8">
-        {SECTIONS.map((section, si) => (
-          <div key={si}>
-            <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-1 mb-3">
-              {section.title}
-            </h2>
-            <div>
-              {section.topics.map(topic => (
-                <Topic key={topic.id} topic={topic} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </main>
-
-      <div className="max-w-2xl mx-auto px-4 mt-10">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-          <div className="text-center max-w-xl mx-auto">
-            <h3 className="text-lg font-normal text-gray-800 mb-3">💡 Um ÍSAT1ÍC</h3>
-            <div className="text-sm text-gray-600 font-light space-y-2">
-              <p>Námsefni þetta er samið af Sigurþóri Einarssyni og Viðari Hrafni Steingrímssyni 2024–2026. Það er samið fyrir nemendur í áfanganum ÍSAT1ÍC – Út og suður – í Tækniskólanum.</p>
-              <p className="mt-4 text-gray-500">© 2026 Sigurþór Einarsson & Viðar Hrafn Steingrímsson</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <footer className="max-w-2xl mx-auto px-6 mt-6 mb-4 text-center">
-        <p className="text-gray-400 text-xs font-light">ÍSAT1ÍC · Málstöðin</p>
-      </footer>
-    </div>
+  const ListenBtn = () => (
+    <button
+      onClick={handleListen}
+      disabled={speaking}
+      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border
+        transition-all ${speaking
+          ? 'bg-green-50 text-green-700 border-green-200 cursor-wait'
+          : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+      <span className="opacity-70">🎧</span>
+      <span className="font-light">Hlustaðu á setninguna</span>
+      <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+    </button>
   );
 
-  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+
+      <div className="flex items-center justify-between mb-4">
+        <span className="w-7 h-7 rounded-full bg-green-600 text-white text-sm
+          flex items-center justify-center font-medium">{index + 1}</span>
+        <span className="text-xs text-gray-400 font-light">{index + 1} af {total}</span>
+      </div>
+
+      <div className="mb-5">
+        <ListenBtn />
+        {speaking && <p className="text-xs text-green-600 font-light mt-1 ml-1">Les upp...</p>}
+      </div>
+
+      {!p1Done && (
+        <div className="fade-in">
+          <label className="block text-sm font-light text-gray-600 mb-2">
+            Skrifaðu nákvæmlega það sem þú heyrðir:
+          </label>
+          <textarea
+            value={p1Input}
+            onChange={e => setP1Input(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (p1Input.trim()) handleCheck1();
+              }
+            }}
+            rows={2}
+            placeholder="Skrifaðu setninguna hér..."
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+              focus:outline-none focus:ring-2 focus:ring-green-500 font-light resize-none text-sm mb-3"
+          />
+          <button
+            onClick={handleCheck1}
+            disabled={!p1Input.trim()}
+            className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+            Athuga ✓
+          </button>
+        </div>
+      )}
+
+      {p1Done && allOk1 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center fade-in">
+          <p className="text-2xl mb-1">🎉</p>
+          <p className="text-green-700 font-medium">Fullkomið! Allt rétt í fyrstu tilraun!</p>
+          <p className="text-green-600 font-light text-sm mt-2">{sentence.text}</p>
+        </div>
+      )}
+
+      {p1Done && !allOk1 && (
+        <div className="fade-in">
+          <p className="text-sm font-light text-gray-500 mb-3">
+            Rétt orð standa – fylltu inn í eyðurnar:
+          </p>
+
+          <div className="bg-gray-50 rounded-lg px-5 py-4 mb-4 leading-[2.2rem] text-sm">
+            {tokens.map((token, i) => {
+              if (!wrongIdx[i]) {
+                return (
+                  <span key={i} className="text-gray-700 font-light">
+                    {token.word}{token.punct}{' '}
+                  </span>
+                );
+              }
+              const isFirst = i === wrongTokenIdx[0];
+              let cls = 'gap-input';
+              if (p2Done) cls += gapResults[i] ? ' correct' : ' wrong';
+
+              return (
+                <span key={i}>
+                  <input
+                    ref={isFirst ? firstGapRef : null}
+                    type="text"
+                    value={gapVals[i] || ''}
+                    onChange={e => setGapVals(prev => ({ ...prev, [i]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter' && !aiChecking) handleCheck2(); }}
+                    disabled={p2Done || aiChecking}
+                    className={cls}
+                    style={{ width: Math.max(60, token.word.length * 12) + 'px' }}
+                    autoComplete="off"
+                    spellCheck="false"
+                  />
+                  {token.punct}{' '}
+                </span>
+              );
+            })}
+          </div>
+
+          {!p2Done && (
+            <button
+              onClick={handleCheck2}
+              disabled={aiChecking || wrongTokenIdx.some(i => !(gapVals[i] || '').trim())}
+              className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+              {aiChecking ? 'Athuga...' : 'Athuga ✓'}
+            </button>
+          )}
+
+          {p2Done && (
+            <div className="fade-in mt-3 space-y-3">
+              {allOk2 ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <p className="text-xl mb-1">✓</p>
+                  <p className="text-green-700 font-medium">Vel gert! Allar eyður réttar!</p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-amber-700 font-medium text-sm mb-2">Rétta setningin:</p>
+                  <p className="text-gray-700 font-light text-sm">{sentence.text}</p>
+                </div>
+              )}
+              <button
+                onClick={handleListen}
+                disabled={speaking}
+                className="px-4 py-1.5 border-2 border-green-200 text-green-700 rounded-lg
+                  hover:bg-green-50 transition-colors font-light text-sm">
+                🔊 Hlustaðu aftur
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const App = () => (
+  <div>
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <button onClick={() => window.history.back()}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+          ← Til baka
+        </button>
+        <h1 className="text-3xl font-light text-gray-800 mb-2">✍️ Hljóðritun 2: Líkamsrækt</h1>
+        <p className="text-gray-500 text-sm font-light">Hljóðritunarverkefni · A1–A2</p>
+      </div>
+    </header>
+
+    <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-12">
+      <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+        <div className="space-y-1 text-sm font-light text-green-800">
+          <p>🎧 Ýttu á „Hlustaðu" og hlustaðu vel á setninguna</p>
+          <p>✍️ Skrifaðu nákvæmlega það sem þú heyrðir</p>
+          <p>🔄 Þú mátt hlusta eins oft og þú vilt</p>
+          <p>✓ Rétt orð standa – röng orð verða eyður sem þú fyllir inn</p>
+        </div>
+      </div>
+
+      {SENTENCES.map((s, i) => (
+        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} />
+      ))}
+    </main>
+  </div>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
