@@ -2,7 +2,7 @@
 <html lang="is">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🃏 Flash kort – kaflar 7–9</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -13,137 +13,139 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
+      margin: 0;
+      padding: 0;
     }
+    .flashcard { perspective: 1000px; cursor: pointer; }
+    .flashcard-inner {
+      position: relative; width: 100%; height: 100%; text-align: center;
+      transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+    .flashcard.flipped .flashcard-inner { transform: rotateY(180deg); }
+    .flashcard-front, .flashcard-back {
+      position: absolute; width: 100%; height: 100%;
+      backface-visibility: hidden; border-radius: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; padding: 2.5rem; box-sizing: border-box;
+    }
+    .flashcard-front {
+      background: #fff; border: 2px solid #e5e7eb;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .flashcard-back {
+      background: #f0fdf4; border: 2px solid #bbf7d0;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      transform: rotateY(180deg);
+    }
+    .flashcard:hover .flashcard-front,
+    .flashcard:hover .flashcard-back { box-shadow: 0 8px 32px rgba(0,0,0,0.13); }
+    @keyframes cardEnter {
+      from { opacity: 0; transform: translateY(16px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .card-enter { animation: cardEnter 0.35s ease both; }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .fade-in { animation: fadeIn 0.35s ease both; }
-    @keyframes flip {
-      0%   { transform: rotateY(0deg); }
-      50%  { transform: rotateY(90deg); }
-      100% { transform: rotateY(0deg); }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes pulse-green {
+      0%   { box-shadow: 0 0 0 0 rgba(22,163,74,0.3); }
+      70%  { box-shadow: 0 0 0 8px rgba(22,163,74,0); }
+      100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
     }
-    .flip { animation: flip 0.35s ease both; }
-    .card-area { perspective: 1000px; }
-    @keyframes learnedPulse {
-      0%   { transform: scale(1); }
-      50%  { transform: scale(1.06); }
-      100% { transform: scale(1); }
-    }
-    .learned-pulse { animation: learnedPulse 0.3s ease; }
+    .learned-pulse { animation: pulse-green 0.5s ease; }
   </style>
 </head>
 <body>
   <div id="root"></div>
-
   <script type="text/babel">
-    const { useState, useEffect, useCallback, useRef } = React;
+    const { useState, useEffect, useCallback } = React;
 
-    const CHAPTERS = [
-      {
-        id: 'dival',
-        label: 'Dívalí',
-        emoji: '🪔',
-        color: 'amber',
-        words: [
-          { w: 'hátíð (kvk)',          hint: 'sérstakur dagur eða tími sem fólk fagnar' },
-          { w: 'kerti (hk)',            hint: 'hlutur úr vaxi sem gefur ljós þegar þú kveikir á honum' },
-          { w: 'flugeldur (kk)',        hint: 'hlutur sem skýtur upp á loftið og gerir lit og hljóð' },
-          { w: 'sælgæti (hk)',          hint: 'eitthvað sætt sem maður borðar, t.d. nammi eða kökur' },
-          { w: 'matarboð (hk)',         hint: 'þegar fólk kemur saman til að borða mat' },
-          { w: 'hefðbundinn (lo)',      hint: 'gamall og þekktur, eins og fólk hefur gert í langan tíma' },
-          { w: 'hindúi (kk)',           hint: 'maður sem trúir á hindúatrú' },
-          { w: 'sigur (kk)',            hint: 'þegar þú vinnur eða nærð markmiðinu þínu' },
-          { w: 'upphaf (hk)',           hint: 'þegar eitthvað byrjar' },
-          { w: 'skreyta (so)',          hint: 'setja falleg hluti á eitthvað til að það líti vel út' },
-          { w: 'eldhúsáhöld (hk.ft)',  hint: 'hlutir sem þú notar til að elda mat, t.d. pottur og panna' },
-          { w: 'sari (kk)',             hint: 'hefðbundinn klæðnaður sem konur nota á Indlandi' },
-          { w: 'tungl (hk)',            hint: 'hvíti hringurinn á næturhimninum' },
-          { w: 'kveikja á ljósum',      hint: 'gera það að ljósin fara af' },
-          { w: 'litríkur (lo)',         hint: 'með mörgum fögrum litum' },
-        ]
-      },
-      {
-        id: 'juni',
-        label: '17. júní',
-        emoji: '🇮🇸',
-        color: 'blue',
-        words: [
-          { w: 'þjóðhátíðardagur (kk)', hint: 'sérstakur frídagur þar sem fólk fagnar landi sínu' },
-          { w: 'sjálfstæði (hk)',        hint: 'þegar land stjórnar sér sjálft og er óháð öðrum löndum' },
-          { w: 'þjóðbúningur (kk)',      hint: 'hefðbundinn klæðnaður sem táknar land eða þjóð' },
-          { w: 'fáni (kk)',              hint: 'litað dúkur sem táknar land eða hóp' },
-          { w: 'skrúðganga (kvk)',       hint: 'þegar margir ganga saman á götu til að fagna einhverju' },
-          { w: 'lúðrasveit (kvk)',       hint: 'hópur tónlistarmanna sem spila á blásturshljóðfæri' },
-          { w: 'ræða (kvk)',             hint: 'tal sem einn maður flytur fyrir fleiri' },
-          { w: 'forseti (kk)',           hint: 'æðsti leiðtogi lands eða ríkis' },
-          { w: 'andlitsmálning (kvk)',   hint: 'þegar þú málar á andlit þitt í skemmtilegar myndir' },
-          { w: 'leiktæki (hk.ft)',       hint: 'hlutir sem börn leika sér á, t.d. rennibraut' },
-          { w: 'pylsa (kvk)',            hint: 'mat úr kjöti sem er langt og þunnt' },
-          { w: 'hljómsveit (kvk)',       hint: 'hópur tónlistarmanna sem spila saman' },
-          { w: 'upphlutur (kk)',         hint: 'hluti af þjóðbúningi sem er á efri hluta líkamans' },
-          { w: 'berjast (so)',           hint: 'reyna hart að ná einhverju eða standa gegn einhverju' },
-        ]
-      },
-      {
-        id: 'sumarvinna',
-        label: 'Sumarvinna',
-        emoji: '💼',
-        color: 'green',
-        words: [
-          { w: 'sumarvinna (kvk)',     hint: 'vinna sem nemandi fær yfir sumarið' },
-          { w: 'atvinnuviðtal (hk)',   hint: 'þegar þú hittir vinnuveitanda til að fá vinnu' },
-          { w: 'ferilskrá (kvk)',      hint: 'skjal þar sem þú skrifar um menntun þína og reynslu' },
-          { w: 'umsókn (kvk)',         hint: 'þegar þú biður formlega um eitthvað, t.d. vinnu' },
-          { w: 'stundvís (lo)',        hint: 'kemur alltaf á réttum tíma, er aldrei of seinn' },
-          { w: 'kurteis (lo)',         hint: 'talar við aðra á góðan og heiðvirðan hátt' },
-          { w: 'laun (hk.ft)',         hint: 'peningar sem þú færð fyrir vinnu' },
-          { w: 'tímaskrá (kvk)',       hint: 'skrá þar sem vinnustundir eru skráðar' },
-          { w: 'viðskiptavinur (kk)', hint: 'maður sem kaupir eitthvað í búð' },
-          { w: 'kvittun (kvk)',        hint: 'pappír sem sýnir hvað þú borgaðir og hvenær' },
-          { w: 'skiptimiði (kk)',      hint: 'miði sem þú færð þegar þú skilar vöru' },
-          { w: 'strikamerki (hk)',     hint: 'svart og hvítt mynstur á vöru sem inniheldur upplýsingar' },
-          { w: 'skanni (kk)',          hint: 'tæki sem les strikamerki' },
-          { w: 'hilla (kvk)',          hint: 'flötur þar sem vörur eru geymdar í búð' },
-          { w: 'verðmiði (kk)',        hint: 'lítill miði á vöru sem sýnir hvað hún kostar' },
-          { w: 'leiðbeinandi (kk)',    hint: 'maður sem kennir öðrum hvað á að gera á nýrri vinnu' },
-          { w: 'yfirmaður (kk)',       hint: 'sá sem er yfir öðru starfsfólki á vinnustað' },
-          { w: 'vakt (kvk)',           hint: 'tímabil þar sem þú vinnur, t.d. morgunvakt' },
-          { w: 'geymsla (kvk)',        hint: 'herbergi þar sem hlutir eru geymdar' },
-          { w: 'auglýsing (kvk)',      hint: 'skilaboð sem segja þér að eitthvað er til sölu eða í boði' },
-          { w: 'tilboð (hk)',          hint: 'þegar vara er seld á lægra verði en venjulega' },
-        ]
-      },
+    const VOCABULARY = [
+      // ── Dívalí ──
+      { is: 'hátíð',               pos: 'no', gen: 'kvk', chapter: 'Dívalí' },
+      { is: 'kerti',               pos: 'no', gen: 'hk',  chapter: 'Dívalí' },
+      { is: 'flugeldur',           pos: 'no', gen: 'kk',  chapter: 'Dívalí' },
+      { is: 'sælgæti',             pos: 'no', gen: 'hk',  chapter: 'Dívalí' },
+      { is: 'matarboð',            pos: 'no', gen: 'hk',  chapter: 'Dívalí' },
+      { is: 'hefðbundinn',         pos: 'lo', gen: null,  chapter: 'Dívalí' },
+      { is: 'hindúi',              pos: 'no', gen: 'kk',  chapter: 'Dívalí' },
+      { is: 'sigur',               pos: 'no', gen: 'kk',  chapter: 'Dívalí' },
+      { is: 'upphaf',              pos: 'no', gen: 'hk',  chapter: 'Dívalí' },
+      { is: 'að skreyta',          pos: 'so', gen: null,  chapter: 'Dívalí' },
+      { is: 'eldhúsáhöld',         pos: 'no', gen: 'hk',  chapter: 'Dívalí' },
+      { is: 'sari',                pos: 'no', gen: 'kk',  chapter: 'Dívalí' },
+      { is: 'tungl',               pos: 'no', gen: 'hk',  chapter: 'Dívalí' },
+      { is: 'að kveikja á ljósum', pos: 'so', gen: null,  chapter: 'Dívalí' },
+      { is: 'litríkur',            pos: 'lo', gen: null,  chapter: 'Dívalí' },
+
+      // ── 17. júní ──
+      { is: 'þjóðhátíðardagur',   pos: 'no', gen: 'kk',  chapter: '17. júní' },
+      { is: 'sjálfstæði',         pos: 'no', gen: 'hk',  chapter: '17. júní' },
+      { is: 'þjóðbúningur',       pos: 'no', gen: 'kk',  chapter: '17. júní' },
+      { is: 'fáni',               pos: 'no', gen: 'kk',  chapter: '17. júní' },
+      { is: 'skrúðganga',         pos: 'no', gen: 'kvk', chapter: '17. júní' },
+      { is: 'lúðrasveit',         pos: 'no', gen: 'kvk', chapter: '17. júní' },
+      { is: 'ræða',               pos: 'no', gen: 'kvk', chapter: '17. júní' },
+      { is: 'forseti',            pos: 'no', gen: 'kk',  chapter: '17. júní' },
+      { is: 'andlitsmálning',     pos: 'no', gen: 'kvk', chapter: '17. júní' },
+      { is: 'leiktæki',           pos: 'no', gen: 'hk',  chapter: '17. júní' },
+      { is: 'pylsa',              pos: 'no', gen: 'kvk', chapter: '17. júní' },
+      { is: 'hljómsveit',         pos: 'no', gen: 'kvk', chapter: '17. júní' },
+      { is: 'upphlutur',          pos: 'no', gen: 'kk',  chapter: '17. júní' },
+      { is: 'að berjast',         pos: 'so', gen: null,  chapter: '17. júní' },
+
+      // ── Sumarvinna ──
+      { is: 'sumarvinna',         pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'atvinnuviðtal',      pos: 'no', gen: 'hk',  chapter: 'Sumarvinna' },
+      { is: 'ferilskrá',          pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'umsókn',             pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'stundvís',           pos: 'lo', gen: null,  chapter: 'Sumarvinna' },
+      { is: 'kurteis',            pos: 'lo', gen: null,  chapter: 'Sumarvinna' },
+      { is: 'laun',               pos: 'no', gen: 'hk',  chapter: 'Sumarvinna' },
+      { is: 'tímaskrá',           pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'viðskiptavinur',     pos: 'no', gen: 'kk',  chapter: 'Sumarvinna' },
+      { is: 'kvittun',            pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'skiptimiði',         pos: 'no', gen: 'kk',  chapter: 'Sumarvinna' },
+      { is: 'strikamerki',        pos: 'no', gen: 'hk',  chapter: 'Sumarvinna' },
+      { is: 'skanni',             pos: 'no', gen: 'kk',  chapter: 'Sumarvinna' },
+      { is: 'hilla',              pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'verðmiði',           pos: 'no', gen: 'kk',  chapter: 'Sumarvinna' },
+      { is: 'leiðbeinandi',       pos: 'no', gen: 'kk',  chapter: 'Sumarvinna' },
+      { is: 'yfirmaður',          pos: 'no', gen: 'kk',  chapter: 'Sumarvinna' },
+      { is: 'vakt',               pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'geymsla',            pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'auglýsing',          pos: 'no', gen: 'kvk', chapter: 'Sumarvinna' },
+      { is: 'tilboð',             pos: 'no', gen: 'hk',  chapter: 'Sumarvinna' },
     ];
 
+    const CHAPTERS = ['Allt', 'Dívalí', '17. júní', 'Sumarvinna'];
+
     const CHAPTER_COLORS = {
-      amber: {
-        filter: 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100',
-        active: 'bg-amber-500 text-white border-amber-500',
-        front: 'border-amber-200',
-        badge: 'bg-amber-100 text-amber-700',
-      },
-      blue: {
-        filter: 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100',
-        active: 'bg-blue-600 text-white border-blue-600',
-        front: 'border-blue-200',
-        badge: 'bg-blue-100 text-blue-700',
-      },
-      green: {
-        filter: 'bg-green-50 text-green-800 border-green-200 hover:bg-green-100',
-        active: 'bg-green-600 text-white border-green-600',
-        front: 'border-green-200',
-        badge: 'bg-green-100 text-green-700',
-      },
+      'Dívalí':     { bg: 'bg-amber-50',  border: 'border-amber-200',  badge: 'bg-amber-100 text-amber-700' },
+      '17. júní':   { bg: 'bg-blue-50',   border: 'border-blue-200',   badge: 'bg-blue-100 text-blue-700' },
+      'Sumarvinna': { bg: 'bg-green-50',  border: 'border-green-200',  badge: 'bg-green-100 text-green-700' },
     };
+
+    async function callOpenAI(messages, max_tokens = 60) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens, model: 'gpt-4o-mini', temperature: 0.2 }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
 
     async function playAudio(text, onEnd) {
       try {
         const r = await fetch('/.netlify/functions/speak', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text_to_speak: text })
+          body: JSON.stringify({ text_to_speak: text }),
         });
         const data = await r.json();
         if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
@@ -152,249 +154,322 @@
         audio.onerror = () => onEnd && onEnd();
         await audio.play().catch(() => onEnd && onEnd());
         return audio;
-      } catch (e) {
-        console.error(e);
-        onEnd && onEnd();
-      }
+      } catch (e) { onEnd && onEnd(); }
     }
 
-    const ListenPill = ({ text, label }) => {
-      const [speaking, setSpeaking] = useState(false);
-      const handle = () => {
-        if (speaking) return;
-        setSpeaking(true);
-        playAudio(text, () => setSpeaking(false));
-      };
+    const ListenPill = ({ onClick, speaking }) => (
+      <button
+        onClick={e => { e.stopPropagation(); onClick(); }}
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all
+          ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+        <span className="opacity-70">🎧</span>
+        <span className="font-light">Hlustaðu</span>
+        <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+      </button>
+    );
+
+    const WordBadge = ({ word }) => {
+      const parts = [];
+      if (word.pos) parts.push(word.pos);
+      if (word.gen) parts.push(word.gen);
+      if (!parts.length) return null;
+      const chap = CHAPTER_COLORS[word.chapter];
       return (
-        <button onClick={handle}
-          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all
-            ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
-          <span className="opacity-70">🎧</span>
-          <span className="font-light">{label || 'Hlustaðu'}</span>
-          <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
-        </button>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-light ${chap?.badge || 'bg-gray-100 text-gray-500'}`}>
+          {parts.join('/')}
+        </span>
       );
     };
 
     const FlashcardsApp = () => {
-      const [chapterFilter, setChapterFilter] = useState('all');
-      const [idx, setIdx] = useState(0);
-      const [flipped, setFlipped] = useState(false);
-      const [animating, setAnimating] = useState(false);
-      const [learned, setLearned] = useState(new Set());
+      const [stage, setStage]               = useState('lang');
+      const [langInput, setLangInput]       = useState('');
+      const [userLang, setUserLang]         = useState('');
+      const [filterChapter, setFilter]      = useState('Allt');
+      const [deck, setDeck]                 = useState([]);
+      const [idx, setIdx]                   = useState(0);
+      const [flipped, setFlipped]           = useState(false);
+      const [translation, setTranslation]   = useState('');
+      const [loadingTrans, setLoadingTrans] = useState(false);
+      const [learned, setLearned]           = useState(new Set());
+      const [speaking, setSpeaking]         = useState(false);
       const [learnedPulse, setLearnedPulse] = useState(false);
-      const [done, setDone] = useState(false);
 
-      const allWords = CHAPTERS.flatMap(ch => ch.words.map(w => ({ ...w, chapter: ch.id, color: ch.color, chLabel: ch.label })));
-      const deck = chapterFilter === 'all'
-        ? allWords
-        : allWords.filter(w => w.chapter === chapterFilter);
+      const buildDeck = (chapter) => {
+        const filtered = chapter === 'Allt'
+          ? VOCABULARY
+          : VOCABULARY.filter(w => w.chapter === chapter);
+        return [...filtered].sort(() => Math.random() - 0.5);
+      };
 
-      const card = deck[idx] || null;
-      const colors = card ? CHAPTER_COLORS[card.color] : CHAPTER_COLORS.blue;
+      const startCards = () => {
+        if (langInput.trim().length < 2) return;
+        setUserLang(langInput.trim());
+        const d = buildDeck(filterChapter);
+        setDeck(d); setIdx(0); setFlipped(false);
+        setTranslation(''); setLearned(new Set()); setStage('cards');
+      };
 
-      const isLearned = card ? learned.has(card.w) : false;
+      const getTranslation = async (word, lang) => {
+        setLoadingTrans(true); setTranslation('');
+        try {
+          const t = await callOpenAI([{
+            role: 'user',
+            content: `Translate the Icelandic word or phrase "${word}" to ${lang}. Reply with ONLY the translation, nothing else. No explanations.`
+          }], 40);
+          setTranslation(t.trim());
+        } catch { setTranslation('(þýðing mistókst)'); }
+        finally { setLoadingTrans(false); }
+      };
 
-      useEffect(() => {
-        setIdx(0);
-        setFlipped(false);
-        setDone(false);
-      }, [chapterFilter]);
+      const handleCardClick = async () => {
+        if (!flipped) {
+          setFlipped(true);
+          if (!translation && deck[idx]) await getTranslation(deck[idx].is, userLang);
+        } else {
+          setFlipped(false);
+        }
+      };
 
-      const flip = useCallback(() => {
-        if (animating) return;
-        setAnimating(true);
-        setTimeout(() => {
-          setFlipped(f => !f);
-          setAnimating(false);
-        }, 175);
-      }, [animating]);
+      const handleSpeak = () => {
+        if (!deck[idx]) return;
+        setSpeaking(true);
+        playAudio(deck[idx].is, () => setSpeaking(false));
+      };
 
       const goNext = useCallback(() => {
-        if (animating) return;
-        setAnimating(true);
-        setTimeout(() => {
-          setFlipped(false);
-          if (idx >= deck.length - 1) {
-            setDone(true);
-          } else {
-            setIdx(i => i + 1);
-          }
-          setAnimating(false);
-        }, 175);
-      }, [animating, idx, deck.length]);
+        if (idx < deck.length - 1) {
+          setIdx(i => i + 1); setFlipped(false); setTranslation('');
+        } else { setStage('done'); }
+      }, [idx, deck.length]);
 
-      const goPrev = useCallback(() => {
-        if (animating || idx === 0) return;
-        setAnimating(true);
-        setTimeout(() => {
-          setFlipped(false);
-          setIdx(i => i - 1);
-          setAnimating(false);
-        }, 175);
-      }, [animating, idx]);
+      const goPrev = () => {
+        if (idx > 0) { setIdx(i => i - 1); setFlipped(false); setTranslation(''); }
+      };
 
-      const toggleLearned = () => {
-        if (!card) return;
-        setLearnedPulse(true);
-        setTimeout(() => setLearnedPulse(false), 300);
+      const toggleLearned = (e) => {
+        e.stopPropagation();
+        if (!deck[idx]) return;
+        const word = deck[idx].is;
         setLearned(prev => {
           const next = new Set(prev);
-          next.has(card.w) ? next.delete(card.w) : next.add(card.w);
+          next.has(word) ? next.delete(word) : next.add(word);
           return next;
         });
+        setLearnedPulse(true);
+        setTimeout(() => setLearnedPulse(false), 600);
       };
 
       useEffect(() => {
-        const onKey = (e) => {
+        if (stage !== 'cards') return;
+        const handler = (e) => {
           if (e.key === 'ArrowRight') goNext();
-          else if (e.key === 'ArrowLeft') goPrev();
-          else if (e.key === ' ') { e.preventDefault(); flip(); }
+          if (e.key === 'ArrowLeft')  goPrev();
+          if (e.key === ' ') { e.preventDefault(); handleCardClick(); }
         };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-      }, [goNext, goPrev, flip]);
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+      }, [stage, idx, flipped, deck]);
 
-      const restart = () => {
-        setIdx(0);
-        setFlipped(false);
-        setDone(false);
-      };
+      const currentWord = deck[idx];
+      const isLearned   = currentWord && learned.has(currentWord.is);
+      const progress    = deck.length ? ((idx + 1) / deck.length) * 100 : 0;
+      const chap        = currentWord ? CHAPTER_COLORS[currentWord.chapter] : null;
 
-      return (
-        <div className="min-h-screen">
+      // ── Tungumálval ──────────────────────────────────────────────────────
+      if (stage === 'lang') return (
+        <div className="min-h-screen pb-16">
           <header className="bg-white shadow-sm border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-6 py-8">
               <button onClick={() => window.history.back()}
-                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
-                ← Til baka
-              </button>
-              <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flash kort – kaflar 7–9</h1>
-              <p className="text-gray-500 text-sm font-light">Dívalí · 17. júní · Sumarvinna — {allWords.length} orð</p>
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">🃏 Flash kort</h1>
+              <p className="text-gray-500 text-sm font-light">Dívalí · 17. júní · Sumarvinna · A1–A2</p>
+            </div>
+          </header>
+          <main className="max-w-2xl mx-auto px-6 mt-10 fade-in">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+              <p className="text-sm font-light text-gray-500 mb-3">Veldu kafla:</p>
+              <div className="flex flex-wrap gap-2">
+                {CHAPTERS.map(ch => (
+                  <button key={ch} onClick={() => setFilter(ch)}
+                    className={`px-4 py-2 rounded-lg text-sm transition-colors font-light border
+                      ${filterChapter === ch ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    {ch === 'Allt' ? `Allt (${VOCABULARY.length} orð)` : `${ch} (${VOCABULARY.filter(w => w.chapter === ch).length} orð)`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+              <div className="text-5xl mb-4 text-center">🌍</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-2 text-center">Hvert er móðurmál þitt?</h2>
+              <p className="text-gray-500 font-light mb-6 text-center text-sm">
+                Skrifaðu tungumálið þitt (t.d. English, Polski, العربية, Español)
+              </p>
+              <input type="text" value={langInput}
+                onChange={e => setLangInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && startCards()}
+                placeholder="Tungumálið þitt..."
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light mb-2 text-center"
+                autoFocus />
+              <div className="flex flex-wrap gap-2 justify-center mb-6 mt-3">
+                {['English','Polski','العربية','Español','Português','中文','Français','Deutsch','Tagalog','Română'].map(l => (
+                  <button key={l} onClick={() => setLangInput(l)}
+                    className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm transition-colors font-light">
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <div className="text-center">
+                <button onClick={startCards} disabled={langInput.trim().length < 2}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg">
+                  Byrja →
+                </button>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+
+      // ── Lokið ─────────────────────────────────────────────────────────────
+      if (stage === 'done') return (
+        <div className="min-h-screen pb-16">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">🃏 Flash kort</h1>
+              <p className="text-gray-500 text-sm font-light">Dívalí · 17. júní · Sumarvinna · A1–A2</p>
+            </div>
+          </header>
+          <main className="max-w-2xl mx-auto px-6 mt-10 fade-in">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-light text-gray-800 mb-2">Til hamingju!</h2>
+              <p className="text-gray-500 font-light mb-6">Þú hefur séð öll {deck.length} orðin!</p>
+              <div className="text-4xl font-light text-green-600 mb-8">
+                {learned.size} / {deck.length} <span className="text-base text-gray-400">lærð</span>
+              </div>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <button onClick={() => {
+                    const d = buildDeck(filterChapter);
+                    setDeck(d); setIdx(0); setFlipped(false); setTranslation(''); setLearned(new Set()); setStage('cards');
+                  }}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                  🔄 Byrja aftur
+                </button>
+                <button onClick={() => { setStage('lang'); setLangInput(''); }}
+                  className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+                  🌍 Breyta tungumáli
+                </button>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+
+      // ── Spjöld ────────────────────────────────────────────────────────────
+      return (
+        <div className="min-h-screen pb-16">
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-6">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h1 className="text-2xl font-light text-gray-800">🃏 Flash kort</h1>
+                  <p className="text-gray-500 text-xs font-light">🌍 {userLang}</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-gray-400 font-light">Lærð</div>
+                  <div className="text-xl font-light text-green-600">{learned.size} / {deck.length}</div>
+                </div>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div className="h-2 rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 font-light">
+                Orð {idx + 1} af {deck.length}
+                {filterChapter !== 'Allt' && (
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${CHAPTER_COLORS[filterChapter]?.badge}`}>
+                    {filterChapter}
+                  </span>
+                )}
+              </p>
             </div>
           </header>
 
-          <main className="max-w-2xl mx-auto px-6 py-8 fade-in">
-
-            {/* Kaflafilter */}
-            <div className="flex flex-wrap gap-2 mb-8">
-              <button
-                onClick={() => setChapterFilter('all')}
-                className={`px-4 py-2 rounded-lg border text-sm font-light transition-all
-                  ${chapterFilter === 'all' ? 'bg-gray-700 text-white border-gray-700' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}>
-                Allt ({allWords.length})
-              </button>
-              {CHAPTERS.map(ch => {
-                const c = CHAPTER_COLORS[ch.color];
-                const active = chapterFilter === ch.id;
-                return (
-                  <button key={ch.id}
-                    onClick={() => setChapterFilter(ch.id)}
-                    className={`px-4 py-2 rounded-lg border text-sm font-light transition-all
-                      ${active ? c.active : c.filter}`}>
-                    {ch.emoji} {ch.label} ({ch.words.length})
-                  </button>
-                );
-              })}
+          <main className="max-w-2xl mx-auto px-6 mt-6">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 mb-4 text-center">
+              <p className="text-blue-700 text-sm font-light">
+                💡 Smelltu á spjaldið til að sjá þýðingu · <kbd className="text-xs bg-blue-100 px-1 rounded">Space</kbd> eða <kbd className="text-xs bg-blue-100 px-1 rounded">←→</kbd>
+              </p>
             </div>
 
-            {done ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center fade-in">
-                <div className="text-5xl mb-4">🎉</div>
-                <h2 className="text-xl font-light text-gray-800 mb-2">Búið!</h2>
-                <p className="text-gray-500 font-light mb-2">
-                  Þú fórst í gegnum {deck.length} orð.
-                </p>
-                <p className="text-green-600 font-light mb-6">
-                  ✅ Lærð: {[...learned].filter(w => deck.some(d => d.w === w)).length} / {deck.length}
-                </p>
-                <button onClick={restart}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
-                  Aftur frá byrjun
-                </button>
-              </div>
-            ) : card ? (
-              <>
-                {/* Framvindustika */}
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full transition-all duration-500"
-                      style={{ width: `${((idx + 1) / deck.length) * 100}%` }} />
+            <div className={`flashcard card-enter mb-4 ${flipped ? 'flipped' : ''}`}
+              onClick={handleCardClick} style={{ height: '320px' }}>
+              <div className="flashcard-inner">
+                <div className="flashcard-front">
+                  {currentWord && (
+                    <div className="absolute top-4 left-4">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-light ${chap?.badge}`}>{currentWord.chapter}</span>
+                    </div>
+                  )}
+                  {isLearned && <div className="absolute top-4 right-4 text-2xl">✅</div>}
+                  <div className="text-4xl font-light text-gray-800 mb-3 leading-tight text-center">{currentWord?.is}</div>
+                  <WordBadge word={currentWord} />
+                  <div className="mt-6">
+                    <ListenPill onClick={handleSpeak} speaking={speaking} />
                   </div>
-                  <span className="text-xs text-gray-400 font-light whitespace-nowrap">{idx + 1} / {deck.length}</span>
                 </div>
-
-                {/* Kaflamiði */}
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-light ${colors.badge}`}>
-                    {card.chLabel}
-                  </span>
-                  {isLearned && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-light">✅ Lært</span>
+                <div className={`flashcard-back ${chap ? chap.bg + ' ' + chap.border : ''}`} style={{ border: '2px solid' }}>
+                  {isLearned && <div className="absolute top-4 right-4 text-2xl">✅</div>}
+                  {currentWord && (
+                    <div className="absolute top-4 left-4">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-light ${chap?.badge}`}>{currentWord.is}</span>
+                    </div>
+                  )}
+                  {loadingTrans ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="text-3xl">⏳</div>
+                      <div className="text-gray-500 font-light text-sm">Þýði...</div>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-4xl font-light text-gray-800 mb-2">{translation}</div>
+                      <div className="text-sm text-gray-500 font-light">{userLang}</div>
+                    </div>
                   )}
                 </div>
+              </div>
+            </div>
 
-                {/* Kort */}
-                <div className="card-area mb-4">
-                  <div
-                    onClick={flip}
-                    className={`bg-white rounded-xl shadow-sm border-2 ${colors.front} cursor-pointer
-                      min-h-52 flex flex-col items-center justify-center p-8 text-center
-                      ${animating ? 'flip' : ''} transition-colors hover:shadow-md`}>
-                    {!flipped ? (
-                      <>
-                        <p className="text-2xl font-light text-gray-800 mb-4">{card.w}</p>
-                        <ListenPill text={card.w.replace(/\s*\(.*?\)/g, '')} label="Hlustaðu" />
-                        <p className="text-xs text-gray-400 font-light mt-6">Smelltu til að sjá skýringu</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-base font-light text-gray-600 mb-4 leading-relaxed">{card.hint}</p>
-                        <p className="text-sm font-medium text-gray-800">{card.w}</p>
-                      </>
-                    )}
-                  </div>
+            <div className="flex gap-3 justify-center mb-4">
+              <button onClick={goPrev} disabled={idx === 0}
+                className="px-5 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                ← Fyrra
+              </button>
+              <button onClick={toggleLearned}
+                className={`px-6 py-2.5 rounded-lg transition-colors font-light text-sm ${learnedPulse ? 'learned-pulse' : ''}
+                  ${isLearned ? 'bg-green-50 text-green-700 border-2 border-green-300 hover:bg-green-100' : 'bg-white text-gray-600 border-2 border-gray-200 hover:bg-gray-50'}`}>
+                {isLearned ? '✅ Lært' : '☐ Merkja sem lært'}
+              </button>
+              <button onClick={goNext}
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+                {idx === deck.length - 1 ? 'Ljúka →' : 'Næsta →'}
+              </button>
+            </div>
+
+            {learned.size > 0 && (
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 fade-in">
+                <p className="text-xs text-green-700 font-light mb-1">✅ Lærð orð ({learned.size}):</p>
+                <div className="flex flex-wrap gap-1">
+                  {[...learned].map(w => (
+                    <span key={w} className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-light">{w}</span>
+                  ))}
                 </div>
-
-                {/* Takkar */}
-                <div className="flex gap-3 justify-between">
-                  <button onClick={goPrev} disabled={idx === 0}
-                    className="px-5 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg
-                      hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-light text-sm">
-                    ← Fyrra
-                  </button>
-
-                  <button
-                    onClick={toggleLearned}
-                    className={`px-5 py-2.5 rounded-lg border-2 text-sm font-light transition-all
-                      ${learnedPulse ? 'learned-pulse' : ''}
-                      ${isLearned
-                        ? 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100'
-                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                    {isLearned ? '✅ Lært' : '☐ Merkja sem lært'}
-                  </button>
-
-                  <button onClick={goNext}
-                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
-                    {idx === deck.length - 1 ? 'Ljúka →' : 'Næsta →'}
-                  </button>
-                </div>
-
-                <p className="text-center text-xs text-gray-400 font-light mt-4">← → til að fletta · Bil til að snúa</p>
-
-                {/* Lærð orð */}
-                {learned.size > 0 && (
-                  <div className="mt-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 fade-in">
-                    <p className="text-xs text-green-700 font-light mb-2">✅ Lærð orð ({learned.size}):</p>
-                    <div className="flex flex-wrap gap-1">
-                      {[...learned].map(w => (
-                        <span key={w} className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-light">{w}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : null}
+              </div>
+            )}
           </main>
         </div>
       );
