@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎧 Orðagáta – kaflar 10–12</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+      50%       { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+    }
+    .speaking { animation: pulse-green 1s ease infinite; }
+    .answer-option {
+      border: 2px solid #e5e7eb;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .answer-option:hover:not(.opt-disabled) { border-color: #93c5fd; background: #eff6ff; }
+    .answer-option.opt-selected  { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; }
+    .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; }
+    .answer-option.opt-disabled  { cursor: default; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    const CHAPTERS = [
+      {
+        id: 'fall',
+        label: 'Fallhlífin',
+        emoji: '🪂',
+        words: [
+          { word: 'fallhlíf (kvk)',        audio: '../media/ordagata10-12_fall01.mp3', hint: 'hlutur sem maður ber á baki og opnast þegar maður stökkur úr flugvél' },
+          { word: 'stökkva (so)',           audio: '../media/ordagata10-12_fall02.mp3', hint: 'annað orð yfir að hoppa' },
+          { word: 'hermaður (kk)',          audio: '../media/ordagata10-12_fall03.mp3', hint: 'einhver sem vinnur í hernum og þarf að hlýða skipunum' },
+          { word: 'morðtilraun (kvk)',      audio: '../media/ordagata10-12_fall04.mp3', hint: 'þegar einhver reynir að drepa aðra manneskju en tekst það ekki' },
+          { word: 'lífstíðarfangelsi (hk)', audio: '../media/ordagata10-12_fall05.mp3', hint: 'maður þarf að vera lokaður inni alla ævi' },
+          { word: 'rannsaka (so)',          audio: '../media/ordagata10-12_fall06.mp3', hint: 'leita vel að svörum, eins og lögregla gerir þegar eitthvað gerist' },
+          { word: 'slasast (so)',           audio: '../media/ordagata10-12_fall07.mp3', hint: 'meiða sig, til dæmis í slysi' },
+          { word: 'sjúkrahús (hk)',         audio: '../media/ordagata10-12_fall08.mp3', hint: 'stór bygging þar sem læknar hjálpa veikum og slösuðum' },
+          { word: 'eiginmaður (kk)',        audio: '../media/ordagata10-12_fall09.mp3', hint: 'maður sem er giftur konu' },
+          { word: 'sekur (lo)',             audio: '../media/ordagata10-12_fall10.mp3', hint: 'þegar dómari segir að þú hafir gert eitthvað rangt' },
+          { word: 'fangelsi (hk)',          audio: '../media/ordagata10-12_fall11.mp3', hint: 'bygging þar sem fólk sem er sekt er geymt og má ekki fara út' },
+        ]
+      },
+      {
+        id: 'cooper',
+        label: 'D.B. Cooper',
+        emoji: '✈️',
+        words: [
+          { word: 'flugvél (kvk)',          audio: '../media/ordagata10-12_cooper01.mp3', hint: 'stór hlutur sem flytur fólk milli landa' },
+          { word: 'flugstjóri (kk)',        audio: '../media/ordagata10-12_cooper02.mp3', hint: 'sá sem stýrir flugvél' },
+          { word: 'farþegi (kk)',           audio: '../media/ordagata10-12_cooper03.mp3', hint: 'manneskja sem ferðast til dæmis í flugvél eða í strætó' },
+          { word: 'sprengja (kvk)',         audio: '../media/ordagata10-12_cooper04.mp3', hint: 'hættulegur hlutur sem getur skemmt eða eyðilagt mikið' },
+          { word: 'seðill (kk)',            audio: '../media/ordagata10-12_cooper05.mp3', hint: 'lítið blað eða miði. Getur líka verið peningur.' },
+          { word: 'ráðgáta (kvk)',          audio: '../media/ordagata10-12_cooper06.mp3', hint: 'spurning eða mál sem erfitt er að leysa' },
+          { word: 'hóta (so)',              audio: '../media/ordagata10-12_cooper07.mp3', hint: 'segja einhverjum að þú munir gera eitthvað slæmt við hann' },
+          { word: 'eldsneyti (hk)',         audio: '../media/ordagata10-12_cooper08.mp3', hint: 'bensín og dísel er dæmi um þetta. Notað á sumar vélar.' },
+          { word: 'vírar (kk.ft)',          audio: '../media/ordagata10-12_cooper09.mp3', hint: 'þunnir málmþræðir sem eru notaðir til að tengja rafmagnstæki' },
+          { word: 'flugfreyja (kvk)',       audio: '../media/ordagata10-12_cooper10.mp3', hint: 'manneskja sem vinnur í flugvél og aðstoðar farþega' },
+        ]
+      },
+      {
+        id: 'mona',
+        label: 'Mona Lisa',
+        emoji: '🖼️',
+        words: [
+          { word: 'málverk (hk)',           audio: '../media/ordagata10-12_mona01.mp3', hint: 'mynd sem einhver hefur sett á striga eða vegg' },
+          { word: 'listamaður (kk)',        audio: '../media/ordagata10-12_mona02.mp3', hint: 'einhver sem skapar list, til dæmis málar myndir' },
+          { word: 'listasafn (hk)',         audio: '../media/ordagata10-12_mona03.mp3', hint: 'bygging þar sem málverk og önnur list eru til sýnis' },
+          { word: 'þjófur (kk)',            audio: '../media/ordagata10-12_mona04.mp3', hint: 'einhver sem tekur eitthvað sem annar á' },
+          { word: 'handtaka (so)',          audio: '../media/ordagata10-12_mona05.mp3', hint: 'þegar lögreglan tekur mann' },
+          { word: 'bros (hk)',              audio: '../media/ordagata10-12_mona06.mp3', hint: 'þegar þú lítur út fyrir að vera glaður eða glöð' },
+          { word: 'fræðimaður (kk)',        audio: '../media/ordagata10-12_mona07.mp3', hint: 'einhver sem rannsakar og lærir mjög mikið um eitthvað' },
+          { word: 'tilfinning (kvk)',       audio: '../media/ordagata10-12_mona08.mp3', hint: 'eitthvað sem þú finnur inni í þér, eins og gleði, sorg eða reiði' },
+        ]
+      },
+    ];
+
+    const ALL_WORDS = CHAPTERS.flatMap(c => c.words);
+
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function getOptions(correct, pool) {
+      const others = pool.filter(w => w.word !== correct.word);
+      const wrong = shuffle(others).slice(0, 3).map(w => w.word);
+      return shuffle([correct.word, ...wrong]);
+    }
+
+    const App = () => {
+      const [chapterFilter, setChapterFilter] = useState('all');
+      const [gameStarted,   setGameStarted]   = useState(false);
+      const [queue,         setQueue]         = useState([]);
+      const [current,       setCurrent]       = useState(0);
+      const [selected,      setSelected]      = useState(null);
+      const [revealed,      setRevealed]      = useState(false);
+      const [score,         setScore]         = useState({ correct: 0, total: 0 });
+      const [speaking,      setSpeaking]      = useState(false);
+      const [done,          setDone]          = useState(false);
+      const audioRef = useRef(null);
+
+      const pool = chapterFilter === 'all'
+        ? ALL_WORDS
+        : CHAPTERS.find(c => c.id === chapterFilter)?.words ?? ALL_WORDS;
+
+      const startGame = useCallback(() => {
+        const shuffled = shuffle(pool).map(item => ({
+          ...item,
+          options: getOptions(item, pool.length >= 4 ? pool : ALL_WORDS),
+        }));
+        setQueue(shuffled);
+        setCurrent(0);
+        setSelected(null);
+        setRevealed(false);
+        setScore({ correct: 0, total: 0 });
+        setDone(false);
+        setGameStarted(true);
+      }, [chapterFilter, pool]);
+
+      const card = queue[current];
+
+      const playHint = useCallback(() => {
+        if (!card) return;
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+        setSpeaking(true);
+        const audio = new Audio(card.audio);
+        audioRef.current = audio;
+        audio.onended = () => setSpeaking(false);
+        audio.onerror = () => setSpeaking(false);
+        audio.play().catch(() => setSpeaking(false));
+      }, [card]);
+
+      useEffect(() => {
+        if (gameStarted && card && !revealed) playHint();
+        return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };
+      }, [current, gameStarted]);
+
+      const handleAnswer = (opt) => {
+        if (revealed) return;
+        setSelected(opt);
+        setRevealed(true);
+        const correct = opt === card.word;
+        setScore(prev => ({ correct: prev.correct + (correct ? 1 : 0), total: prev.total + 1 }));
+      };
+
+      const next = () => {
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+        if (current + 1 >= queue.length) {
+          setDone(true);
+        } else {
+          setCurrent(c => c + 1);
+          setSelected(null);
+          setRevealed(false);
+        }
+      };
+
+      const pct = queue.length > 0 ? Math.round((current / queue.length) * 100) : 0;
+      const isCorrect = selected === card?.word;
+
+      // ── Forsíða ───────────────────────────────────────────────────────────
+      if (!gameStarted) return (
+        <>
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">🎧 Orðagáta</h1>
+              <p className="text-gray-500 text-sm font-light">Fallhlífin · D.B. Cooper · Mona Lisa · A2–B1</p>
+            </div>
+          </header>
+          <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4">
+            <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+              <p className="text-sm font-light text-green-800">
+                <span className="block">🎧 Hlustaðu á lýsinguna og veldu rétta orðið</span>
+                <span className="block">🔄 Þú getur hlustað aftur á lýsinguna hvenær sem er</span>
+              </p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-base font-medium text-gray-800 mb-4">Veldu kafla</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { id: 'all',    label: '📚 Allir kaflar', count: ALL_WORDS.length },
+                  { id: 'fall',   label: '🪂 Fallhlífin',   count: CHAPTERS[0].words.length },
+                  { id: 'cooper', label: '✈️ D.B. Cooper',  count: CHAPTERS[1].words.length },
+                  { id: 'mona',   label: '🖼️ Mona Lisa',    count: CHAPTERS[2].words.length },
+                ].map(opt => (
+                  <button key={opt.id} onClick={() => setChapterFilter(opt.id)}
+                    className={`p-4 rounded-xl border-2 text-left transition-all
+                      ${chapterFilter === opt.id
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-gray-200 hover:border-green-300 hover:bg-green-50'}`}>
+                    <div className="text-sm font-medium text-gray-800">{opt.label}</div>
+                    <div className="text-xs text-gray-500 font-light mt-1">{opt.count} orð</div>
+                  </button>
+                ))}
+              </div>
+              <button onClick={startGame}
+                className="mt-6 w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light text-base">
+                Byrja leikinn 🎮
+              </button>
+            </div>
+          </main>
+        </>
+      );
+
+      // ── Lokasíða ──────────────────────────────────────────────────────────
+      if (done) {
+        const pctCorrect = Math.round((score.correct / score.total) * 100);
+        return (
+          <>
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-4xl mx-auto px-6 py-8">
+                <button onClick={() => setGameStarted(false)}
+                  className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                  ← Til baka
+                </button>
+                <h1 className="text-3xl font-light text-gray-800 mb-2">🎧 Orðagáta</h1>
+                <p className="text-gray-500 text-sm font-light">Niðurstaða</p>
+              </div>
+            </header>
+            <main className="max-w-4xl mx-auto px-6 mt-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center fade-in">
+                <div className="text-5xl mb-4">
+                  {pctCorrect >= 80 ? '🎉' : pctCorrect >= 50 ? '👍' : '💪'}
+                </div>
+                <h2 className="text-2xl font-light text-gray-800 mb-2">Vel gert!</h2>
+                <p className="text-gray-600 font-light mb-1">
+                  Þú fékkst <strong>{score.correct}</strong> af <strong>{score.total}</strong> rétt
+                </p>
+                <p className="text-3xl font-light text-green-600 mb-8">{pctCorrect}%</p>
+                <div className="w-full bg-gray-100 rounded-full h-3 mb-8">
+                  <div className="bg-green-500 h-3 rounded-full transition-all duration-700"
+                    style={{ width: `${pctCorrect}%` }} />
+                </div>
+                <p className="text-gray-500 font-light text-sm mb-6">
+                  {pctCorrect >= 80 ? 'Frábært! Þú þekkir þessi orð mjög vel.' :
+                   pctCorrect >= 50 ? 'Góð byrjun! Haltu áfram að æfa.' :
+                   'Haltu áfram – æfing skapar meistar!'}
+                </p>
+                <div className="flex gap-3 justify-center flex-wrap">
+                  <button onClick={startGame}
+                    className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light">
+                    Reyna aftur 🔄
+                  </button>
+                  <button onClick={() => setGameStarted(false)}
+                    className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light">
+                    Velja kafla
+                  </button>
+                </div>
+              </div>
+            </main>
+          </>
+        );
+      }
+
+      // ── Leikurinn ─────────────────────────────────────────────────────────
+      return (
+        <>
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              <button onClick={() => { if (audioRef.current) audioRef.current.pause(); setGameStarted(false); }}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+                ← Til baka
+              </button>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">🎧 Orðagáta</h1>
+              <p className="text-gray-500 text-sm font-light">
+                Orð {current + 1} af {queue.length} · {score.correct} rétt
+              </p>
+            </div>
+          </header>
+
+          <main className="max-w-4xl mx-auto px-6 mt-6 pb-6 space-y-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-gray-100 rounded-full h-2">
+                  <div className="bg-green-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-xs text-gray-400 font-light whitespace-nowrap">
+                  {current}/{queue.length}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in" key={current}>
+              <div className="flex flex-col items-center text-center mb-6">
+                <button
+                  onClick={playHint}
+                  disabled={speaking}
+                  className={`w-20 h-20 rounded-full flex items-center justify-center transition-all text-white mb-3
+                    ${speaking ? 'bg-green-500 speaking' : 'bg-green-600 hover:bg-green-700'}`}>
+                  {speaking
+                    ? <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    : <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  }
+                </button>
+                <p className="text-xs text-gray-400 font-light uppercase tracking-wide">
+                  {speaking ? 'Hlustaðu...' : 'Ýttu til að hlusta aftur'}
+                </p>
+                {revealed && (
+                  <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 fade-in">
+                    <p className="text-xs text-gray-400 font-light mb-1 uppercase tracking-wide">Lýsingin</p>
+                    <p className="text-gray-700 font-light leading-relaxed text-sm">{card.hint}</p>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-sm text-gray-500 font-light mb-3">Hvaða orð er þetta?</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {card.options.map((opt, i) => {
+                  const isCorr = opt === card.word;
+                  const isSel  = opt === selected;
+                  let cls = 'answer-option p-4 rounded-xl text-center font-light text-gray-800';
+                  if (revealed) {
+                    cls += ' opt-disabled';
+                    if (isCorr) cls += ' opt-correct';
+                    else if (isSel) cls += ' opt-incorrect';
+                  } else if (isSel) {
+                    cls += ' opt-selected';
+                  }
+                  return (
+                    <div key={i} className={cls} onClick={() => handleAnswer(opt)}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm">{opt}</span>
+                        {revealed && isCorr && <span className="text-green-600">✓</span>}
+                        {revealed && isSel && !isCorr && <span className="text-red-500">✗</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {revealed && (
+                <div className={`mt-4 p-4 rounded-xl border fade-in flex items-center justify-between gap-4
+                  ${isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <p className={`font-medium text-sm ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                    {isCorrect ? '🎉 Rétt!' : `✗ Rangt – rétta svarið er: ${card.word}`}
+                  </p>
+                  <button onClick={next}
+                    className="flex-shrink-0 px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light text-sm">
+                    {current + 1 >= queue.length ? 'Sjá niðurstöður →' : 'Næsta →'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </main>
+        </>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
