@@ -53,7 +53,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -66,10 +66,24 @@
 
   const COURSE = 'isat1ia';
   const LOGIN = '../login.html';
+  const EXERCISE_ID = 'hlustun_12';
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+
+  async function writeProgress(status) {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ref = doc(db, 'progress', user.uid, 'isat1ia', EXERCISE_ID);
+      const data = { status, updated_at: serverTimestamp() };
+      if (status === 'opened') data.opened_at = serverTimestamp();
+      if (status === 'completed') data.completed_at = serverTimestamp();
+      await setDoc(ref, data, { merge: true });
+    } catch(e) { console.error('Progress write failed:', e); }
+  }
+  window.writeProgress = writeProgress;
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = LOGIN; return; }
@@ -85,6 +99,7 @@
       window.location.href = LOGIN; return;
     }
     // Access confirmed – show the page
+    writeProgress('opened');
     document.getElementById('auth-loading').style.display = 'none';
     const root = document.getElementById('root');
     if (root) root.style.display = 'block';
@@ -225,6 +240,9 @@
       const allDone = tabs.every(t => t.done) && !!transFeedback2;
 
       const markDone = (i) => setTabs(prev => prev.map((t, idx) => idx === i ? { ...t, done: true } : t));
+      useEffect(() => {
+        if (allDone) window.writeProgress && window.writeProgress('completed');
+      }, [allDone]);
 
       // ── Flipi 0: Þýðingar ─────────────────────────────────────────────────
       const [vocabOpen, setVocabOpen] = useState(true);
