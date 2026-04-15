@@ -121,6 +121,7 @@ const DrawingCanvas = React.forwardRef(function DrawingCanvas(
     }
   }, [clearSig]);
 
+  // Resize
   React.useEffect(() => {
     const c = cvs.current;
     function resize() {
@@ -168,13 +169,25 @@ const DrawingCanvas = React.forwardRef(function DrawingCanvas(
     pts.current=[];
   }
 
+  // Native touch listeners með passive:false – iOS krefst þess fyrir preventDefault()
+  React.useEffect(() => {
+    const c = cvs.current; if (!c) return;
+    c.addEventListener('touchstart', onStart, { passive: false });
+    c.addEventListener('touchmove',  onMove,  { passive: false });
+    c.addEventListener('touchend',   onEnd,   { passive: false });
+    return () => {
+      c.removeEventListener('touchstart', onStart);
+      c.removeEventListener('touchmove',  onMove);
+      c.removeEventListener('touchend',   onEnd);
+    };
+  }, [readOnly, erasing]);
+
   return (
     <div className="relative">
       <canvas ref={cvs}
         style={{cursor: readOnly?'default':(erasing?'cell':'crosshair'), background:'#fff'}}
         className="w-full rounded-xl border-2 border-gray-200"
         onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
-        onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
       />
       {readOnly && !remoteStrokes && !remoteActive && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -215,7 +228,15 @@ function App() {
   function listenToRoom(code) {
     const ref = fbDb.ref(`teiknileikur/${code}`);
     roomRef.current = ref;
-    ref.on('value', snap => { if (snap.val()) setGs(snap.val()); });
+    ref.on('value', snap => {
+      const val = snap.val();
+      if (!val) return;
+      setGs(val);
+      // Fara beint í leik þegar status breytist – þarf ekki að bíða eftir useEffect
+      if (val.status === 'playing' || val.status === 'between') {
+        setScreen(s => s !== 'game' ? 'game' : s);
+      }
+    });
     ref.child(`players/${myId.current}`).onDisconnect().remove();
   }
 
