@@ -177,7 +177,7 @@ function isGapCorrect(val, tokenWord, alternates) {
   return alts.includes(u);
 }
 
-const SentenceCard = ({ sentence, index, total }) => {
+const SentenceCard = ({ sentence, index, total, onDone }) => {
   const tokens = tokenize(sentence.text);
   const alternates = sentence.alternates || {};
 
@@ -207,8 +207,10 @@ const SentenceCard = ({ sentence, index, total }) => {
   };
 
   const handleCheck1 = () => {
-    setWrongIdx(computeWrongIndices(p1Input, tokens, alternates));
+    const wrong = computeWrongIndices(p1Input, tokens, alternates);
+    setWrongIdx(wrong);
     setP1Done(true);
+    if (wrong.every(w => !w)) onDone && onDone();
   };
 
   const handleCheck2 = () => {
@@ -222,6 +224,7 @@ const SentenceCard = ({ sentence, index, total }) => {
     setGapResults(results);
     setAllOk2(ok);
     setP2Done(true);
+    onDone && onDone();
   };
 
   const ListenBtn = () => (
@@ -366,7 +369,15 @@ const SentenceCard = ({ sentence, index, total }) => {
   );
 };
 
-const App = () => (
+const App = () => {
+  const [doneCount, setDoneCount] = useState(0);
+  useEffect(() => {
+    if (doneCount === SENTENCES.length) {
+      window.writeProgress && window.writeProgress('completed');
+    }
+  }, [doneCount]);
+
+  return (
   <div>
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -390,11 +401,12 @@ const App = () => (
       </div>
 
       {SENTENCES.map((s, i) => (
-        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} />
+        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} onDone={() => setDoneCount(c => c + 1)} />
       ))}
     </main>
   </div>
-);
+  );
+};
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
