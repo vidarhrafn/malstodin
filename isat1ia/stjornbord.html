@@ -65,7 +65,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getFirestore, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -193,33 +193,41 @@
       document.getElementById('app').style.display = 'block';
       document.getElementById('btn-logout').onclick = () => signOut(auth).then(() => window.location.href = '/isat1ia/login.html');
 
-      await loadData();
       renderTabs();
-      renderTable(activeGroup);
+      startListening();
     });
 
-    // ── Gögn ─────────────────────────────────────────────────────
+    // ── Rauntíma hlustun ──────────────────────────────────────────
 
-    async function loadData() {
-      // Sækja alla nemendur úr user_access
-      const userSnap = await getDocs(collection(db, 'user_access'));
-      userSnap.forEach(d => {
-        const data = d.data();
-        if (data[COURSE] && data[COURSE].activated_at) {
-          allStudents.push({ uid: d.id, email: data.email || d.id });
-        }
+    function startListening() {
+      const listenedUids = new Set();
+
+      onSnapshot(collection(db, 'user_access'), (snap) => {
+        allStudents = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if (data[COURSE] && data[COURSE].activated_at) {
+            allStudents.push({ uid: d.id, email: data.email || d.id });
+          }
+        });
+
+        // Hlusta á framvindu nýrra nemenda
+        allStudents.forEach(student => {
+          if (!listenedUids.has(student.uid)) {
+            listenedUids.add(student.uid);
+            allProgress[student.uid] = {};
+            onSnapshot(collection(db, 'progress', student.uid, COURSE), (progSnap) => {
+              allProgress[student.uid] = {};
+              progSnap.forEach(d => {
+                allProgress[student.uid][d.id] = d.data().status || 'opened';
+              });
+              renderTable(activeGroup);
+            });
+          }
+        });
+
+        renderTable(activeGroup);
       });
-
-      // Sækja framvindu hvers nemanda
-      await Promise.all(allStudents.map(async (student) => {
-        allProgress[student.uid] = {};
-        try {
-          const progSnap = await getDocs(collection(db, 'progress', student.uid, COURSE));
-          progSnap.forEach(d => {
-            allProgress[student.uid][d.id] = d.data().status || 'opened';
-          });
-        } catch(e) { /* Engin framvinda ennþá */ }
-      }));
     }
 
     // ── Flipar ───────────────────────────────────────────────────
