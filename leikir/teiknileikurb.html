@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Teiknileikurinn – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pop {
+      0%   { transform: scale(0.85); opacity: 0; }
+      70%  { transform: scale(1.05); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    .pop-in  { animation: pop 0.4s ease both; }
+    canvas { touch-action: none; display: block; }
+    .word-reveal { letter-spacing: 0.18em; font-size: 1.6rem; font-weight: 300; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+// ─── FIREBASE STILLINGAR ──────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "SETTU-INN-API-KEY",
+  authDomain:        "SETTU-INN.firebaseapp.com",
+  databaseURL:       "https://SETTU-INN-default-rtdb.firebaseio.com",
+  projectId:         "SETTU-INN",
+  storageBucket:     "SETTU-INN.appspot.com",
+  messagingSenderId: "SETTU-INN",
+  appId:             "SETTU-INN"
+};
+// ─────────────────────────────────────────────────────────────────────────
+
+const WORDS = [
+  'hestur','köttur','hundur','fiskur','fugl',
+  'bíll','reiðhjól','flugvél','bátur','strætó',
+  'hús','skóli','kirkja','stigi','gluggi',
+  'epli','banani','brauð','kaka','ís',
+];
+
+function norm(v, max)   { return v / max; }
+function denorm(v, max) { return v * max; }
+function randWord(exclude) {
+  const pool = WORDS.filter(w => w !== exclude);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function getOrCreatePlayerId() {
+  let id = sessionStorage.getItem('tlpid');
+  if (!id) { id = 'p' + Math.random().toString(36).slice(2,10); sessionStorage.setItem('tlpid', id); }
+  return id;
+}
+
+let fbDb;
+function initFirebase() {
+  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  fbDb = firebase.database();
+}
+
+// ─── Canvas ───────────────────────────────────────────────────────────────
+const DrawingCanvas = React.forwardRef(function DrawingCanvas(
+  { readOnly, erasing, onStrokeEnd, onActiveStroke, remoteStrokes, remoteActive, clearSig }, ref
+) {
+  const cvs     = React.useRef(null);
+  const drawing = React.useRef(false);
+  const pts     = React.useRef([]);
+  const local   = React.useRef([]);
+  const thr     = React.useRef(0);
+
+  React.useImperativeHandle(ref, () => ({
+    clear() {
+      local.current = [];
+      const c = cvs.current;
+      if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    }
+  }));
+
+  function draw(strokes, active, canvas) {
+    const c = canvas || cvs.current; if (!c) return;
+    const ctx = c.getContext('2d');
+    const w = c.width, h = c.height;
+    ctx.clearRect(0, 0, w, h);
+    const all = [...(strokes||[])];
+    if (active?.points?.length > 1) all.push(active);
+    for (const s of all) {
+      if (!s.points || s.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.lineWidth   = s.eraser ? 28 : 3;
+      ctx.lineCap     = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = s.eraser ? '#fff' : '#1a1a1a';
+      ctx.moveTo(denorm(s.points[0].x,w), denorm(s.points[0].y,h));
+      for (let i=1;i<s.points.length;i++) ctx.lineTo(denorm(s.points[i].x,w),denorm(s.points[i].y,h));
+      ctx.stroke();
+    }
+  }
+
+  React.useEffect(() => {
+    if (readOnly) draw(remoteStrokes ? Object.values(remoteStrokes) : [], remoteActive);
+  }, [remoteStrokes, remoteActive, readOnly]);
+
+  React.useEffect(() => {
+    if (!readOnly) {
+      local.current = [];
+      const c = cvs.current;
+      if (c) c.getContext('2d').clearRect(0,0,c.width,c.height);
+    }
+  }, [clearSig]);
+
+  React.useEffect(() => {
+    const c = cvs.current;
+    function resize() {
+      const w = c.parentElement.clientWidth;
+      const h = Math.min(w*0.72, 400);
+      c.width=w; c.height=h;
+      if (!readOnly) draw(local.current, null, c);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+
+  function pos(e) {
+    const r = cvs.current.getBoundingClientRect();
+    const s = e.touches ? e.touches[0] : e;
+    return { x: norm(s.clientX-r.left, r.width), y: norm(s.clientY-r.top, r.height) };
+  }
+  function onStart(e) {
+    if (readOnly) return;
+    e.preventDefault(); drawing.current=true; pts.current=[pos(e)];
+  }
+  function onMove(e) {
+    if (!drawing.current||readOnly) return;
+    e.preventDefault();
+    const p = pos(e); pts.current.push(p);
+    const c = cvs.current, ctx = c.getContext('2d'), arr = pts.current;
+    if (arr.length>=2) {
+      const pv=arr[arr.length-2], cu=arr[arr.length-1];
+      ctx.beginPath(); ctx.lineWidth=erasing?28:3; ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.strokeStyle=erasing?'#fff':'#1a1a1a';
+      ctx.moveTo(denorm(pv.x,c.width),denorm(pv.y,c.height));
+      ctx.lineTo(denorm(cu.x,c.width),denorm(cu.y,c.height)); ctx.stroke();
+    }
+    const now=Date.now();
+    if (now-thr.current>100) { thr.current=now; onActiveStroke?.({points:[...pts.current],eraser:!!erasing}); }
+  }
+  function onEnd(e) {
+    if (!drawing.current||readOnly) return;
+    e.preventDefault(); drawing.current=false;
+    if (pts.current.length>1) {
+      const s={points:[...pts.current],eraser:!!erasing};
+      local.current.push(s); onStrokeEnd?.(s); onActiveStroke?.(null);
+    }
+    pts.current=[];
+  }
+
+  return (
+    <div className="relative">
+      <canvas ref={cvs}
+        style={{cursor: readOnly?'default':(erasing?'cell':'crosshair'), background:'#fff'}}
+        className="w-full rounded-xl border-2 border-gray-200"
+        onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
+        onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
+      />
+      {readOnly && !remoteStrokes && !remoteActive && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <p className="text-gray-300 font-light text-lg">Bíð eftir teikningu…</p>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ─── Aðalapp ──────────────────────────────────────────────────────────────
+function App() {
+  const [screen,    setScreen]    = React.useState('home');
+  const [nameInput, setNameInput] = React.useState('');
+  const [codeInput, setCodeInput] = React.useState('');
+  const [roomCode,  setRoomCode]  = React.useState('');
+  const [isHost,    setIsHost]    = React.useState(false);
+  const [gs,        setGs]        = React.useState(null);   // gameState
+  const [erasing,   setErasing]   = React.useState(false);
+  const [guess,     setGuess]     = React.useState('');
+  const [guessMsg,  setGuessMsg]  = React.useState(null);
+  const [clearSig,  setClearSig]  = React.useState(0);
+  const [error,     setError]     = React.useState('');
+  const canvasRef = React.useRef(null);
+  const roomRef   = React.useRef(null);
+  const myId      = React.useRef(getOrCreatePlayerId());
+  const advancing = React.useRef(false);  // debounce advanceDrawer
+
+  React.useEffect(() => { try { initFirebase(); } catch(e) { setError('Firebase uppsetning mistókst.'); } }, []);
+
+  // Ef gameState.status breytist í 'playing' / 'between' → fara í game-skjá
+  React.useEffect(() => {
+    if (gs?.status === 'playing' || gs?.status === 'between') {
+      if (screen !== 'game') setScreen('game');
+    }
+  }, [gs?.status]);
+
+  function listenToRoom(code) {
+    const ref = fbDb.ref(`teiknileikur/${code}`);
+    roomRef.current = ref;
+    ref.on('value', snap => { if (snap.val()) setGs(snap.val()); });
+    ref.onDisconnect().child(`players/${myId.current}`).remove();
+  }
+
+  function createRoom() {
+    const name = nameInput.trim(); if (!name) return;
+    const code = Math.floor(1000 + Math.random()*9000).toString();
+    const word = randWord('');
+    fbDb.ref(`teiknileikur/${code}`).set({
+      status: 'lobby', word,
+      currentDrawerIndex: 0,
+      strokes: null, activeStroke: null,
+      players: { [myId.current]: { name, order: 0, score: 0 } },
+      hostId: myId.current,
+      guessedBy: null, lastWinner: null,
+    });
+    setRoomCode(code); setIsHost(true);
+    listenToRoom(code); setScreen('lobby');
+  }
+
+  function joinRoom() {
+    const name = nameInput.trim(); const code = codeInput.trim();
+    if (!name || code.length !== 4) return;
+    const ref = fbDb.ref(`teiknileikur/${code}`);
+    ref.once('value', snap => {
+      if (!snap.exists()) { setError('Herbergiskóðinn finnst ekki.'); return; }
+      const g = snap.val();
+      if (g.status !== 'lobby') { setError('Leikurinn er þegar hafinn.'); return; }
+      const order = Object.values(g.players||{}).length;
+      ref.child(`players/${myId.current}`).set({ name, order, score: 0 });
+      setRoomCode(code); setIsHost(false);
+      listenToRoom(code); setScreen('lobby'); setError('');
+    });
+  }
+
+  function startGame() {
+    roomRef.current?.update({ status: 'playing', guessedBy: null, lastWinner: null });
+  }
+
+  function handleStrokeEnd(stroke) { roomRef.current?.child('strokes').push(stroke); }
+  function handleActiveStroke(stroke) { roomRef.current?.child('activeStroke').set(stroke||null); }
+
+  function clearCanvas() {
+    canvasRef.current?.clear();
+    setClearSig(s=>s+1);
+    roomRef.current?.child('strokes').set(null);
+    roomRef.current?.child('activeStroke').set(null);
+  }
+
+  function advanceDrawer() {
+    if (advancing.current) return;
+    advancing.current = true;
+    const players = getSortedPlayers();
+    const nextIdx = ((gs.currentDrawerIndex||0) + 1) % players.length;
+    const nextWord = randWord(gs.word);
+    roomRef.current?.update({
+      currentDrawerIndex: nextIdx, word: nextWord,
+      strokes: null, activeStroke: null,
+      status: 'between', guessedBy: null,
+    });
+    setClearSig(s=>s+1);
+    setTimeout(() => {
+      roomRef.current?.update({ status: 'playing', lastWinner: null });
+      advancing.current = false;
+    }, 3000);
+  }
+
+  function checkGuess() {
+    if (!gs || !guess.trim() || gs.guessedBy) return;
+    const correct = guess.trim().toLowerCase() === (gs.word||'').toLowerCase();
+    if (correct) {
+      roomRef.current?.child(`players/${myId.current}/score`).transaction(s=>(s||0)+1);
+      const myName = gs.players?.[myId.current]?.name || '';
+      roomRef.current?.update({ guessedBy: myId.current, lastWinner: myName });
+      setGuess('');
+      setGuessMsg({ text: '🎉 Rétt!', ok: true });
+      setTimeout(() => setGuessMsg(null), 2500);
+      setTimeout(() => advanceDrawer(), 2800);
+    } else {
+      setGuessMsg({ text: '🤔 Reyndu aftur!', ok: false });
+      setTimeout(() => setGuessMsg(null), 1500);
+      setGuess('');
+    }
+  }
+
+  function getSortedPlayers() {
+    if (!gs?.players) return [];
+    return Object.entries(gs.players)
+      .map(([id,p])=>({id,...p}))
+      .sort((a,b)=>a.order-b.order);
+  }
+
+  function getCurrentDrawer() {
+    const p = getSortedPlayers();
+    if (!p.length) return null;
+    return p[(gs?.currentDrawerIndex||0) % p.length];
+  }
+
+  function goHome() {
+    roomRef.current?.child(`players/${myId.current}`).remove();
+    roomRef.current?.off(); roomRef.current=null;
+    setGs(null); setScreen('home'); setRoomCode('');
+    setCodeInput(''); setError(''); setGuess(''); setGuessMsg(null);
+  }
+
+  // ── Forsíða ──────────────────────────────────────────────────────────────
+  if (screen === 'home') return (
+    <div className="min-h-screen">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <button onClick={()=>window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+          <h1 className="text-3xl font-light text-gray-800 mb-1">Teiknileikurinn</h1>
+          <p className="text-gray-500 text-sm font-light">2–4 leikmenn · einn teiknar, aðrir giska · hringrás</p>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-4">
+        {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-light">{error}</div>}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <label className="block text-sm text-gray-500 font-light mb-2">Nafnið þitt</label>
+          <input type="text" value={nameInput} onChange={e=>setNameInput(e.target.value)}
+            placeholder="t.d. Anna" maxLength={20}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-lg"/>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">✏️</span>
+            <div>
+              <h2 className="font-medium text-gray-800">Stofna herbergi</h2>
+              <p className="text-xs text-gray-400 font-light">Þú ert fyrst – gefðu kóðann öðrum</p>
+            </div>
+          </div>
+          <button onClick={createRoom} disabled={!nameInput.trim()}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            Stofna herbergi
+          </button>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">🔍</span>
+            <div>
+              <h2 className="font-medium text-gray-800">Ganga í herbergi</h2>
+              <p className="text-xs text-gray-400 font-light">Sláðu inn 4 stafa kóðann</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <input type="tel" maxLength={4} value={codeInput}
+              onChange={e=>setCodeInput(e.target.value.replace(/\D/g,''))}
+              onKeyDown={e=>e.key==='Enter'&&joinRoom()}
+              placeholder="1234"
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-light text-2xl text-center tracking-widest"/>
+            <button onClick={joinRoom} disabled={!nameInput.trim()||codeInput.length!==4}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+              Ganga í
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+
+  // ── Biðsalur ─────────────────────────────────────────────────────────────
+  if (screen === 'lobby') {
+    const players = getSortedPlayers();
+    return (
+      <div className="min-h-screen">
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-2xl mx-auto px-6 py-5 flex items-center justify-between">
+            <button onClick={goHome} className="text-sm text-gray-500 hover:text-gray-700 font-light">← Hætta</button>
+            <div className="text-center">
+              <div className="text-xs text-gray-400 font-light mb-0.5">Herbergiskóði</div>
+              <div className="text-3xl font-medium text-blue-600 tracking-widest">{roomCode}</div>
+            </div>
+            <div className="w-16"/>
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-6 py-8 fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <h2 className="font-medium text-gray-600 mb-4 text-sm uppercase tracking-wide">
+              Leikmenn ({players.length}/4)
+            </h2>
+            <div className="space-y-2">
+              {players.map((p,i) => (
+                <div key={p.id} className={`flex items-center gap-3 p-3 rounded-lg ${p.id===myId.current?'bg-blue-50':'bg-gray-50'}`}>
+                  <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 text-sm flex items-center justify-center font-medium">{i+1}</span>
+                  <span className="font-light text-gray-800 flex-1">{p.name}</span>
+                  {p.id===myId.current && <span className="text-xs text-blue-500 font-light">þú</span>}
+                  {p.id===gs?.hostId && p.id!==myId.current && <span className="text-xs text-gray-400 font-light">gestgjafi</span>}
+                </div>
+              ))}
+              {players.length < 4 && (
+                <div className="p-3 rounded-lg border-2 border-dashed border-gray-200 text-center text-sm text-gray-400 font-light animate-pulse">
+                  Bíð eftir fleiri…
+                </div>
+              )}
+            </div>
+          </div>
+          {isHost ? (
+            <button onClick={startGame} disabled={players.length < 2}
+              className="w-full py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-lg">
+              {players.length < 2 ? 'Þarf að minnsta kosti 2 leikmenn' : `Byrja leik (${players.length} leikmenn) →`}
+            </button>
+          ) : (
+            <div className="text-center p-6 bg-gray-50 rounded-xl">
+              <div className="animate-pulse text-gray-400 font-light">Gestgjafinn byrjar leikinn…</div>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  // ── Leikurinn ─────────────────────────────────────────────────────────────
+  if (screen === 'game') {
+    const drawer      = getCurrentDrawer();
+    const iAmDrawing  = drawer?.id === myId.current;
+    const players     = getSortedPlayers();
+    const isBetween   = gs?.status === 'between';
+
+    return (
+      <div className="min-h-screen">
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+            <button onClick={goHome} className="text-xs text-gray-400 hover:text-gray-600 font-light">← Hætta</button>
+            {/* Stigatafla */}
+            <div className="flex items-center gap-2">
+              {players.map(p => (
+                <div key={p.id} className={`text-center px-2 py-1 rounded-lg transition-all ${p.id===drawer?.id?'bg-blue-50':''}`}>
+                  <div className={`text-xs font-light truncate max-w-[55px] ${p.id===myId.current?'text-blue-600':'text-gray-500'}`}>{p.name}</div>
+                  <div className="text-sm font-medium text-gray-700">{p.score||0}</div>
+                  {p.id===drawer?.id && <div className="text-xs leading-none">✏️</div>}
+                </div>
+              ))}
+            </div>
+            <div className="text-xs text-gray-300 font-light">{roomCode}</div>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 py-4 fade-in">
+
+          {/* Milli umferða */}
+          {isBetween && (
+            <div className="mb-3 pop-in bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+              <div className="text-2xl mb-1">🎉</div>
+              <p className="font-medium text-green-700">
+                {gs?.lastWinner ? `${gs.lastWinner} giskaði rétt!` : 'Rétt!'}
+              </p>
+              <p className="text-xs text-green-500 font-light mt-1">
+                Næst teiknar <strong>{getSortedPlayers()[(((gs?.currentDrawerIndex||0)+1) % getSortedPlayers().length)]?.name}</strong>…
+              </p>
+            </div>
+          )}
+
+          {/* Orðið (teiknarinn sér) */}
+          {iAmDrawing && !isBetween && (
+            <div className="mb-3 bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
+              <p className="text-xs text-blue-400 font-light mb-1 uppercase tracking-wide">Þitt orð – teiknaðu þetta!</p>
+              <p className="word-reveal text-blue-800">{gs?.word}</p>
+            </div>
+          )}
+
+          {/* Hverjir er að teikna (giskarar sjá) */}
+          {!iAmDrawing && !isBetween && (
+            <p className="text-center text-sm font-light text-gray-500 mb-3">
+              ✏️ <strong className="text-gray-700">{drawer?.name}</strong> er að teikna
+            </p>
+          )}
+
+          {/* Canvas */}
+          <DrawingCanvas
+            ref={canvasRef}
+            readOnly={!iAmDrawing || isBetween}
+            erasing={erasing}
+            onStrokeEnd={handleStrokeEnd}
+            onActiveStroke={handleActiveStroke}
+            remoteStrokes={gs?.strokes}
+            remoteActive={gs?.activeStroke}
+            clearSig={clearSig}
+          />
+
+          {/* Verkfæri teiknarans */}
+          {iAmDrawing && !isBetween && (
+            <div className="flex gap-2 mt-3">
+              <button onClick={()=>setErasing(false)}
+                className={`flex-1 py-2.5 rounded-lg border-2 text-sm font-light transition-all ${!erasing?'bg-blue-600 text-white border-blue-600':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                ✏️ Penni
+              </button>
+              <button onClick={()=>setErasing(true)}
+                className={`flex-1 py-2.5 rounded-lg border-2 text-sm font-light transition-all ${erasing?'bg-gray-700 text-white border-gray-700':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                🧹 Stroka
+              </button>
+              <button onClick={clearCanvas}
+                className="flex-1 py-2.5 rounded-lg border-2 border-gray-200 bg-white text-gray-600 hover:bg-gray-50 text-sm font-light">
+                🗑️ Hreinsa
+              </button>
+            </div>
+          )}
+
+          {/* Giskari */}
+          {!iAmDrawing && !isBetween && (
+            <div className="mt-3 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="flex gap-2">
+                <input type="text" value={guess} onChange={e=>setGuess(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&checkGuess()}
+                  placeholder="Hvað er þetta?"
+                  disabled={!!gs?.guessedBy}
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-light disabled:bg-gray-50"/>
+                <button onClick={checkGuess} disabled={!guess.trim()||!!gs?.guessedBy}
+                  className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+                  Giska
+                </button>
+              </div>
+              {guessMsg && (
+                <div className={`mt-2 p-2 rounded-lg text-sm text-center fade-in ${guessMsg.ok?'bg-green-50 text-green-700':'bg-amber-50 text-amber-700'} font-light`}>
+                  {guessMsg.text}
+                </div>
+              )}
+              {gs?.guessedBy && gs.guessedBy !== myId.current && (
+                <p className="mt-2 text-xs text-gray-400 font-light text-center">
+                  {gs.lastWinner} fékk þetta rétt 🎉
+                </p>
+              )}
+            </div>
+          )}
+
+          {iAmDrawing && isBetween && (
+            <p className="mt-3 text-center text-sm text-gray-400 font-light animate-pulse">Undirbúningur…</p>
+          )}
+
+        </main>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
