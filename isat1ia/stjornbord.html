@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 Stjórnborð – ÍSAT1ÍA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .cell { width: 32px; height: 32px; border-radius: 6px; display: inline-block; }
+    .cell-none    { background: #e5e7eb; }
+    .cell-opened  { background: #fbbf24; }
+    .cell-completed { background: #22c55e; }
+    .tab-btn { transition: all 0.2s; }
+    .tab-btn.active { background: #2563eb; color: white; }
+    .tab-btn:not(.active):hover { background: #f3f4f6; }
+  </style>
+</head>
+<body>
+
+  <div id="loading" class="min-h-screen flex items-center justify-center">
+    <p class="text-gray-400 font-light">Hleður...</p>
+  </div>
+
+  <div id="app" style="display:none" class="min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+
+      <!-- Header -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-light text-gray-800 mb-1">📊 Stjórnborð kennara</h1>
+          <p class="text-gray-500 text-sm font-light">ÍSAT1ÍA – Framvinda nemenda</p>
+        </div>
+        <div class="text-right">
+          <div class="flex items-center gap-4 mb-2 justify-end">
+            <div class="flex items-center gap-2 text-sm font-light text-gray-500">
+              <span class="cell cell-none"></span> Ekki byrjað
+              <span class="cell cell-opened ml-2"></span> Opnað
+              <span class="cell cell-completed ml-2"></span> Lokið
+            </div>
+          </div>
+          <button id="btn-logout" class="text-sm text-blue-600 hover:text-blue-800 font-light">Útskrá</button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-2" id="tabs"></div>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div id="table-container" class="overflow-x-auto p-6">
+          <p class="text-gray-400 font-light text-center py-8">Sæki gögn...</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
+      authDomain: "malstodin-90f85.firebaseapp.com",
+      projectId: "malstodin-90f85",
+      storageBucket: "malstodin-90f85.firebasestorage.app",
+      messagingSenderId: "190485777754",
+      appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
+    };
+
+    // Aðeins þessir UIDs mega sjá stjórnborðið
+    const ADMIN_UIDS = [
+      'MM8vUelStVSl8eNlBSSVrgq0GW52',
+      'T08EOXfVZxQO13BJyCXDElR6apD2'
+    ];
+
+    const COURSE = 'isat1ia';
+
+    // Skilgreining á öllum æfingum
+    const EXERCISE_GROUPS = [
+      {
+        id: 'lestextar',
+        label: '📖 Lestextar',
+        exercises: [
+          { id: 'lestextar_01', label: 'L1' },
+          { id: 'lestextar_02', label: 'L2' },
+          { id: 'lestextar_03', label: 'L3' },
+          { id: 'lestextar_04', label: 'L4' },
+          { id: 'lestextar_05', label: 'L5' },
+          { id: 'lestextar_06', label: 'L6' },
+          { id: 'lestextar_07', label: 'L7' },
+          { id: 'lestextar_08', label: 'L8' },
+          { id: 'lestextar_09', label: 'L9' },
+          { id: 'lestextar_10', label: 'L10' },
+          { id: 'lestextar_11', label: 'L11' },
+          { id: 'lestextar_12', label: 'L12' },
+          { id: 'lestextar_13', label: 'L13' },
+        ]
+      },
+      {
+        id: 'hlustun',
+        label: '🎧 Hlustun',
+        exercises: [
+          { id: 'hlustun_01', label: 'H1' },
+          { id: 'hlustun_02', label: 'H2' },
+          { id: 'hlustun_03', label: 'H3' },
+          { id: 'hlustun_04', label: 'H4' },
+          { id: 'hlustun_05', label: 'H5' },
+          { id: 'hlustun_06', label: 'H6' },
+          { id: 'hlustun_07', label: 'H7' },
+          { id: 'hlustun_08', label: 'H8' },
+          { id: 'hlustun_09', label: 'H9' },
+          { id: 'hlustun_10', label: 'H10' },
+          { id: 'hlustun_11', label: 'H11' },
+          { id: 'hlustun_12', label: 'H12' },
+        ]
+      },
+      {
+        id: 'spjall',
+        label: '💬 Spjall',
+        exercises: [
+          { id: 'spjall_01', label: 'S1' },
+          { id: 'spjall_02', label: 'S2' },
+          { id: 'spjall_03', label: 'S3' },
+          { id: 'spjall_04', label: 'S4' },
+          { id: 'spjall_05', label: 'S5' },
+          { id: 'spjall_06', label: 'S6' },
+          { id: 'spjall_07', label: 'S7' },
+          { id: 'spjall_08', label: 'S8' },
+          { id: 'spjall_09', label: 'S9' },
+          { id: 'spjall_10', label: 'S10' },
+          { id: 'spjall_11', label: 'S11' },
+          { id: 'spjall_12', label: 'S12' },
+        ]
+      },
+      {
+        id: 'hljodritun',
+        label: '✍️ Hljóðritun',
+        exercises: [
+          { id: 'hljodritun_k1',  label: 'R1' },
+          { id: 'hljodritun_k2',  label: 'R2' },
+          { id: 'hljodritun_k3',  label: 'R3' },
+          { id: 'hljodritun_k4',  label: 'R4' },
+          { id: 'hljodritun_k5',  label: 'R5' },
+          { id: 'hljodritun_k6',  label: 'R6' },
+          { id: 'hljodritun_k7',  label: 'R7' },
+          { id: 'hljodritun_k8',  label: 'R8' },
+          { id: 'hljodritun_k9',  label: 'R9' },
+          { id: 'hljodritun_k10', label: 'R10' },
+          { id: 'hljodritun_k11', label: 'R11' },
+          { id: 'hljodritun_k12', label: 'R12' },
+          { id: 'hljodritun_k13', label: 'R13' },
+        ]
+      },
+      {
+        id: 'leikir',
+        label: '🎮 Leikir',
+        exercises: [
+          { id: 'leikir_teiknileikur1', label: 'T1' },
+          { id: 'leikir_teiknileikur2', label: 'T2' },
+          { id: 'leikir_teiknileikur3', label: 'T3' },
+          { id: 'leikir_teiknileikur4', label: 'T4' },
+          { id: 'leikir_visbendingaleikur1', label: 'V1' },
+          { id: 'leikir_visbendingaleikur2', label: 'V2' },
+        ]
+      }
+    ];
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    let allProgress = {}; // { uid: { exerciseId: status } }
+    let allStudents = []; // [{ uid, email }]
+    let activeGroup = 'lestextar';
+
+    // ── Auth ─────────────────────────────────────────────────────
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user || !ADMIN_UIDS.includes(user.uid)) {
+        window.location.href = '/isat1ia/login.html';
+        return;
+      }
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('btn-logout').onclick = () => signOut(auth).then(() => window.location.href = '/isat1ia/login.html');
+
+      await loadData();
+      renderTabs();
+      renderTable(activeGroup);
+    });
+
+    // ── Gögn ─────────────────────────────────────────────────────
+
+    async function loadData() {
+      // Sækja alla nemendur úr user_access
+      const userSnap = await getDocs(collection(db, 'user_access'));
+      userSnap.forEach(d => {
+        const data = d.data();
+        if (data[COURSE] && data[COURSE].activated_at) {
+          allStudents.push({ uid: d.id, email: data.email || d.id });
+        }
+      });
+
+      // Sækja framvindu hvers nemanda
+      await Promise.all(allStudents.map(async (student) => {
+        allProgress[student.uid] = {};
+        try {
+          const progSnap = await getDocs(collection(db, 'progress', student.uid, COURSE));
+          progSnap.forEach(d => {
+            allProgress[student.uid][d.id] = d.data().status || 'opened';
+          });
+        } catch(e) { /* Engin framvinda ennþá */ }
+      }));
+    }
+
+    // ── Flipar ───────────────────────────────────────────────────
+
+    function renderTabs() {
+      const container = document.getElementById('tabs');
+      container.innerHTML = '';
+      EXERCISE_GROUPS.forEach(group => {
+        const btn = document.createElement('button');
+        btn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-light border border-gray-200 ${group.id === activeGroup ? 'active' : ''}`;
+        btn.textContent = group.label;
+        btn.onclick = () => {
+          activeGroup = group.id;
+          renderTabs();
+          renderTable(activeGroup);
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    // ── Tafla ────────────────────────────────────────────────────
+
+    function renderTable(groupId) {
+      const group = EXERCISE_GROUPS.find(g => g.id === groupId);
+      const container = document.getElementById('table-container');
+
+      if (allStudents.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Engir nemendur skráðir ennþá.</p>';
+        return;
+      }
+
+      let html = '<table class="w-full text-sm">';
+
+      // Haus
+      html += '<thead><tr class="border-b border-gray-100">';
+      html += '<th class="text-left py-3 pr-6 font-light text-gray-500 whitespace-nowrap">Nemandi</th>';
+      group.exercises.forEach(ex => {
+        html += `<th class="py-3 px-1 font-light text-gray-400 text-xs text-center">${ex.label}</th>`;
+      });
+      html += '<th class="py-3 pl-4 font-light text-gray-400 text-xs text-center">Lokið</th>';
+      html += '</tr></thead>';
+
+      // Raðir
+      html += '<tbody>';
+      allStudents.sort((a, b) => (a.email || '').localeCompare(b.email || '')).forEach(student => {
+        const prog = allProgress[student.uid] || {};
+        let completedCount = 0;
+
+        html += '<tr class="border-b border-gray-50 hover:bg-gray-50">';
+        html += `<td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">${student.email}</td>`;
+
+        group.exercises.forEach(ex => {
+          const status = prog[ex.id];
+          let cls = 'cell-none';
+          let title = 'Ekki byrjað';
+          if (status === 'opened')    { cls = 'cell-opened';    title = 'Opnað'; }
+          if (status === 'completed') { cls = 'cell-completed'; title = 'Lokið'; completedCount++; }
+          html += `<td class="py-3 px-1 text-center"><span class="cell ${cls}" title="${title}"></span></td>`;
+        });
+
+        // Lokið tala
+        const total = group.exercises.length;
+        const pct = Math.round(completedCount / total * 100);
+        const color = pct === 100 ? 'text-green-600' : pct > 0 ? 'text-amber-600' : 'text-gray-400';
+        html += `<td class="py-3 pl-4 text-center font-light ${color}">${completedCount}/${total}</td>`;
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
