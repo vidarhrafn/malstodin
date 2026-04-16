@@ -102,7 +102,7 @@
         );
 
         // ===== API FUNCTIONS =====
-        async function callOpenAI(messages, max_tokens = 500, model = 'gpt-4o-mini', temperature = 0.4) {
+        async function callOpenAI(messages, max_tokens = 500, model = 'gpt-4o', temperature = 0.4) {
             const r = await fetch('/.netlify/functions/openai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -146,6 +146,13 @@
 - MIKILVÆGT: Segðu "Góðan daginn" í stað "Halló"
 - MIKILVÆGT: Þegar nemandi segir "takk", svaraðu með "ekkert að þakka" eða "gjörðu svo vel" (aldrei "þú ert velkomin/n")
 
+## MÁLFRÆÐI – FORÐASTU ÞESSAR VILLUR
+- Notaðu ALLTAF "vera með" í spurningum: "Ertu með pantað borð?" / "Ertu með ofnæmi?" (ALDREI "áttu...?")
+- Til að spyrja um spurningar: "Ertu með einhverjar spurningar?" eða "Viltu spyrja að einhverju?" (ALDREI "áttu einhverjar spurningar?")
+- Gættu ALLTAF að tölu: "Þetta eru frábær markmið" / "Hér eru réttirnar" (EKKI "er" þegar um fleirtölu er að ræða)
+- Gættu að kynþætti: "maturinn" (kk), "rétturinn" (kk), "súpan" (kvk), "vatnið" (hk), "kaffi" (hk)
+- "Við höfum" í stað "við erum með" þegar talað er um mat á matseðli
+
 ## EF NEMANDI TALAR ANNAÐ TUNGUMÁL
 Ef nemandi skrifar á öðru tungumáli en íslensku (og biður EKKI um hjálp), svaraðu:
 "Afsakið, ég skil ekki. Geturðu sagt þetta á íslensku?"
@@ -177,7 +184,7 @@ Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
 - Spyrðu um forrétt/eftirrétt
 
 ### 5. OFNÆMI
-- Spyrðu: "Ert þú með ofnæmi fyrir einhverju?"
+- Spyrðu: "Ertu með ofnæmi fyrir einhverju?"
 - Ef já: "Ég skal athuga hjá kokknum til öryggis"
 
 ### 6. BÍÐ EFTIR MAT
@@ -273,7 +280,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
 
             // Play audio
             const playAudio = async (index, text) => {
-                // Stop current audio if playing
                 if (currentAudioRef.current) {
                     currentAudioRef.current.pause();
                     currentAudioRef.current = null;
@@ -330,7 +336,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         { role: 'user', content: '[Viðskiptavinur kemur inn á veitingastaðinn]' }
                     ];
 
-                    const response = await callOpenAI(apiMessages);
+                    const response = await callOpenAI(apiMessages, 300, 'gpt-4o', 0.4);
                     setMessages([{ role: 'assistant', content: response }]);
 
                 } catch (error) {
@@ -358,7 +364,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         ...newMessages.map(m => ({ role: m.role, content: m.content }))
                     ];
 
-                    const response = await callOpenAI(apiMessages);
+                    const response = await callOpenAI(apiMessages, 300, 'gpt-4o', 0.4);
                     
                     // Check if finished
                     if (response.includes('[SAMTALI LOKIÐ]')) {
@@ -372,7 +378,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                             { role: 'user', content: `Samtalið:\n${allMessages.map(m => `${m.role === 'user' ? 'Nemandi' : 'Þjónn'}: ${m.content}`).join('\n')}` }
                         ];
                         
-                        const feedbackText = await callOpenAI(feedbackMsgs, 500);
+                        const feedbackText = await callOpenAI(feedbackMsgs, 500, 'gpt-4o-mini', 0.4);
                         setFeedback(feedbackText);
                         setFinished(true);
                     } 
@@ -400,7 +406,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 setWaitingForFood(false);
                 setLoading(true);
 
-                // Add the waiting message to display
                 const waitMessage = { role: 'system', content: '⏳ 15 mínútum síðar...', isWaitMessage: true };
                 const newMessages = [...messages, waitMessage];
                 setMessages(newMessages);
@@ -413,7 +418,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         { role: 'user', content: '[Maturinn er tilbúinn]' }
                     ];
 
-                    const response = await callOpenAI(apiMessages);
+                    const response = await callOpenAI(apiMessages, 300, 'gpt-4o', 0.4);
                     setMessages([...newMessages, { role: 'assistant', content: response }]);
 
                 } catch (error) {
@@ -453,7 +458,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         { role: 'user', content: helpInput }
                     ];
 
-                    const response = await callOpenAI(helpMessages, 200);
+                    const response = await callOpenAI(helpMessages, 200, 'gpt-4o-mini', 0.3);
                     setHelpResponse(response);
                 } catch (e) {
                     setHelpResponse('Villa. Reyndu aftur.');
@@ -469,7 +474,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Get assistant message number (ignore wait messages)
             const getAssistantNumber = (index) => {
                 let count = 0;
                 for (let i = 0; i <= index; i++) {
