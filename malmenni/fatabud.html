@@ -102,7 +102,7 @@
         );
 
         // ===== API FUNCTIONS =====
-        async function callOpenAI(messages, max_tokens = 500, model = 'gpt-4o-mini', temperature = 0.4) {
+        async function callOpenAI(messages, max_tokens = 500, model = 'gpt-4o', temperature = 0.4) {
             const r = await fetch('/.netlify/functions/openai', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -144,6 +144,13 @@
 - Vertu þolinmóður ef nemandi gerir málfræðivillur
 - Leiðréttu óbeint með því að endurtaka rétt
 
+## MIKILVÆGAR SKRIFAREGLUR – FYLGJA ALLTAF
+Texti þinn er lesinn upp af tölvu. Til að hljóðið sé rétt:
+- ALDREI nota % táknið – skrifaðu alltaf "prósent" (t.d. "30 prósent afsláttur")
+- ALDREI nota punkt í tölum – skrifaðu bil sem þúsundaskiltákn (t.d. "12 000 krónur" ekki "12.000 krónur")
+- ALDREI nota stafstæðar skammstafanir fyrir stærðir – skrifaðu alltaf fullt orð:
+  "Lítil stærð" (ekki "S"), "Miðlungsstærð" (ekki "M"), "Stór stærð" (ekki "L")
+
 ## EF NEMANDI TALAR ANNAÐ TUNGUMÁL
 Ef nemandi skrifar á öðru tungumáli en íslensku (og biður EKKI um hjálp), svaraðu:
 "Afsakið, ég skil ekki. Geturðu sagt þetta á íslensku?"
@@ -164,7 +171,7 @@ Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
 ### 2. ÞARFIR VIÐSKIPTAVINAR
 - Hverju ertu að leita að?
 - Hvaða lit viltu?
-- Hvaða stærð notar þú? (S, M eða L)
+- Hvaða stærð notar þú? Lítil stærð, miðlungsstærð eða stór stærð?
 - Viltu stuttar ermar eða síðar ermar?
 
 ### 3. HJÁLPA AÐ FINNA
@@ -178,11 +185,11 @@ Ef nemandi biður um hjálp (t.d. "How do I say...", "Jak powiedzieć..."):
 - Viltu prófa aðra stærð?
 
 ### 5. TILBOÐ (nefndu einu sinni í samtalinu)
-- "Við erum líka með tilboð á sokkum í dag - pakki með þremur pörum er á 30% afslætti!"
+- "Við erum líka með tilboð á sokkum í dag - pakki með þremur pörum er á 30 prósent afslætti!"
 
 ### 6. BORGUN (þegar viðskiptavinur vill kaupa)
 - Komdu með mér að búðarkassanum
-- Þetta kostar [veldu verð á milli 3000-15000] krónur
+- Veldu verð á milli 3 000 og 15 000 króna og skrifaðu það með bili (t.d. "8 500 krónur")
 - Borgar þú með korti eða reiðufé?
 - Má bjóða þér poka?
 
@@ -198,7 +205,6 @@ Bættu NÁKVÆMLEGA við í LOK skilaboðanna: [VIÐSKIPTUM LOKIÐ]
 - Ekki flýta samtalinu - láttu nemandann svara
 - Vertu náttúrulegur - ekki alltaf spyrja, stundum bara svara
 `.trim();
-
 
         const FEEDBACK_SYSTEM_PROMPT = `
 Þú ert íslenskukennari. Gefðu nemanda hrós eftir æfingu í fatabúð.
@@ -234,7 +240,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
             const messagesEndRef = useRef(null);
             const currentAudioRef = useRef(null);
 
-            // Initialize speech recognition
             useEffect(() => {
                 if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
                     const recognitionInstance = new window.webkitSpeechRecognition();
@@ -255,12 +260,10 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             }, []);
 
-            // Scroll to bottom
             useEffect(() => {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, [messages]);
 
-            // Play audio
             const playAudio = async (index, text) => {
                 if (currentAudioRef.current) {
                     currentAudioRef.current.pause();
@@ -296,7 +299,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Copy feedback
             const copyFeedback = async () => {
                 try {
                     await navigator.clipboard.writeText(feedback);
@@ -307,7 +309,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Start conversation
             const startConversation = async () => {
                 setStarted(true);
                 setLoading(true);
@@ -318,7 +319,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         { role: 'user', content: '[Viðskiptavinur kemur inn í búðina]' }
                     ];
 
-                    const response = await callOpenAI(apiMessages);
+                    const response = await callOpenAI(apiMessages, 300, 'gpt-4o', 0.4);
                     setMessages([{ role: 'assistant', content: response }]);
 
                 } catch (error) {
@@ -328,7 +329,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Send message
             const sendMessage = async () => {
                 if (!input.trim() || loading) return;
 
@@ -346,21 +346,19 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         ...newMessages.map(m => ({ role: m.role, content: m.content }))
                     ];
 
-                    const response = await callOpenAI(apiMessages);
+                    const response = await callOpenAI(apiMessages, 300, 'gpt-4o', 0.4);
                     
-                    // Check if finished
                     if (response.includes('[VIÐSKIPTUM LOKIÐ]')) {
                         const cleanResponse = response.replace('[VIÐSKIPTUM LOKIÐ]', '').trim();
                         setMessages([...newMessages, { role: 'assistant', content: cleanResponse }]);
                         
-                        // Get feedback
                         const allMessages = [...newMessages, { role: 'assistant', content: cleanResponse }];
                         const feedbackMsgs = [
                             { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
                             { role: 'user', content: `Samtalið í fatabúðinni:\n${allMessages.map(m => `${m.role === 'user' ? 'Viðskiptavinur' : 'Starfsmaður'}: ${m.content}`).join('\n')}` }
                         ];
                         
-                        const feedbackText = await callOpenAI(feedbackMsgs, 500);
+                        const feedbackText = await callOpenAI(feedbackMsgs, 500, 'gpt-4o-mini', 0.4);
                         setFeedback(feedbackText);
                         setFinished(true);
                     } else {
@@ -374,7 +372,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Toggle recording
             const toggleRecording = () => {
                 if (!recognition) {
                     alert('Talgreining er ekki studd í þessum vafra. Prófaðu Chrome.');
@@ -390,7 +387,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Help
             const askForHelp = async () => {
                 if (!helpInput.trim() || helpLoading) return;
                 setHelpLoading(true);
@@ -404,7 +400,7 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         { role: 'user', content: helpInput }
                     ];
 
-                    const response = await callOpenAI(helpMessages, 200);
+                    const response = await callOpenAI(helpMessages, 200, 'gpt-4o-mini', 0.3);
                     setHelpResponse(response);
                 } catch (e) {
                     setHelpResponse('Villa. Reyndu aftur.');
@@ -420,7 +416,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                 }
             };
 
-            // Get assistant message number
             const getAssistantNumber = (index) => {
                 let count = 0;
                 for (let i = 0; i <= index; i++) {
@@ -431,7 +426,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
 
             return (
                 <div className="min-h-screen flex flex-col" style={{ maxHeight: '100vh' }}>
-                    {/* Header */}
                     <header className="bg-white shadow-sm py-4 px-5">
                         <div className="flex items-center gap-4">
                             <span className="text-4xl">👕</span>
@@ -442,10 +436,8 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                         </div>
                     </header>
 
-                    {/* Main */}
                     <main className="flex-1 flex flex-col overflow-hidden p-4">
                         
-                        {/* Start screen */}
                         {!started && (
                             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
                                 <div className="text-8xl mb-6">👕</div>
@@ -464,10 +456,8 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                             </div>
                         )}
 
-                        {/* Conversation */}
                         {started && !finished && (
                             <>
-                                {/* Messages */}
                                 <div className="flex-1 overflow-y-auto bg-white rounded-2xl shadow-sm p-5 mb-4">
                                     <div className="space-y-5">
                                         {messages.map((msg, idx) => (
@@ -511,7 +501,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                                     </div>
                                 </div>
 
-                                {/* Input */}
                                 <div className="bg-white rounded-2xl shadow-sm p-4">
                                     <div className="flex gap-3 mb-3">
                                         <button
@@ -547,7 +536,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                                         <p className="text-base text-red-500 mb-3 font-medium">🔴 Talaðu núna...</p>
                                     )}
 
-                                    {/* Help */}
                                     <button
                                         onClick={() => setShowHelp(!showHelp)}
                                         className="flex items-center gap-2 text-base text-gray-500 hover:text-gray-700 py-2"
@@ -584,7 +572,6 @@ Vertu hvetjandi. Nemandinn er á A1-A2 stigi.
                             </>
                         )}
 
-                        {/* Finished */}
                         {finished && (
                             <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm p-6 overflow-y-auto">
                                 <div className="text-center mb-5">
