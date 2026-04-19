@@ -58,8 +58,44 @@
 <body>
   <div id="root"></div>
 
+  <script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
+    authDomain: "malstodin-90f85.firebaseapp.com",
+    projectId: "malstodin-90f85",
+    storageBucket: "malstodin-90f85.firebasestorage.app",
+    messagingSenderId: "190485777754",
+    appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const COURSE = 'isat1ic';
+
+  async function writeProgress(exerciseId, status) {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
+      const data = { status, updated_at: serverTimestamp() };
+      if (status === 'opened') data.opened_at = serverTimestamp();
+      if (status === 'completed') data.completed_at = serverTimestamp();
+      await setDoc(ref, data, { merge: true });
+    } catch(e) {
+      // Fail silently — never interrupt exercise
+    }
+  }
+
+  window.writeProgress = writeProgress;
+</script>
+
   <script type="text/babel">
-    const { useState, useRef, useMemo } = React;
+    const { useState, useRef, useMemo, useEffect } = React;
 
     /* ─── API ─── */
     async function callOpenAI(messages, max_tokens = 300) {
@@ -145,7 +181,7 @@
     const TABS = [
       { id: 'krossar', label: 'Krossaspurningar', icon: '✓' },
       { id: 'stuttar', label: 'Stuttar spurningar', icon: '📝' },
-      { id: 'umraeda', label: 'Umræðuspurningar', icon: '💬' }
+      { id: 'umraeda', label: 'Tölum saman', icon: '💬' }
     ];
 
     /* ─── SHARED COMPONENTS ─── */
@@ -494,7 +530,7 @@ Vera MJÖG hvetjandi. Aldrei nefna fleiri en eina villu.` },
         <div className="space-y-5 fade-in">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
             <div className="text-5xl mb-3">💬</div>
-            <h2 className="text-xl font-light text-gray-800 mb-1">Umræðuspurningar</h2>
+            <h2 className="text-xl font-light text-gray-800 mb-1">Tölum saman</h2>
             <p className="text-gray-500 text-sm font-light">
               Spjallaðu við AI um áhugamál þín – 3 tilsvör í hverju samtali.
             </p>
@@ -598,6 +634,19 @@ Vera MJÖG hvetjandi. Aldrei nefna fleiri en eina villu.` },
       const [done, setDone] = useState({ krossar: false, stuttar: false, umraeda: false });
 
       const markDone = (tab) => setDone(d => ({ ...d, [tab]: true }));
+
+      const progressWritten = React.useRef(false);
+      useEffect(() => {
+        window.writeProgress && window.writeProgress('lestextar_ahugamal', 'opened');
+      }, []);
+
+      useEffect(() => {
+        const exerciseDone = done.krossar && done.stuttar;
+        if (exerciseDone && !progressWritten.current) {
+          progressWritten.current = true;
+          window.writeProgress && window.writeProgress('lestextar_ahugamal', 'completed');
+        }
+      }, [done.krossar, done.stuttar]);
 
       return (
         <div className="min-h-screen">
