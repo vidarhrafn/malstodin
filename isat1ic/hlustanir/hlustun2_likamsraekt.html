@@ -79,6 +79,42 @@
 <body>
   <div id="root"></div>
 
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
+    authDomain: "malstodin-90f85.firebaseapp.com",
+    projectId: "malstodin-90f85",
+    storageBucket: "malstodin-90f85.firebasestorage.app",
+    messagingSenderId: "190485777754",
+    appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const COURSE = 'isat1ic';
+
+  async function writeProgress(exerciseId, status) {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
+      const data = { status, updated_at: serverTimestamp() };
+      if (status === 'opened') data.opened_at = serverTimestamp();
+      if (status === 'completed') data.completed_at = serverTimestamp();
+      await setDoc(ref, data, { merge: true });
+    } catch(e) {
+      // Fail silently — never interrupt exercise
+    }
+  }
+
+  window.writeProgress = writeProgress;
+</script>
+
   <script type="text/babel">
     const { useState, useRef, useEffect, useMemo } = React;
 
@@ -344,6 +380,16 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
       const isTransDone = TRANSLATION_WORDS.length > 0 &&
         TRANSLATION_WORDS.every((_, i) => transFeedback[i] !== undefined);
       const allDone = isTFDone && isMCDone && isShortDone && isTransDone;
+      const progressWritten = React.useRef(false);
+      useEffect(() => {
+        window.writeProgress && window.writeProgress('hlustun2_likamsraekt', 'opened');
+      }, []);
+      useEffect(() => {
+        if (allDone && !progressWritten.current) {
+          progressWritten.current = true;
+          window.writeProgress && window.writeProgress('hlustun2_likamsraekt', 'completed');
+        }
+      }, [allDone]);
 
       // ── Þýðingar ──
 
