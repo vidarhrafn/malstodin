@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Framburðarþjálfun – Þóra</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes recPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+      50%       { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+    }
+    .rec-btn { animation: recPulse 1.4s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useCallback, useEffect } = React;
+
+/* ─── Texti og gildrur ─────────────────────────────────────── */
+const SENTENCES = [
+  "Þóra fer út í búð á hverjum fimmtudegi.",
+  "Hún kaupir þrjú brauð, rauð epli og heita súpu.",
+  "Síðan hringir hún í bróður sinn og biður hann að hjálpa sér heim.",
+  "Það er hvass vindur úti og göturnar eru blautar eftir rigninguna."
+];
+const FULL_TEXT = SENTENCES.join(' ');
+
+// Forsmíðaðar gildrur: orð sem eru sérstaklega erfið
+// Ef talgreining skilar eitthvað annað en þetta eru líkur á villu
+const TRAP_WORDS = [
+  { word: 'búð',     hint: 'ð í lok',     tag: 'ð' },
+  { word: 'brauð',   hint: 'au + ð',      tag: 'au+ð' },
+  { word: 'rauð',    hint: 'au + ð',      tag: 'au+ð' },
+  { word: 'bróður',  hint: 'ð í miðju',   tag: 'ð' },
+  { word: 'biður',   hint: 'ð í miðju',   tag: 'ð' },
+  { word: 'blautar', hint: 'au í miðju',  tag: 'au' },
+];
+const TRAP_SET = new Set(TRAP_WORDS.map(t => t.word.toLowerCase()));
+
+/* ─── Hjálparföll ──────────────────────────────────────────── */
+function norm(s) {
+  return (s || '').toLowerCase().replace(/[.,!?;:""„]/g, '').trim();
+}
+
+function findErrors(transcription) {
+  const heard = norm(transcription).split(/\s+/);
+  const errors = [];
+
+  // 1. Leitum sérstaklega að gildruum
+  for (const trap of TRAP_WORDS) {
+    if (!heard.includes(norm(trap.word))) {
+      errors.push({ ...trap, miss: true });
+    }
+    if (errors.length === 3) break;
+  }
+
+  // 2. Ef færri en 3 villur – leitum að öðrum mismun
+  if (errors.length < 3) {
+    const origWords = norm(FULL_TEXT).split(/\s+/);
+    for (const w of origWords) {
+      if (!heard.includes(w) && !errors.find(e => norm(e.word) === w)) {
+        errors.push({ word: w, hint: null, tag: null });
+      }
+      if (errors.length === 3) break;
+    }
+  }
+
+  return errors.slice(0, 3);
+}
+
+/* ─── Azure TTS ────────────────────────────────────────────── */
+async function playAudio(text, onEnd) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) { onEnd?.(); return; }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended = () => onEnd?.();
+    audio.onerror = () => onEnd?.();
+    await audio.play().catch(() => onEnd?.());
+    return audio;
+  } catch(e) { console.error(e); onEnd?.(); }
+}
+
+/* ─── OpenAI endurgjöf ─────────────────────────────────────── */
+async function getAIFeedback(errors, improved) {
+  try {
+    const r = await fetch('/.netlify/functions/openai', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', temperature: 0.4, max_tokens: 80,
+        messages: [{ role: 'user', content:
+          `Nemandi les íslensku sem annað mál (A1-A2). ${
+            errors.length === 0
+              ? 'Hann las textann rétt.'
+              : `Vandræðaorðin voru: ${errors.map(e=>e.word).join(', ')}.`
+          } ${improved > 0 ? `Í lotu 2 batnaði hann um ${improved} orð.` : ''}
+Skrifaðu EINA stuttan hvetjandi setningu á íslensku (max 15 orð).` }]
+      })
+    });
+    const d = await r.json();
+    return d.content || 'Vel gert – haltu áfram!';
+  } catch { return 'Vel gert – haltu áfram!'; }
+}
+
+/* ─── Speech recognition hook ─────────────────────────────── */
+function useMic() {
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const recRef = useRef(null);
+  const latestRef = useRef('');
+
+  const start = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Vafrinn þinn styður ekki hljóðritun. Notaðu Chrome eða Edge.'); return false; }
+    latestRef.current = '';
+    setTranscript('');
+    const rec = new SR();
+    rec.lang = 'is-IS';
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      let full = '';
+      for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript + ' ';
+      latestRef.current = full.trim();
+      setTranscript(full.trim());
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    rec.start();
+    recRef.current = rec;
+    setListening(true);
+    return true;
+  }, []);
+
+  const stop = useCallback(() => {
+    recRef.current?.stop();
+    recRef.current = null;
+    setListening(false);
+    return latestRef.current;
+  }, []);
+
+  return { listening, transcript, start, stop };
+}
+
+/* ─── ListenPill ───────────────────────────────────────────── */
+function ListenPill({ text, label }) {
+  const [active, setActive] = useState(false);
+  const listen = () => {
+    if (active) return;
+    setActive(true);
+    playAudio(text, () => setActive(false));
+  };
+  return (
+    <button onClick={listen} disabled={active}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border transition-all font-light
+        ${active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+      <span>🎧</span> {label || 'Hlustaðu'}
+      <span className={`text-green-600 ${active ? 'animate-pulse' : ''}`}>🔊</span>
+    </button>
+  );
+}
+
+/* ─── Auðkenndur texti ─────────────────────────────────────── */
+function HighlightedText({ problemWords }) {
+  const marks = new Set(problemWords.map(p => norm(p.word)));
+  const tokens = FULL_TEXT.split(/(\s+|(?<=[a-zA-ZþðæöáéýúíóÞÐÆÖÁÉÝÚÍÓ])(?=[.,!?]))/);
+  return (
+    <p className="text-xl font-light text-gray-800 leading-relaxed">
+      {tokens.map((tok, i) => {
+        if (marks.has(norm(tok))) {
+          return (
+            <mark key={i} className="bg-amber-200 text-amber-900 rounded px-0.5 font-semibold not-italic">
+              {tok}
+            </mark>
+          );
+        }
+        return <span key={i}>{tok}</span>;
+      })}
+    </p>
+  );
+}
+
+/* ─── Aðalforrit ───────────────────────────────────────────── */
+function App() {
+  const [phase, setPhase] = useState('intro');
+  // intro | round1 | analysing | round2 | done
+
+  const [errors, setErrors] = useState([]);          // max 3 villur
+  const [r2Improved, setR2Improved] = useState(0);
+  const [aiFeedback, setAIFeedback] = useState('');
+
+  const mic1 = useMic();
+  const mic2 = useMic();
+
+  /* ── Lota 1: klára hljóðritun og greina ── */
+  async function finishRound1() {
+    const t = mic1.stop();
+    setPhase('analysing');
+    const errs = findErrors(t);
+    setErrors(errs);
+    // sæki AI-endurgjöf í bakgrunni
+    getAIFeedback(errs, 0).then(setAIFeedback);
+    // stuttur delay svo "greining..." birtist
+    setTimeout(() => setPhase(errs.length > 0 ? 'round2' : 'done'), 900);
+  }
+
+  /* ── Lota 2: klára og meta ── */
+  async function finishRound2() {
+    const t = mic2.stop();
+    const heard = norm(t).split(/\s+/);
+    const stillBad = errors.filter(e => !heard.includes(norm(e.word)));
+    const improved = errors.length - stillBad.length;
+    setR2Improved(improved);
+    getAIFeedback(stillBad, improved).then(setAIFeedback);
+    setPhase('done');
+  }
+
+  /* ══ INTRO ══════════════════════════════════════════════════ */
+  if (phase === 'intro') return (
+    <>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+          <h1 className="text-3xl font-light text-gray-800 mb-1">Framburðarþjálfun</h1>
+          <p className="text-gray-500 text-sm font-light">Þóra fer út í búð – lesum upphátt</p>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <p className="text-xs text-gray-400 font-light mb-3 uppercase tracking-wide">Textinn</p>
+          <p className="text-lg font-light text-gray-800 leading-relaxed">{FULL_TEXT}</p>
+        </div>
+
+        <div className="bg-blue-50 rounded-xl border border-blue-100 p-4 text-sm text-blue-700 font-light">
+          <strong className="font-medium">Hvernig þetta virkar:</strong> Þú les textann upphátt í tveimur lotum. Kerfið finnur allt að 3 orð til að bæta og lætur þig æfa þau sérstaklega.
+        </div>
+
+        <div className="flex gap-3 flex-wrap items-center">
+          <ListenPill text={FULL_TEXT} label="Hlustaðu á textann" />
+          <button onClick={() => setPhase('round1')}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+            Byrja lotu 1 →
+          </button>
+        </div>
+      </main>
+    </>
+  );
+
+  /* ══ LOTA 1 ═════════════════════════════════════════════════ */
+  if (phase === 'round1') return (
+    <>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-1.5 rounded-full bg-blue-400"></div>
+            <div className="w-8 h-1.5 rounded-full bg-gray-200"></div>
+            <span className="text-xs text-gray-400 font-light">Lota 1 af 2</span>
+          </div>
+          <h1 className="text-3xl font-light text-gray-800 mb-1">Lestu upphátt</h1>
+          <p className="text-gray-500 text-sm font-light">Lestu textann hægt og skýrt</p>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <p className="text-xl font-light text-gray-800 leading-relaxed">{FULL_TEXT}</p>
+        </div>
+
+        {mic1.transcript && (
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm text-gray-600 font-light fade-in">
+            <span className="font-medium text-gray-500">Heyrðist: </span>{mic1.transcript}
+          </div>
+        )}
+
+        <div className="flex gap-3 flex-wrap items-center">
+          <ListenPill text={FULL_TEXT} label="Hlustaðu" />
+          {!mic1.listening ? (
+            <button onClick={mic1.start}
+              className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-light flex items-center gap-2">
+              🎙️ Byrja hljóðritun
+            </button>
+          ) : (
+            <button onClick={finishRound1}
+              className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-light flex items-center gap-2 rec-btn">
+              ⏹ Klára og fá endurgjöf
+            </button>
+          )}
+        </div>
+        {mic1.listening && (
+          <p className="text-xs text-red-500 font-light animate-pulse flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+            Tekur upp – lestu textann upphátt...
+          </p>
+        )}
+      </main>
+    </>
+  );
+
+  /* ══ GREINING ═══════════════════════════════════════════════ */
+  if (phase === 'analysing') return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center fade-in">
+        <div className="text-5xl mb-4 animate-pulse">🔍</div>
+        <p className="text-gray-500 font-light">Greini framburð...</p>
+      </div>
+    </div>
+  );
+
+  /* ══ LOTA 2 ═════════════════════════════════════════════════ */
+  if (phase === 'round2') return (
+    <>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-1.5 rounded-full bg-green-400"></div>
+            <div className="w-8 h-1.5 rounded-full bg-blue-400"></div>
+            <span className="text-xs text-gray-400 font-light">Lota 2 af 2</span>
+          </div>
+          <h1 className="text-3xl font-light text-gray-800 mb-1">Æfðu vandræðaorðin</h1>
+          <p className="text-gray-500 text-sm font-light">Hlustaðu fyrst – lestu svo textann aftur upphátt</p>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+
+        {/* Vandræðaorð – hvert með hlustunarhnapp */}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-light">Orð til að æfa:</p>
+          {errors.map(e => (
+            <div key={e.word} className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-medium text-gray-800">{e.word}</span>
+                {e.hint && (
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-light">{e.hint}</span>
+                )}
+              </div>
+              <ListenPill text={e.word} label="Hlustaðu" />
+            </div>
+          ))}
+        </div>
+
+        {/* Texti með auðkenntum orðum */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <p className="text-xs text-gray-400 font-light mb-3">Texti – vandræðaorðin eru auðkennd:</p>
+          <HighlightedText problemWords={errors} />
+        </div>
+
+        {mic2.transcript && (
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm text-gray-600 font-light fade-in">
+            <span className="font-medium text-gray-500">Heyrðist: </span>{mic2.transcript}
+          </div>
+        )}
+
+        <div className="flex gap-3 flex-wrap items-center">
+          <ListenPill text={FULL_TEXT} label="Heyr heilan texta" />
+          {!mic2.listening ? (
+            <button onClick={mic2.start}
+              className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-light flex items-center gap-2">
+              🎙️ Lesa aftur
+            </button>
+          ) : (
+            <button onClick={finishRound2}
+              className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-light flex items-center gap-2 rec-btn">
+              ⏹ Klára lotu 2
+            </button>
+          )}
+        </div>
+        {mic2.listening && (
+          <p className="text-xs text-red-500 font-light animate-pulse flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+            Tekur upp...
+          </p>
+        )}
+      </main>
+    </>
+  );
+
+  /* ══ NIÐURSTAÐA ═════════════════════════════════════════════ */
+  if (phase === 'done') {
+    const perfect = errors.length === 0 || r2Improved === errors.length;
+    const partial = r2Improved > 0 && r2Improved < errors.length;
+
+    return (
+      <>
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-2xl mx-auto px-6 py-8">
+            <h1 className="text-3xl font-light text-gray-800 mb-1">Niðurstaða</h1>
+            <p className="text-gray-500 text-sm font-light">Framburðarþjálfun lokið</p>
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+
+          {/* Meginniðurstaða */}
+          <div className={`rounded-xl border p-6 text-center ${
+            perfect  ? 'bg-green-50 border-green-200' :
+            partial  ? 'bg-amber-50 border-amber-200' :
+                       'bg-red-50 border-red-200'
+          }`}>
+            <div className="text-5xl mb-3">
+              {perfect ? '🌟' : partial ? '👍' : '💪'}
+            </div>
+            <p className={`font-medium text-lg ${
+              perfect ? 'text-green-700' : partial ? 'text-amber-700' : 'text-red-700'
+            }`}>
+              {perfect
+                ? 'Frábært – öll orðin lesin rétt!'
+                : partial
+                  ? `Batnaðist um ${r2Improved} af ${errors.length} orðum`
+                  : 'Æfðu þessi orð áfram – þú ert að gera framfarir!'}
+            </p>
+            {aiFeedback && (
+              <p className={`text-sm font-light mt-2 ${
+                perfect ? 'text-green-600' : partial ? 'text-amber-600' : 'text-red-600'
+              }`}>{aiFeedback}</p>
+            )}
+          </div>
+
+          {/* Vandræðaorð til frekari æfingar */}
+          {errors.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+              <p className="text-sm font-medium text-gray-700">Orð til frekari æfingar:</p>
+              <div className="flex flex-wrap gap-2">
+                {errors.map(e => (
+                  <div key={e.word} className="flex items-center gap-2">
+                    <span className="bg-gray-100 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-light">{e.word}</span>
+                    <ListenPill text={e.word} label="" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => { setPhase('intro'); setErrors([]); setR2Improved(0); setAIFeedback(''); }}
+              className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+              ↺ Gera aftur
+            </button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
