@@ -206,11 +206,13 @@ function App() {
   // intro | round1 | analysing | round2 | done
 
   const [errors, setErrors] = useState([]);          // max 3 villur
-  const [r2Improved, setR2Improved] = useState(0);
+  const [wordIndex, setWordIndex] = useState(0);     // hvaða orð í lotu 2
+  const [wordResults, setWordResults] = useState([]); // [{ word, correct }]
+  const [wordFeedback, setWordFeedback] = useState(null); // null | 'correct' | 'wrong'
   const [aiFeedback, setAIFeedback] = useState('');
 
   const mic1 = useMic();
-  const mic2 = useMic();
+  const micWord = useMic();
 
   /* ── Lota 1: klára hljóðritun og greina ── */
   async function finishRound1() {
@@ -218,21 +220,36 @@ function App() {
     setPhase('analysing');
     const errs = findErrors(t);
     setErrors(errs);
-    // sæki AI-endurgjöf í bakgrunni
-    getAIFeedback(errs, 0).then(setAIFeedback);
-    // stuttur delay svo "greining..." birtist
+    setWordIndex(0);
+    setWordResults([]);
+    setWordFeedback(null);
     setTimeout(() => setPhase(errs.length > 0 ? 'round2' : 'done'), 900);
   }
 
-  /* ── Lota 2: klára og meta ── */
-  async function finishRound2() {
-    const t = mic2.stop();
+  /* ── Lota 2: nemandi les eitt orð ── */
+  function checkWord() {
+    const t = micWord.stop();
     const heard = norm(t).split(/\s+/);
-    const stillBad = errors.filter(e => !heard.includes(norm(e.word)));
-    const improved = errors.length - stillBad.length;
-    setR2Improved(improved);
-    getAIFeedback(stillBad, improved).then(setAIFeedback);
-    setPhase('done');
+    const target = errors[wordIndex];
+    const correct = heard.includes(norm(target.word));
+    setWordFeedback(correct ? 'correct' : 'wrong');
+  }
+
+  /* ── Lota 2: fara á næsta orð eða ljúka ── */
+  function nextWord() {
+    const target = errors[wordIndex];
+    const newResults = [...wordResults, { word: target.word, correct: wordFeedback === 'correct' }];
+    setWordResults(newResults);
+    setWordFeedback(null);
+
+    if (wordIndex + 1 < errors.length) {
+      setWordIndex(wordIndex + 1);
+    } else {
+      const improved = newResults.filter(r => r.correct).length;
+      const stillBad = newResults.filter(r => !r.correct).map(r => errors.find(e => e.word === r.word));
+      getAIFeedback(stillBad, improved).then(setAIFeedback);
+      setPhase('done');
+    }
   }
 
   /* ══ INTRO ══════════════════════════════════════════════════ */
@@ -326,77 +343,130 @@ function App() {
   );
 
   /* ══ LOTA 2 ═════════════════════════════════════════════════ */
-  if (phase === 'round2') return (
-    <>
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-6 py-8">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-1.5 rounded-full bg-green-400"></div>
-            <div className="w-8 h-1.5 rounded-full bg-blue-400"></div>
-            <span className="text-xs text-gray-400 font-light">Lota 2 af 2</span>
-          </div>
-          <h1 className="text-3xl font-light text-gray-800 mb-1">Æfðu vandræðaorðin</h1>
-          <p className="text-gray-500 text-sm font-light">Hlustaðu fyrst – lestu svo textann aftur upphátt</p>
-        </div>
-      </header>
-      <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+  if (phase === 'round2') {
+    const current = errors[wordIndex];
+    const isLast = wordIndex === errors.length - 1;
 
-        {/* Vandræðaorð – hvert með hlustunarhnapp */}
-        <div className="space-y-2">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-light">Orð til að æfa:</p>
-          {errors.map(e => (
-            <div key={e.word} className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-medium text-gray-800">{e.word}</span>
-                {e.hint && (
-                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-light">{e.hint}</span>
+    return (
+      <>
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-2xl mx-auto px-6 py-8">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-1.5 rounded-full bg-green-400"></div>
+              <div className="w-8 h-1.5 rounded-full bg-blue-400"></div>
+              <span className="text-xs text-gray-400 font-light">Lota 2 – orðaæfing</span>
+            </div>
+            <h1 className="text-3xl font-light text-gray-800 mb-1">Æfðu vandræðaorðin</h1>
+            <p className="text-gray-500 text-sm font-light">
+              Orð {wordIndex + 1} af {errors.length}
+            </p>
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+
+          {/* Framvindur */}
+          <div className="flex gap-2">
+            {errors.map((_, i) => (
+              <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                i < wordIndex ? 'bg-green-400' :
+                i === wordIndex ? 'bg-blue-400' : 'bg-gray-200'
+              }`} />
+            ))}
+          </div>
+
+          {/* Orðakort */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center fade-in">
+            <div className="text-5xl font-medium text-gray-800 mb-2">{current.word}</div>
+            {current.hint && (
+              <span className="inline-block text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-light mb-4">
+                {current.hint}
+              </span>
+            )}
+            <div className="flex justify-center mt-2">
+              <ListenPill text={current.word} label="Hlustaðu á framburðinn" />
+            </div>
+          </div>
+
+          {/* Leiðbeiningar */}
+          {!wordFeedback && (
+            <p className="text-sm text-gray-500 font-light text-center">
+              Hlustaðu á orðið og segjum það svo upphátt.
+            </p>
+          )}
+
+          {/* Hljóðrituninn eða endurgjöf */}
+          {!wordFeedback ? (
+            <div className="flex justify-center gap-3">
+              {!micWord.listening ? (
+                <button onClick={micWord.start}
+                  className="px-8 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-light flex items-center gap-2">
+                  🎙️ Segjum orðið
+                </button>
+              ) : (
+                <button onClick={checkWord}
+                  className="px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-light flex items-center gap-2 rec-btn">
+                  ⏹ Klára
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="fade-in space-y-4">
+              {/* Endurgjöf */}
+              <div className={`rounded-xl border p-4 text-center ${
+                wordFeedback === 'correct'
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-red-50 border-red-200'
+              }`}>
+                <div className="text-2xl mb-1">
+                  {wordFeedback === 'correct' ? '✅' : '❌'}
+                </div>
+                <p className={`font-medium ${
+                  wordFeedback === 'correct' ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {wordFeedback === 'correct'
+                    ? 'Rétt – framburður greindur!'
+                    : 'Talgreiningarkerfið greindi orðið ekki – reyndu aftur'}
+                </p>
+                {micWord.transcript && (
+                  <p className="text-xs text-gray-400 font-light mt-1">
+                    Heyrðist: „{micWord.transcript}"
+                  </p>
                 )}
               </div>
-              <ListenPill text={e.word} label="Hlustaðu" />
+
+              <div className="flex justify-center gap-3">
+                {wordFeedback === 'wrong' && (
+                  <button onClick={() => { setWordFeedback(null); }}
+                    className="px-5 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+                    ↺ Reyna aftur
+                  </button>
+                )}
+                <button onClick={nextWord}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+                  {isLast ? 'Sjá niðurstöður →' : 'Næsta orð →'}
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
-
-        {/* Texti með auðkenntum orðum */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <p className="text-xs text-gray-400 font-light mb-3">Texti – vandræðaorðin eru auðkennd:</p>
-          <HighlightedText problemWords={errors} />
-        </div>
-
-        {mic2.transcript && (
-          <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm text-gray-600 font-light fade-in">
-            <span className="font-medium text-gray-500">Heyrðist: </span>{mic2.transcript}
-          </div>
-        )}
-
-        <div className="flex gap-3 flex-wrap items-center">
-          <ListenPill text={FULL_TEXT} label="Heyr heilan texta" />
-          {!mic2.listening ? (
-            <button onClick={mic2.start}
-              className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-light flex items-center gap-2">
-              🎙️ Lesa aftur
-            </button>
-          ) : (
-            <button onClick={finishRound2}
-              className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-light flex items-center gap-2 rec-btn">
-              ⏹ Klára lotu 2
-            </button>
           )}
-        </div>
-        {mic2.listening && (
-          <p className="text-xs text-red-500 font-light animate-pulse flex items-center gap-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-            Tekur upp...
-          </p>
-        )}
-      </main>
-    </>
-  );
+
+          {micWord.listening && (
+            <p className="text-xs text-red-500 font-light animate-pulse text-center flex items-center justify-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+              Tekur upp...
+            </p>
+          )}
+        </main>
+      </>
+    );
+  }
 
   /* ══ NIÐURSTAÐA ═════════════════════════════════════════════ */
   if (phase === 'done') {
-    const perfect = errors.length === 0 || r2Improved === errors.length;
-    const partial = r2Improved > 0 && r2Improved < errors.length;
+    const improved = wordResults.filter(r => r.correct).length;
+    const total = errors.length;
+    const perfect = total === 0 || improved === total;
+    const partial = improved > 0 && improved < total;
+    const stillBad = wordResults.filter(r => !r.correct).map(r => errors.find(e => e.word === r.word)).filter(Boolean);
 
     return (
       <>
@@ -420,11 +490,13 @@ function App() {
             <p className={`font-medium text-lg ${
               perfect ? 'text-green-700' : partial ? 'text-amber-700' : 'text-red-700'
             }`}>
-              {perfect
-                ? 'Frábært – öll orðin lesin rétt!'
-                : partial
-                  ? `Batnaðist um ${r2Improved} af ${errors.length} orðum`
-                  : 'Æfðu þessi orð áfram – þú ert að gera framfarir!'}
+              {total === 0
+                ? 'Frábært – engar villur í lotu 1!'
+                : perfect
+                  ? 'Öll vandræðaorðin lesin rétt!'
+                  : partial
+                    ? `Tókst með ${improved} af ${total} orðum`
+                    : 'Æfðu þessi orð áfram – þú ert að gera framfarir!'}
             </p>
             {aiFeedback && (
               <p className={`text-sm font-light mt-2 ${
@@ -433,23 +505,34 @@ function App() {
             )}
           </div>
 
-          {/* Vandræðaorð til frekari æfingar */}
-          {errors.length > 0 && (
+          {/* Yfirlit per orð */}
+          {wordResults.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-              <p className="text-sm font-medium text-gray-700">Orð til frekari æfingar:</p>
-              <div className="flex flex-wrap gap-2">
-                {errors.map(e => (
-                  <div key={e.word} className="flex items-center gap-2">
-                    <span className="bg-gray-100 text-gray-700 rounded-lg px-3 py-1.5 text-sm font-light">{e.word}</span>
-                    <ListenPill text={e.word} label="" />
+              <p className="text-sm font-medium text-gray-700">Yfirlit:</p>
+              {wordResults.map(r => (
+                <div key={r.word} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg ${r.correct ? 'text-green-500' : 'text-red-400'}`}>
+                      {r.correct ? '✅' : '❌'}
+                    </span>
+                    <span className="font-medium text-gray-800">{r.word}</span>
+                    {errors.find(e => e.word === r.word)?.hint && (
+                      <span className="text-xs text-gray-400 font-light">
+                        ({errors.find(e => e.word === r.word).hint})
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <ListenPill text={r.word} label="" />
+                </div>
+              ))}
             </div>
           )}
 
           <div className="flex gap-3">
-            <button onClick={() => { setPhase('intro'); setErrors([]); setR2Improved(0); setAIFeedback(''); }}
+            <button onClick={() => {
+              setPhase('intro'); setErrors([]); setWordIndex(0);
+              setWordResults([]); setWordFeedback(null); setAIFeedback('');
+            }}
               className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
               ↺ Gera aftur
             </button>
