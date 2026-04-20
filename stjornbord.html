@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>📊 Stjórnborð – ÍSAT1ÍC</title>
+  <title>📊 Stjórnborð – Málstöðin</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -31,7 +31,7 @@
       <div class="text-center mb-8">
         <div class="text-5xl mb-3">📊</div>
         <h1 class="text-2xl font-light text-gray-800">Stjórnborð kennara</h1>
-        <p class="text-gray-500 text-sm font-light mt-1">ÍSAT1ÍC · Málstöðin</p>
+        <p class="text-gray-500 text-sm font-light mt-1">Málstöðin · Tækniskólinn</p>
       </div>
       <div id="login-err" class="mb-4 text-red-600 text-sm font-light text-center"></div>
       <button id="btn-google"
@@ -71,7 +71,7 @@
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
         <div>
           <h1 class="text-3xl font-light text-gray-800 mb-1">📊 Stjórnborð kennara</h1>
-          <p class="text-gray-500 text-sm font-light">ÍSAT1ÍC – Framvinda nemenda</p>
+          <p class="text-gray-500 text-sm font-light">Málstöðin · Tækniskólinn</p>
         </div>
         <div class="text-right">
           <div class="flex items-center gap-4 mb-2 justify-end">
@@ -85,11 +85,22 @@
         </div>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
-        <div class="flex flex-wrap gap-2" id="tabs"></div>
-      </div>
-
+      <!-- Síur -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-4 items-center">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-light text-gray-500">Áfangi:</span>
+          <select id="filter-course" onchange="setCourseFilter(this.value)"
+            class="text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="isat1ic">ÍSAT1ÍC</option>
+            <option value="isat1ia">ÍSAT1ÍA</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-light text-gray-500">Hópur:</span>
+          <select id="filter-class" onchange="setClassFilter(this.value)"
+            class="text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </select>
+        </div>
         <div class="flex items-center gap-2">
           <span class="text-sm font-light text-gray-500">Önn:</span>
           <select id="filter-semester" onchange="setSemesterFilter(this.value)"
@@ -98,18 +109,15 @@
             <option value="V26">V26</option>
           </select>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-light text-gray-500">Hópur:</span>
-          <select id="filter-class" onchange="setClassFilter(this.value)"
-            class="text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="all">Allir hópar</option>
-            <option value="h1">Hópur 1</option>
-            <option value="h2">Hópur 2</option>
-          </select>
-        </div>
         <span id="student-count" class="text-sm font-light text-gray-400 ml-auto"></span>
       </div>
 
+      <!-- Flipar -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-2" id="tabs"></div>
+      </div>
+
+      <!-- Tafla -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div id="table-container" class="overflow-x-auto p-6">
           <p class="text-gray-400 font-light text-center py-8">Sæki gögn...</p>
@@ -134,106 +142,152 @@
     };
 
     const ADMIN_UIDS = [
-      'AQ5xRpv41caDHy8p6KEQ',          // sei@tskoli.is
-      'T08EOXfVZxQO13BJyCXDElR6apD2'   // vhs@tskoli.is
+      'AQ5xRpv41caDHy8p6KEQ',          // sei@tskoli.is – Sigurþór
+      'T08EOXfVZxQO13BJyCXDElR6apD2',   // vhs@tskoli.is – Viðar
+      'MM8vUelStVSl8eNlBSSVrgq0GW52'    // (þriðji admin ef við á)
     ];
 
-    const COURSE = 'isat1ic';
-
-    const EXERCISE_GROUPS = [
-      {
-        id: 'lestextar', label: '📖 Lestextar',
-        exercises: [
-          { id: 'lestextar_01', label: 'L1' },
-          { id: 'lestextar_02', label: 'L2' },
-          { id: 'lestextar_03', label: 'L3' },
-          { id: 'lestextar_04', label: 'L4' },
-          { id: 'lestextar_05', label: 'L5' },
-          { id: 'lestextar_06', label: 'L6' },
-          { id: 'lestextar_07', label: 'L7' },
-          { id: 'lestextar_08', label: 'L8' },
-          { id: 'lestextar_09', label: 'L9' },
-          { id: 'lestextar_10', label: 'L10' },
-          { id: 'lestextar_11', label: 'L11' },
-          { id: 'lestextar_12', label: 'L12' },
+    const COURSES = {
+      isat1ic: {
+        label: 'ÍSAT1ÍC',
+        classes: [
+          { value: 'all',  label: 'Allir hópar' },
+          { value: 'h1',   label: 'ÍSAT1ÍC – Hópur 1' },
+          { value: 'h2',   label: 'ÍSAT1ÍC – Hópur 2' },
+        ],
+        groups: [
+          {
+            id: 'lestextar', label: '📖 Lestextar',
+            exercises: [
+              { id: 'lestextar_01', label: 'L1' }, { id: 'lestextar_02', label: 'L2' },
+              { id: 'lestextar_03', label: 'L3' }, { id: 'lestextar_04', label: 'L4' },
+              { id: 'lestextar_05', label: 'L5' }, { id: 'lestextar_06', label: 'L6' },
+              { id: 'lestextar_07', label: 'L7' }, { id: 'lestextar_08', label: 'L8' },
+              { id: 'lestextar_09', label: 'L9' }, { id: 'lestextar_10', label: 'L10' },
+              { id: 'lestextar_11', label: 'L11' }, { id: 'lestextar_12', label: 'L12' },
+            ]
+          },
+          {
+            id: 'hlustun', label: '🎧 Hlustun',
+            exercises: [
+              { id: 'hlustun_01', label: 'H1' }, { id: 'hlustun_02', label: 'H2' },
+              { id: 'hlustun_03', label: 'H3' }, { id: 'hlustun_04', label: 'H4' },
+              { id: 'hlustun_05', label: 'H5' }, { id: 'hlustun_06', label: 'H6' },
+              { id: 'hlustun_07', label: 'H7' }, { id: 'hlustun_08', label: 'H8' },
+              { id: 'hlustun_09', label: 'H9' }, { id: 'hlustun_10', label: 'H10' },
+              { id: 'hlustun_11', label: 'H11' }, { id: 'hlustun_12', label: 'H12' },
+              { id: 'aukahlustun_01', label: 'A1' }, { id: 'aukahlustun_02', label: 'A2' },
+              { id: 'aukahlustun_03', label: 'A3' },
+            ]
+          },
+          {
+            id: 'spjall', label: '💬 Spjall',
+            exercises: [
+              { id: 'spjall_01', label: 'S1' }, { id: 'spjall_02', label: 'S2' },
+              { id: 'spjall_03', label: 'S3' }, { id: 'spjall_04', label: 'S4' },
+              { id: 'spjall_05', label: 'S5' }, { id: 'spjall_06', label: 'S6' },
+              { id: 'spjall_07', label: 'S7' }, { id: 'spjall_08', label: 'S8' },
+              { id: 'spjall_09', label: 'S9' }, { id: 'spjall_10', label: 'S10' },
+              { id: 'spjall_11', label: 'S11' }, { id: 'spjall_12', label: 'S12' },
+            ]
+          },
+          {
+            id: 'hljodritun', label: '✍️ Hljóðritun',
+            exercises: [
+              { id: 'hljodritun_k1', label: 'R1' }, { id: 'hljodritun_k2', label: 'R2' },
+              { id: 'hljodritun_k3', label: 'R3' }, { id: 'hljodritun_k4', label: 'R4' },
+              { id: 'hljodritun_k5', label: 'R5' }, { id: 'hljodritun_k6', label: 'R6' },
+              { id: 'hljodritun_k7', label: 'R7' }, { id: 'hljodritun_k8', label: 'R8' },
+              { id: 'hljodritun_k9', label: 'R9' }, { id: 'hljodritun_k10', label: 'R10' },
+              { id: 'hljodritun_k11', label: 'R11' }, { id: 'hljodritun_k12', label: 'R12' },
+            ]
+          },
+          {
+            id: 'leikir', label: '🎮 Leikir',
+            exercises: [
+              { id: 'leikir_ordagata1', label: 'O1-3' }, { id: 'leikir_ordagata2', label: 'O4-6' },
+              { id: 'leikir_ordagata3', label: 'O7-9' }, { id: 'leikir_flashkort1', label: 'F1-3' },
+              { id: 'leikir_flashkort2', label: 'F4-6' }, { id: 'leikir_flashkort3', label: 'F7-9' },
+            ]
+          }
         ]
       },
-      {
-        id: 'hlustun', label: '🎧 Hlustun',
-        exercises: [
-          { id: 'hlustun_01', label: 'H1' },
-          { id: 'hlustun_02', label: 'H2' },
-          { id: 'hlustun_03', label: 'H3' },
-          { id: 'hlustun_04', label: 'H4' },
-          { id: 'hlustun_05', label: 'H5' },
-          { id: 'hlustun_06', label: 'H6' },
-          { id: 'hlustun_07', label: 'H7' },
-          { id: 'hlustun_08', label: 'H8' },
-          { id: 'hlustun_09', label: 'H9' },
-          { id: 'hlustun_10', label: 'H10' },
-          { id: 'hlustun_11', label: 'H11' },
-          { id: 'hlustun_12', label: 'H12' },
-          { id: 'aukahlustun_01', label: 'A1' },
-          { id: 'aukahlustun_02', label: 'A2' },
-          { id: 'aukahlustun_03', label: 'A3' },
-        ]
-      },
-      {
-        id: 'spjall', label: '💬 Spjall',
-        exercises: [
-          { id: 'spjall_01', label: 'S1' },
-          { id: 'spjall_02', label: 'S2' },
-          { id: 'spjall_03', label: 'S3' },
-          { id: 'spjall_04', label: 'S4' },
-          { id: 'spjall_05', label: 'S5' },
-          { id: 'spjall_06', label: 'S6' },
-          { id: 'spjall_07', label: 'S7' },
-          { id: 'spjall_08', label: 'S8' },
-          { id: 'spjall_09', label: 'S9' },
-          { id: 'spjall_10', label: 'S10' },
-          { id: 'spjall_11', label: 'S11' },
-          { id: 'spjall_12', label: 'S12' },
-        ]
-      },
-      {
-        id: 'hljodritun', label: '✍️ Hljóðritun',
-        exercises: [
-          { id: 'hljodritun_k1',  label: 'R1' },
-          { id: 'hljodritun_k2',  label: 'R2' },
-          { id: 'hljodritun_k3',  label: 'R3' },
-          { id: 'hljodritun_k4',  label: 'R4' },
-          { id: 'hljodritun_k5',  label: 'R5' },
-          { id: 'hljodritun_k6',  label: 'R6' },
-          { id: 'hljodritun_k7',  label: 'R7' },
-          { id: 'hljodritun_k8',  label: 'R8' },
-          { id: 'hljodritun_k9',  label: 'R9' },
-          { id: 'hljodritun_k10', label: 'R10' },
-          { id: 'hljodritun_k11', label: 'R11' },
-          { id: 'hljodritun_k12', label: 'R12' },
-        ]
-      },
-      {
-        id: 'leikir', label: '🎮 Leikir',
-        exercises: [
-          { id: 'leikir_ordagata1',  label: 'O1-3' },
-          { id: 'leikir_ordagata2',  label: 'O4-6' },
-          { id: 'leikir_ordagata3',  label: 'O7-9' },
-          { id: 'leikir_flashkort1', label: 'F1-3' },
-          { id: 'leikir_flashkort2', label: 'F4-6' },
-          { id: 'leikir_flashkort3', label: 'F7-9' },
+      isat1ia: {
+        label: 'ÍSAT1ÍA',
+        classes: [
+          { value: 'all',        label: 'Allir hópar' },
+          { value: 'ÍSAT1ÍA-1', label: 'ÍSAT1ÍA – Hópur 1' },
+        ],
+        groups: [
+          {
+            id: 'lestextar', label: '📖 Lestextar',
+            exercises: [
+              { id: 'lestextar_01', label: 'L1' }, { id: 'lestextar_02', label: 'L2' },
+              { id: 'lestextar_03', label: 'L3' }, { id: 'lestextar_04', label: 'L4' },
+              { id: 'lestextar_05', label: 'L5' }, { id: 'lestextar_06', label: 'L6' },
+              { id: 'lestextar_07', label: 'L7' }, { id: 'lestextar_08', label: 'L8' },
+              { id: 'lestextar_09', label: 'L9' }, { id: 'lestextar_10', label: 'L10' },
+              { id: 'lestextar_11', label: 'L11' }, { id: 'lestextar_12', label: 'L12' },
+              { id: 'lestextar_13', label: 'L13' },
+            ]
+          },
+          {
+            id: 'hlustun', label: '🎧 Hlustun',
+            exercises: [
+              { id: 'hlustun_01', label: 'H1' }, { id: 'hlustun_02', label: 'H2' },
+              { id: 'hlustun_03', label: 'H3' }, { id: 'hlustun_04', label: 'H4' },
+              { id: 'hlustun_05', label: 'H5' }, { id: 'hlustun_06', label: 'H6' },
+              { id: 'hlustun_07', label: 'H7' }, { id: 'hlustun_08', label: 'H8' },
+              { id: 'hlustun_09', label: 'H9' }, { id: 'hlustun_10', label: 'H10' },
+              { id: 'hlustun_11', label: 'H11' }, { id: 'hlustun_12', label: 'H12' },
+            ]
+          },
+          {
+            id: 'spjall', label: '💬 Spjall',
+            exercises: [
+              { id: 'spjall_01', label: 'S1' }, { id: 'spjall_02', label: 'S2' },
+              { id: 'spjall_03', label: 'S3' }, { id: 'spjall_04', label: 'S4' },
+              { id: 'spjall_05', label: 'S5' }, { id: 'spjall_06', label: 'S6' },
+              { id: 'spjall_07', label: 'S7' }, { id: 'spjall_08', label: 'S8' },
+              { id: 'spjall_09', label: 'S9' }, { id: 'spjall_10', label: 'S10' },
+              { id: 'spjall_11', label: 'S11' }, { id: 'spjall_12', label: 'S12' },
+            ]
+          },
+          {
+            id: 'hljodritun', label: '✍️ Hljóðritun',
+            exercises: [
+              { id: 'hljodritun_k1', label: 'R1' }, { id: 'hljodritun_k2', label: 'R2' },
+              { id: 'hljodritun_k3', label: 'R3' }, { id: 'hljodritun_k4', label: 'R4' },
+              { id: 'hljodritun_k5', label: 'R5' }, { id: 'hljodritun_k6', label: 'R6' },
+              { id: 'hljodritun_k7', label: 'R7' }, { id: 'hljodritun_k8', label: 'R8' },
+              { id: 'hljodritun_k9', label: 'R9' }, { id: 'hljodritun_k10', label: 'R10' },
+              { id: 'hljodritun_k11', label: 'R11' }, { id: 'hljodritun_k12', label: 'R12' },
+              { id: 'hljodritun_k13', label: 'R13' },
+            ]
+          },
+          {
+            id: 'leikir', label: '🎮 Leikir',
+            exercises: [
+              { id: 'leikir_teiknileikur1', label: 'T1' }, { id: 'leikir_teiknileikur2', label: 'T2' },
+              { id: 'leikir_teiknileikur3', label: 'T3' }, { id: 'leikir_teiknileikur4', label: 'T4' },
+              { id: 'leikir_visbendingaleikur1', label: 'V1' }, { id: 'leikir_visbendingaleikur2', label: 'V2' },
+            ]
+          }
         ]
       }
-    ];
+    };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    let allProgress = {};
-    let allStudents = [];
-    let activeGroup = 'lestextar';
+    let allProgress = {};      // { uid: { course: { exerciseId: status } } }
+    let allUserData = [];      // [{ uid, email, courses: { isat1ic: {class,semester}, isat1ia: {...} } }]
+    let activeCourse = 'isat1ic';
+    let activeGroup  = 'lestextar';
+    let filterClass    = 'all';
     let filterSemester = 'all';
-    let filterClass = 'all';
+    let progressUnsubscribers = {};
 
     function showLogin() {
       document.getElementById('loading').style.display = 'none';
@@ -242,8 +296,7 @@
       document.getElementById('btn-google').onclick = async () => {
         document.getElementById('login-err').textContent = '';
         try {
-          const provider = new GoogleAuthProvider();
-          await signInWithPopup(auth, provider);
+          await signInWithPopup(auth, new GoogleAuthProvider());
         } catch { document.getElementById('login-err').textContent = 'Villa við Google-innskráningu.'; }
       };
 
@@ -258,7 +311,7 @@
       };
     }
 
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, (user) => {
       if (!user) { showLogin(); return; }
       if (!ADMIN_UIDS.includes(user.uid)) {
         document.getElementById('loading').style.display = 'none';
@@ -270,50 +323,89 @@
       document.getElementById('login').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       document.getElementById('btn-logout').onclick = () => signOut(auth);
+      updateClassDropdown();
       renderTabs();
       startListening();
     });
 
     function startListening() {
-      const listenedUids = new Set();
       onSnapshot(collection(db, 'user_access'), (snap) => {
-        allStudents = [];
+        allUserData = [];
+        const newUids = new Set();
+
         snap.forEach(d => {
           const data = d.data();
-          if (data[COURSE] && data[COURSE].activated_at) {
-            allStudents.push({
-              uid: d.id,
-              email: data.email || d.id,
-              class: data[COURSE].class || null,
-              semester: data[COURSE].semester || null
-            });
+          const courses = {};
+          Object.keys(COURSES).forEach(c => {
+            if (data[c] && data[c].activated_at) {
+              courses[c] = {
+                class:    data[c].class    || null,
+                semester: data[c].semester || null,
+              };
+            }
+          });
+          if (Object.keys(courses).length > 0) {
+            allUserData.push({ uid: d.id, email: data.email || d.id, courses });
+            newUids.add(d.id);
           }
         });
 
-        allStudents.forEach(student => {
-          if (!listenedUids.has(student.uid)) {
-            listenedUids.add(student.uid);
-            allProgress[student.uid] = {};
-            onSnapshot(collection(db, 'progress', student.uid, COURSE), (progSnap) => {
-              allProgress[student.uid] = {};
-              progSnap.forEach(d => {
-                allProgress[student.uid][d.id] = d.data().status || 'opened';
-              });
-              renderTable(activeGroup);
-            });
-          }
+        // Hlusta á framvindu allra notenda í öllum áföngum
+        newUids.forEach(uid => {
+          if (progressUnsubscribers[uid]) return; // þegar hlustað
+          if (!allProgress[uid]) allProgress[uid] = {};
+          Object.keys(COURSES).forEach(course => {
+            const key = uid + '_' + course;
+            if (progressUnsubscribers[key]) return;
+            progressUnsubscribers[key] = onSnapshot(
+              collection(db, 'progress', uid, course),
+              (progSnap) => {
+                if (!allProgress[uid]) allProgress[uid] = {};
+                allProgress[uid][course] = {};
+                progSnap.forEach(d => {
+                  allProgress[uid][course][d.id] = d.data().status || 'opened';
+                });
+                renderTable();
+              }
+            );
+          });
         });
-        renderTable(activeGroup);
+
+        renderTable();
       });
     }
 
-    window.setSemesterFilter = (val) => { filterSemester = val; renderTable(activeGroup); };
-    window.setClassFilter    = (val) => { filterClass    = val; renderTable(activeGroup); };
+    window.setCourseFilter = (val) => {
+      activeCourse = val;
+      activeGroup = COURSES[val].groups[0].id;
+      filterClass = 'all';
+      filterSemester = 'all';
+      document.getElementById('filter-class').value = 'all';
+      document.getElementById('filter-semester').value = 'all';
+      updateClassDropdown();
+      renderTabs();
+      renderTable();
+    };
+    window.setClassFilter    = (val) => { filterClass    = val; renderTable(); };
+    window.setSemesterFilter = (val) => { filterSemester = val; renderTable(); };
+
+    function updateClassDropdown() {
+      const sel = document.getElementById('filter-class');
+      sel.innerHTML = '';
+      COURSES[activeCourse].classes.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.value;
+        opt.textContent = c.label;
+        sel.appendChild(opt);
+      });
+    }
 
     function filteredStudents() {
-      return allStudents.filter(s => {
-        if (filterSemester !== 'all' && s.semester !== filterSemester) return false;
-        if (filterClass    !== 'all' && s.class    !== filterClass)    return false;
+      return allUserData.filter(u => {
+        const cd = u.courses[activeCourse];
+        if (!cd) return false;
+        if (filterSemester !== 'all' && cd.semester !== filterSemester) return false;
+        if (filterClass    !== 'all' && cd.class    !== filterClass)    return false;
         return true;
       });
     }
@@ -321,17 +413,18 @@
     function renderTabs() {
       const container = document.getElementById('tabs');
       container.innerHTML = '';
-      EXERCISE_GROUPS.forEach(group => {
+      COURSES[activeCourse].groups.forEach(group => {
         const btn = document.createElement('button');
         btn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-light border border-gray-200 ' + (group.id === activeGroup ? 'active' : '');
         btn.textContent = group.label;
-        btn.onclick = () => { activeGroup = group.id; renderTabs(); renderTable(activeGroup); };
+        btn.onclick = () => { activeGroup = group.id; renderTabs(); renderTable(); };
         container.appendChild(btn);
       });
     }
 
-    function renderTable(groupId) {
-      const group = EXERCISE_GROUPS.find(g => g.id === groupId);
+    function renderTable() {
+      const groups = COURSES[activeCourse].groups;
+      const group = groups.find(g => g.id === activeGroup) || groups[0];
       const container = document.getElementById('table-container');
       const students = filteredStudents();
       const countEl = document.getElementById('student-count');
@@ -345,7 +438,7 @@
       let html = '<table class="w-full text-sm">';
       html += '<thead><tr class="border-b border-gray-100">';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500 whitespace-nowrap">Nemandi</th>';
-      html += '<th class="py-3 pr-4 font-light text-gray-400 text-xs text-left">Hópur</th>';
+      html += '<th class="py-3 pr-4 font-light text-gray-400 text-xs text-left whitespace-nowrap">Hópur</th>';
       group.exercises.forEach(ex => {
         html += '<th class="py-3 px-1 font-light text-gray-400 text-xs text-center">' + ex.label + '</th>';
       });
@@ -353,21 +446,28 @@
       html += '</tr></thead><tbody>';
 
       students.sort((a, b) => {
-        if (a.class !== b.class) return (a.class || '').localeCompare(b.class || '');
+        const ca = a.courses[activeCourse], cb = b.courses[activeCourse];
+        const classA = ca ? ca.class || '' : '';
+        const classB = cb ? cb.class || '' : '';
+        if (classA !== classB) return classA.localeCompare(classB);
         return (a.email || '').localeCompare(b.email || '');
       }).forEach(student => {
-        const prog = allProgress[student.uid] || {};
+        const courseProgress = (allProgress[student.uid] || {})[activeCourse] || {};
+        const studentClass = (student.courses[activeCourse] || {}).class || '–';
         let completedCount = 0;
+
         html += '<tr class="border-b border-gray-50 hover:bg-gray-50">';
         html += '<td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">' + student.email + '</td>';
-        html += '<td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">' + (student.class || '–') + '</td>';
+        html += '<td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">' + studentClass + '</td>';
+
         group.exercises.forEach(ex => {
-          const status = prog[ex.id];
+          const status = courseProgress[ex.id];
           let cls = 'cell-none', title = 'Ekki byrjað';
           if (status === 'opened')    { cls = 'cell-opened';    title = 'Opnað'; }
           if (status === 'completed') { cls = 'cell-completed'; title = 'Lokið'; completedCount++; }
           html += '<td class="py-3 px-1 text-center"><span class="cell ' + cls + '" title="' + title + '"></span></td>';
         });
+
         const total = group.exercises.length;
         const pct = Math.round(completedCount / total * 100);
         const color = pct === 100 ? 'text-green-600' : pct > 0 ? 'text-amber-600' : 'text-gray-400';
