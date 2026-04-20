@@ -53,6 +53,14 @@ const TRAP_WORDS = [
 ];
 const TRAP_SET = new Set(TRAP_WORDS.map(t => t.word.toLowerCase()));
 
+/* ─── Tungumál vafrans ─────────────────────────────────────── */
+function detectBrowserLang() {
+  const langs = navigator.languages || [navigator.language || ''];
+  const primary = (langs[0] || '').toLowerCase();
+  const isIcelandic = primary.startsWith('is');
+  return { primary, isIcelandic, langs };
+}
+
 /* ─── Hjálparföll ──────────────────────────────────────────── */
 function norm(s) {
   return (s || '').toLowerCase().replace(/[.,!?;:""„]/g, '').trim();
@@ -253,7 +261,9 @@ function App() {
   }
 
   /* ══ INTRO ══════════════════════════════════════════════════ */
-  if (phase === 'intro') return (
+  if (phase === 'intro') {
+    const { isIcelandic, primary } = detectBrowserLang();
+    return (
     <>
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-2xl mx-auto px-6 py-8">
@@ -263,6 +273,34 @@ function App() {
         </div>
       </header>
       <main className="max-w-2xl mx-auto px-6 py-8 fade-in space-y-5">
+
+        {/* Viðvörun ef vaframál er ekki íslenska */}
+        {!isIcelandic && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-xl mt-0.5">⚠️</span>
+              <div>
+                <p className="font-medium text-amber-800 text-sm">
+                  Vaframálið þitt virðist vera <strong>{primary}</strong> – ekki íslenska.
+                </p>
+                <p className="text-amber-700 text-sm font-light mt-1">
+                  Hljóðritunin notar tungumálastillingu vafrans. Til að æfingin virki rétt þarftu að stilla vafrann á íslensku.
+                </p>
+                <details className="mt-2">
+                  <summary className="text-xs text-amber-600 cursor-pointer hover:text-amber-800 font-light">
+                    Hvernig set ég vafrann á íslensku? ▾
+                  </summary>
+                  <div className="mt-2 text-xs text-amber-700 font-light space-y-1.5 pl-1">
+                    <p><strong>Chrome:</strong> Stillingar → Tungumál → Bæta við íslensku → Færa efst → Endurræsa</p>
+                    <p><strong>Edge:</strong> Stillingar → Tungumál → Bæta við íslensku → Nota sem birtingarmál</p>
+                    <p><strong>Safari (iOS):</strong> Stillingar → Almennt → Tungumál og svæði → iPhone-mál → Íslenska</p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <p className="text-xs text-gray-400 font-light mb-3 uppercase tracking-wide">Textinn</p>
           <p className="text-lg font-light text-gray-800 leading-relaxed">{FULL_TEXT}</p>
@@ -281,7 +319,8 @@ function App() {
         </div>
       </main>
     </>
-  );
+    );
+  }
 
   /* ══ LOTA 1 ═════════════════════════════════════════════════ */
   if (phase === 'round1') return (
