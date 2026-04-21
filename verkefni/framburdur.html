@@ -130,38 +130,85 @@ Skrifaðu EINA stuttan hvetjandi setningu á íslensku (max 15 orð).` }]
   } catch { return 'Vel gert – haltu áfram!'; }
 }
 
+/* ─── iOS greinir ──────────────────────────────────────────── */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 /* ─── Speech recognition hook ─────────────────────────────── */
+// iOS Safari: continuous=true virkar ekki – við endurræsum sjálfkrafa
+// þar til notandinn ýtir á "Klára"
 function useMic() {
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const recRef = useRef(null);
   const latestRef = useRef('');
+  const activeRef = useRef(false); // hvort við viljum enn hlusta
+
+  const startRec = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = 'is-IS';
+    rec.continuous = !isIOS;   // iOS hunsar þetta en við setjum það samt
+    rec.interimResults = true;
+
+    rec.onresult = (e) => {
+      let full = '';
+      for (let i = 0; i < e.results.length; i++) {
+        full += e.results[i][0].transcript + ' ';
+      }
+      const t = full.trim();
+      // iOS: safna niðurstöðum yfir margar lotur
+      if (isIOS && latestRef.current && t) {
+        latestRef.current = latestRef.current + ' ' + t;
+      } else if (t) {
+        latestRef.current = t;
+      }
+      setTranscript(latestRef.current);
+    };
+
+    rec.onend = () => {
+      // iOS stoppar oft sjálfkrafa – endurræsum ef við erum enn að hlusta
+      if (activeRef.current && isIOS) {
+        try { rec.start(); } catch(e) {
+          // ef það tekst ekki – búum til nýjan
+          startRec();
+        }
+      } else if (!isIOS) {
+        setListening(false);
+      }
+    };
+
+    rec.onerror = (e) => {
+      if (e.error === 'no-speech' && activeRef.current && isIOS) {
+        // eðlilegt á iOS – endurræsum
+        try { setTimeout(() => { if (activeRef.current) startRec(); }, 200); } catch {}
+      } else if (e.error !== 'no-speech') {
+        activeRef.current = false;
+        setListening(false);
+      }
+    };
+
+    try { rec.start(); recRef.current = rec; } catch(e) { console.error(e); }
+  }, []);
 
   const start = useCallback(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert('Vafrinn þinn styður ekki hljóðritun. Notaðu Chrome eða Edge.'); return false; }
+    if (!SR) {
+      alert('Vafrinn þinn styður ekki hljóðritun. Notaðu Chrome (Android) eða Safari (iPhone).');
+      return false;
+    }
     latestRef.current = '';
+    activeRef.current = true;
     setTranscript('');
-    const rec = new SR();
-    rec.lang = 'is-IS';
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      let full = '';
-      for (let i = 0; i < e.results.length; i++) full += e.results[i][0].transcript + ' ';
-      latestRef.current = full.trim();
-      setTranscript(full.trim());
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    rec.start();
-    recRef.current = rec;
     setListening(true);
+    startRec();
     return true;
-  }, []);
+  }, [startRec]);
 
   const stop = useCallback(() => {
-    recRef.current?.stop();
+    activeRef.current = false;
+    try { recRef.current?.stop(); } catch {}
     recRef.current = null;
     setListening(false);
     return latestRef.current;
@@ -296,6 +343,21 @@ function App() {
                     <p><strong>Safari (iOS):</strong> Stillingar → Almennt → Tungumál og svæði → iPhone-mál → Íslenska</p>
                   </div>
                 </details>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* iOS-ábending um hljóðritun */}
+        {isIOS && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-xl mt-0.5">📱</span>
+              <div>
+                <p className="font-medium text-blue-800 text-sm">iPhone / iPad greinzt</p>
+                <p className="text-blue-700 text-sm font-light mt-1">
+                  Notaðu <strong>Safari</strong> – ekki Chrome á iPhone. Hljóðritunin stoppar sjálfkrafa eftir þögn en ræsist aftur, þar til þú ýtir á „Klára".
+                </p>
               </div>
             </div>
           </div>
