@@ -142,10 +142,8 @@
       { w: 'velkominn', kyn: 'lo.', hint: 'þegar þér er boðið að koma' },
     ];
 
-    // Þýðingarorð (fyrsti flipi)
     const TRANSLATION_WORDS = ['að þykjast', 'að elta'];
 
-    // Rétt/Rangt
     const TRUE_FALSE_RAW = [
       { statement: 'Það er slæmt veður úti.', correct: false },
       { statement: 'Katja kennir Lilju íslenskan leik.', correct: false },
@@ -155,7 +153,6 @@
       { statement: 'Anna eldar pasta með kjúklingi.', correct: true },
     ];
 
-    // Krossaspurningar
     const MC_RAW = [
       { question: 'Hvaðan er Katja?', options: ['Frá Póllandi', 'Frá Úkraínu', 'Frá Rússlandi', 'Frá Íslandi'], correct: 1 },
       { question: 'Hver byrjar sem björn?', options: ['Lilja', 'Anna', 'Katja', 'Fleiri börn'], correct: 2 },
@@ -163,14 +160,12 @@
       { question: 'Hvað eldar Anna?', options: ['Pizzu', 'Hamborgara', 'Pasta með kjúklingi', 'Súpu'], correct: 2 },
     ];
 
-    // Stuttar spurningar
     const SHORT_QUESTIONS = [
       'Hvernig leikur maður Björninn?',
       'Hvað segja börnin við björninn?',
       'Hvað teikna stelpurnar í herberginu?',
     ];
 
-    // Pörun
     const MATCHING_RAW = [
       { left: 'Katja', right: 'Kennir Lilju úkraínskan leik' },
       { left: 'Lilja', right: 'Teiknar mynd af Katja' },
@@ -209,7 +204,6 @@
     // ── AÐALÍHLUTUR ───────────────────────────────────────────────────────────
 
     const App = () => {
-      // Hljóðspilari
       const audioRef = useRef(null);
       const [isPlaying, setIsPlaying] = useState(false);
       const [currentTime, setCurrentTime] = useState(0);
@@ -226,7 +220,6 @@
         setIsPlaying(!isPlaying);
       };
 
-      // Flipar
       const [activeTab, setActiveTab] = useState(0);
       const [tabs, setTabs] = useState([
         { label: 'Rétt/Rangt', done: false },
@@ -236,14 +229,22 @@
         { label: 'Þýðingar', done: false },
       ]);
       const [showText, setShowText] = useState(false);
-      const allDone = tabs.every(t => t.done) && !!transFeedback2;
+
+      // FIX 1: allDone no longer requires !!transFeedback2 — useEffect handles markDone(4)
+      const allDone = tabs.every(t => t.done);
 
       const markDone = (i) => setTabs(prev => prev.map((t, idx) => idx === i ? { ...t, done: true } : t));
+
+      // FIX 2: useEffect watches both translation feedbacks and calls markDone(4) when both done
+      useEffect(() => {
+        if (transFeedback && transFeedback2) markDone(4);
+      }, [transFeedback, transFeedback2]);
+
       useEffect(() => {
         if (allDone) window.writeProgress && window.writeProgress('completed');
       }, [allDone]);
 
-      // ── Flipi 0: Þýðingar ─────────────────────────────────────────────────
+      // ── Þýðingar state ────────────────────────────────────────────────────
       const [vocabOpen, setVocabOpen] = useState(true);
       const [transAnswer, setTransAnswer] = useState('');
       const [transFeedback, setTransFeedback] = useState(null);
@@ -253,10 +254,7 @@
       const [transLoading2, setTransLoading2] = useState(false);
 
       const checkTranslation = async () => {
-        if (!transAnswer.trim()) {
-          alert('Vinsamlegast skrifaðu þýðingu.');
-          return;
-        }
+        if (!transAnswer.trim()) { alert('Vinsamlegast skrifaðu þýðingu.'); return; }
         setTransLoading(true);
         try {
           const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
@@ -280,18 +278,14 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           );
           const clean = r.replace(new RegExp('```json\n?', 'g'), '').replace(new RegExp('```\n?', 'g'), '').trim();
           const data = JSON.parse(clean);
+          // FIX 3a: just set feedback — useEffect handles markDone(4)
           setTransFeedback(data);
-          if (transFeedback2) markDone(4);
         } catch(e) {
           alert('Villa. Reyndu aftur.');
         } finally {
           setTransLoading(false);
         }
       };
-
-      // ── Flipi 1: Rétt/Rangt ───────────────────────────────────────────────
-      const [tfAnswers, setTfAnswers] = useState(Array(TRUE_FALSE_RAW.length).fill(null));
-      const [tfSubmitted, setTfSubmitted] = useState(false);
 
       const checkTranslation2 = async () => {
         if (!transAnswer2.trim()) { alert('Vinsamlegast skrifaðu þýðingu.'); return; }
@@ -306,11 +300,15 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           const r = await callOpenAI([{ role: 'system', content: sys }, { role: 'user', content: 'Meta þýðingu.' }], 200, 0.2);
           const clean = r.replace(new RegExp('```json\n?', 'g'), '').replace(new RegExp('```\n?', 'g'), '').trim();
           const data = JSON.parse(clean);
+          // FIX 3b: just set feedback — useEffect handles markDone(4)
           setTransFeedback2(data);
-          if (transFeedback) markDone(4);
         } catch(e) { alert('Villa. Reyndu aftur.'); }
         finally { setTransLoading2(false); }
       };
+
+      // ── Rétt/Rangt ────────────────────────────────────────────────────────
+      const [tfAnswers, setTfAnswers] = useState(Array(TRUE_FALSE_RAW.length).fill(null));
+      const [tfSubmitted, setTfSubmitted] = useState(false);
 
       const checkTf = () => {
         if (tfAnswers.some(a => a === null)) { alert('Vinsamlegast svaraðu öllum!'); return; }
@@ -318,7 +316,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         markDone(0);
       };
 
-      // ── Flipi 2: Krossaspurningar ─────────────────────────────────────────
+      // ── Krossaspurningar ──────────────────────────────────────────────────
       const shuffledMC = useMemo(() => MC_RAW.map(q => {
         const opts = shuffle(q.options.map((o, i) => ({ text: o, isCorrect: i === q.correct })));
         return { question: q.question, options: opts };
@@ -333,7 +331,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         markDone(1);
       };
 
-      // ── Flipi 3: Stuttar spurningar ───────────────────────────────────────
+      // ── Stuttar spurningar ────────────────────────────────────────────────
       const [shortAnswers, setShortAnswers] = useState(Array(SHORT_QUESTIONS.length).fill(''));
       const [shortFeedback, setShortFeedback] = useState(Array(SHORT_QUESTIONS.length).fill(null));
       const [shortLoading, setShortLoading] = useState(Array(SHORT_QUESTIONS.length).fill(false));
@@ -369,7 +367,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
         if (shortFeedback.every(f => f !== null)) markDone(2);
       }, [shortFeedback]);
 
-      // ── Flipi 4: Pörun ────────────────────────────────────────────────────
+      // ── Pörun ─────────────────────────────────────────────────────────────
       const rightOptions = useMemo(() => shuffle(MATCHING_RAW.map(m => m.right)), []);
       const [matchAnswers, setMatchAnswers] = useState(Array(MATCHING_RAW.length).fill(''));
       const [matchSubmitted, setMatchSubmitted] = useState(false);
@@ -385,7 +383,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
       return (
         <div className="min-h-screen pb-24">
 
-          {/* Header */}
           <header className="bg-white shadow-sm border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-6 py-8">
               <button onClick={() => window.history.back()}
@@ -397,7 +394,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
             </div>
           </header>
 
-          {/* Sticky hljóðspilari */}
           <div className="sticky-player">
             <div className="max-w-4xl mx-auto px-6 py-3">
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
@@ -446,7 +442,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
 
           <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-20">
 
-            {/* Leiðbeiningabox */}
             <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
               <p className="text-sm font-light text-green-800">📘 Lestu lykilorðin hér að neðan fyrst</p>
               <p className="text-sm font-light text-green-800">🎧 Hlustaðu á samtalið 2–3 sinnum</p>
@@ -454,7 +449,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
               <p className="text-sm font-light text-green-800">🔓 Þegar allt er lokið opnast textinn</p>
             </div>
 
-            {/* Lykilorð */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <button onClick={() => setVocabOpen(v => !v)}
                 className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">
@@ -473,7 +467,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
               )}
             </div>
 
-            {/* Flipar */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
                 {tabs.map((tab, i) => (
@@ -486,15 +479,16 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
 
               <div className="p-6 fade-in" key={activeTab}>
 
-                {/* ── Flipi 4: Þýðingar (aftast) ── */}
+                {/* ── Flipi 4: Þýðingar ── */}
                 {activeTab === 4 && (
                   <div className="space-y-5">
                     <p className="text-sm font-light text-gray-600">Þýddu orðin á þitt móðurmál.</p>
+
+                    {/* Orð 1 */}
                     <div className="border border-gray-100 rounded-xl p-5">
                       <p className="font-medium text-gray-800 mb-4 text-sm">
                         1. Hvað þýðir <strong>„{TRANSLATION_WORDS[0]}"</strong> á þínu móðurmáli?
                       </p>
-
                       <textarea
                         value={transAnswer}
                         onChange={e => setTransAnswer(e.target.value)}
@@ -522,14 +516,39 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
                         </div>
                       )}
                     </div>
-                    {transFeedback && (
-                      <div className="text-center fade-in">
-                        <button onClick={() => setActiveTab(1)}
-                          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light text-sm">
-                          Áfram í krossaspurningar →
+
+                    {/* Orð 2 */}
+                    <div className="border border-gray-100 rounded-xl p-5">
+                      <p className="font-medium text-gray-800 mb-4 text-sm">
+                        2. Hvað þýðir <strong>„{TRANSLATION_WORDS[1]}"</strong> á þínu móðurmáli?
+                      </p>
+                      <textarea
+                        value={transAnswer2}
+                        onChange={e => setTransAnswer2(e.target.value)}
+                        disabled={!!transFeedback2}
+                        rows={2}
+                        placeholder="Skrifaðu þýðinguna hér..."
+                        className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-400 font-light text-sm resize-none disabled:bg-gray-50 mb-3"
+                      />
+                      {!transFeedback2 ? (
+                        <button onClick={checkTranslation2} disabled={transLoading2}
+                          className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 transition-colors font-light text-sm">
+                          {transLoading2 ? 'Bíð...' : 'Athuga þýðingu'}
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className={`p-4 rounded-xl border fade-in ${transFeedback2.correct ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                          <p className={`text-sm font-light mb-1 ${transFeedback2.correct ? 'text-green-800' : 'text-amber-800'}`}>
+                            {transFeedback2.correct ? '✓' : '💡'} {transFeedback2.feedback_is}
+                          </p>
+                          <p className={`text-xs font-light ${transFeedback2.correct ? 'text-green-700' : 'text-amber-700'}`}>
+                            {transFeedback2.feedback_native}
+                          </p>
+                          {transFeedback2.correct_translation && (
+                            <p className="text-xs text-gray-500 mt-2 font-light">Dæmi: {transFeedback2.correct_translation}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -581,7 +600,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
                   </div>
                 )}
 
-                {/* ── Flipi 2: Krossaspurningar ── */}
+                {/* ── Flipi 1: Krossaspurningar ── */}
                 {activeTab === 1 && (
                   <div className="space-y-5">
                     {shuffledMC.map((q, qi) => (
@@ -638,7 +657,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
                   </div>
                 )}
 
-                {/* ── Flipi 3: Stuttar spurningar ── */}
+                {/* ── Flipi 2: Stuttar spurningar ── */}
                 {activeTab === 2 && (
                   <div className="space-y-5">
                     {SHORT_QUESTIONS.map((q, i) => (
@@ -675,7 +694,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
                   </div>
                 )}
 
-                {/* ── Flipi 4: Pörun ── */}
+                {/* ── Flipi 3: Pörun ── */}
                 {activeTab === 3 && (
                   <div className="space-y-4">
                     {MATCHING_RAW.map((item, i) => (
