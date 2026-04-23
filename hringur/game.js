@@ -297,11 +297,9 @@ function startGame() {
         });
     }
     
-    // Skipta um skjá
     document.getElementById('welcome-screen').classList.remove('active');
     document.getElementById('game-screen').classList.add('active');
     
-    // Setja upp spilaborð
     setupGameBoard();
 }
 
@@ -314,7 +312,6 @@ function setupGameBoard() {
         createPlayerPieces();
     };
     
-    // Ef myndin er þegar hlaðin
     if (mapImg.complete) {
         createLocationMarkers();
         createPlayerPieces();
@@ -358,13 +355,27 @@ function createPlayerPieces() {
 
 function updatePlayersStatus() {
     const statusDiv = document.getElementById('players-status');
-    statusDiv.innerHTML = gameState.players.map((player, i) => `
-        <div class="player-status ${i === gameState.currentPlayerIndex ? 'active' : ''}">
-            <span class="icon">${player.icon}</span>
-            <span>${player.name}</span>
-            <span class="position">${player.position}/30</span>
-        </div>
-    `).join('');
+    statusDiv.innerHTML = '';
+    gameState.players.forEach((player, i) => {
+        const div = document.createElement('div');
+        div.className = 'player-status' + (i === gameState.currentPlayerIndex ? ' active' : '');
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'icon';
+        iconSpan.textContent = player.icon;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = player.name;
+
+        const posSpan = document.createElement('span');
+        posSpan.className = 'position';
+        posSpan.textContent = player.position + '/30';
+
+        div.appendChild(iconSpan);
+        div.appendChild(nameSpan);
+        div.appendChild(posSpan);
+        statusDiv.appendChild(div);
+    });
 }
 
 function updateCurrentPlayer() {
@@ -380,7 +391,6 @@ function rollDice() {
     const btn = document.getElementById('roll-btn');
     btn.disabled = true;
     
-    // Animate dice
     const diceDisplay = document.getElementById('dice-display');
     let rolls = 0;
     const interval = setInterval(() => {
@@ -402,16 +412,13 @@ function movePlayer(steps) {
     const player = gameState.players[gameState.currentPlayerIndex];
     const newPosition = Math.min(player.position + steps, locations.length);
     
-    // Animate movement
     animateMovement(player, newPosition, () => {
         player.position = newPosition;
         updatePlayersStatus();
         
-        // Athuga hvort leikmaður kláraði
         if (player.position >= locations.length) {
             showWinner(player);
         } else {
-            // Sýna spurningu
             showQuestion();
         }
     });
@@ -422,7 +429,6 @@ function animateMovement(player, targetPosition, callback) {
     const interval = setInterval(() => {
         currentPos++;
         
-        // Animate marker
         const marker = document.getElementById(`location-marker-${currentPos}`);
         if (marker) {
             marker.classList.add('active');
@@ -436,22 +442,19 @@ function animateMovement(player, targetPosition, callback) {
         
         if (currentPos >= targetPosition) {
             clearInterval(interval);
-            
-            // Zoom inn á staðinn
             setTimeout(() => {
                 zoomToLocation(currentPos, () => {
                     callback();
                 });
             }, 300);
         }
-    }, 600); // Hægar (var 400ms)
+    }, 600);
 }
 
 function updatePlayerPiecePosition(player, position) {
     const loc = locations[Math.min(position, locations.length - 1)];
     const piece = player.element;
     
-    // Offset fyrir marga leikmenn á sama stað
     const playersAtSameSpot = gameState.players.filter(p => p.position === position).indexOf(player);
     const offsetX = (playersAtSameSpot - 1) * 20;
     
@@ -464,17 +467,15 @@ function zoomToLocation(position, callback) {
     const mapContainer = document.getElementById('map-container');
     const loc = locations[position];
     
-    // Zoom in animation - MIKLU meira zoom (2x)
     mapContainer.style.transition = 'transform 0.6s ease-in-out';
     mapContainer.style.transform = `scale(2) translate(${(0.5 - loc.x) * 50}%, ${(0.5 - loc.y) * 50}%)`;
     
-    // Halda zoom - ekki zooma út fyrr en eftir spurningu
     setTimeout(() => {
         callback();
     }, 600);
 }
 
-// Zoom út úr stað (kallað eftir spurningu)
+// Zoom út úr stað
 function zoomOut() {
     const mapContainer = document.getElementById('map-container');
     mapContainer.style.transition = 'transform 0.6s ease-in-out';
@@ -492,39 +493,44 @@ function showQuestion() {
     const player = gameState.players[gameState.currentPlayerIndex];
     const location = locations[player.position];
     
-    // Sækja spurningu fyrir þennan stað, eða nota default
     const questionData = questionsForLocations[location.name] || defaultQuestion;
     
     document.getElementById('question-location').textContent = location.name;
     document.getElementById('question-text').textContent = questionData.question;
     
-    // Setja mynd
+    // Mynd – örugg útgáfa
     const locationImage = document.getElementById('location-image');
+    locationImage.innerHTML = '';
     if (questionData.imageUrl) {
-        locationImage.innerHTML = `<img src="${questionData.imageUrl}" alt="${location.name}">`;
+        const img = document.createElement('img');
+        img.src = questionData.imageUrl;
+        img.alt = location.name;
+        locationImage.appendChild(img);
     } else {
-        locationImage.innerHTML = '🏔️';
+        locationImage.textContent = '🏔️';
     }
     
+    // Svarmöguleikar – örugg útgáfa
     const answersDiv = document.getElementById('answers');
-    answersDiv.innerHTML = questionData.answers.map((answer, i) => 
-        `<button class="answer-btn" onclick="checkAnswer(${i})">${String.fromCharCode(65 + i)}) ${answer}</button>`
-    ).join('');
+    answersDiv.innerHTML = '';
+    questionData.answers.forEach((answer, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn';
+        btn.textContent = String.fromCharCode(65 + i) + ') ' + answer;
+        btn.onclick = () => checkAnswer(i);
+        answersDiv.appendChild(btn);
+    });
     
     document.getElementById('result-message').classList.remove('show', 'correct', 'wrong');
     document.getElementById('continue-btn').style.display = 'none';
     
-    // Geyma current question data
     gameState.currentQuestion = questionData;
     
-    // Reset listen button
     const listenBtn = document.getElementById('listen-btn');
     listenBtn.disabled = false;
     listenBtn.innerHTML = '🔊 Hlusta á lýsingu';
     
     document.getElementById('question-modal').classList.add('active');
-    
-    // EKKI spila sjálfvirkt
 }
 
 async function playAudio() {
@@ -603,20 +609,16 @@ function continueGame() {
     document.getElementById('question-modal').classList.remove('active');
     gameState.waitingForAnswer = false;
     
-    // Stop audio
     if (gameState.currentAudio) {
         gameState.currentAudio.pause();
         gameState.currentAudio = null;
     }
     
-    // Zoom út úr staðnum
     zoomOut();
     
-    // Ef svarið var rétt og < 2 í röð, leyfa að kasta aftur
     if (gameState.consecutiveRolls > 0 && gameState.consecutiveRolls < 2) {
         document.getElementById('roll-btn').disabled = false;
     } else {
-        // Næsti leikmaður
         gameState.consecutiveRolls = 0;
         gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
         updateCurrentPlayer();
