@@ -1,6 +1,36 @@
 <!DOCTYPE html>
 <html lang="is">
 <head>
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
+    authDomain: "malstodin-90f85.firebaseapp.com",
+    projectId: "malstodin-90f85",
+    storageBucket: "malstodin-90f85.firebasestorage.app",
+    messagingSenderId: "190485777754",
+    appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) { window.location.href = '../login.html'; return; }
+    try {
+      const snap = await getDoc(doc(db, 'user_access', user.uid));
+      if (!snap.exists()) { window.location.href = '../login.html'; return; }
+      const courseData = snap.data()['isat1ic'];
+      if (!courseData || !courseData.activated_at) { window.location.href = '../login.html'; return; }
+      if (courseData.expires_at && courseData.expires_at.toDate() < new Date()) { window.location.href = '../login.html'; return; }
+    } catch { window.location.href = '../login.html'; }
+  });
+</script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>✍️ Hljóðritun 7: Dívalí – Málstöðin</title>
