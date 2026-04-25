@@ -14,24 +14,50 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
+
     .answer-option {
       border: 2px solid #e5e7eb;
       transition: all 0.2s;
       cursor: pointer;
     }
-    .answer-option:hover:not(.opt-disabled) { border-color: #93c5fd; background: #eff6ff; }
-    .answer-option.opt-selected   { border-color: #3b82f6; background: #eff6ff; }
-    .answer-option.opt-correct    { border-color: #22c55e; background: #f0fdf4; }
-    .answer-option.opt-incorrect  { border-color: #ef4444; background: #fef2f2; }
-    .answer-option.opt-disabled   { cursor: default; }
+    .answer-option:hover:not(.opt-disabled) {
+      border-color: #93c5fd;
+      background: #eff6ff;
+    }
+    .answer-option.opt-selected {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .answer-option.opt-correct {
+      border-color: #22c55e;
+      background: #f0fdf4;
+    }
+    .answer-option.opt-incorrect {
+      border-color: #ef4444;
+      background: #fef2f2;
+    }
+    .answer-option.opt-disabled {
+      cursor: default;
+    }
 
-    .tab-btn { transition: all 0.2s; position: relative; }
-    .tab-btn:not(.active):hover { background: #f3f4f6; }
-    .tab-btn.active { background: white; color: #2563eb; font-weight: 500; }
+    .tab-btn {
+      transition: all 0.2s;
+      position: relative;
+    }
+    .tab-btn:not(.active):hover {
+      background: #f3f4f6;
+    }
+    .tab-btn.active {
+      background: white;
+      color: #2563eb;
+      font-weight: 500;
+    }
     .tab-btn.active::after {
       content: '';
       position: absolute;
-      bottom: -1px; left: 0; right: 0;
+      bottom: -1px;
+      left: 0;
+      right: 0;
       height: 3px;
       background: #2563eb;
       border-radius: 2px 2px 0 0;
@@ -41,7 +67,9 @@
       from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
     }
-    .fade-in { animation: fadeIn 0.35s ease both; }
+    .fade-in {
+      animation: fadeIn 0.35s ease both;
+    }
   </style>
 </head>
 <body>
@@ -76,23 +104,38 @@
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
       await setDoc(ref, data, { merge: true });
-    } catch(e) { console.error('Progress write failed:', e); }
+    } catch (e) {
+      console.error('Progress write failed:', e);
+    }
   }
   window.writeProgress = writeProgress;
 
   onAuthStateChanged(auth, async (user) => {
-    if (!user) { window.location.href = LOGIN; return; }
+    if (!user) {
+      window.location.href = LOGIN;
+      return;
+    }
+
     try {
       const snap = await getDoc(doc(db, 'user_access', user.uid));
-      if (!snap.exists()) { window.location.href = LOGIN; return; }
+      if (!snap.exists()) {
+        window.location.href = LOGIN;
+        return;
+      }
       const courseData = snap.data()[COURSE];
-      if (!courseData || !courseData.activated_at) { window.location.href = LOGIN; return; }
+      if (!courseData || !courseData.activated_at) {
+        window.location.href = LOGIN;
+        return;
+      }
       if (courseData.expires_at && courseData.expires_at.toDate() < new Date()) {
-        window.location.href = LOGIN; return;
+        window.location.href = LOGIN;
+        return;
       }
     } catch {
-      window.location.href = LOGIN; return;
+      window.location.href = LOGIN;
+      return;
     }
+
     writeProgress('opened');
     document.getElementById('auth-loading').style.display = 'none';
     const root = document.getElementById('root');
@@ -109,7 +152,7 @@
 <script type="text/babel">
   const { useState, useEffect, useRef, useMemo } = React;
 
-  async function callOpenAI(messages, maxTokens = 120, temperature = 0.2) {
+  async function callOpenAI(messages, maxTokens = 140, temperature = 0.2) {
     const r = await fetch('/.netlify/functions/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -120,6 +163,7 @@
         temperature,
       }),
     });
+
     const data = await r.json();
     if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
     return data.content;
@@ -173,11 +217,13 @@
 
   const WRITING_EXERCISES = [
     {
+      type: 'twoPart',
       imageUrl: '/isat1ia/media/elsa.png',
       question: 'Hvar vinnur Elsa?',
       subject: 'Elsa',
       connector: 'á',
-      modelAnswer: 'Elsa vinnur á sjúkrahúsi.',
+      placeholder1: '...',
+      placeholder2: '...',
       teacherNote: `
 Rétt merking er að Elsa vinnur á sjúkrahúsi.
 
@@ -193,23 +239,22 @@ Samþykkja má umburðarlynt:
 - Elsa er að vinna á Landsspítalanum.
 - Elsa vinnur á spítalanum.
 
-Samþykkja má smávægilegar stafsetningarvillur og beygingarvillur ef merkingin er skýr.
-
 Ekki samþykkja:
 - Þetta er Elsa.
 - Elsa er kona.
 - Elsa er á sjúkrahúsi.
 - Elsa vinnur.
 - Elsa er hjúkrunarfræðingur.
-því þá vantar annað lykilatriðið eða svarið er of óbeint.
 `
     },
     {
+      type: 'twoPart',
       imageUrl: '/isat1ia/media/arni.png',
       question: 'Hvar vinnur Árni?',
       subject: 'Árni',
       connector: 'í',
-      modelAnswer: 'Árni vinnur í búð.',
+      placeholder1: '...',
+      placeholder2: '...',
       teacherNote: `
 Rétt merking er að Árni vinnur í búð.
 
@@ -223,16 +268,84 @@ Samþykkja má umburðarlynt:
 - Árni vinnur í verslun.
 - Árni vinnur í matvöruverslun.
 - Árni vinnur í Nettó.
-- Árni er að vinna í verslun.
-
-Samþykkja má smávægilegar stafsetningarvillur og beygingarvillur ef merkingin er skýr.
 
 Ekki samþykkja:
 - Þetta er Árni.
 - Árni er í búð.
 - Árni vinnur.
 - Árni er starfsmaður.
-því þá vantar annað lykilatriðið eða merkingin er of óskýr.
+`
+    },
+    {
+      type: 'onePart',
+      imageUrl: '/isat1ia/media/harpa.png',
+      question: 'Hvar er Harpa?',
+      prefix: 'Harpa er í',
+      placeholder1: '...',
+      teacherNote: `
+Rétt merking er að Harpa sé í eða við Tækniskólann.
+
+Samþykkja má umburðarlynt:
+- Harpa er í Tækniskólanum.
+- Harpa er í skólanum.
+- Harpa er fyrir framan Tækniskólann.
+- Harpa er við Tækniskólann.
+- Harpa er fyrir utan skólann.
+
+Ekki samþykkja:
+- Þetta er Harpa.
+- Harpa er stelpa.
+- Harpa er úti.
+- Harpa er glöð.
+því þá svarar nemandinn ekki skýrt hvar hún er.
+`
+    },
+    {
+      type: 'freeText',
+      imageUrl: '/isat1ia/media/saekir.png',
+      question: 'Hvað gerir Harpa?',
+      placeholderText: 'Skrifaðu eina setningu sem passar við myndina...',
+      teacherNote: `
+Rétt merking er að Harpa sé að sækja Huldu í skólann eða taka á móti henni eftir skóla.
+
+Samþykkja má umburðarlynt:
+- Harpa sækir Huldu í skólann.
+- Harpa er að sækja Huldu í skólann.
+- Harpa sækir litlu systur sína í skólann.
+- Harpa tekur á móti Huldu eftir skóla.
+- Harpa sækir systur sína eftir skóla.
+- Harpa hittir Huldu þegar hún kemur út úr skólanum.
+
+Ekki samþykkja:
+- Harpa er í skólanum.
+- Harpa er með Huldu.
+- Harpa er glöð.
+- Harpa er úti.
+því þá vantar aðgerðarmerkinguna.
+`
+    },
+    {
+      type: 'freeText',
+      imageUrl: '/isat1ia/media/elda.png',
+      question: 'Hvað gera Harpa og Hulda?',
+      placeholderText: 'Skrifaðu eina setningu sem passar við myndina...',
+      teacherNote: `
+Rétt merking er að Harpa og Hulda eldi kvöldmat saman.
+
+Samþykkja má umburðarlynt:
+- Harpa og Hulda elda kvöldmat saman.
+- Þær elda saman.
+- Harpa og Hulda eru að elda.
+- Þær eru að elda kvöldmat.
+- Harpa og Hulda hjálpast að í eldhúsinu.
+- Þær elda mat saman.
+
+Ekki samþykkja:
+- Þær eru heima.
+- Þær standa saman.
+- Þær eru glöðar.
+- Harpa er í eldhúsinu.
+því þá vantar skýrt hvað þær gera.
 `
     }
   ];
@@ -248,11 +361,13 @@ Ekki samþykkja:
 
   const FeedbackBadge = ({ score, message, onRetry }) => {
     const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+
     const colors = {
       green: 'bg-green-50 border-green-200 text-green-700',
       amber: 'bg-amber-50 border-amber-200 text-amber-700',
-      red:   'bg-red-50 border-red-200 text-red-700',
+      red: 'bg-red-50 border-red-200 text-red-700',
     };
+
     return (
       <div className={`mt-3 p-3 rounded-lg border fade-in ${colors[color]}`}>
         <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
@@ -276,7 +391,9 @@ Ekki samþykkja:
     ]);
 
     const markDone = (i) => {
-      setTabs(prev => prev.map((t, idx) => idx === i ? { ...t, done: true } : t));
+      setTabs(prev =>
+        prev.map((t, idx) => idx === i ? { ...t, done: true } : t)
+      );
     };
 
     useEffect(() => {
@@ -336,15 +453,16 @@ Ekki samþykkja:
 Textinn: "${READING_TEXT}"
 Spurning: "${SHORT_QUESTIONS[i]}"
 Svar nemanda: "${ans}"
+
 Svaraðu EINUNGIS á þessu formi:
-STIG: [tala 0-5]
-ENDURGJOF: [ein setning, vinaleg og hvetjandi á íslensku]`
+STIG: [0-5]
+ENDURGJOF: [ein stutt, hlý setning á íslensku]`
           },
           { role: 'user', content: 'Mettu svarið.' }
         ], 100, 0.2);
 
-        const stigMatch = result.match(/STIG:\s*(\d)/);
-        const endMatch = result.match(/ENDURGJOF:\s*(.+)/);
+        const stigMatch = result.match(/STIG:\s*(\d)/i);
+        const endMatch = result.match(/ENDURGJOF:\s*(.+)/i);
 
         const score = stigMatch ? parseInt(stigMatch[1], 10) : 0;
         const msg = endMatch ? endMatch[1].trim() : result.trim();
@@ -354,7 +472,7 @@ ENDURGJOF: [ein setning, vinaleg og hvetjandi á íslensku]`
           a[i] = { score, msg };
           return a;
         });
-      } catch(e) {
+      } catch (e) {
         alert('Villa. Reyndu aftur.');
       } finally {
         setShortLoading(prev => {
@@ -366,7 +484,9 @@ ENDURGJOF: [ein setning, vinaleg og hvetjandi á íslensku]`
     };
 
     useEffect(() => {
-      if (shortFeedback.every(f => f !== null)) markDone(1);
+      if (shortFeedback.every(f => f !== null)) {
+        markDone(1);
+      }
     }, [shortFeedback]);
 
     // --- Flipi 2: Umræðuspurningar ---
@@ -460,7 +580,6 @@ Vertu hlýr og áhugasamur. Einföld íslenska.`;
         const grammarSys = `Þú ert íslenskukennari sem gefur MJÖG stuttar og hlýjar málfarsábendingar til nemenda á A1-A2 stigi.
 Skoðaðu setninguna og athugaðu hvort það sé ein augljós villa (stafsetning, kyn orða, eintölu/fleirtölu eða beygingu).
 Ef það er villa: Svaraðu með einni stuttri setningu sem byrjar á "Mundu að..." og lagar villuna hlýlega.
-Dæmi: "Mundu að 'gaman' er hvorugkyn, svo við segjum 'það er gaman' 😊"
 Ef engin villa eða of flókið: Svaraðu EINUNGIS með "ENGIN".
 Aldrei nefna fleiri en eina villu.`;
 
@@ -498,7 +617,7 @@ Aldrei nefna fleiri en eina villu.`;
             return a;
           });
         }
-      } catch(e) {
+      } catch (e) {
         alert('Villa. Reyndu aftur.');
         setConvs(prev => {
           const a = [...prev];
@@ -532,6 +651,7 @@ Aldrei nefna fleiri en eina villu.`;
       WRITING_EXERCISES.map(() => ({
         part1: '',
         part2: '',
+        freeText: '',
         feedback: null,
         loading: false,
         approved: false
@@ -549,19 +669,38 @@ Aldrei nefna fleiri en eina villu.`;
       });
     };
 
+    const buildWritingAnswer = (exercise, answerState) => {
+      if (exercise.type === 'twoPart') {
+        return `${exercise.subject} ${answerState.part1.trim()} ${exercise.connector} ${answerState.part2.trim()}.`;
+      }
+
+      if (exercise.type === 'onePart') {
+        return `${exercise.prefix} ${answerState.part1.trim()}.`;
+      }
+
+      return answerState.freeText.trim();
+    };
+
+    const isWritingFilled = (exercise, answerState) => {
+      if (exercise.type === 'twoPart') {
+        return answerState.part1.trim() && answerState.part2.trim();
+      }
+      if (exercise.type === 'onePart') {
+        return answerState.part1.trim();
+      }
+      return answerState.freeText.trim();
+    };
+
     const evaluateWritingAnswer = async () => {
       const ex = WRITING_EXERCISES[writingIndex];
       const ans = writingAnswers[writingIndex];
 
-      const part1 = ans.part1.trim();
-      const part2 = ans.part2.trim();
-
-      if (!part1 || !part2) {
-        alert('Vinsamlegast fylltu í bæði eyðurnar.');
+      if (!isWritingFilled(ex, ans)) {
+        alert('Vinsamlegast fylltu út svarið.');
         return;
       }
 
-      const fullSentence = `${ex.subject} ${part1} ${ex.connector} ${part2}.`;
+      const fullAnswer = buildWritingAnswer(ex, ans);
 
       setWritingAnswers(prev => {
         const arr = [...prev];
@@ -578,37 +717,34 @@ Aldrei nefna fleiri en eina villu.`;
 Nemandi sér mynd og svarar spurningunni:
 "${ex.question}"
 
-Markmerking:
-"${ex.modelAnswer}"
-
 Leiðbeiningar til mats:
 ${ex.teacherNote}
 
 Mikilvægt:
-- Vertu mjög umburðarlynd/ur gagnvart stafsetningarvillum og smávægilegum beygingarvillum.
-- Samþykktu svarið ef merkingin er skýr og bæði lykilatriðin koma fram.
-- Ekki samþykkja svarið ef aðeins annað lykilatriðið kemur fram.
-- Nemandinn þarf ekki að skrifa fullkomna málfræði til að fá jákvætt mat.
-- Endurgjöfin á að vera stutt, hlý og skýr.
+- Vertu MJÖG umburðarlynd/ur gagnvart stafsetningarvillum og smávægilegum beygingarvillum.
 - Meta skal fyrst merkingu, svo málfar.
+- Samþykktu svarið ef merkingin er skýr og svarar spurningunni.
+- Nemandinn þarf ekki fullkomna málfræði.
+- Endurgjöfin á að vera stutt, hlý og einföld.
+- Ef svarið er næstum rétt, segðu það á uppbyggilegan hátt.
 
 Svar nemanda:
-"${fullSentence}"
+"${fullAnswer}"
 
 Svaraðu EINUNGIS á þessu formi:
 STIG: [0-5]
-SAMTHYKKT: [JÁ eða NEI]
-ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
+SAMTHYKKT: [JA eða NEI]
+ENDURGJOF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
           },
           { role: 'user', content: 'Mettu svarið.' }
         ], 140, 0.2);
 
         const stigMatch = result.match(/STIG:\s*(\d)/i);
-        const samþykktMatch = result.match(/SAMTHYKKT:\s*(JÁ|NEI)/i);
-        const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/i);
+        const samþykktMatch = result.match(/SAMTHYKKT:\s*(JA|NEI)/i);
+        const endurgjofMatch = result.match(/ENDURGJOF:\s*(.+)/i);
 
         const score = stigMatch ? parseInt(stigMatch[1], 10) : 0;
-        const approved = samþykktMatch ? samþykktMatch[1].toUpperCase() === 'JÁ' : false;
+        const approved = samþykktMatch ? samþykktMatch[1].toUpperCase() === 'JA' : false;
         const msg = endurgjofMatch ? endurgjofMatch[1].trim() : 'Takk fyrir svarið.';
 
         setWritingAnswers(prev => {
@@ -653,11 +789,91 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
       }
     };
 
+    const goToPrevWriting = () => {
+      if (writingIndex > 0) {
+        setWritingIndex(prev => prev - 1);
+      }
+    };
+
     useEffect(() => {
       if (writingAnswers.every(item => item.approved)) {
         markDone(3);
       }
     }, [writingAnswers]);
+
+    const renderWritingInput = () => {
+      if (currentWriting.type === 'twoPart') {
+        return (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-base text-gray-800 font-medium">
+                {currentWriting.subject}
+              </span>
+
+              <input
+                type="text"
+                value={currentWritingAnswer.part1}
+                onChange={(e) => updateWritingAnswer(writingIndex, 'part1', e.target.value)}
+                disabled={currentWritingAnswer.feedback !== null}
+                placeholder={currentWriting.placeholder1}
+                className="min-w-[110px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
+              />
+
+              <span className="text-base text-gray-800 font-medium">
+                {currentWriting.connector}
+              </span>
+
+              <input
+                type="text"
+                value={currentWritingAnswer.part2}
+                onChange={(e) => updateWritingAnswer(writingIndex, 'part2', e.target.value)}
+                disabled={currentWritingAnswer.feedback !== null}
+                placeholder={currentWriting.placeholder2}
+                className="min-w-[130px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
+              />
+
+              <span className="text-base text-gray-800 font-medium">.</span>
+            </div>
+          </div>
+        );
+      }
+
+      if (currentWriting.type === 'onePart') {
+        return (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-base text-gray-800 font-medium">
+                {currentWriting.prefix}
+              </span>
+
+              <input
+                type="text"
+                value={currentWritingAnswer.part1}
+                onChange={(e) => updateWritingAnswer(writingIndex, 'part1', e.target.value)}
+                disabled={currentWritingAnswer.feedback !== null}
+                placeholder={currentWriting.placeholder1}
+                className="min-w-[180px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
+              />
+
+              <span className="text-base text-gray-800 font-medium">.</span>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
+          <textarea
+            value={currentWritingAnswer.freeText}
+            onChange={(e) => updateWritingAnswer(writingIndex, 'freeText', e.target.value)}
+            disabled={currentWritingAnswer.feedback !== null}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50 text-sm"
+            rows={3}
+            placeholder={currentWriting.placeholderText}
+          />
+        </div>
+      );
+    };
 
     return (
       <div className="min-h-screen pb-24">
@@ -680,7 +896,7 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
             <p className="text-sm font-light text-blue-800">✏️ Svaraðu krossaspurningunum</p>
             <p className="text-sm font-light text-blue-800">📝 Svaraðu stuttum spurningum með heilum setningum</p>
             <p className="text-sm font-light text-blue-800">💬 Ræddu spurningarnar með AI</p>
-            <p className="text-sm font-light text-blue-800">✍️ Skrifaðu stuttar setningar út frá myndum</p>
+            <p className="text-sm font-light text-blue-800">✍️ Skrifaðu út frá 5 myndum</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
@@ -702,7 +918,6 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
 
             <div className="p-6 fade-in" key={activeTab}>
 
-              {/* --- Flipi 0: Krossaspurningar --- */}
               {activeTab === 0 && (
                 <div className="space-y-6">
                   {shuffledMC.map((q, qi) => (
@@ -767,7 +982,6 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
                 </div>
               )}
 
-              {/* --- Flipi 1: Stuttar spurningar --- */}
               {activeTab === 1 && (
                 <div className="space-y-6">
                   {SHORT_QUESTIONS.map((q, i) => (
@@ -820,7 +1034,6 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
                 </div>
               )}
 
-              {/* --- Flipi 2: Umræðuspurningar --- */}
               {activeTab === 2 && (
                 <div className="space-y-6">
                   {DISCUSSION_QUESTIONS.map((q, i) => (
@@ -922,7 +1135,6 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
                 </div>
               )}
 
-              {/* --- Flipi 3: Ritun --- */}
               {activeTab === 3 && (
                 <div className="space-y-6">
                   <div className="border border-gray-100 rounded-xl p-5">
@@ -930,7 +1142,7 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
                       <div>
                         <h2 className="text-xl font-medium text-gray-800 mb-1">Ritun</h2>
                         <p className="text-sm text-gray-500 font-light">
-                          Skoðaðu myndina og svaraðu spurningunni með stuttri setningu.
+                          Verkefnið verður aðeins frjálsara eftir því sem líður á.
                         </p>
                       </div>
 
@@ -965,46 +1177,12 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
                       {currentWriting.question}
                     </p>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base text-gray-800 font-medium">
-                          {currentWriting.subject}
-                        </span>
-
-                        <input
-                          type="text"
-                          value={currentWritingAnswer.part1}
-                          onChange={(e) => updateWritingAnswer(writingIndex, 'part1', e.target.value)}
-                          disabled={currentWritingAnswer.feedback !== null}
-                          placeholder="..."
-                          className="min-w-[110px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
-                        />
-
-                        <span className="text-base text-gray-800 font-medium">
-                          {currentWriting.connector}
-                        </span>
-
-                        <input
-                          type="text"
-                          value={currentWritingAnswer.part2}
-                          onChange={(e) => updateWritingAnswer(writingIndex, 'part2', e.target.value)}
-                          disabled={currentWritingAnswer.feedback !== null}
-                          placeholder="..."
-                          className="min-w-[130px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
-                        />
-
-                        <span className="text-base text-gray-800 font-medium">.</span>
-                      </div>
-                    </div>
+                    {renderWritingInput()}
 
                     {!currentWritingAnswer.feedback ? (
                       <button
                         onClick={evaluateWritingAnswer}
-                        disabled={
-                          currentWritingAnswer.loading ||
-                          !currentWritingAnswer.part1.trim() ||
-                          !currentWritingAnswer.part2.trim()
-                        }
+                        disabled={currentWritingAnswer.loading || !isWritingFilled(currentWriting, currentWritingAnswer)}
                         className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
                       >
                         {currentWritingAnswer.loading ? 'Bíð...' : 'Fá mat frá AI'}
@@ -1017,20 +1195,29 @@ ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
                           onRetry={retryWriting}
                         />
 
-                        {currentWritingAnswer.approved && (
-                          <div className="flex flex-wrap gap-3">
-                            {writingIndex < WRITING_EXERCISES.length - 1 ? (
-                              <button
-                                onClick={goToNextWriting}
-                                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm"
-                              >
-                                Næsta mynd →
-                              </button>
-                            ) : (
-                              <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-700 text-sm font-light">
-                                🎉 Frábært! Þú kláraðir ritunarverkefnið.
-                              </div>
-                            )}
+                        <div className="flex flex-wrap gap-3">
+                          {writingIndex > 0 && (
+                            <button
+                              onClick={goToPrevWriting}
+                              className="px-5 py-2 border-2 border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm"
+                            >
+                              ← Fyrri mynd
+                            </button>
+                          )}
+
+                          {currentWritingAnswer.approved && writingIndex < WRITING_EXERCISES.length - 1 && (
+                            <button
+                              onClick={goToNextWriting}
+                              className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm"
+                            >
+                              Næsta mynd →
+                            </button>
+                          )}
+                        </div>
+
+                        {currentWritingAnswer.approved && writingIndex === WRITING_EXERCISES.length - 1 && (
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-700 text-sm font-light">
+                            🎉 Frábært! Þú kláraðir ritunarverkefnið.
                           </div>
                         )}
                       </div>
