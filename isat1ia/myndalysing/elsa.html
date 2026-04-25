@@ -24,6 +24,7 @@
     .answer-option.opt-correct    { border-color: #22c55e; background: #f0fdf4; }
     .answer-option.opt-incorrect  { border-color: #ef4444; background: #fef2f2; }
     .answer-option.opt-disabled   { cursor: default; }
+
     .tab-btn { transition: all 0.2s; position: relative; }
     .tab-btn:not(.active):hover { background: #f3f4f6; }
     .tab-btn.active { background: white; color: #2563eb; font-weight: 500; }
@@ -35,6 +36,7 @@
       background: #2563eb;
       border-radius: 2px 2px 0 0;
     }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -169,11 +171,71 @@
     'Hvað finnst þér um að hjálpa heima við húsverk? Hvaða húsverk hjálpar þú við?'
   ];
 
-  const IMAGE_EXERCISE = {
-    imageUrl: '/isat1ia/media/elsa.png',
-    instruction: 'Skoðaðu myndina og svaraðu spurningunni.',
-    question: 'Hvar vinnur Elsa?'
-  };
+  const WRITING_EXERCISES = [
+    {
+      imageUrl: '/isat1ia/media/elsa.png',
+      question: 'Hvar vinnur Elsa?',
+      subject: 'Elsa',
+      connector: 'á',
+      modelAnswer: 'Elsa vinnur á sjúkrahúsi.',
+      teacherNote: `
+Rétt merking er að Elsa vinnur á sjúkrahúsi.
+
+Nemandi þarf að sýna:
+1) að Elsa vinni / sé að vinna
+2) að hún vinni á sjúkrahúsi / spítala / Landspítala
+
+Samþykkja má umburðarlynt:
+- Elsa vinnur á sjúkrahúsi.
+- Elsa er að vinna á sjúkrahúsi.
+- Elsa vinnur á spítala.
+- Elsa vinnur á Landspítalanum.
+- Elsa er að vinna á Landsspítalanum.
+- Elsa vinnur á spítalanum.
+
+Samþykkja má smávægilegar stafsetningarvillur og beygingarvillur ef merkingin er skýr.
+
+Ekki samþykkja:
+- Þetta er Elsa.
+- Elsa er kona.
+- Elsa er á sjúkrahúsi.
+- Elsa vinnur.
+- Elsa er hjúkrunarfræðingur.
+því þá vantar annað lykilatriðið eða svarið er of óbeint.
+`
+    },
+    {
+      imageUrl: '/isat1ia/media/arni.png',
+      question: 'Hvar vinnur Árni?',
+      subject: 'Árni',
+      connector: 'í',
+      modelAnswer: 'Árni vinnur í búð.',
+      teacherNote: `
+Rétt merking er að Árni vinnur í búð.
+
+Nemandi þarf að sýna:
+1) að Árni vinni / sé að vinna
+2) að hann vinni í búð / verslun / matvöruverslun / Nettó
+
+Samþykkja má umburðarlynt:
+- Árni vinnur í búð.
+- Árni er að vinna í búð.
+- Árni vinnur í verslun.
+- Árni vinnur í matvöruverslun.
+- Árni vinnur í Nettó.
+- Árni er að vinna í verslun.
+
+Samþykkja má smávægilegar stafsetningarvillur og beygingarvillur ef merkingin er skýr.
+
+Ekki samþykkja:
+- Þetta er Árni.
+- Árni er í búð.
+- Árni vinnur.
+- Árni er starfsmaður.
+því þá vantar annað lykilatriðið eða merkingin er of óskýr.
+`
+    }
+  ];
 
   function shuffle(arr) {
     const a = [...arr.map((o, i) => ({ ...o, origIndex: i }))];
@@ -210,7 +272,7 @@
       { label: 'Krossaspurningar', done: false },
       { label: 'Stuttar spurningar', done: false },
       { label: 'Umræðuspurningar', done: false },
-      { label: 'Myndaritun', done: false },
+      { label: 'Ritun', done: false },
     ]);
 
     const markDone = (i) => {
@@ -268,13 +330,16 @@
 
       try {
         const result = await callOpenAI([
-          { role: 'system', content: `Þú ert íslenskukennari sem metur stutt svör (A1–A2).
+          {
+            role: 'system',
+            content: `Þú ert íslenskukennari sem metur stutt svör (A1–A2).
 Textinn: "${READING_TEXT}"
 Spurning: "${SHORT_QUESTIONS[i]}"
 Svar nemanda: "${ans}"
 Svaraðu EINUNGIS á þessu formi:
 STIG: [tala 0-5]
-ENDURGJOF: [ein setning, vinaleg og hvetjandi á íslensku]` },
+ENDURGJOF: [ein setning, vinaleg og hvetjandi á íslensku]`
+          },
           { role: 'user', content: 'Mettu svarið.' }
         ], 100, 0.2);
 
@@ -331,10 +396,13 @@ ENDURGJOF: [ein setning, vinaleg og hvetjandi á íslensku]` },
         a[i] = false;
         return a;
       });
-      if (closed.filter(Boolean).length + 1 >= DISCUSSION_QUESTIONS.length) {
+    };
+
+    useEffect(() => {
+      if (closed.every(Boolean)) {
         markDone(2);
       }
-    };
+    }, [closed]);
 
     const continueChat = (i) => {
       setAwaitingChoice(prev => {
@@ -458,92 +526,138 @@ Aldrei nefna fleiri en eina villu.`;
       }
     };
 
-    // --- Flipi 3: Myndaritun með AI mati ---
-    const [imageVerb, setImageVerb] = useState('');
-    const [imagePlace, setImagePlace] = useState('');
-    const [imageFeedback, setImageFeedback] = useState(null);
-    const [imageLoading, setImageLoading] = useState(false);
+    // --- Flipi 3: Ritun ---
+    const [writingIndex, setWritingIndex] = useState(0);
+    const [writingAnswers, setWritingAnswers] = useState(
+      WRITING_EXERCISES.map(() => ({
+        part1: '',
+        part2: '',
+        feedback: null,
+        loading: false,
+        approved: false
+      }))
+    );
 
-    const getImageFeedback = async () => {
-      const verb = imageVerb.trim();
-      const place = imagePlace.trim();
+    const currentWriting = WRITING_EXERCISES[writingIndex];
+    const currentWritingAnswer = writingAnswers[writingIndex];
 
-      if (!verb && !place) return;
+    const updateWritingAnswer = (index, field, value) => {
+      setWritingAnswers(prev => {
+        const arr = [...prev];
+        arr[index] = { ...arr[index], [field]: value };
+        return arr;
+      });
+    };
 
-      const fullAnswer = `Elsa ${verb} á ${place}.`;
+    const evaluateWritingAnswer = async () => {
+      const ex = WRITING_EXERCISES[writingIndex];
+      const ans = writingAnswers[writingIndex];
 
-      setImageLoading(true);
+      const part1 = ans.part1.trim();
+      const part2 = ans.part2.trim();
+
+      if (!part1 || !part2) {
+        alert('Vinsamlegast fylltu í bæði eyðurnar.');
+        return;
+      }
+
+      const fullSentence = `${ex.subject} ${part1} ${ex.connector} ${part2}.`;
+
+      setWritingAnswers(prev => {
+        const arr = [...prev];
+        arr[writingIndex] = { ...arr[writingIndex], loading: true };
+        return arr;
+      });
 
       try {
         const result = await callOpenAI([
           {
             role: 'system',
-            content: `Þú ert íslenskukennari sem metur mjög stutta myndaritun fyrir A1–A2 nemanda.
+            content: `Þú ert íslenskukennari sem metur mjög stutta ritun hjá A1–A2 nemanda.
 
-Nemandi sér mynd af Elsu í vinnunni á sjúkrahúsi.
-Spurningin er: "Hvar vinnur Elsa?"
+Nemandi sér mynd og svarar spurningunni:
+"${ex.question}"
 
-Nemandi fyllir inn í setninguna:
-"Elsa ______ á ______."
+Markmerking:
+"${ex.modelAnswer}"
 
-Þú átt að meta hvort svarið sýni að nemandinn skilji að:
-- Elsa vinnur
-- á sjúkrahúsi / spítala / Landspítala
+Leiðbeiningar til mats:
+${ex.teacherNote}
 
-Vertu umburðarlynd/umburðarlynn:
-- samþykktu eðlileg afbrigði eins og:
-  - "vinnur á sjúkrahúsi"
-  - "er að vinna á sjúkrahúsi"
-  - "vinnur á spítala"
-  - "er að vinna á Landsspítalanum"
-  - "vinnur á Landspítalanum"
-- samþykktu smávægilegar stafsetningarvillur ef merkingin er skýr
-- samþykktu aðeins mismunandi orðalag ef svarið svarar spurningunni skýrt
+Mikilvægt:
+- Vertu mjög umburðarlynd/ur gagnvart stafsetningarvillum og smávægilegum beygingarvillum.
+- Samþykktu svarið ef merkingin er skýr og bæði lykilatriðin koma fram.
+- Ekki samþykkja svarið ef aðeins annað lykilatriðið kemur fram.
+- Nemandinn þarf ekki að skrifa fullkomna málfræði til að fá jákvætt mat.
+- Endurgjöfin á að vera stutt, hlý og skýr.
+- Meta skal fyrst merkingu, svo málfar.
 
-Ekki samþykkja:
-- svör sem eru of óljós
-- svör sem svara ekki hvar hún vinnur
-- svör eins og:
-  - "Þetta er Elsa."
-  - "Elsa er kona."
-  - "Elsa er í vinnu."
-
-Mettu fyrst merkingu, svo málfar.
+Svar nemanda:
+"${fullSentence}"
 
 Svaraðu EINUNGIS á þessu formi:
 STIG: [0-5]
-SAMTHYKKT: [JA eða NEI]
-ENDURGJOF: [ein stutt, hlý setning á íslensku]`
+SAMTHYKKT: [JÁ eða NEI]
+ENDURGJÖF: [ein eða tvær stuttar setningar á einfaldri íslensku]`
           },
-          {
-            role: 'user',
-            content: `Svar nemanda: "${fullAnswer}"`
-          }
-        ], 120, 0.2);
+          { role: 'user', content: 'Mettu svarið.' }
+        ], 140, 0.2);
 
-        const scoreMatch = result.match(/STIG:\s*(\d)/i);
-        const acceptedMatch = result.match(/SAMTHYKKT:\s*(JA|NEI)/i);
-        const feedbackMatch = result.match(/ENDURGJOF:\s*(.+)/i);
+        const stigMatch = result.match(/STIG:\s*(\d)/i);
+        const samþykktMatch = result.match(/SAMTHYKKT:\s*(JÁ|NEI)/i);
+        const endurgjofMatch = result.match(/ENDURGJÖF:\s*(.+)/i);
 
-        const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
-        const accepted = acceptedMatch ? acceptedMatch[1].toUpperCase() === 'JA' : false;
-        const message = feedbackMatch ? feedbackMatch[1].trim() : 'Takk fyrir svarið.';
+        const score = stigMatch ? parseInt(stigMatch[1], 10) : 0;
+        const approved = samþykktMatch ? samþykktMatch[1].toUpperCase() === 'JÁ' : false;
+        const msg = endurgjofMatch ? endurgjofMatch[1].trim() : 'Takk fyrir svarið.';
 
-        setImageFeedback({ score, accepted, message });
-
-        if (accepted) {
-          markDone(3);
-        }
+        setWritingAnswers(prev => {
+          const arr = [...prev];
+          arr[writingIndex] = {
+            ...arr[writingIndex],
+            feedback: { score, msg },
+            approved,
+            loading: false
+          };
+          return arr;
+        });
       } catch (e) {
-        alert('Villa. Reyndu aftur.');
-      } finally {
-        setImageLoading(false);
+        setWritingAnswers(prev => {
+          const arr = [...prev];
+          arr[writingIndex] = {
+            ...arr[writingIndex],
+            loading: false
+          };
+          return arr;
+        });
+        alert('Villa kom upp. Reyndu aftur.');
       }
     };
 
-    const resetImageExercise = () => {
-      setImageFeedback(null);
+    const retryWriting = () => {
+      setWritingAnswers(prev => {
+        const arr = [...prev];
+        arr[writingIndex] = {
+          ...arr[writingIndex],
+          feedback: null,
+          approved: false,
+          loading: false
+        };
+        return arr;
+      });
     };
+
+    const goToNextWriting = () => {
+      if (writingIndex < WRITING_EXERCISES.length - 1) {
+        setWritingIndex(prev => prev + 1);
+      }
+    };
+
+    useEffect(() => {
+      if (writingAnswers.every(item => item.approved)) {
+        markDone(3);
+      }
+    }, [writingAnswers]);
 
     return (
       <div className="min-h-screen pb-24">
@@ -566,7 +680,7 @@ ENDURGJOF: [ein stutt, hlý setning á íslensku]`
             <p className="text-sm font-light text-blue-800">✏️ Svaraðu krossaspurningunum</p>
             <p className="text-sm font-light text-blue-800">📝 Svaraðu stuttum spurningum með heilum setningum</p>
             <p className="text-sm font-light text-blue-800">💬 Ræddu spurningarnar með AI</p>
-            <p className="text-sm font-light text-blue-800">🖼️ Svaraðu spurningu út frá mynd</p>
+            <p className="text-sm font-light text-blue-800">✍️ Skrifaðu stuttar setningar út frá myndum</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
@@ -801,103 +915,124 @@ ENDURGJOF: [ein stutt, hlý setning á íslensku]`
                         onClick={() => setActiveTab(3)}
                         className="mt-3 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm"
                       >
-                        Áfram í myndaritun →
+                        Áfram í ritun →
                       </button>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* --- Flipi 3: Myndaritun --- */}
+              {/* --- Flipi 3: Ritun --- */}
               {activeTab === 3 && (
                 <div className="space-y-6">
                   <div className="border border-gray-100 rounded-xl p-5">
-                    <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                       <div>
-                        <h2 className="text-xl font-medium text-gray-800 mb-1">Myndaritun</h2>
+                        <h2 className="text-xl font-medium text-gray-800 mb-1">Ritun</h2>
                         <p className="text-sm text-gray-500 font-light">
-                          {IMAGE_EXERCISE.instruction}
+                          Skoðaðu myndina og svaraðu spurningunni með stuttri setningu.
                         </p>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-medium text-gray-700">1 af 1 mynd</p>
-                        <div className="w-28 h-2 bg-gray-200 rounded-full mt-2 overflow-hidden">
-                          <div className="w-full h-full bg-blue-600 rounded-full"></div>
+
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-700">
+                          Mynd {writingIndex + 1} af {WRITING_EXERCISES.length}
+                        </p>
+                        <div className="flex gap-2 justify-end mt-2">
+                          {WRITING_EXERCISES.map((_, i) => (
+                            <div
+                              key={i}
+                              className={`w-3 h-3 rounded-full ${
+                                writingAnswers[i].approved
+                                  ? 'bg-green-500'
+                                  : i === writingIndex
+                                  ? 'bg-blue-500'
+                                  : 'bg-gray-300'
+                              }`}
+                            />
+                          ))}
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-5">
-                      <img
-                        src={IMAGE_EXERCISE.imageUrl}
-                        alt="Elsa í vinnunni"
-                        className="w-full max-w-2xl mx-auto rounded-xl shadow-sm border border-gray-200 object-cover"
-                      />
-                    </div>
+                    <img
+                      src={currentWriting.imageUrl}
+                      alt={currentWriting.question}
+                      className="block w-full h-auto max-w-2xl mx-auto rounded-xl shadow-sm border border-gray-200 mb-5"
+                    />
 
-                    <p className="text-sm font-medium text-gray-800 mb-3">
-                      {IMAGE_EXERCISE.question}
+                    <p className="font-medium text-gray-800 text-base mb-4">
+                      {currentWriting.question}
                     </p>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-                      <div className="flex flex-wrap items-center gap-2 text-base md:text-lg">
-                        <span className="font-medium text-gray-800">Elsa</span>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base text-gray-800 font-medium">
+                          {currentWriting.subject}
+                        </span>
 
                         <input
                           type="text"
-                          value={imageVerb}
-                          onChange={(e) => {
-                            setImageVerb(e.target.value);
-                            if (imageFeedback) resetImageExercise();
-                          }}
-                          disabled={imageFeedback?.accepted}
-                          className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light min-w-[130px] disabled:bg-gray-50"
+                          value={currentWritingAnswer.part1}
+                          onChange={(e) => updateWritingAnswer(writingIndex, 'part1', e.target.value)}
+                          disabled={currentWritingAnswer.feedback !== null}
                           placeholder="..."
+                          className="min-w-[110px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
                         />
 
-                        <span className="font-medium text-gray-800">á</span>
+                        <span className="text-base text-gray-800 font-medium">
+                          {currentWriting.connector}
+                        </span>
 
                         <input
                           type="text"
-                          value={imagePlace}
-                          onChange={(e) => {
-                            setImagePlace(e.target.value);
-                            if (imageFeedback) resetImageExercise();
-                          }}
-                          disabled={imageFeedback?.accepted}
-                          className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light min-w-[150px] disabled:bg-gray-50"
+                          value={currentWritingAnswer.part2}
+                          onChange={(e) => updateWritingAnswer(writingIndex, 'part2', e.target.value)}
+                          disabled={currentWritingAnswer.feedback !== null}
                           placeholder="..."
+                          className="min-w-[130px] flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light disabled:bg-gray-50"
                         />
 
-                        <span className="font-medium text-gray-800">.</span>
+                        <span className="text-base text-gray-800 font-medium">.</span>
                       </div>
                     </div>
 
-                    {!imageFeedback?.accepted && (
+                    {!currentWritingAnswer.feedback ? (
                       <button
-                        onClick={getImageFeedback}
-                        disabled={imageLoading || (!imageVerb.trim() && !imagePlace.trim())}
+                        onClick={evaluateWritingAnswer}
+                        disabled={
+                          currentWritingAnswer.loading ||
+                          !currentWritingAnswer.part1.trim() ||
+                          !currentWritingAnswer.part2.trim()
+                        }
                         className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
                       >
-                        {imageLoading ? 'Bíð...' : 'Athuga svar'}
+                        {currentWritingAnswer.loading ? 'Bíð...' : 'Fá mat frá AI'}
                       </button>
-                    )}
+                    ) : (
+                      <div className="space-y-4">
+                        <FeedbackBadge
+                          score={currentWritingAnswer.feedback.score}
+                          message={currentWritingAnswer.feedback.msg}
+                          onRetry={retryWriting}
+                        />
 
-                    {imageFeedback && !imageFeedback.accepted && (
-                      <FeedbackBadge
-                        score={imageFeedback.score}
-                        message={imageFeedback.message}
-                        onRetry={() => {
-                          setImageFeedback(null);
-                        }}
-                      />
-                    )}
-
-                    {imageFeedback?.accepted && (
-                      <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4 fade-in">
-                        <p className="text-green-800 font-light text-sm">
-                          🎉 {imageFeedback.message}
-                        </p>
+                        {currentWritingAnswer.approved && (
+                          <div className="flex flex-wrap gap-3">
+                            {writingIndex < WRITING_EXERCISES.length - 1 ? (
+                              <button
+                                onClick={goToNextWriting}
+                                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm"
+                              >
+                                Næsta mynd →
+                              </button>
+                            ) : (
+                              <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-700 text-sm font-light">
+                                🎉 Frábært! Þú kláraðir ritunarverkefnið.
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
