@@ -184,110 +184,6 @@
     return a;
   }
 
-  function normalizeText(str) {
-    return (str || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[.,!?;:()"]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function levenshtein(a, b) {
-    const m = a.length;
-    const n = b.length;
-    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        dp[i][j] = Math.min(
-          dp[i - 1][j] + 1,
-          dp[i][j - 1] + 1,
-          dp[i - 1][j - 1] + cost
-        );
-      }
-    }
-    return dp[m][n];
-  }
-
-  function evaluateImageAnswer(verbInput, placeInput) {
-    const verb = normalizeText(verbInput);
-    const place = normalizeText(placeInput);
-
-    const verbExact = verb === 'vinnur';
-    const verbClose = !verbExact && levenshtein(verb, 'vinnur') <= 1;
-
-    const placeExact = place === 'sjukrahusi';
-    const placeBaseForm = place === 'sjukrahus';
-    const placeCloseTypo =
-      !placeExact &&
-      !placeBaseForm &&
-      place.startsWith('sjukrahus') &&
-      levenshtein(place, 'sjukrahusi') <= 1;
-
-    const verbAccepted = verbExact || verbClose;
-    const placeAccepted = placeExact || placeCloseTypo;
-
-    if (verbAccepted && placeAccepted) {
-      return {
-        accepted: true,
-        score: 5,
-        message: 'Frábært! Nú er setningin rétt.'
-      };
-    }
-
-    if (!verb && !place) {
-      return {
-        accepted: false,
-        score: 0,
-        message: 'Reyndu að fylla inn í bæði eyðurnar.'
-      };
-    }
-
-    if (!verbAccepted && !placeAccepted) {
-      return {
-        accepted: false,
-        score: 1,
-        message: 'Næstum því. Í fyrra bili á að koma „vinnur“ og í seinna „sjúkrahúsi“.'
-      };
-    }
-
-    if (!verbAccepted && placeAccepted) {
-      return {
-        accepted: false,
-        score: 2,
-        message: 'Mjög gott. Nú vantar bara réttu sögnina: „vinnur“.'
-      };
-    }
-
-    if (verbAccepted && placeBaseForm) {
-      return {
-        accepted: false,
-        score: 3,
-        message: 'Mjög gott. Eftir „á“ segjum við „sjúkrahúsi“.'
-      };
-    }
-
-    if (verbAccepted && !placeAccepted) {
-      return {
-        accepted: false,
-        score: 2,
-        message: 'Mjög gott. Nú vantar staðinn í réttri mynd: „sjúkrahúsi“.'
-      };
-    }
-
-    return {
-      accepted: false,
-      score: 1,
-      message: 'Reyndu aftur.'
-    };
-  }
-
   const FeedbackBadge = ({ score, message, onRetry }) => {
     const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
     const colors = {
@@ -562,16 +458,86 @@ Aldrei nefna fleiri en eina villu.`;
       }
     };
 
-    // --- Flipi 3: Myndaritun ---
+    // --- Flipi 3: Myndaritun með AI mati ---
     const [imageVerb, setImageVerb] = useState('');
     const [imagePlace, setImagePlace] = useState('');
     const [imageFeedback, setImageFeedback] = useState(null);
+    const [imageLoading, setImageLoading] = useState(false);
 
-    const checkImageAnswer = () => {
-      const result = evaluateImageAnswer(imageVerb, imagePlace);
-      setImageFeedback(result);
-      if (result.accepted) {
-        markDone(3);
+    const getImageFeedback = async () => {
+      const verb = imageVerb.trim();
+      const place = imagePlace.trim();
+
+      if (!verb && !place) return;
+
+      const fullAnswer = `Elsa ${verb} á ${place}.`;
+
+      setImageLoading(true);
+
+      try {
+        const result = await callOpenAI([
+          {
+            role: 'system',
+            content: `Þú ert íslenskukennari sem metur mjög stutta myndaritun fyrir A1–A2 nemanda.
+
+Nemandi sér mynd af Elsu í vinnunni á sjúkrahúsi.
+Spurningin er: "Hvar vinnur Elsa?"
+
+Nemandi fyllir inn í setninguna:
+"Elsa ______ á ______."
+
+Þú átt að meta hvort svarið sýni að nemandinn skilji að:
+- Elsa vinnur
+- á sjúkrahúsi / spítala / Landspítala
+
+Vertu umburðarlynd/umburðarlynn:
+- samþykktu eðlileg afbrigði eins og:
+  - "vinnur á sjúkrahúsi"
+  - "er að vinna á sjúkrahúsi"
+  - "vinnur á spítala"
+  - "er að vinna á Landsspítalanum"
+  - "vinnur á Landspítalanum"
+- samþykktu smávægilegar stafsetningarvillur ef merkingin er skýr
+- samþykktu aðeins mismunandi orðalag ef svarið svarar spurningunni skýrt
+
+Ekki samþykkja:
+- svör sem eru of óljós
+- svör sem svara ekki hvar hún vinnur
+- svör eins og:
+  - "Þetta er Elsa."
+  - "Elsa er kona."
+  - "Elsa er í vinnu."
+
+Mettu fyrst merkingu, svo málfar.
+
+Svaraðu EINUNGIS á þessu formi:
+STIG: [0-5]
+SAMTHYKKT: [JA eða NEI]
+ENDURGJOF: [ein stutt, hlý setning á íslensku]`
+          },
+          {
+            role: 'user',
+            content: `Svar nemanda: "${fullAnswer}"`
+          }
+        ], 120, 0.2);
+
+        const scoreMatch = result.match(/STIG:\s*(\d)/i);
+        const acceptedMatch = result.match(/SAMTHYKKT:\s*(JA|NEI)/i);
+        const feedbackMatch = result.match(/ENDURGJOF:\s*(.+)/i);
+
+        const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
+        const accepted = acceptedMatch ? acceptedMatch[1].toUpperCase() === 'JA' : false;
+        const message = feedbackMatch ? feedbackMatch[1].trim() : 'Takk fyrir svarið.';
+
+        setImageFeedback({ score, accepted, message });
+
+        if (accepted) {
+          markDone(3);
+        }
+      } catch (e) {
+        alert('Villa. Reyndu aftur.');
+      } finally {
+        setImageLoading(false);
       }
     };
 
@@ -909,11 +875,11 @@ Aldrei nefna fleiri en eina villu.`;
 
                     {!imageFeedback?.accepted && (
                       <button
-                        onClick={checkImageAnswer}
-                        disabled={!imageVerb.trim() && !imagePlace.trim()}
+                        onClick={getImageFeedback}
+                        disabled={imageLoading || (!imageVerb.trim() && !imagePlace.trim())}
                         className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
                       >
-                        Athuga svar
+                        {imageLoading ? 'Bíð...' : 'Athuga svar'}
                       </button>
                     )}
 
