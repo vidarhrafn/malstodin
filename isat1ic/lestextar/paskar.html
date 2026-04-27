@@ -135,7 +135,7 @@
 
   <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -152,9 +152,16 @@
   const db = getFirestore(app);
   const COURSE = 'isat1ic';
 
+  const authReady = new Promise(resolve => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+
   async function writeProgress(exerciseId, status) {
     try {
-      const user = auth.currentUser;
+      const user = await authReady;
       if (!user) return;
       const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
       const data = { status, updated_at: serverTimestamp() };
@@ -881,13 +888,13 @@ SVARAÐU MEÐ JSON (BARA JSON):
       const [done, setDone] = useState({ krossar: false, stuttar: false, umraeda: false });
       const progressWritten = React.useRef(false);
       useEffect(() => {
-        window.writeProgress && window.writeProgress('lestextar_paskar', 'opened');
+        window.writeProgress && window.writeProgress('lestextar_05', 'opened');
       }, []);
       useEffect(() => {
         const exerciseDone = done.krossar && done.stuttar;
         if (exerciseDone && !progressWritten.current) {
           progressWritten.current = true;
-          window.writeProgress && window.writeProgress('lestextar_paskar', 'completed');
+          window.writeProgress && window.writeProgress('lestextar_05', 'completed');
         }
       }, [done]);
       const [lang, setLang] = useState('English');
