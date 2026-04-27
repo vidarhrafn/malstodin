@@ -118,7 +118,7 @@
   <div id="root"></div>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -135,9 +135,16 @@
   const db = getFirestore(app);
   const COURSE = 'isat1ic';
 
+  const authReady = new Promise(resolve => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+
   async function writeProgress(exerciseId, status) {
     try {
-      const user = auth.currentUser;
+      const user = await authReady;
       if (!user) return;
       const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
       const data = { status, updated_at: serverTimestamp() };
@@ -436,12 +443,12 @@ Um kvöldið fara svo Hólmfríður, Alex og Klara saman á tónleikana á Arnar
       const allDone = completedSections === totalSections;
       const progressWritten = React.useRef(false);
       useEffect(() => {
-        window.writeProgress && window.writeProgress('hlustun8_17juni', 'opened');
+        window.writeProgress && window.writeProgress('hlustun_08', 'opened');
       }, []);
       useEffect(() => {
         if (allDone && !progressWritten.current) {
           progressWritten.current = true;
-          window.writeProgress && window.writeProgress('hlustun8_17juni', 'completed');
+          window.writeProgress && window.writeProgress('hlustun_08', 'completed');
         }
       }, [allDone]);
 
