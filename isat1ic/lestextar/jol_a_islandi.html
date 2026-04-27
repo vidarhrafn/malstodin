@@ -89,7 +89,7 @@
 
   <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -106,9 +106,16 @@
   const db = getFirestore(app);
   const COURSE = 'isat1ic';
 
+  const authReady = new Promise(resolve => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+
   async function writeProgress(exerciseId, status) {
     try {
-      const user = auth.currentUser;
+      const user = await authReady;
       if (!user) return;
       const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
       const data = { status, updated_at: serverTimestamp() };
@@ -490,13 +497,13 @@ REGLUR:
       const [tabsDone, setTabsDone] = useState([false, false, false]);
       const progressWritten = React.useRef(false);
       useEffect(() => {
-        window.writeProgress && window.writeProgress('lestextar_jol_a_islandi', 'opened');
+        window.writeProgress && window.writeProgress('lestextar_04', 'opened');
       }, []);
       useEffect(() => {
         const exerciseDone = tabsDone[0] && tabsDone[1];
         if (exerciseDone && !progressWritten.current) {
           progressWritten.current = true;
-          window.writeProgress && window.writeProgress('lestextar_jol_a_islandi', 'completed');
+          window.writeProgress && window.writeProgress('lestextar_04', 'completed');
         }
       }, [tabsDone]);
 
