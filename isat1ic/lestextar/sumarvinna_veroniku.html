@@ -84,7 +84,7 @@
 
   <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -101,9 +101,17 @@
   const db = getFirestore(app);
   const COURSE = 'isat1ic';
 
+  // Bíður eftir að Firebase auth sé tilbúinn áður en writeProgress er kallað
+  const authReady = new Promise(resolve => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+
   async function writeProgress(exerciseId, status) {
     try {
-      const user = auth.currentUser;
+      const user = await authReady;
       if (!user) return;
       const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
       const data = { status, updated_at: serverTimestamp() };
@@ -235,14 +243,16 @@
       const [activeTab, setActiveTab] = useState(0);
       const [tabsDone, setTabsDone] = useState([false, false, false]);
       const progressWritten = React.useRef(false);
+
       useEffect(() => {
-        window.writeProgress && window.writeProgress('lestextar_sumarvinna_veroniku', 'opened');
+        window.writeProgress && window.writeProgress('lestextar_09', 'opened');
       }, []);
+
       useEffect(() => {
         const exerciseDone = tabsDone[0] && tabsDone[1];
         if (exerciseDone && !progressWritten.current) {
           progressWritten.current = true;
-          window.writeProgress && window.writeProgress('lestextar_sumarvinna_veroniku', 'completed');
+          window.writeProgress && window.writeProgress('lestextar_09', 'completed');
         }
       }, [tabsDone]);
 
@@ -427,7 +437,6 @@ SVARAÐU MEÐ JSON:
               </ul>
             </div>
 
-            {/* Tab 0: Krossaspurningar */}
             {activeTab === 0 && (
               <div className="fade-in space-y-6">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -497,7 +506,6 @@ SVARAÐU MEÐ JSON:
               </div>
             )}
 
-            {/* Tab 1: Stuttar spurningar */}
             {activeTab === 1 && (
               <div className="fade-in">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -540,7 +548,6 @@ SVARAÐU MEÐ JSON:
               </div>
             )}
 
-            {/* Tab 2: Tölum saman */}
             {activeTab === 2 && (
               <div className="fade-in space-y-6">
                 {DISCUSSION_QUESTIONS.map((q, qi) => (
