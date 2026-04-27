@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>📝 Æfingapróf: Út og suður – Málstöðin</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+    min-height: 100vh;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeIn 0.4s ease both; }
+
+  @keyframes pop {
+    0%   { transform: scale(0.85); }
+    60%  { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  .pop { animation: pop 0.3s ease-out both; }
+
+  /* Tab styling – blátt þema */
+  .tab-btn { transition: all 0.2s; position: relative; }
+  .tab-btn:not(.tab-active):hover { background: #f3f4f6; }
+  .tab-btn.tab-active { background: white; color: #2563eb; font-weight: 500; }
+  .tab-btn.tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0;
+    height: 3px;
+    background: #2563eb;
+    border-radius: 2px 2px 0 0;
+  }
+
+  /* Answer options */
+  .answer-option {
+    border: 2px solid #e5e7eb;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .answer-option:hover:not(.opt-disabled) { border-color: #93c5fd; background: #eff6ff; }
+  .answer-option.opt-selected  { border-color: #3b82f6; background: #eff6ff; }
+  .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; }
+  .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; }
+  .answer-option.opt-disabled  { cursor: default; }
+
+  select.inp { min-width: 3.5rem; }
+</style>
+</head>
+<body class="pb-24">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+// ======== HELPERS ========
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ======== DATA ========
+const EX1 = {
+  title: "1. Paraðu saman orð og skýringar",
+  maxPoints: 10,
+  items: [
+    { id: 1, word: "hlaupabretti", correct: "b" },
+    { id: 2, word: "markvörður",   correct: "d" },
+    { id: 3, word: "dymbilvika",   correct: "e" },
+    { id: 4, word: "þjóðbúningur", correct: "a" },
+    { id: 5, word: "lúðrasveit",   correct: "c" },
+  ],
+  options: [
+    { letter: "a", text: "hefðbundin föt sem fólk klæðist á hátíðum" },
+    { letter: "b", text: "tæki í ræktinni til að hlaupa inni" },
+    { letter: "c", text: "hópur sem spilar saman á blásturshljóðfæri" },
+    { letter: "d", text: "leikmaður í fótbolta sem má nota hendur" },
+    { letter: "e", text: "vikan á undan páskum" },
+  ]
+};
+
+const EX2 = {
+  title: "2. Paraðu saman andstæður",
+  maxPoints: 10,
+  items: [
+    { id: 1, word: "Glaðlegt", correct: "c" },
+    { id: 2, word: "Hæg",      correct: "d" },
+    { id: 3, word: "Sterkur",  correct: "e" },
+    { id: 4, word: "Snemma",   correct: "a" },
+    { id: 5, word: "Stórt",    correct: "b" },
+  ],
+  options: [
+    { letter: "a", text: "Seint" },
+    { letter: "b", text: "Lítið" },
+    { letter: "c", text: "Sorglegt" },
+    { letter: "d", text: "Hröð" },
+    { letter: "e", text: "Veikur" },
+  ]
+};
+
+const EX3 = {
+  title: "3. Paraðu saman upphaf og endi",
+  maxPoints: 20,
+  items: [
+    { id: 1,  start: "Jól byrja á",                          correct: "b" },
+    { id: 2,  start: "Börn setja skó í gluggann og fá",      correct: "g" },
+    { id: 3,  start: "Í ræktinni getur þú til dæmis",        correct: "f" },
+    { id: 4,  start: "Á föstudaginn langa var Jesús",         correct: "h" },
+    { id: 5,  start: "Dívalí er mikilvæg hátíð fyrir",       correct: "c" },
+    { id: 6,  start: "Á sumardeginum fyrsta fara sumir",     correct: "e" },
+    { id: 7,  start: "Margir synda í",                       correct: "i" },
+    { id: 8,  start: "Björgunarsveitirnar þurfa stundum að", correct: "d" },
+    { id: 9,  start: "Á Þorláksmessu borða sumir",           correct: "j" },
+    { id: 10, start: "Í jólafríi eru skólarnir",             correct: "a" },
+  ],
+  options: [
+    { letter: "a", text: "lokaðir." },
+    { letter: "b", text: "Þorláksmessu, 23. desember." },
+    { letter: "c", text: "hindúa." },
+    { letter: "d", text: "klifra í klettum." },
+    { letter: "e", text: "í skrúðgöngu." },
+    { letter: "f", text: "lyft lóðum." },
+    { letter: "g", text: "gjöf frá jólasveinunum." },
+    { letter: "h", text: "krossfestur." },
+    { letter: "i", text: "sundlaugum." },
+    { letter: "j", text: "skötu." },
+  ]
+};
+
+const EX4 = {
+  title: "4. Hvað passar saman?",
+  maxPoints: 10,
+  instructions: "Tengdu orðið/hugtakið í dálki A við rétta skýringu í dálki B.",
+  items: [
+    { id: 1, word: "Jól",                  correct: "d" },
+    { id: 2, word: "Páskar",               correct: "e" },
+    { id: 3, word: "Dívalí",               correct: "a" },
+    { id: 4, word: "Sumardagurinn fyrsti", correct: "c" },
+    { id: 5, word: "Föstudagurinn langi",  correct: "b" },
+  ],
+  options: [
+    { letter: "a", text: "Indland" },
+    { letter: "b", text: "Jesús krossfestur" },
+    { letter: "c", text: "Byrjun sumars" },
+    { letter: "d", text: "Jólasveinar" },
+    { letter: "e", text: "Páskaegg" },
+  ]
+};
+
+const EX5 = {
+  title: "5. Settu orðin inn í eyðurnar",
+  maxPoints: 10,
+  words: ["sundlaug", "jólatré", "rækta", "hindúa", "sumargjöf"],
+  sentences: [
+    { id: 1, before: "Margir synda í ",                                          after: " á Íslandi.",                              answer: "sundlaug" },
+    { id: 2, before: "Fólk skreytir heimili sín með ",                           after: " á jólum.",                                answer: "jólatré" },
+    { id: 3, before: "Við tölum um að ",                                         after: " líkama okkar með líkamsrækt.",            answer: "rækta" },
+    { id: 4, before: "Dívalí er mikilvæg hátíð fyrir ",                          after: ".",                                        answer: "hindúa" },
+    { id: 5, before: "Á sumardeginum fyrsta gefa sumir foreldrar börnum sínum ", after: ".",                                        answer: "sumargjöf" },
+  ]
+};
+
+const EX6 = {
+  title: "6. Rétt eða rangt?",
+  maxPoints: 10,
+  statements: [
+    { id: 1,  text: "Margir fara í sund tvisvar eða þrisvar sinnum í viku.",  correct: true  },
+    { id: 2,  text: "Markvörður má taka boltann með höndum.",                 correct: true  },
+    { id: 3,  text: "Í ræktinni getur þú aðeins hlaupið, ekkert annað.",      correct: false },
+    { id: 4,  text: "Björgunarsveitirnar nota aldrei þyrlur.",                 correct: false },
+    { id: 5,  text: "Fólk klæðir sig í spariföt á aðfangadagskvöld.",          correct: true  },
+    { id: 6,  text: "Páskadagur er sami dagur og föstudagurinn langi.",        correct: false },
+    { id: 7,  text: "Sumardagurinn fyrsti er alltaf á sunnudegi.",             correct: false },
+    { id: 8,  text: "Á Dívalí skreytir fólk heimili sín með ljósum.",          correct: true  },
+    { id: 9,  text: "Í fótbolta eru ellefu leikmenn í liði.",                  correct: true  },
+    { id: 10, text: "Dívalí stendur oft í fimm daga.",                         correct: true  },
+  ]
+};
+
+const EX7 = {
+  title: "7. Lestu textann og svaraðu spurningunum",
+  maxPoints: 20,
+  subtitle: "Jól á Íslandi",
+  paragraphs: [
+    "Jól eru stór og mikilvæg hátíð á Íslandi. Margir elska jólin og undirbúa þau lengi. Fólk skreytir heimili sín með ljósum, skrauti og jólatrjám. Jól hafa kristinn uppruna og margir fara í kirkju á jólum. Í dag halda þó margir upp á jólin, líka þeir sem eru ekki trúaðir. Fyrir flesta eru jólin tími friðar og samveru.",
+    "Jólin byrja á Þorláksmessu, 23. desember. Þá klára margir að skreyta og kaupa síðustu jólagjafir. Á Þorláksmessu borða sumir skötu. Sú lykt finnst ekki öllum góð! Á aðfangadagskvöld, 24. desember, hittist fjölskyldan í veislu. Fólk klæðir sig í spariföt, borðar góðan mat og opnar svo gjafir undir jólatrénu.",
+    "Í desember koma jólasveinarnir. Þeir eru 13 bræður og koma einn á dag fyrir jól. Börn setja skó í gluggann á kvöldin. Ef þau hafa verið góð, fá þau gjöf. Ef þau hafa verið óþekk, fá þau stundum kartöflu."
+  ],
+  questions: [
+    { id: 1, q: "Hvers vegna halda margir upp á jólin í dag, samkvæmt textanum?",
+      example: "Af því að jólin eru orðin hátíð fyrir flesta — tími friðar og samveru með fjölskyldu — og ekki bara trúarleg hátíð. Þess vegna halda líka þeir sem eru ekki trúaðir upp á þau." },
+    { id: 2, q: "Hvað borða sumir á Þorláksmessu?",
+      example: "Sumir borða skötu á Þorláksmessu. Lyktin af skötunni er sterk og finnst ekki öllum góð." },
+    { id: 3, q: "Hvað gerir fjölskyldan á aðfangadagskvöld?",
+      example: "Fjölskyldan hittist í veislu, klæðir sig í spariföt, borðar góðan mat og opnar gjafir undir jólatrénu." },
+    { id: 4, q: "Hversu margir eru jólasveinarnir?",
+      example: "Jólasveinarnir eru 13 bræður. Þeir koma einn á dag fyrir jól." },
+    { id: 5, q: "Hvað fá börn í skóinn ef þau hafa verið óþekk?",
+      example: "Ef börn hafa verið óþekk fá þau stundum kartöflu í skóinn." },
+  ]
+};
+
+const EX8 = {
+  title: "8. Fjölvalsspurningar",
+  maxPoints: 10,
+  questions: [
+    {
+      id: 1,
+      q: "Hver er vinsælasta íþróttin í heimi samkvæmt textanum?",
+      options: [
+        { letter: "A", text: "Sund" },
+        { letter: "B", text: "Fótbolti" },
+        { letter: "C", text: "Tónlist" }
+      ],
+      correct: "B"
+    },
+    {
+      id: 2,
+      q: "Hvað gera björgunarsveitarmenn þegar einhver er í hættu?",
+      options: [
+        { letter: "A", text: "Þeir fara í skólann" },
+        { letter: "B", text: "Þeir fara í útkall og hjálpa" },
+        { letter: "C", text: "Þeir fara í sund" }
+      ],
+      correct: "B"
+    },
+    {
+      id: 3,
+      q: "Hvenær er sumardagurinn fyrsti?",
+      options: [
+        { letter: "A", text: "Á mánudegi í mars" },
+        { letter: "B", text: "Á fimmtudegi í apríl" },
+        { letter: "C", text: "Á sunnudegi í júní" }
+      ],
+      correct: "B"
+    },
+    {
+      id: 4,
+      q: "Hvað er páskaegg samkvæmt textanum?",
+      options: [
+        { letter: "A", text: "Lítið egg frá hænu" },
+        { letter: "B", text: "Súkkulaðiegg fullt af nammi" },
+        { letter: "C", text: "Áhugaverð íþrótt, stunduð á Indlandi" }
+      ],
+      correct: "B"
+    },
+    {
+      id: 5,
+      q: "Um hvað er hátíðin Dívalí samkvæmt textanum?",
+      options: [
+        { letter: "A", text: "Um sigur góðs yfir illu" },
+        { letter: "B", text: "Um upphaf nýs skólaárs" },
+        { letter: "C", text: "Um fæðingu konungs" }
+      ],
+      correct: "A"
+    },
+  ]
+};
+
+// ======== COMPONENTS ========
+
+function SectionHeader({ number, title, subtitle }) {
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-1">
+        <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-sm
+          flex items-center justify-center font-medium">{number}</span>
+        <h2 className="text-lg font-medium text-gray-800">{title}</h2>
+      </div>
+      {subtitle && <p className="text-sm text-gray-500 font-light ml-10">{subtitle}</p>}
+    </div>
+  );
+}
+
+function FeedbackBadge({ score, max }) {
+  if (score === null || score === undefined) return null;
+  const pct = max > 0 ? (score / max) * 100 : 0;
+  let bg = "bg-red-50 border-red-200 text-red-700";
+  let emoji = "😔";
+  if (pct >= 90)      { bg = "bg-green-50 border-green-200 text-green-700"; emoji = "🎉"; }
+  else if (pct >= 70) { bg = "bg-green-50 border-green-200 text-green-700"; emoji = "😊"; }
+  else if (pct >= 50) { bg = "bg-amber-50 border-amber-200 text-amber-700"; emoji = "🙂"; }
+  else if (pct >= 30) { bg = "bg-amber-50 border-amber-200 text-amber-700"; emoji = "💪"; }
+  return (
+    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 font-medium ${bg} pop`}>
+      <span className="text-xl">{emoji}</span>
+      <span className="font-light">{score} / {max} stig</span>
+    </div>
+  );
+}
+
+// ======== MATCHING EXERCISE ========
+function MatchingExercise({ data, onScore, rightLabel, type }) {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+
+  const shuffledOptions = useMemo(() => shuffle(data.options), []);
+  const letters = data.options.map(o => o.letter);
+
+  const correctCount = () =>
+    data.items.filter(i => answers[i.id] === i.correct).length;
+
+  const check = () => {
+    const score = Math.round((correctCount() / data.items.length) * data.maxPoints);
+    setChecked(true);
+    onScore(data.title, score);
+  };
+
+  const reset = () => { setAnswers({}); setChecked(false); onScore(data.title, null); };
+
+  const score = checked
+    ? Math.round((correctCount() / data.items.length) * data.maxPoints)
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 md:p-7 fade-in">
+      <SectionHeader
+        number={data.title.split(".")[0]}
+        title={data.title.replace(/^\d+\.\s*/, "")}
+        subtitle={`${data.maxPoints} stig${data.instructions ? " · " + data.instructions : ""}`}
+      />
+
+      <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-5">
+        <p className="text-sm font-medium text-blue-900 mb-2">{rightLabel}:</p>
+        <ul className="space-y-1.5">
+          {shuffledOptions.map(opt => (
+            <li key={opt.letter} className="flex items-start gap-2 text-gray-800 font-light">
+              <span className="font-medium text-blue-700 min-w-[1.25rem]">{opt.letter})</span>
+              <span>{opt.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="space-y-2">
+        {data.items.map(item => {
+          const isCorrect = checked && answers[item.id] === item.correct;
+          const isWrong   = checked && answers[item.id] && answers[item.id] !== item.correct;
+          const cls = isCorrect
+            ? "answer-option opt-correct opt-disabled"
+            : isWrong
+            ? "answer-option opt-incorrect opt-disabled"
+            : "answer-option";
+          return (
+            <div key={item.id}
+              className={`flex items-center gap-3 p-2.5 rounded-lg ${cls}`}>
+              <span className="font-medium text-gray-700 w-6 font-light">{item.id}.</span>
+              <span className="flex-1 font-light">
+                {type === "sentence" ? item.start : item.word}
+              </span>
+              <select
+                className="inp border-2 border-gray-300 rounded-lg px-3 py-1.5 font-light
+                  focus:border-blue-500 focus:outline-none"
+                value={answers[item.id] || ""}
+                onChange={e => setAnswers({ ...answers, [item.id]: e.target.value })}
+                disabled={checked}
+              >
+                <option value="">—</option>
+                {letters.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+              {checked && (
+                <span className="text-xl min-w-[1.5rem]">
+                  {isCorrect ? "✓" : isWrong ? "✗" : "⚪"}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {checked && (
+        <div className="mt-5 p-4 bg-green-50 border border-green-200 rounded-lg fade-in">
+          <p className="font-medium text-green-800 mb-2 text-sm">Rétt svör:</p>
+          <ul className="text-sm space-y-1 text-gray-700 font-light">
+            {data.items.map(item => (
+              <li key={item.id}>
+                <span className="font-medium">{item.id}.</span>{" "}
+                {type === "sentence" ? item.start : item.word}{" "}→{" "}
+                <span className="font-medium text-green-700">{item.correct})</span>{" "}
+                {data.options.find(o => o.letter === item.correct)?.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3 mt-5">
+        {!checked ? (
+          <button onClick={check}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+              transition-colors font-light">
+            Athuga svör
+          </button>
+        ) : (
+          <button onClick={reset}
+            className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+              hover:bg-gray-50 transition-colors font-light text-sm">
+            Reyna aftur
+          </button>
+        )}
+        <FeedbackBadge score={score} max={data.maxPoints} />
+      </div>
+    </div>
+  );
+}
+
+// ======== FILL IN THE BLANK ========
+function FillExercise({ data, onScore }) {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+
+  const normalize = s => (s || "").trim().toLowerCase();
+
+  const correctCount = () =>
+    data.sentences.filter(s => normalize(answers[s.id]) === normalize(s.answer)).length;
+
+  const check = () => {
+    const score = Math.round((correctCount() / data.sentences.length) * data.maxPoints);
+    setChecked(true);
+    onScore(data.title, score);
+  };
+
+  const reset = () => { setAnswers({}); setChecked(false); onScore(data.title, null); };
+
+  const score = checked
+    ? Math.round((correctCount() / data.sentences.length) * data.maxPoints)
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 md:p-7 fade-in">
+      <SectionHeader
+        number={data.title.split(".")[0]}
+        title={data.title.replace(/^\d+\.\s*/, "")}
+        subtitle={`${data.maxPoints} stig`}
+      />
+
+      <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-5">
+        <p className="text-sm font-medium text-blue-900 mb-1">Orð til að nota:</p>
+        <p className="text-gray-800 font-light italic">{data.words.join(", ")}</p>
+      </div>
+
+      <div className="space-y-3">
+        {data.sentences.map(s => {
+          const userAns = answers[s.id] || "";
+          const isCorrect = checked && normalize(userAns) === normalize(s.answer);
+          const isWrong   = checked && userAns && !isCorrect;
+          const cls = isCorrect
+            ? "answer-option opt-correct opt-disabled"
+            : isWrong
+            ? "answer-option opt-incorrect opt-disabled"
+            : "answer-option";
+          return (
+            <div key={s.id} className={`p-3 rounded-lg ${cls}`}>
+              <div className="flex flex-wrap items-baseline gap-1">
+                <span className="font-medium text-gray-700">
+                  {String.fromCharCode(96 + s.id)})
+                </span>
+                <span className="font-light">{s.before}</span>
+                <input
+                  type="text"
+                  value={userAns}
+                  onChange={e => setAnswers({ ...answers, [s.id]: e.target.value })}
+                  disabled={checked}
+                  className="border-b-2 border-gray-400 focus:border-blue-500 outline-none
+                    px-2 py-0.5 font-light min-w-[8rem] disabled:bg-transparent"
+                  placeholder="..."
+                />
+                <span className="font-light">{s.after}</span>
+                {checked && (
+                  <span className="text-base ml-1">{isCorrect ? "✓" : isWrong ? "✗" : "⚪"}</span>
+                )}
+              </div>
+              {checked && !isCorrect && (
+                <p className="text-sm text-green-700 mt-1.5 font-light">
+                  Rétt svar: <span className="font-medium">{s.answer}</span>
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mt-5">
+        {!checked ? (
+          <button onClick={check}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+              transition-colors font-light">
+            Athuga svör
+          </button>
+        ) : (
+          <button onClick={reset}
+            className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+              hover:bg-gray-50 transition-colors font-light text-sm">
+            Reyna aftur
+          </button>
+        )}
+        <FeedbackBadge score={score} max={data.maxPoints} />
+      </div>
+    </div>
+  );
+}
+
+// ======== TRUE/FALSE ========
+function TrueFalseExercise({ data, onScore }) {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+
+  const correctCount = () =>
+    data.statements.filter(s => answers[s.id] === s.correct).length;
+
+  const check = () => {
+    const score = Math.round((correctCount() / data.statements.length) * data.maxPoints);
+    setChecked(true);
+    onScore(data.title, score);
+  };
+
+  const reset = () => { setAnswers({}); setChecked(false); onScore(data.title, null); };
+
+  const score = checked
+    ? Math.round((correctCount() / data.statements.length) * data.maxPoints)
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 md:p-7 fade-in">
+      <SectionHeader
+        number={data.title.split(".")[0]}
+        title={data.title.replace(/^\d+\.\s*/, "")}
+        subtitle={`${data.maxPoints} stig · Merktu við rétt eða rangt`}
+      />
+
+      <div className="space-y-2">
+        {data.statements.map(s => {
+          const userAns = answers[s.id];
+          const isCorrect = checked && userAns === s.correct;
+          const isWrong   = checked && userAns !== undefined && userAns !== s.correct;
+          const cls = isCorrect
+            ? "answer-option opt-correct opt-disabled"
+            : isWrong
+            ? "answer-option opt-incorrect opt-disabled"
+            : "answer-option";
+          return (
+            <div key={s.id} className={`p-3 rounded-lg ${cls}`}>
+              <div className="flex items-start gap-3">
+                <span className="font-medium text-gray-700 min-w-[1.5rem] font-light">{s.id}.</span>
+                <span className="flex-1 font-light">{s.text}</span>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => !checked && setAnswers({ ...answers, [s.id]: true })}
+                    disabled={checked}
+                    className={`px-3 py-1 rounded-lg border-2 font-light text-sm transition
+                      ${userAns === true
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"}
+                      ${checked ? "cursor-default" : ""}`}
+                  >Rétt</button>
+                  <button
+                    onClick={() => !checked && setAnswers({ ...answers, [s.id]: false })}
+                    disabled={checked}
+                    className={`px-3 py-1 rounded-lg border-2 font-light text-sm transition
+                      ${userAns === false
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"}
+                      ${checked ? "cursor-default" : ""}`}
+                  >Rangt</button>
+                </div>
+                {checked && (
+                  <span className="text-base ml-1">{isCorrect ? "✓" : isWrong ? "✗" : "⚪"}</span>
+                )}
+              </div>
+              {checked && !isCorrect && (
+                <p className="text-sm text-green-700 mt-1.5 ml-8 font-light">
+                  Rétt svar: <span className="font-medium">{s.correct ? "Rétt" : "Rangt"}</span>
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mt-5">
+        {!checked ? (
+          <button onClick={check}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+              transition-colors font-light">
+            Athuga svör
+          </button>
+        ) : (
+          <button onClick={reset}
+            className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+              hover:bg-gray-50 transition-colors font-light text-sm">
+            Reyna aftur
+          </button>
+        )}
+        <FeedbackBadge score={score} max={data.maxPoints} />
+      </div>
+    </div>
+  );
+}
+
+// ======== READING COMPREHENSION ========
+function ReadingExercise({ data, onScore }) {
+  const [answers, setAnswers] = useState({});
+  const [shown, setShown]     = useState({});
+
+  const allShown = Object.keys(shown).length === data.questions.length;
+
+  const revealAll = () => {
+    const all = {};
+    data.questions.forEach(q => { all[q.id] = true; });
+    setShown(all);
+    onScore(data.title, data.maxPoints);
+  };
+
+  const reset = () => { setShown({}); setAnswers({}); onScore(data.title, null); };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 md:p-7 fade-in">
+      <SectionHeader
+        number={data.title.split(".")[0]}
+        title={data.title.replace(/^\d+\.\s*/, "")}
+        subtitle={`${data.maxPoints} stig · Svaraðu með eigin orðum`}
+      />
+
+      {/* Reading text */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-5">
+        <h4 className="text-lg font-medium text-blue-900 mb-3">{data.subtitle}</h4>
+        {data.paragraphs.map((p, i) => (
+          <p key={i} className="text-gray-800 font-light leading-relaxed mb-3 last:mb-0">{p}</p>
+        ))}
+      </div>
+
+      {/* Note */}
+      <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-5">
+        <p className="text-sm font-light text-blue-900">
+          <strong className="font-medium">Athugið:</strong> Þetta eru opnar spurningar. Berðu saman
+          svarið þitt við dæmisvarið — svarið þitt má vera öðruvísi orðað en á að innihalda sömu
+          lykilupplýsingar.
+        </p>
+      </div>
+
+      <p className="font-medium text-gray-800 mb-3">Spurningar:</p>
+      <div className="space-y-4">
+        {data.questions.map(q => (
+          <div key={q.id} className="answer-option p-4 rounded-lg">
+            <p className="font-light text-gray-900 mb-2">
+              <span className="font-medium text-blue-600">{String.fromCharCode(96 + q.id)})</span>{" "}
+              {q.q}
+            </p>
+            <textarea
+              value={answers[q.id] || ""}
+              onChange={e => setAnswers({ ...answers, [q.id]: e.target.value })}
+              rows={2}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+                focus:outline-none focus:border-blue-400 font-light resize-none"
+              placeholder="Skrifaðu svarið þitt hér..."
+            />
+            {shown[q.id] ? (
+              <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg fade-in">
+                <p className="text-xs font-medium text-green-800 uppercase tracking-wide mb-1">
+                  Dæmisvar
+                </p>
+                <p className="text-gray-800 font-light">{q.example}</p>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShown({ ...shown, [q.id]: true })}
+                className="mt-2 text-sm bg-amber-50 hover:bg-amber-100 text-amber-900
+                  font-light px-3 py-1.5 rounded-lg border border-amber-300 transition">
+                💡 Sýna dæmisvar
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mt-5">
+        {!allShown ? (
+          <button onClick={revealAll}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+              transition-colors font-light">
+            Sýna öll dæmisvör
+          </button>
+        ) : (
+          <button onClick={reset}
+            className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+              hover:bg-gray-50 transition-colors font-light text-sm">
+            Reyna aftur
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ======== MULTIPLE CHOICE ========
+function MultipleChoiceExercise({ data, onScore }) {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+
+  const shuffledQuestions = useMemo(() =>
+    data.questions.map(q => ({ ...q, options: shuffle(q.options) }))
+  , []);
+
+  const correctCount = () =>
+    data.questions.filter(q => answers[q.id] === q.correct).length;
+
+  const check = () => {
+    const score = Math.round((correctCount() / data.questions.length) * data.maxPoints);
+    setChecked(true);
+    onScore(data.title, score);
+  };
+
+  const reset = () => { setAnswers({}); setChecked(false); onScore(data.title, null); };
+
+  const score = checked
+    ? Math.round((correctCount() / data.questions.length) * data.maxPoints)
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 md:p-7 fade-in">
+      <SectionHeader
+        number={data.title.split(".")[0]}
+        title={data.title.replace(/^\d+\.\s*/, "")}
+        subtitle={`${data.maxPoints} stig · Veldu rétt svar`}
+      />
+
+      <div className="space-y-4">
+        {shuffledQuestions.map(q => {
+          const userAns   = answers[q.id];
+          const isCorrect = checked && userAns === q.correct;
+          const isWrong   = checked && userAns && userAns !== q.correct;
+          const wrapCls = isCorrect
+            ? "answer-option opt-correct opt-disabled"
+            : isWrong
+            ? "answer-option opt-incorrect opt-disabled"
+            : "answer-option";
+          return (
+            <div key={q.id} className={`p-4 rounded-lg ${wrapCls}`}>
+              <p className="font-light text-gray-900 mb-2">
+                <span className="font-medium text-blue-600">{q.id}.</span> {q.q}
+              </p>
+              <div className="space-y-1.5">
+                {q.options.map(opt => {
+                  const isThisCorrect = checked && opt.letter === q.correct;
+                  const isThisChosen  = userAns === opt.letter;
+                  const optCls = checked
+                    ? isThisCorrect
+                      ? "opt-correct opt-disabled"
+                      : isThisChosen
+                      ? "opt-incorrect opt-disabled"
+                      : "opt-disabled"
+                    : isThisChosen
+                    ? "opt-selected"
+                    : "";
+                  return (
+                    <label key={opt.letter}
+                      className={`flex items-center gap-2.5 p-2 rounded-lg answer-option
+                        ${optCls} ${checked ? "" : "cursor-pointer"}`}
+                      onClick={() => !checked && setAnswers({ ...answers, [q.id]: opt.letter })}
+                    >
+                      <span className="font-medium text-gray-700 min-w-[1.5rem] font-light">
+                        {opt.letter}.
+                      </span>
+                      <span className="font-light">{opt.text}</span>
+                      {checked && isThisCorrect && <span className="ml-auto">✓</span>}
+                      {checked && isThisChosen && !isThisCorrect && <span className="ml-auto">✗</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mt-5">
+        {!checked ? (
+          <button onClick={check}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+              transition-colors font-light">
+            Athuga svör
+          </button>
+        ) : (
+          <button onClick={reset}
+            className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+              hover:bg-gray-50 transition-colors font-light text-sm">
+            Reyna aftur
+          </button>
+        )}
+        <FeedbackBadge score={score} max={data.maxPoints} />
+      </div>
+    </div>
+  );
+}
+
+// ======== MAIN APP ========
+const TABS = [
+  { id: "vocab",   label: "Orðaforði",     icon: "🔤" },
+  { id: "match",   label: "Pörun",         icon: "🔗" },
+  { id: "fill",    label: "Eyður",         icon: "✏️" },
+  { id: "tf",      label: "Rétt/Rangt",    icon: "✓"  },
+  { id: "reading", label: "Lesskilningur", icon: "📖" },
+  { id: "mc",      label: "Fjölval",       icon: "⭕" },
+];
+
+const SECTION_TITLES = [EX1, EX2, EX3, EX4, EX5, EX6, EX7, EX8].map(e => e.title);
+const MAX_TOTAL = 100;
+
+function App() {
+  const [activeTab, setActiveTab] = useState("vocab");
+  const [scores, setScores]       = useState({});
+
+  const setScore = (title, score) => {
+    setScores(prev => {
+      const next = { ...prev };
+      if (score === null) delete next[title];
+      else next[title] = score;
+      return next;
+    });
+  };
+
+  const totalScore      = Object.values(scores).reduce((a, b) => a + b, 0);
+  const pct             = Math.min(100, Math.round((totalScore / MAX_TOTAL) * 100));
+  const sectionsCompleted = Object.keys(scores).length;
+
+  // Which tabs are "done" (all their exercises scored)
+  const tabDone = {
+    vocab:   scores[EX1.title] !== undefined && scores[EX2.title] !== undefined,
+    match:   scores[EX3.title] !== undefined && scores[EX4.title] !== undefined,
+    fill:    scores[EX5.title] !== undefined,
+    tf:      scores[EX6.title] !== undefined,
+    reading: scores[EX7.title] !== undefined,
+    mc:      scores[EX8.title] !== undefined,
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-2">
+            📝 Æfingapróf: Út og suður
+          </h1>
+          <p className="text-gray-500 text-sm font-light">
+            Kaflar 1–7: Áhugamál · Líkamsrækt · Björgunarsveitir · Jól · Páskar · Sumardagurinn fyrsti · Dívalí
+          </p>
+        </div>
+      </header>
+
+      {/* Instruction box */}
+      <div className="max-w-4xl mx-auto px-6 pt-6">
+        <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-2">
+          <p className="text-sm font-light text-blue-900">
+            ✏️ Farðu í gegnum alla flipana · Fáðu endurgjöf strax · Æfðu þig fyrir lokaprófið
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-4xl mx-auto px-2 py-0 flex overflow-x-auto">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`tab-btn shrink-0 px-3 md:px-5 py-3 text-sm md:text-base font-light
+                text-gray-600 whitespace-nowrap
+                ${activeTab === t.id ? "tab-active" : ""}`}
+            >
+              <span className="mr-1">{t.icon}</span>
+              {t.label}
+              {tabDone[t.id] && <span className="ml-1 text-blue-600">✓</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main content */}
+      <main className="max-w-4xl mx-auto px-4 py-6 space-y-5 pb-28">
+        {activeTab === "vocab" && (
+          <>
+            <MatchingExercise data={EX1} onScore={setScore} rightLabel="Skýringar" type="word" />
+            <MatchingExercise data={EX2} onScore={setScore} rightLabel="Orð B" type="word" />
+          </>
+        )}
+        {activeTab === "match" && (
+          <>
+            <MatchingExercise data={EX3} onScore={setScore} rightLabel="Endingar setninga" type="sentence" />
+            <MatchingExercise data={EX4} onScore={setScore} rightLabel="Dálkur B" type="word" />
+          </>
+        )}
+        {activeTab === "fill"    && <FillExercise           data={EX5} onScore={setScore} />}
+        {activeTab === "tf"      && <TrueFalseExercise      data={EX6} onScore={setScore} />}
+        {activeTab === "reading" && <ReadingExercise        data={EX7} onScore={setScore} />}
+        {activeTab === "mc"      && <MultipleChoiceExercise data={EX8} onScore={setScore} />}
+      </main>
+
+      {/* Fixed progress footer */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+        <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
+          {TABS.map(t => (
+            <button key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex-1 py-2 rounded-lg text-sm font-light transition-colors
+                ${tabDone[t.id]
+                  ? "bg-blue-600 text-white"
+                  : activeTab === t.id
+                  ? "bg-blue-50 text-blue-600 border border-blue-200"
+                  : "bg-gray-100 text-gray-500"}`}>
+              {tabDone[t.id] ? "✓ " : ""}{t.label}
+            </button>
+          ))}
+        </div>
+        {/* Score row */}
+        <div className="max-w-4xl mx-auto px-6 pb-3 flex items-center justify-between gap-4">
+          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-600 transition-all duration-500 rounded-full"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-sm font-light text-gray-600 whitespace-nowrap">
+            <span className="font-medium text-blue-700">{totalScore}</span> / {MAX_TOTAL} stig
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
