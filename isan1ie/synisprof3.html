@@ -363,7 +363,7 @@ function showFinal(){
 // ── UTILITIES ────────────────────────────────────────────────
 function norm(s){return s.trim().toLowerCase().replace(/[.,!?]/g,'');}
 async function callAI(messages,max_tokens=400){
-  const r=await fetch('/.netlify/functions/openai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,max_tokens,model:'gpt-4o',temperature:0.2})});
+  const r=await fetch('/.netlify/functions/openai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,max_tokens,model:'gpt-4o-mini',temperature:0.2})});
   const d=await r.json();if(!r.ok||d.error)throw new Error(d.error);return d.content;
 }
 function setLoading(id,on){const b=document.getElementById(id);if(on){b.disabled=true;b.textContent='Athuga...';}else{b.disabled=false;b.textContent='Athuga svör';}}
@@ -381,7 +381,8 @@ Rétt: heitur → heitari → heitastur. stór → stærri → stærstur.
 Gefðu 1 stig fyrir hvert rétt (hámark 4), skalaðu í 8 (x2).
 SKILAÐU EINUNGIS JSON: {"score_8":N,"feedback":"stutt endurgjöf á íslensku – sýndu rétt svar ef rangt"}`;
     const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(answers)}]);
-    const obj=JSON.parse(res);const score=Math.min(8,Math.max(0,obj.score_8||0));
+    const clean=res.replace(/```json\s*/g,'').replace(/```/g,'').trim();
+    const obj=JSON.parse(clean);const score=Math.min(8,Math.max(0,obj.score_8||0));
     showFb('sec1-fb',`<div class="${score>=6?'fb-ok':'fb-bad'}"><p class="font-normal mb-1">Einkunn: ${score}/8 stig</p><p class="text-sm font-light">${obj.feedback}</p></div>`);
     markDone(1,score);
   }catch(e){showFb('sec1-fb','<p class="text-red-600 text-sm">Villa. Reyndu aftur.</p>');setLoading('btn1',false);}
@@ -502,7 +503,8 @@ Orð 2: Léttur – rétt andheiti: þungur (eða önnur lögmæt íslensk andhe
 Gefðu 1 stig fyrir hvert rétt. Ef rangt, sýndu rétt svar.
 SKILAÐU EINUNGIS JSON: {"score":N,"feedback_1":"endurgjöf um orð 1","feedback_2":"endurgjöf um orð 2"}`;
     const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(pairs)}]);
-    const obj=JSON.parse(res);const score=Math.min(2,Math.max(0,obj.score||0));
+    const clean=res.replace(/```json\s*/g,'').replace(/```/g,'').trim();
+    const obj=JSON.parse(clean);const score=Math.min(2,Math.max(0,obj.score||0));
     const pts=score===2?5:score===1?2:0;
     showFb('sec5-fb',`<div class="${score===2?'fb-ok':'fb-bad'}"><p class="font-normal mb-2">Einkunn: ${pts}/5 stig</p><p class="text-sm font-light mb-1"><strong>1. Heitur:</strong> ${obj.feedback_1}</p><p class="text-sm font-light"><strong>2. Léttur:</strong> ${obj.feedback_2}</p></div>`);
     markDone(5,pts);
@@ -522,7 +524,8 @@ TEXTI: Konan frá Selfossi. Á heima á Akranesi. Vinnur í matvöruverslun. Þr
 Gefðu 1 stig fyrir hvert rétt svar (hámark 7). Hunsa smávægilegar málfræðivillur.
 SKILAÐU EINUNGIS JSON: {"score":N,"feedback":"stutt endurgjöf á íslensku"}`;
     const res=await callAI([{role:'system',content:sys},{role:'user',content:JSON.stringify(answers)}],500);
-    const obj=JSON.parse(res);const score=Math.min(7,Math.max(0,obj.score||0));const pts=Math.round(score/7*21);
+    const clean=res.replace(/```json\s*/g,'').replace(/```/g,'').trim();
+    const obj=JSON.parse(clean);const score=Math.min(7,Math.max(0,obj.score||0));const pts=Math.round(score/7*21);
     showFb('sec6-fb',`<div class="${score>=6?'fb-ok':'fb-bad'}"><p class="font-normal mb-1">Einkunn: ${pts}/21 stig (${score}/7 rétt)</p><p class="text-sm font-light">${obj.feedback}</p></div>`);
     markDone(6,pts);
   }catch(e){showFb('sec6-fb','<p class="text-red-600 text-sm">Villa. Reyndu aftur.</p>');setLoading('btn6',false);}
