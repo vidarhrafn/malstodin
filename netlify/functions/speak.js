@@ -3,44 +3,43 @@ exports.handler = async (event) => {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    // Athuga að Azure API lykill og region séu til staðar
     if (!process.env.AZURE_SPEECH_KEY) {
-        return { 
-            statusCode: 500, 
-            body: JSON.stringify({ error: "AZURE_SPEECH_KEY vantar í environment variables." }) 
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: "AZURE_SPEECH_KEY vantar í environment variables." })
         };
     }
+
     if (!process.env.AZURE_SPEECH_REGION) {
-        return { 
-            statusCode: 500, 
-            body: JSON.stringify({ error: "AZURE_SPEECH_REGION vantar í environment variables." }) 
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: "AZURE_SPEECH_REGION vantar í environment variables." })
         };
     }
 
     try {
         const { text_to_speak, voice, rate } = JSON.parse(event.body);
-        
+
         if (!text_to_speak) {
-            return { 
-                statusCode: 400, 
-                body: JSON.stringify({ error: "text_to_speak vantar í body." }) 
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: "text_to_speak vantar í body." })
             };
         }
-        
+
         // Nota Guðrúnu sem default ef engin rödd er valin
         const selectedVoice = voice || 'is-IS-GudrunNeural';
-        
+
         // Nota venjulegan hraða ef ekkert rate er sent
         const selectedRate = rate || '1.0';
-        
+
         const AZURE_KEY = process.env.AZURE_SPEECH_KEY;
         const AZURE_REGION = process.env.AZURE_SPEECH_REGION;
-        
+
         // SSML með valinni rödd og hraða
         let ssml;
-        
+
         if (selectedRate === '1.0') {
-            // Venjulegur hraði - engin prosody tag
             ssml = `
                 <speak version='1.0' xml:lang='is-IS'>
                     <voice xml:lang='is-IS' name='${selectedVoice}'>
@@ -49,7 +48,6 @@ exports.handler = async (event) => {
                 </speak>
             `;
         } else {
-            // Annar hraði - bæta við prosody tag
             ssml = `
                 <speak version='1.0' xml:lang='is-IS'>
                     <voice xml:lang='is-IS' name='${selectedVoice}'>
@@ -81,20 +79,21 @@ exports.handler = async (event) => {
             console.error("Azure TTS API villa:", errorBody);
             return {
                 statusCode: azureResponse.status,
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     error: `Azure TTS API villa: ${azureResponse.status}`,
-                    details: errorBody 
+                    details: errorBody
                 })
             };
         }
 
-        // Fáum hljóðgögnin sem buffer
-        const audioBuffer = await azureResponse.buffer();
+        // Leiðrétt: arrayBuffer() í stað buffer() (node-fetch v3)
+        const arrayBuffer = await azureResponse.arrayBuffer();
+        const audioBuffer = Buffer.from(arrayBuffer);
         const audioBase64 = audioBuffer.toString('base64');
 
         return {
             statusCode: 200,
-            headers: { 
+            headers: {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Headers": "Content-Type"
