@@ -3,109 +3,80 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const AREAS = [
-    { name: 'København K', slug: 'k%C3%B8benhavn-k' },
-    { name: 'Vesterbro',   slug: 'vesterbro' },
-    { name: 'Nørrebro',    slug: 'n%C3%B8rrebro' },
-    { name: 'Frederiksberg', slug: 'frederiksberg' },
-    { name: 'Christianshavn', slug: 'christianshavn' },
-  ];
-
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept-Language': 'da-DK,da;q=0.9',
-    'Accept': 'text/html,application/xhtml+xml',
-  };
-
-  const allListings = [];
-
-  for (const area of AREAS) {
-    const url = `https://www.boligportal.dk/lejligheder/k%C3%B8benhavn/2-3-v%C3%A6relser/${area.slug}/?furnished=1`;
-
-    try {
-      const resp = await fetch(url, { headers });
-      if (!resp.ok) continue;
-      const html = await resp.text();
-
-      // Extract listings from anchor tags in the search results
-      // Pattern: /lejligheder/kobenhavn/[size]m2-[rooms]-vaer-id-[id]
-      const linkRegex = /href="(\/lejligheder\/k%C3%B8benhavn\/[^"]+id-\d+)"/g;
-      const titleRegex = /(\d+)\s+v\u00e6r\.\s+lejlighed\s+p\u00e5\s+(\d+)\s+m\u00b2[^<]*?([\w\s]+),\s+([^<\n]+?)\s+([\d.]+)\s+kr\./g;
-
-      // More robust: parse the text content for listing data
-      // Each listing appears as: "X vær. lejlighed på Y m² København K, [street] [price] kr. [date]"
-      const listingPattern = /(\d+)\s+v[æa]r\.\s+lejlighed\s+p[åa]\s+(\d+)\s+m[²2]\s*(K[øo]benhavn\s+[A-ZÆØÅ][\w\s]*),\s+([^\d\n]+?)\s*([\d.]+)\s+kr\./g;
-
-      let match;
-      const seenIds = new Set();
-
-      // Get all href links for this area
-      const hrefMatches = [...html.matchAll(/href="(\/lejligheder\/k[^"]+id-(\d+))"/g)];
-
-      // Get text blocks containing listing info
-      // Strip HTML tags for text parsing
-      const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-
-      // Match listings: "X vær. lejlighed på Y m²AreaName, Street Price kr. Date"
-      const pattern = /(\d+)\s+v[æa]r\.\s+lejlighed\s+p[åa]\s+(\d+)\s+m[²2](K[øo]benhavn\s+[A-ZÆØÅ][^,]*),\s+([^0-9]+?)([\d.]+)\s+kr\.([\d.\s]+(?:timer?\s+siden|dag[e]?\s+siden|I g[åa]r|\d+\.\s+\w+))?/g;
-
-      const matches = [...stripped.matchAll(pattern)];
-
-      matches.forEach((m, idx) => {
-        const rooms = parseInt(m[1]);
-        const size = parseInt(m[2]);
-        const areaName = m[3].trim();
-        const street = m[4].trim();
-        const priceStr = m[5].replace(/\./g, '');
-        const price = parseInt(priceStr);
-        const dateRaw = m[6] ? m[6].trim() : '';
-
-        // Get corresponding URL
-        const hrefMatch = hrefMatches[idx];
-        const listingUrl = hrefMatch
-          ? `https://www.boligportal.dk${hrefMatch[1]}`
-          : url;
-        const id = hrefMatch ? hrefMatch[2] : `${area.slug}-${idx}`;
-
-        if (seenIds.has(id)) return;
-        seenIds.add(id);
-
-        allListings.push({
-          id,
-          rooms,
-          size,
-          area: areaName || area.name,
-          street,
-          price,
-          date: dateRaw,
-          url: listingUrl,
-          furnished: true,
-        });
-      });
-
-    } catch (e) {
-      console.error(`Error fetching ${area.name}:`, e.message);
-    }
+  const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+  if (!PERPLEXITY_API_KEY) {
+    return { statusCode: 500, body: JSON.stringify({ error: 'PERPLEXITY_API_KEY not set' }) };
   }
 
-  // Sort by newest (those with "timer siden" or "dag siden" first), then by price
-  allListings.sort((a, b) => {
-    const aNew = a.date.includes('timer') || a.date.includes('I går') ? 0 : 1;
-    const bNew = b.date.includes('timer') || b.date.includes('I går') ? 0 : 1;
-    if (aNew !== bNew) return aNew - bNew;
-    return a.price - b.price;
-  });
+  const prompt = `Search boligportal.dk right now for furnished apartment listings (møbleret) in Copenhagen with 2-3 rooms in these areas: København K, Vesterbro, Nørrebro, Frederiksberg, Christianshavn.
 
-  return {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=1800', // cache 30 min
-    },
-    body: JSON.stringify({
-      listings: allListings,
-      count: allListings.length,
-      fetched: new Date().toISOString(),
-    }),
-  };
+Search these URLs and extract real current listings:
+- https://www.boligportal.dk/lejligheder/k%C3%B8benhavn/2-3-v%C3%A6relser/k%C3%B8benhavn-k/?furnished=1
+- https://www.boligportal.dk/lejligheder/k%C3%B8benhavn/2-3-v%C3%A6relser/vesterbro/?furnished=1
+- https://www.boligportal.dk/lejligheder/k%C3%B8benhavn/2-3-v%C3%A6relser/n%C3%B8rrebro/?furnished=1
+- https://www.boligportal.dk/lejligheder/k%C3%B8benhavn/2-3-v%C3%A6relser/frederiksberg/?furnished=1
+- https://www.boligportal.dk/lejligheder/k%C3%B8benhavn/2-3-v%C3%A6relser/christianshavn/?furnished=1
+
+Return ONLY a valid JSON array, no markdown, no explanation:
+[{"title":"...","street":"...","area":"København K","rooms":2,"size":70,"price":14000,"date":"I dag","url":"https://www.boligportal.dk/...","available_from":""}]
+
+Rules:
+- Only include real listings you can verify from the URLs above
+- Include up to 20 listings total
+- All must be furnished (møbleret)
+- price is monthly rent in DKK as integer
+- size is square meters as integer
+- url must be the exact boligportal.dk URL for that listing`;
+
+  try {
+    const resp = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'sonar',
+        messages: [
+          { role: 'system', content: 'You are a web scraping assistant. Search the provided URLs and return only valid JSON with real data. Never invent listings.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.1,
+        return_citations: true
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      return { statusCode: resp.status, body: JSON.stringify({ error: err.error?.message || `HTTP ${resp.status}` }) };
+    }
+
+    const data = await resp.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    const start = raw.indexOf('[');
+    const end = raw.lastIndexOf(']');
+
+    if (start === -1 || end === -1) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'No JSON in response', raw: raw.slice(0, 400) }) };
+    }
+
+    const listings = JSON.parse(raw.slice(start, end + 1));
+
+    listings.sort((a, b) => {
+      const aNew = ['dag', 'timer', 'I dag', 'I går'].some(k => (a.date || '').includes(k)) ? 0 : 1;
+      const bNew = ['dag', 'timer', 'I dag', 'I går'].some(k => (b.date || '').includes(k)) ? 0 : 1;
+      if (aNew !== bNew) return aNew - bNew;
+      return a.price - b.price;
+    });
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+      body: JSON.stringify({ listings, count: listings.length, fetched: new Date().toISOString() })
+    };
+
+  } catch (err) {
+    return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Unknown error' }) };
+  }
 };
