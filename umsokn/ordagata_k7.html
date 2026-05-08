@@ -149,14 +149,19 @@
       const current = WORDS[idx];
       const target  = current.word.toLowerCase();
 
-      // Einbeittu á input þegar orð breytist
+      // Einbeittu á input og spila vísbendingu þegar orð breytist
       useEffect(() => {
         setInput('');
         setSubmitted(false);
         setCorrect(false);
         setAttempts(0);
         setRevealed(false);
-        setTimeout(() => inputRef.current?.focus(), 100);
+        setTimeout(() => {
+          inputRef.current?.focus();
+          // Spila vísbendingu sjálfkrafa eftir stuttan tíma
+          setSpeaking(true);
+          playAudio(WORDS[idx].clue, () => setSpeaking(false));
+        }, 400);
       }, [idx]);
 
       const handleSpeak = useCallback(async (e) => {
@@ -308,26 +313,29 @@
             {/* Gátukort */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 fade-in">
 
-              {/* Vísbending + hljóðtakki */}
-              <div className="mb-8">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <p className="text-gray-700 font-light text-lg leading-relaxed flex-1">
-                    {current.clue}
-                  </p>
-                  <button
-                    onClick={handleSpeak}
-                    className={`flex-shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-all
-                      ${speaking
-                        ? 'bg-green-50 text-green-700 border-green-200'
-                        : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
-                  >
-                    <span className="opacity-70">🎧</span>
-                    <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
-                  </button>
-                </div>
+              {/* Hljóðtakki – vísbending bara í hljóði */}
+              <div className="mb-8 text-center">
+                <button
+                  onClick={handleSpeak}
+                  className={`inline-flex items-center gap-3 px-6 py-4 rounded-2xl border-2 transition-all text-base
+                    ${speaking
+                      ? 'bg-green-50 text-green-700 border-green-300'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300'}`}
+                >
+                  <span className="text-2xl">🎧</span>
+                  <span className="font-light">{speaking ? 'Hlustar...' : 'Hlusta á vísbendingu'}</span>
+                  <span className={`text-green-600 text-xl ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+                </button>
 
-                {/* Stafafjöldi hint */}
-                <p className="text-xs text-gray-400 font-light">
+                {/* Vísbendingin birtist eftir 3 rangar tilraunir */}
+                {attempts >= 3 && !correct && (
+                  <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-700 font-light text-sm fade-in">
+                    💡 {current.clue}
+                  </div>
+                )}
+
+                {/* Stafafjöldi */}
+                <p className="text-xs text-gray-400 font-light mt-4">
                   {target.length} stafir
                   {attempts > 0 && !correct && !revealed && (
                     <span className="ml-2 text-amber-500">· {attempts} {attempts === 1 ? 'tilraun' : 'tilraunir'}</span>
