@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🃏 Flashcort – Mat og innkaup</title>
+  <title>🧩 Orðagáta – Mat og innkaup</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -20,73 +20,77 @@
     }
     .fade-in { animation: fadeIn 0.4s ease both; }
 
-    .card-container {
-      perspective: 1000px;
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-6px); }
+      40%       { transform: translateX(6px); }
+      60%       { transform: translateX(-4px); }
+      80%       { transform: translateX(4px); }
     }
-    .card-inner {
-      position: relative;
-      width: 100%;
-      transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
-      transform-style: preserve-3d;
+    .shake { animation: shake 0.4s ease both; }
+
+    @keyframes pop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.08); }
+      100% { transform: scale(1); }
     }
-    .card-inner.flipped {
-      transform: rotateY(180deg);
+    .pop { animation: pop 0.3s ease both; }
+
+    .letter-box {
+      width: 42px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 1.25rem;
+      font-weight: 400;
+      transition: all 0.15s;
+      border: 2px solid;
+      user-select: none;
     }
-    .card-face {
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
-    .card-back {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      transform: rotateY(180deg);
-    }
-    .lang-btn {
-      transition: all 0.2s;
-      cursor: pointer;
-    }
-    .lang-btn.selected {
-      background: #2563eb;
-      color: white;
-      border-color: #2563eb;
-    }
+    .letter-box.empty    { border-color: #d1d5db; background: #f9fafb; color: transparent; }
+    .letter-box.filled   { border-color: #93c5fd; background: #eff6ff; color: #1e40af; }
+    .letter-box.correct  { border-color: #86efac; background: #f0fdf4; color: #166534; }
+    .letter-box.wrong    { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useCallback } = React;
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
     // --- Orðalisti ---
-    const CARDS = [
-      { is: "deig (hk)",          hint: "baka eða gera pizzu eða brauð" },
-      { is: "rifinn ostur (kk)",   hint: "ostur sem er skorinn í litla bita" },
-      { is: "álegg (hk)",          hint: "matur sem fer ofan á pizzu eða brauð" },
-      { is: "að fletja",           hint: "að þrýsta deigi út með höndunum eða kökukefli" },
-      { is: "að aðstoða",          hint: "að hjálpa einhverjum" },
-      { is: "grænmetisæta (kvk)",  hint: "maður sem borðar ekki kjöt" },
-      { is: "meðlæti (hk)",        hint: "matur sem fylgir með aðalréttinum, t.d. hrísgrjón" },
-      { is: "innkaupalisti (kk)",  hint: "listi yfir það sem þarf að kaupa í búð" },
-      { is: "óreganó (hk)",        hint: "krydd sem oft er notað á pizzu" },
-      { is: "að gleyma",           hint: "að muna ekki eftir einhverju" },
-      { is: "að labba",            hint: "að ganga hægt og rólega" },
-      { is: "kókosmjólk (kvk)",    hint: "mjólk úr kókoshnetu, notuð í matargerð" },
-    ];
-
-    const LANGUAGES = [
-      { code: "en", label: "English",    flag: "🇬🇧" },
-      { code: "pl", label: "Polski",     flag: "🇵🇱" },
-      { code: "uk", label: "Українська", flag: "🇺🇦" },
-      { code: "es", label: "Español",    flag: "🇪🇸" },
-      { code: "pt", label: "Português",  flag: "🇵🇹" },
-      { code: "ar", label: "العربية",    flag: "🇸🇦" },
-      { code: "fa", label: "فارسی",      flag: "🇮🇷" },
-      { code: "th", label: "ไทย",        flag: "🇹🇭" },
-      { code: "tl", label: "Filipino",   flag: "🇵🇭" },
-      { code: "de", label: "Deutsch",    flag: "🇩🇪" },
-      { code: "fr", label: "Français",   flag: "🇫🇷" },
-      { code: "zh", label: "中文",        flag: "🇨🇳" },
+    const WORDS = [
+      {
+        word: "deig",
+        clue: "Blanda af hveiti og vatni til að búa til pizzubotn eða brauð."
+      },
+      {
+        word: "grænmetisæta",
+        clue: "Þessi manneskja borðar ekki kjöt."
+      },
+      {
+        word: "innkaupalisti",
+        clue: "Þetta er listi yfir það sem þarf að kaupa í búð."
+      },
+      {
+        word: "óreganó",
+        clue: "Þetta er krydd sem er oft notað á pizzu."
+      },
+      {
+        word: "meðlæti",
+        clue: "Þetta fylgir með aðalréttinum, til dæmis hrísgrjón eða salat."
+      },
+      {
+        word: "kókosmjólk",
+        clue: "Þetta er vökvi sem kemur úr kókoshnetu."
+      },
+      {
+        word: "álegg",
+        clue: "Þetta er matur sem fer ofan á pizzu eða brauð."
+      },
     ];
 
     // --- Azure TTS ---
@@ -110,114 +114,128 @@
       }
     }
 
-    // --- OpenAI þýðing ---
-    async function fetchTranslation(word, targetLang) {
-      const r = await fetch('/.netlify/functions/openai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          temperature: 0.1,
-          max_tokens: 60,
-          messages: [
-            {
-              role: 'system',
-              content: `Þýðu þetta íslenska orð yfir á ${targetLang}. Gefðu EINUNGIS þýðinguna, ekkert annað. Ef orðið er sögn (byrjar á "að") skaltu þýða sögnina einni í ${targetLang}. Ef orðið hefur kynsskírteini (kk/kvk/hk) skaltu sleppa því í þýðingunni.`
-            },
-            { role: 'user', content: word }
-          ]
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
-      return data.content.trim();
+    // Normalize – hunsa séríslenska stafi við samanburð
+    function normalize(s) {
+      return s.toLowerCase()
+        .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i')
+        .replace(/ó/g,'o').replace(/ú/g,'u').replace(/ý/g,'y')
+        .replace(/ð/g,'d').replace(/þ/g,'th').replace(/æ/g,'ae')
+        .replace(/ö/g,'o');
     }
 
-    // --- Shuffle ---
-    function shuffle(arr) {
-      const a = [...arr];
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
+    // Stafir í orði → birgðir
+    function letterCounts(word) {
+      const counts = {};
+      for (const ch of word.toLowerCase()) {
+        counts[ch] = (counts[ch] || 0) + 1;
       }
-      return a;
+      return counts;
     }
 
-    // --- Aðalforritið ---
     const App = () => {
-      const [lang, setLang] = useState(null);
-      const [cards, setCards] = useState(() => shuffle(CARDS));
-      const [idx, setIdx] = useState(0);
-      const [flipped, setFlipped] = useState(false);
+      const [idx, setIdx]           = useState(0);
+      const [input, setInput]       = useState('');
+      const [submitted, setSubmitted] = useState(false);
+      const [correct, setCorrect]   = useState(false);
+      const [attempts, setAttempts] = useState(0);
+      const [revealed, setRevealed] = useState(false);
       const [speaking, setSpeaking] = useState(false);
-      const [translation, setTranslation] = useState(null);
-      const [translating, setTranslating] = useState(false);
-      const [seen, setSeen] = useState(new Set());
-      const [done, setDone] = useState(false);
+      const [shakeKey, setShakeKey] = useState(0);
+      const [popKey, setPopKey]     = useState(0);
+      const [scores, setScores]     = useState([]); // {word, got} per orð
+      const [done, setDone]         = useState(false);
+      const inputRef = useRef(null);
 
-      const current = cards[idx];
+      const current = WORDS[idx];
+      const target  = current.word.toLowerCase();
 
-      const handleSpeak = useCallback(async (e) => {
-        e.stopPropagation();
-        if (speaking) return;
-        setSpeaking(true);
-        // Hreinsum (kk/kvk/hk) og "að" úr TTS texta
-        const clean = current.is
-          .replace(/\s*\((kk|kvk|hk)\)\s*/g, '')
-          .trim();
-        await playAudio(clean, () => setSpeaking(false));
-      }, [speaking, current]);
-
-      const handleFlip = useCallback(async () => {
-        if (!flipped) {
-          setFlipped(true);
-          setSeen(prev => new Set([...prev, idx]));
-          // Sækja þýðingu þegar kort er snúið
-          if (lang && !translation) {
-            setTranslating(true);
-            try {
-              const t = await fetchTranslation(current.is, lang.label);
-              setTranslation(t);
-            } catch (e) {
-              setTranslation('—');
-            } finally {
-              setTranslating(false);
-            }
-          }
-        } else {
-          setFlipped(false);
-        }
-      }, [flipped, lang, translation, current, idx]);
-
-      const goNext = useCallback(() => {
-        if (idx + 1 >= cards.length) {
-          setDone(true);
-        } else {
-          setIdx(idx + 1);
-          setFlipped(false);
-          setTranslation(null);
-        }
-      }, [idx, cards.length]);
-
-      const goPrev = useCallback(() => {
-        if (idx > 0) {
-          setIdx(idx - 1);
-          setFlipped(false);
-          setTranslation(null);
-        }
+      // Einbeittu á input þegar orð breytist
+      useEffect(() => {
+        setInput('');
+        setSubmitted(false);
+        setCorrect(false);
+        setAttempts(0);
+        setRevealed(false);
+        setTimeout(() => inputRef.current?.focus(), 100);
       }, [idx]);
 
-      const restart = useCallback(() => {
-        setCards(shuffle(CARDS));
-        setIdx(0);
-        setFlipped(false);
-        setTranslation(null);
-        setSeen(new Set());
-        setDone(false);
-      }, []);
+      const handleSpeak = useCallback(async (e) => {
+        e?.stopPropagation();
+        if (speaking) return;
+        setSpeaking(true);
+        await playAudio(current.clue, () => setSpeaking(false));
+      }, [speaking, current]);
 
-      // --- Móðurmálsval ---
-      if (!lang) {
+      // Reikna lit hverrar stafar í innslægi
+      const letterStatuses = useMemo(() => {
+        if (!submitted) return input.toLowerCase().split('').map(() => 'filled');
+        const guess = input.toLowerCase();
+        const statuses = Array(guess.length).fill('wrong');
+        const targetCounts = letterCounts(target);
+        // Fyrst: nákvæmlega réttir
+        for (let i = 0; i < Math.min(guess.length, target.length); i++) {
+          if (guess[i] === target[i]) {
+            statuses[i] = 'correct';
+            targetCounts[guess[i]]--;
+          }
+        }
+        return statuses;
+      }, [submitted, input, target]);
+
+      const checkAnswer = useCallback(() => {
+        if (!input.trim()) return;
+        const isCorrect = normalize(input.trim()) === normalize(target);
+        setSubmitted(true);
+        setCorrect(isCorrect);
+        setAttempts(a => a + 1);
+        if (isCorrect) {
+          setPopKey(k => k + 1);
+        } else {
+          setShakeKey(k => k + 1);
+        }
+      }, [input, target]);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !submitted) checkAnswer();
+        if (e.key === 'Enter' && submitted && correct) goNext();
+      };
+
+      const retry = () => {
+        setInput('');
+        setSubmitted(false);
+        setCorrect(false);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      };
+
+      const reveal = () => {
+        setRevealed(true);
+        setSubmitted(true);
+        setCorrect(false);
+      };
+
+      const goNext = () => {
+        const got = correct;
+        setScores(prev => [...prev, { word: current.word, got }]);
+        if (idx + 1 >= WORDS.length) {
+          setDone(true);
+        } else {
+          setIdx(i => i + 1);
+        }
+      };
+
+      // Birta stafi – sýna innsláttar stafi eða auð
+      const displayWord = () => {
+        if (revealed) return target.split('');
+        if (submitted) return input.toLowerCase().padEnd(target.length, ' ').slice(0, target.length).split('');
+        return input.toLowerCase().split('').slice(0, target.length);
+      };
+
+      const boxes = displayWord();
+
+      // --- Lokasíða ---
+      if (done) {
+        const total = scores.length;
+        const got   = scores.filter(s => s.got).length;
         return (
           <div className="min-h-screen flex flex-col">
             <header className="bg-white shadow-sm border-b border-gray-200">
@@ -226,90 +244,39 @@
                   className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
                   ← Til baka
                 </button>
-                <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flashcort – Mat og innkaup</h1>
+                <h1 className="text-3xl font-light text-gray-800 mb-2">🧩 Orðagáta – Mat og innkaup</h1>
                 <p className="text-gray-500 text-sm font-light">Orðaforðaæfing · A1–A2</p>
               </div>
             </header>
             <main className="max-w-xl mx-auto px-6 mt-10 w-full fade-in">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-                <div className="text-center mb-8">
-                  <div className="text-5xl mb-4">🌍</div>
-                  <h2 className="text-2xl font-light text-gray-800 mb-2">Veldu móðurmál þitt</h2>
-                  <p className="text-gray-500 font-light text-sm">Þú munt fá þýðingar á þínu eigin máli</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {LANGUAGES.map(l => (
-                    <button
-                      key={l.code}
-                      onClick={() => setLang(l)}
-                      className="flex items-center gap-3 px-4 py-3 rounded-lg border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all font-light text-gray-700"
-                    >
-                      <span className="text-2xl">{l.flag}</span>
-                      <span>{l.label}</span>
-                    </button>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                <div className="text-6xl mb-4">{got === total ? '🎉' : got >= total / 2 ? '💪' : '📚'}</div>
+                <h2 className="text-2xl font-light text-gray-800 mb-2">Vel gert!</h2>
+                <p className="text-gray-500 font-light mb-6">
+                  Þú gissaðir rétt á <strong className="text-blue-600">{got}</strong> af <strong>{total}</strong> orðum.
+                </p>
+                <div className="space-y-2 mb-8 text-left">
+                  {scores.map((s, i) => (
+                    <div key={i} className={`flex items-center justify-between px-4 py-2 rounded-lg text-sm font-light
+                      ${s.got ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                      <span>{s.word}</span>
+                      <span>{s.got ? '✓' : '✗'}</span>
+                    </div>
                   ))}
                 </div>
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={() => setLang({ code: 'none', label: null, flag: '🏳️' })}
-                    className="text-sm text-gray-400 hover:text-gray-600 font-light underline"
-                  >
-                    Nota bara íslensku
-                  </button>
-                </div>
-              </div>
-            </main>
-          </div>
-        );
-      }
-
-      // --- Lokasíða ---
-      if (done) {
-        return (
-          <div className="min-h-screen flex flex-col">
-            <header className="bg-white shadow-sm border-b border-gray-200">
-              <div className="max-w-4xl mx-auto px-6 py-8">
-                <button onClick={() => window.history.back()}
-                  className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
-                  ← Til baka
+                <button
+                  onClick={() => { setIdx(0); setScores([]); setDone(false); }}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light"
+                >
+                  🔄 Reyna aftur
                 </button>
-                <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flashcort – Mat og innkaup</h1>
-                <p className="text-gray-500 text-sm font-light">Orðaforðaæfing · A1–A2</p>
-              </div>
-            </header>
-            <main className="max-w-xl mx-auto px-6 mt-10 w-full fade-in text-center">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10">
-                <div className="text-6xl mb-4">🎉</div>
-                <h2 className="text-2xl font-light text-gray-800 mb-3">Vel gert!</h2>
-                <p className="text-gray-500 font-light mb-2">
-                  Þú fórst í gegnum öll {CARDS.length} orðin.
-                </p>
-                <p className="text-gray-400 font-light text-sm mb-8">
-                  {seen.size} af {CARDS.length} kortum snúin
-                </p>
-                <div className="flex gap-3 justify-center flex-wrap">
-                  <button
-                    onClick={restart}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light"
-                  >
-                    🔄 Byrja aftur
-                  </button>
-                  <button
-                    onClick={() => { setLang(null); restart(); }}
-                    className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm"
-                  >
-                    Skipta um tungumál
-                  </button>
-                </div>
               </div>
             </main>
           </div>
         );
       }
 
-      // --- Flashcort ---
-      const progress = ((idx) / cards.length) * 100;
-
+      // --- Aðalspil ---
       return (
         <div className="min-h-screen flex flex-col">
           <header className="bg-white shadow-sm border-b border-gray-200">
@@ -318,22 +285,8 @@
                 className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
                 ← Til baka
               </button>
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flashcort – Mat og innkaup</h1>
-                  <p className="text-gray-500 text-sm font-light">Orðaforðaæfing · A1–A2</p>
-                </div>
-                {lang.flag !== '🏳️' && (
-                  <button
-                    onClick={() => setLang(null)}
-                    className="text-sm text-gray-400 hover:text-gray-600 font-light flex items-center gap-1 mt-1"
-                    title="Skipta um tungumál"
-                  >
-                    <span>{lang.flag}</span>
-                    <span className="underline">skipta</span>
-                  </button>
-                )}
-              </div>
+              <h1 className="text-3xl font-light text-gray-800 mb-2">🧩 Orðagáta – Mat og innkaup</h1>
+              <p className="text-gray-500 text-sm font-light">Orðaforðaæfing · A1–A2</p>
             </div>
           </header>
 
@@ -341,94 +294,158 @@
             {/* Framvindustika */}
             <div className="mb-6">
               <div className="flex justify-between text-xs text-gray-400 font-light mb-2">
-                <span>Kort {idx + 1} af {cards.length}</span>
-                <span>{seen.size} snúin</span>
+                <span>Orð {idx + 1} af {WORDS.length}</span>
+                <span>{scores.filter(s => s.got).length} rétt</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                  style={{ width: `${((idx + 1) / cards.length) * 100}%` }}
+                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                  style={{ width: `${((idx) / WORDS.length) * 100}%` }}
                 />
               </div>
             </div>
 
-            {/* Leiðbeiningar */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6 text-sm text-blue-700 font-light">
-              Smelltu á kortið til að sjá skýringuna
-              {lang.label && ' og þýðinguna'}
-              . Smelltu á 🔊 til að heyra framburðinn.
-            </div>
+            {/* Gátukort */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 fade-in">
 
-            {/* Kortið */}
-            <div className="card-container mb-6" style={{ minHeight: 260 }}>
-              <div
-                className={`card-inner cursor-pointer ${flipped ? 'flipped' : ''}`}
-                onClick={handleFlip}
-                style={{ minHeight: 260 }}
-              >
-                {/* Framhlið */}
-                <div className="card-face bg-white rounded-xl shadow-sm border border-gray-100 p-8 flex flex-col items-center justify-center"
-                  style={{ minHeight: 260 }}>
-                  <div className="text-4xl mb-5">📖</div>
-                  <p className="text-2xl font-light text-gray-800 text-center mb-6 leading-snug">
-                    {current.is}
+              {/* Vísbending + hljóðtakki */}
+              <div className="mb-8">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <p className="text-gray-700 font-light text-lg leading-relaxed flex-1">
+                    {current.clue}
                   </p>
-                  {/* TTS hnappur */}
                   <button
                     onClick={handleSpeak}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border transition-all
+                    className={`flex-shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-all
                       ${speaking
                         ? 'bg-green-50 text-green-700 border-green-200'
                         : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
                   >
                     <span className="opacity-70">🎧</span>
-                    <span className="font-light">Hlustaðu</span>
                     <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
                   </button>
-                  <p className="text-xs text-gray-400 font-light mt-4">Smelltu til að snúa</p>
                 </div>
 
-                {/* Bakhlið */}
-                <div className="card-face card-back bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 p-8 flex flex-col items-center justify-center"
-                  style={{ minHeight: 260 }}>
-                  <div className="text-4xl mb-4">💡</div>
-                  <p className="text-lg font-light text-gray-700 text-center mb-4 leading-relaxed">
-                    {current.hint}
-                  </p>
-                  {lang.label && (
-                    <div className="mt-2 px-4 py-2 bg-white/70 rounded-lg border border-blue-200 text-center min-w-[120px]">
-                      {translating ? (
-                        <span className="text-gray-400 text-sm font-light animate-pulse">Þýði...</span>
-                      ) : translation ? (
-                        <span className="text-blue-700 font-medium text-lg">{translation}</span>
-                      ) : null}
+                {/* Stafafjöldi hint */}
+                <p className="text-xs text-gray-400 font-light">
+                  {target.length} stafir
+                  {attempts > 0 && !correct && !revealed && (
+                    <span className="ml-2 text-amber-500">· {attempts} {attempts === 1 ? 'tilraun' : 'tilraunir'}</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Stafakassar */}
+              <div
+                key={`boxes-${shakeKey}-${popKey}`}
+                className={`flex flex-wrap gap-2 mb-6 justify-center ${
+                  submitted && !correct && !revealed ? 'shake' : ''
+                } ${correct ? 'pop' : ''}`}
+              >
+                {Array.from({ length: target.length }).map((_, i) => {
+                  const ch = boxes[i];
+                  let status = 'empty';
+                  if (revealed) {
+                    status = 'correct';
+                  } else if (submitted && ch && ch !== ' ') {
+                    status = letterStatuses[i] || 'wrong';
+                  } else if (!submitted && ch) {
+                    status = 'filled';
+                  }
+                  return (
+                    <div key={i} className={`letter-box ${status}`}>
+                      {revealed ? target[i] : (ch && ch !== ' ' ? ch : '')}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Innsláttarsvæði */}
+              {!correct && !revealed && (
+                <div className="space-y-3">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={input}
+                    onChange={e => { setInput(e.target.value); setSubmitted(false); }}
+                    onKeyDown={handleKeyDown}
+                    disabled={submitted && !correct}
+                    placeholder="Skrifaðu orðið hér..."
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-lg disabled:bg-gray-50"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <div className="flex gap-3">
+                    {!submitted ? (
+                      <button
+                        onClick={checkAnswer}
+                        disabled={!input.trim()}
+                        className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+                      >
+                        Athuga
+                      </button>
+                    ) : (
+                      <button
+                        onClick={retry}
+                        className="flex-1 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors font-light"
+                      >
+                        Reyna aftur
+                      </button>
+                    )}
+                    {attempts >= 2 && !revealed && (
+                      <button
+                        onClick={reveal}
+                        className="px-4 py-3 border-2 border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm"
+                      >
+                        Gefast upp
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Endurgjöf – rangt */}
+                  {submitted && !correct && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-light fade-in">
+                      Ekki alveg – reyndu aftur! 💪
                     </div>
                   )}
-                  <p className="text-xs text-gray-500 font-light mt-4">Smelltu til að snúa aftur</p>
                 </div>
-              </div>
+              )}
+
+              {/* Endurgjöf – rétt */}
+              {correct && (
+                <div className="space-y-4 fade-in">
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-green-700 font-light">
+                    ✓ Frábært! <strong>{target}</strong> er rétt!
+                  </div>
+                  <button
+                    onClick={goNext}
+                    className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light"
+                  >
+                    {idx + 1 >= WORDS.length ? 'Sjá niðurstöður 🎉' : 'Næsta orð →'}
+                  </button>
+                </div>
+              )}
+
+              {/* Endurgjöf – gefið upp */}
+              {revealed && (
+                <div className="space-y-4 fade-in">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-700 font-light">
+                    💡 Orðið var <strong>{target}</strong>. Ekki hægt að vinna alltaf!
+                  </div>
+                  <button
+                    onClick={goNext}
+                    className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light"
+                  >
+                    {idx + 1 >= WORDS.length ? 'Sjá niðurstöður 🎉' : 'Næsta orð →'}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Fletting */}
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={goPrev}
-                disabled={idx === 0}
-                className="px-5 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-light"
-              >
-                ← Til baka
-              </button>
-              <button
-                onClick={goNext}
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light"
-              >
-                {idx + 1 >= cards.length ? 'Klára 🎉' : 'Næsta →'}
-              </button>
-            </div>
-
-            {/* Smáar leiðbeiningar neðst */}
-            <p className="text-center text-xs text-gray-400 font-light mt-6">
-              Þú þarft ekki að snúa öllum kortum – farðu í þínum hraða
+            {/* Smátexti */}
+            <p className="text-center text-xs text-gray-400 font-light mt-5">
+              Smelltu á 🔊 til að heyra vísbendinguna lesna upp
             </p>
           </main>
         </div>
