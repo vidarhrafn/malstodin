@@ -19,15 +19,9 @@
       to { opacity: 1; transform: translateY(0); }
     }
     .fade-in { animation: fadeIn 0.4s ease both; }
-    .drag-item {
-      cursor: grab;
-      user-select: none;
-    }
+    .drag-item { cursor: grab; user-select: none; }
     .drag-item:active { cursor: grabbing; }
-    .drop-zone {
-      min-height: 44px;
-      transition: background 0.15s;
-    }
+    .drop-zone { min-height: 44px; transition: background 0.15s; }
     .drop-zone.over { background: #eff6ff; border-color: #3b82f6 !important; }
   </style>
 </head>
@@ -35,9 +29,18 @@
 <div id="root"></div>
 <script type="text/babel">
 
-const { useState, useRef, useCallback } = React;
+const { useState, useRef } = React;
 
-// ── Helpers ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 async function callOpenAI(messages) {
   const r = await fetch('/.netlify/functions/openai', {
@@ -53,13 +56,10 @@ async function callOpenAI(messages) {
 function parseAI(text) {
   const s = text.match(/STIG:\s*(\d)/);
   const e = text.match(/ENDURGJÖF:\s*(.+)/);
-  return {
-    score: s ? parseInt(s[1]) : 0,
-    msg: e ? e[1].trim() : text.trim()
-  };
+  return { score: s ? parseInt(s[1]) : 0, msg: e ? e[1].trim() : text.trim() };
 }
 
-// ── Shared components ──────────────────────────────────────────────────
+// ── Shared components ─────────────────────────────────────────────────────
 
 const ProgressBar = ({ current, total }) => (
   <div className="flex items-center gap-2 mb-6">
@@ -82,13 +82,10 @@ const SectionHeader = ({ number, title, subtitle, points }) => (
   </div>
 );
 
-const FeedbackBadge = ({ score, maxScore, msg, color }) => {
-  const c = color || (score >= maxScore * 0.8 ? 'green' : score >= maxScore * 0.5 ? 'amber' : 'red');
-  const cls = {
-    green: 'bg-green-50 border-green-200 text-green-800',
-    amber: 'bg-amber-50 border-amber-200 text-amber-800',
-    red: 'bg-red-50 border-red-200 text-red-800',
-  }[c];
+const FeedbackBadge = ({ score, maxScore, msg }) => {
+  const pct = score / maxScore;
+  const c = pct >= 0.8 ? 'green' : pct >= 0.5 ? 'amber' : 'red';
+  const cls = { green: 'bg-green-50 border-green-200 text-green-800', amber: 'bg-amber-50 border-amber-200 text-amber-800', red: 'bg-red-50 border-red-200 text-red-800' }[c];
   return (
     <div className={`mt-3 p-3 rounded-lg border ${cls} fade-in`}>
       <div className="font-medium text-sm mb-0.5">{score}/{maxScore} stig</div>
@@ -105,14 +102,14 @@ const NextBtn = ({ onClick, label }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIÐUR 1 – Myndir (8 stig)
+// 1 – Myndir (8 stig)
 // ─────────────────────────────────────────────────────────────────────────
 
 const IMAGES = [
-  { emoji: '🎃', word: 'grasker',         hint: 'Þetta er appelsínugult grænmeti/ávöxtur sem fólk skreytir á hrekkjavöku.' },
-  { emoji: '🧄', word: 'hvítlaukur',       hint: 'Þetta er kryddgrænmeti með sterka lykt, notað í eldamennsku.' },
-  { emoji: '🥦', word: 'blómkál',          hint: 'Þetta er grænt grænmeti sem lítur út eins og tré.' },
-  { emoji: '🫘', word: 'kjúklingabaunir',  hint: 'Þetta eru litlar, kringlóttar, brúnar/hvítar baunir.' },
+  { emoji: '🎃', word: 'grasker' },
+  { emoji: '🧄', word: 'hvítlaukur' },
+  { emoji: '🥦', word: 'blómkál' },
+  { emoji: '🫘', word: 'kjúklingabaunir' },
 ];
 
 function Section1({ onComplete }) {
@@ -126,17 +123,14 @@ function Section1({ onComplete }) {
     try {
       const results = await Promise.all(IMAGES.map((img, i) =>
         callOpenAI([{ role: 'user', content:
-          `Nemandi á að skrifa íslenska orðið fyrir þessa mynd: ${img.emoji} (rétt svar: "${img.word}"). Nemandi skrifaði: "${answers[i]}".
-Svaraðu EINUNGIS á þessu formi:\nSTIG: [0 eða 1]\nENDURGJÖF: [ein stuttur setning á íslensku]` }])
+          `Nemandi á að skrifa íslenska orðið fyrir þessa mynd: ${img.emoji} (rétt svar: "${img.word}"). Nemandi skrifaði: "${answers[i]}". Smá stafsetningarvilla er í lagi.\nSTIG: [0 eða 1]\nENDURGJÖF: [ein stuttur setning á íslensku]` }])
       ));
       const parsed = results.map(parseAI);
       const total = parsed.reduce((s, p) => s + Math.min(p.score, 1) * 2, 0);
       setFeedback({ items: parsed, total });
       setDone(true);
       onComplete(total);
-    } catch(e) {
-      setFeedback({ error: true });
-    }
+    } catch(e) { setFeedback({ error: true }); }
     setLoading(false);
   };
 
@@ -147,16 +141,13 @@ Svaraðu EINUNGIS á þessu formi:\nSTIG: [0 eða 1]\nENDURGJÖF: [ein stuttur s
         {IMAGES.map((img, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col items-center gap-3">
             <span className="text-5xl">{img.emoji}</span>
-            <input
-              value={answers[i]}
+            <input value={answers[i]}
               onChange={e => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }}
-              disabled={done}
-              placeholder="Orðið…"
-              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-center disabled:bg-gray-50"
-            />
+              disabled={done} placeholder="Orðið…"
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-center disabled:bg-gray-50" />
             {feedback && (
               <div className={`text-xs font-light px-2 py-1 rounded ${feedback.items[i].score > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                {feedback.items[i].score > 0 ? '✓ Rétt' : `✗ Rétt: ${IMAGES[i].word}`} – {feedback.items[i].msg}
+                {feedback.items[i].score > 0 ? '✓ Rétt' : `✗ Rétt: ${img.word}`} – {feedback.items[i].msg}
               </div>
             )}
           </div>
@@ -176,11 +167,11 @@ Svaraðu EINUNGIS á þessu formi:\nSTIG: [0 eða 1]\nENDURGJÖF: [ein stuttur s
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIÐUR 2 – Paraðu saman (8 stig)
+// 2 – Paraðu orð og skýringar (8 stig)
 // ─────────────────────────────────────────────────────────────────────────
 
-const PAIRS = [
-  { word: 'kósíkvöld',    def: 'kvöld þar sem fólk slappir af saman, horfir á mynd og borðar gos og nammi' },
+const PAIRS_DATA = [
+  { word: 'kósíkvöld',    def: 'kvöld þar sem fólk slappar af saman, horfir á mynd og borðar nammi' },
   { word: 'meðlæti',      def: 'hlutir sem koma með aðalréttinn, t.d. hrísgrjón eða salat' },
   { word: 'uppskrift',    def: 'listi af hráefnum og leiðbeiningar um hvernig á að elda rétt' },
   { word: 'iðngrein',     def: 'verk sem krefst sérstakrar handanlegrar þjálfunar, t.d. múrari eða pípari' },
@@ -191,59 +182,38 @@ function Section2({ onComplete }) {
   const [matches, setMatches] = useState({});
   const [done, setDone] = useState(false);
   const [score, setScore] = useState(null);
+  const shuffledDefs = useRef(shuffle(PAIRS_DATA));
 
-  const shuffledDefs = useRef([...PAIRS].sort(() => Math.random() - 0.5));
-
-  const handleWord = (i) => {
-    if (done || matches[i] !== undefined) return;
-    setSelected({ type: 'word', i });
-  };
-
+  const handleWord = (i) => { if (done || matches[i] !== undefined) return; setSelected(i); };
   const handleDef = (j) => {
-    if (done) return;
-    if (selected?.type === 'word') {
-      const newMatches = { ...matches, [selected.i]: j };
-      setMatches(newMatches);
-      setSelected(null);
-      if (Object.keys(newMatches).length === PAIRS.length) {
-        let correct = 0;
-        Object.entries(newMatches).forEach(([wi, di]) => {
-          if (shuffledDefs.current[di].word === PAIRS[wi].word) correct++;
-        });
-        const s = correct * 2;
-        setScore(s);
-        setDone(true);
-        onComplete(s);
-      }
+    if (done || selected === null) return;
+    const newM = { ...matches, [selected]: j };
+    setMatches(newM);
+    setSelected(null);
+    if (Object.keys(newM).length === PAIRS_DATA.length) {
+      let c = 0;
+      Object.entries(newM).forEach(([wi, di]) => { if (shuffledDefs.current[di].word === PAIRS_DATA[wi].word) c++; });
+      const s = c * 2;
+      setScore(s); setDone(true); onComplete(s);
     }
   };
-
-  const getDefIdx = (wordIdx) => matches[wordIdx];
-  const isWordMatched = (i) => matches[i] !== undefined;
   const isDefMatched = (j) => Object.values(matches).includes(j);
-
-  const defCorrect = (wi, di) => shuffledDefs.current[di].word === PAIRS[wi].word;
+  const defCorrect = (wi, di) => di !== undefined && shuffledDefs.current[di]?.word === PAIRS_DATA[wi].word;
 
   return (
     <div className="fade-in">
       <SectionHeader number="2" title="Paraðu saman orð og skýringar" subtitle="Smelltu á orð og síðan á rétta skýringu." points="8" />
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-2">
-          {PAIRS.map((p, i) => (
+          {PAIRS_DATA.map((p, i) => (
             <button key={i} onClick={() => handleWord(i)}
               className={`px-4 py-3 rounded-lg border-2 text-left font-light text-sm transition-all
-                ${done
-                  ? defCorrect(i, getDefIdx(i))
-                    ? 'bg-green-50 border-green-300 text-green-800'
-                    : 'bg-red-50 border-red-300 text-red-800'
-                  : isWordMatched(i)
-                    ? 'bg-blue-50 border-blue-300 text-blue-800'
-                    : selected?.type === 'word' && selected.i === i
-                      ? 'bg-blue-100 border-blue-500 text-blue-900'
-                      : 'bg-white border-gray-200 hover:border-blue-300 text-gray-700'
-                }`}>
+                ${done ? defCorrect(i, matches[i]) ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'
+                  : matches[i] !== undefined ? 'bg-blue-50 border-blue-300 text-blue-800'
+                  : selected === i ? 'bg-blue-100 border-blue-500 text-blue-900'
+                  : 'bg-white border-gray-200 hover:border-blue-300 text-gray-700'}`}>
               {p.word}
-              {done && !defCorrect(i, getDefIdx(i)) && <span className="block text-xs mt-1 text-red-600">→ {PAIRS[i].def.substring(0,40)}…</span>}
+              {done && !defCorrect(i, matches[i]) && <span className="block text-xs mt-1 text-red-600">→ {p.def.substring(0,38)}…</span>}
             </button>
           ))}
         </div>
@@ -251,107 +221,87 @@ function Section2({ onComplete }) {
           {shuffledDefs.current.map((d, j) => (
             <button key={j} onClick={() => handleDef(j)}
               className={`px-4 py-3 rounded-lg border-2 text-left font-light text-xs transition-all
-                ${done
-                  ? 'bg-gray-50 border-gray-200 text-gray-600 cursor-default'
-                  : isDefMatched(j)
-                    ? 'bg-blue-50 border-blue-300 text-blue-800 cursor-default'
-                    : selected?.type === 'word'
-                      ? 'bg-white border-amber-300 hover:bg-amber-50 text-gray-700 cursor-pointer'
-                      : 'bg-white border-gray-200 text-gray-500 cursor-default'
-                }`}>
+                ${done ? 'bg-gray-50 border-gray-200 text-gray-600 cursor-default'
+                  : isDefMatched(j) ? 'bg-blue-50 border-blue-300 text-blue-800 cursor-default'
+                  : selected !== null ? 'bg-white border-amber-300 hover:bg-amber-50 text-gray-700 cursor-pointer'
+                  : 'bg-white border-gray-200 text-gray-500 cursor-default'}`}>
               {d.def}
             </button>
           ))}
         </div>
       </div>
-      {done && (
-        <FeedbackBadge score={score} maxScore={8}
-          msg={score >= 6 ? 'Vel gert – þú þekkir þennan orðaforða!' : 'Skoðaðu skýringarnar aftur og æfðu þig.'} />
-      )}
+      {done && <FeedbackBadge score={score} maxScore={8} msg={score >= 6 ? 'Vel gert – þú þekkir þennan orðaforða!' : 'Skoðaðu skýringarnar aftur og æfðu þig.'} />}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIÐUR 3 – Flokkaðu orðin (6 stig)
+// 3 – Flokkaðu orðin (6 stig)
 // ─────────────────────────────────────────────────────────────────────────
 
-const CLASSIFY_WORDS = [
-  { word: 'laukur',          correct: 0 },
-  { word: 'paprika',         correct: 0 },
-  { word: 'hrekkjavaka',     correct: 1 },
-  { word: 'búningur',        correct: 1 },
-  { word: 'múrari',          correct: 2 },
-  { word: 'hárgreiðslukona', correct: 2 },
+const CLASSIFY_RAW = [
+  { word: 'kókosmjólk',      correct: 0 },
+  { word: 'gulrætur',         correct: 0 },
+  { word: 'hrekkjavaka',      correct: 1 },
+  { word: 'búningur',         correct: 1 },
+  { word: 'sjúkraliði',       correct: 2 },
+  { word: 'hárgreiðslukona',  correct: 2 },
 ];
 const CATS = ['🥦 Matvæli', '🎭 Hátíðir', '🔧 Starfsheiti'];
 
 function Section3({ onComplete }) {
+  const words = useRef(shuffle(CLASSIFY_RAW.map((w, i) => ({ ...w, origIdx: i }))));
   const [placements, setPlacements] = useState({});
-  const [dragWord, setDragWord] = useState(null);
+  const [dragIdx, setDragIdx] = useState(null);
   const [done, setDone] = useState(false);
   const [score, setScore] = useState(null);
 
-  const unplaced = CLASSIFY_WORDS.filter((_, i) => placements[i] === undefined);
-  const placed = (catIdx) => CLASSIFY_WORDS.filter((_, i) => placements[i] === catIdx);
+  const placed = (ci) => words.current.filter((_, i) => placements[i] === ci);
+  const unplaced = words.current.filter((_, i) => placements[i] === undefined);
 
-  const handleDrop = (catIdx) => {
-    if (dragWord === null || done) return;
-    const newP = { ...placements, [dragWord]: catIdx };
+  const handleDrop = (ci) => {
+    if (dragIdx === null || done) return;
+    const newP = { ...placements, [dragIdx]: ci };
     setPlacements(newP);
-    setDragWord(null);
-    if (Object.keys(newP).length === CLASSIFY_WORDS.length) {
-      let correct = 0;
-      Object.entries(newP).forEach(([wi, ci]) => {
-        if (CLASSIFY_WORDS[wi].correct === ci) correct++;
-      });
-      setScore(correct);
-      setDone(true);
-      onComplete(correct);
+    setDragIdx(null);
+    if (Object.keys(newP).length === words.current.length) {
+      let c = 0;
+      Object.entries(newP).forEach(([i, ci]) => { if (words.current[i].correct === ci) c++; });
+      setScore(c); setDone(true); onComplete(c);
     }
   };
 
-  const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('over'); };
-  const handleDragLeave = (e) => { e.currentTarget.classList.remove('over'); };
-  const handleDropEvt = (e, catIdx) => { e.currentTarget.classList.remove('over'); handleDrop(catIdx); };
-
-  const wordBg = (wi) => {
-    if (!done) return 'bg-white border-gray-200 hover:border-blue-300 text-gray-700';
-    return CLASSIFY_WORDS[wi].correct === placements[wi]
-      ? 'bg-green-50 border-green-300 text-green-800'
-      : 'bg-red-50 border-red-300 text-red-800';
+  const wordCls = (i) => {
+    if (!done) return 'bg-white border-gray-200 text-gray-700';
+    return words.current[i].correct === placements[i] ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800';
   };
 
   return (
     <div className="fade-in">
       <SectionHeader number="3" title="Flokkaðu orðin" subtitle="Dragðu hvert orð í réttan flokk." points="6" />
-
       {unplaced.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
-          {CLASSIFY_WORDS.map((w, i) => placements[i] === undefined && (
-            <span key={i}
-              draggable
-              onDragStart={() => setDragWord(i)}
-              className={`drag-item px-3 py-1.5 rounded-lg border-2 text-sm font-light cursor-grab bg-white border-gray-200 hover:border-blue-300 text-gray-700`}>
+          {words.current.map((w, i) => placements[i] === undefined && (
+            <span key={i} draggable onDragStart={() => setDragIdx(i)}
+              className="drag-item px-3 py-1.5 rounded-lg border-2 text-sm font-light bg-white border-gray-200 hover:border-blue-300 text-gray-700">
               {w.word}
             </span>
           ))}
         </div>
       )}
-
       <div className="grid grid-cols-3 gap-3">
         {CATS.map((cat, ci) => (
           <div key={ci}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={e => handleDropEvt(e, ci)}
+            onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('over'); }}
+            onDragLeave={e => e.currentTarget.classList.remove('over')}
+            onDrop={e => { e.currentTarget.classList.remove('over'); handleDrop(ci); }}
             className="drop-zone rounded-xl border-2 border-dashed border-gray-200 p-3 min-h-24">
             <div className="text-xs font-medium text-gray-500 mb-2">{cat}</div>
             <div className="flex flex-col gap-1.5">
-              {placed(ci).map((w, j) => {
-                const wi = CLASSIFY_WORDS.indexOf(w);
+              {placed(ci).map((w) => {
+                const i = words.current.indexOf(w);
                 return (
-                  <span key={j} className={`px-3 py-1.5 rounded-lg border-2 text-sm font-light ${wordBg(wi)}`}>
+                  <span key={i} className={`px-3 py-1.5 rounded-lg border-2 text-sm font-light ${wordCls(i)}`}>
                     {w.word}
                     {done && w.correct !== ci && <span className="ml-1 text-xs">→ {CATS[w.correct].split(' ')[1]}</span>}
                   </span>
@@ -361,27 +311,92 @@ function Section3({ onComplete }) {
           </div>
         ))}
       </div>
-
-      {done && (
-        <FeedbackBadge score={score} maxScore={6}
-          msg={score === 6 ? 'Fullkomið! Öll orðin í réttum flokki.' : `${score} af 6 rétt. Skoðaðu orðin sem eru rauð.`} />
-      )}
+      {done && <FeedbackBadge score={score} maxScore={6} msg={score === 6 ? 'Fullkomið! Öll orðin í réttum flokki.' : `${score} af 6 rétt – skoðaðu rauðu orðin.`} />}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIÐUR 4 – Eyðufylling (8 stig)
+// 4 – Tengdu persónu við lýsingu (8 stig)
 // ─────────────────────────────────────────────────────────────────────────
 
-const FILL_SENTENCES = [
-  { before: 'Harpa og Eiríkur eiga oft', blank: 'kósíkvöld', after: 'á föstudögum og horfa á bíómynd.' },
-  { before: 'Þegar Eiríkur sækir um vinnu þarf hann að búa til góða', blank: 'ferilskrá', after: '.' },
-  { before: 'Í', blank: 'heimilisfræði', after: 'læra nemendur að baka brauð og þvo hendur áður en þeir byrja.' },
-  { before: 'Hrísgrjón, salat og sósa er', blank: 'meðlæti', after: 'með kjúklingnum.' },
+const PERSONAS = [
+  { name: 'Harpa',      def: 'Hún er grænmetisæta og er í Tækniskólanum.' },
+  { name: 'Ingibjörg',  def: 'Hún er móðir Hörpu og á íbúð í Vesturbæ.' },
+  { name: 'Árni',       def: 'Hann lærði viðskiptafræði í Háskólanum í Reykjavík.' },
+  { name: 'Eiríkur',    def: 'Hann er sonur Ingibjargar og kærasti Hörpu.' },
 ];
 
 function Section4({ onComplete }) {
+  const [selected, setSelected] = useState(null);
+  const [matches, setMatches] = useState({});
+  const [done, setDone] = useState(false);
+  const [score, setScore] = useState(null);
+  const shuffledDefs = useRef(shuffle(PERSONAS));
+
+  const handleName = (i) => { if (done || matches[i] !== undefined) return; setSelected(i); };
+  const handleDef = (j) => {
+    if (done || selected === null) return;
+    const newM = { ...matches, [selected]: j };
+    setMatches(newM);
+    setSelected(null);
+    if (Object.keys(newM).length === PERSONAS.length) {
+      let c = 0;
+      Object.entries(newM).forEach(([pi, di]) => { if (shuffledDefs.current[di].name === PERSONAS[pi].name) c++; });
+      const s = c * 2;
+      setScore(s); setDone(true); onComplete(s);
+    }
+  };
+  const isDefMatched = (j) => Object.values(matches).includes(j);
+  const defCorrect = (pi, di) => di !== undefined && shuffledDefs.current[di]?.name === PERSONAS[pi].name;
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="4" title="Tengdu persónu við lýsingu" subtitle="Smelltu á nafn og síðan á rétta lýsingu." points="8" />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-2">
+          {PERSONAS.map((p, i) => (
+            <button key={i} onClick={() => handleName(i)}
+              className={`px-4 py-3 rounded-lg border-2 text-left font-medium text-sm transition-all
+                ${done ? defCorrect(i, matches[i]) ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'
+                  : matches[i] !== undefined ? 'bg-blue-50 border-blue-300 text-blue-800'
+                  : selected === i ? 'bg-blue-100 border-blue-500 text-blue-900'
+                  : 'bg-white border-gray-200 hover:border-blue-300 text-gray-700'}`}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2">
+          {shuffledDefs.current.map((d, j) => (
+            <button key={j} onClick={() => handleDef(j)}
+              className={`px-4 py-3 rounded-lg border-2 text-left font-light text-xs transition-all
+                ${done ? 'bg-gray-50 border-gray-200 text-gray-600 cursor-default'
+                  : isDefMatched(j) ? 'bg-blue-50 border-blue-300 text-blue-800 cursor-default'
+                  : selected !== null ? 'bg-white border-amber-300 hover:bg-amber-50 text-gray-700 cursor-pointer'
+                  : 'bg-white border-gray-200 text-gray-500 cursor-default'}`}>
+              {d.def}
+            </button>
+          ))}
+        </div>
+      </div>
+      {done && <FeedbackBadge score={score} maxScore={8} msg={score >= 6 ? 'Vel gert – þú þekkir persónurnar!' : 'Lestu um persónurnar aftur og prófaðu.'} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 5 – Eyðufylling með orðabanka (8 stig)
+// ─────────────────────────────────────────────────────────────────────────
+
+const FILL_DATA = [
+  { before: 'Hulda og Halima nota teppi og stóla til að búa til', blank: 'hús', after: 'í stofunni.' },
+  { before: 'Á hrekkjavöku fara margir krakkar í', blank: 'búning', after: 'og ganga í hús.' },
+  { before: 'Árni er', blank: 'verslunarstjóri', after: 'í Nettó.' },
+  { before: 'Elsa vinnur stundum á', blank: 'kvöldin', after: 'og nóttunni á sjúkrahúsinu.' },
+];
+const WORD_BANK = shuffle(['hús', 'búning', 'verslunarstjóri', 'kvöldin', 'salur', 'ferilskrá']);
+
+function Section5({ onComplete }) {
   const [answers, setAnswers] = useState(['', '', '', '']);
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -390,9 +405,9 @@ function Section4({ onComplete }) {
   const submit = async () => {
     setLoading(true);
     try {
-      const results = await Promise.all(FILL_SENTENCES.map((s, i) =>
+      const results = await Promise.all(FILL_DATA.map((s, i) =>
         callOpenAI([{ role: 'user', content:
-          `Setning: "${s.before} ___ ${s.after}"\nRétt orð: "${s.blank}"\nNemandi skrifaði: "${answers[i]}"\nMetur hvort merking og mynd orðsins sé rétt (smá stafsetningarvilla er í lagi).\nSTIG: [0 eða 1]\nENDURGJÖF: [ein setning á íslensku]` }])
+          `Setning: "${s.before} ___ ${s.after}"\nRétt orð: "${s.blank}"\nNemandi skrifaði/valdi: "${answers[i]}"\nMetur hvort svarið sé rétt (smá stafsetningarvilla er í lagi).\nSTIG: [0 eða 1]\nENDURGJÖF: [ein setning á íslensku]` }])
       ));
       const parsed = results.map(parseAI);
       const total = parsed.reduce((s, p) => s + Math.min(p.score, 1) * 2, 0);
@@ -405,23 +420,26 @@ function Section4({ onComplete }) {
 
   return (
     <div className="fade-in">
-      <SectionHeader number="4" title="Settu rétt orð inn í eyðurnar" subtitle="Skrifaðu orðið sem vantar í hverja setningu." points="8" />
-      <div className="flex flex-col gap-4 mb-5">
-        {FILL_SENTENCES.map((s, i) => (
+      <SectionHeader number="5" title="Settu rétt orð inn í eyðurnar" subtitle="Veldu orð úr orðabankanum." points="8" />
+      <div className="flex flex-wrap gap-2 mb-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
+        <span className="text-xs font-medium text-amber-700 w-full mb-1">Orðabanki:</span>
+        {WORD_BANK.map((w, i) => (
+          <span key={i} className="px-3 py-1 rounded-lg bg-white border border-amber-200 text-sm font-light text-gray-700">{w}</span>
+        ))}
+      </div>
+      <div className="flex flex-col gap-3 mb-5">
+        {FILL_DATA.map((s, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <p className="text-sm text-gray-700 font-light mb-2">
+            <p className="text-sm text-gray-600 font-light mb-2">
               {s.before} <span className="font-medium text-blue-600">___</span> {s.after}
             </p>
-            <input
-              value={answers[i]}
+            <input value={answers[i]}
               onChange={e => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }}
-              disabled={done}
-              placeholder="Orðið…"
-              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-sm disabled:bg-gray-50"
-            />
+              disabled={done} placeholder="Veldu eða skrifaðu orðið…"
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-sm disabled:bg-gray-50" />
             {feedback && (
               <div className={`mt-2 text-xs font-light px-2 py-1.5 rounded ${feedback.items[i].score > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                {feedback.items[i].score > 0 ? '✓' : `✗ Rétt: ${FILL_SENTENCES[i].blank}`} – {feedback.items[i].msg}
+                {feedback.items[i].score > 0 ? '✓' : `✗ Rétt: ${s.blank}`} – {feedback.items[i].msg}
               </div>
             )}
           </div>
@@ -434,25 +452,86 @@ function Section4({ onComplete }) {
         </button>
       )}
       {feedback && !feedback.error && (
-        <FeedbackBadge score={feedback.total} maxScore={8}
-          msg={feedback.total >= 6 ? 'Glæsilegt! Þú notar þennan orðaforða rétt.' : 'Góð tilraun – lestu setningarnar aftur og prófaðu þig.'} />
+        <FeedbackBadge score={feedback.total} maxScore={8} msg={feedback.total >= 6 ? 'Glæsilegt! Þú notar orðaforðann rétt.' : 'Góð tilraun – skoðaðu orðabankann aftur.'} />
       )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIÐUR 5 – Lestu og svaraðu (10 stig)
+// 6 – Rétt eða rangt (6 stig)
 // ─────────────────────────────────────────────────────────────────────────
 
-const TEXT5 = `Harpa og Eiríkur ætluðu að koma Ingibjörgu á óvart. Ingibjörg eldar yfirleitt kvöldmatinn en í kvöld ætluðu Harpa og Eiríkur að elda uppáhalds mat hennar. Þetta er kjúklingur í ofni. Harpa er grænmetisæta og þess vegna gerðu þau líka kjúklingabaunarétt með grænmeti. Meðlætið var hrísgrjón, sósa og salat. Þau fóru í Bónus og keyptu heilan kjúkling, papriku, lauk og kókosmjólk. Þegar þau voru að fara úr búðinni fáttu þau að þau höfðu gleymt kjúklingabaunum. Harpa fór aftur inn og Eiríkur setti vörurnar í poka. Þegar Ingibjörg kom heim var hún hissa og mjög ánægð.`;
-
-const QS5 = [
-  'Hvers vegna gerðu Harpa og Eiríkur tvo rétti í kvöld?',
-  'Hvað gerðist þegar þau voru að fara úr Bónus?',
+const RR_DATA = [
+  { text: 'Hulda er yngri en Harpa.', correct: true },
+  { text: 'Ingibjörg er gift.', correct: false },
+  { text: 'Harpa er grænmetisæta.', correct: true },
+  { text: 'Eiríkur langar að verða læknir.', correct: false },
+  { text: 'Halima er palestínsk.', correct: true },
+  { text: 'Árni vinnur á Landspítalanum.', correct: false },
 ];
 
-function Section5({ onComplete }) {
+function Section6({ onComplete }) {
+  const items = useRef(shuffle(RR_DATA));
+  const [answers, setAnswers] = useState({});
+  const [done, setDone] = useState(false);
+  const [score, setScore] = useState(null);
+
+  const pick = (i, val) => {
+    if (done) return;
+    const newA = { ...answers, [i]: val };
+    setAnswers(newA);
+    if (Object.keys(newA).length === items.current.length) {
+      let c = 0;
+      Object.entries(newA).forEach(([i, v]) => { if (v === items.current[i].correct) c++; });
+      setScore(c); setDone(true); onComplete(c);
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="6" title="Rétt eða rangt?" subtitle="Smelltu á Rétt eða Rangt fyrir hverja fullyrðingu." points="6" />
+      <div className="flex flex-col gap-3">
+        {items.current.map((item, i) => (
+          <div key={i} className={`bg-white rounded-xl border shadow-sm p-4 transition-all
+            ${done ? item.correct === answers[i] ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50' : 'border-gray-100'}`}>
+            <p className="text-sm text-gray-700 font-light mb-3">{item.text}</p>
+            <div className="flex gap-2">
+              {[true, false].map(val => (
+                <button key={String(val)} onClick={() => pick(i, val)}
+                  className={`flex-1 py-2 rounded-lg border-2 text-sm font-light transition-all
+                    ${done
+                      ? answers[i] === val
+                        ? val === item.correct ? 'bg-green-100 border-green-400 text-green-800' : 'bg-red-100 border-red-400 text-red-800'
+                        : val === item.correct ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-400'
+                      : answers[i] === val ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-gray-200 hover:border-blue-300 text-gray-600'}`}>
+                  {val ? 'Rétt' : 'Rangt'}
+                </button>
+              ))}
+            </div>
+            {done && answers[i] !== item.correct && (
+              <p className="text-xs text-red-600 font-light mt-2">✗ Rétt svar: {item.correct ? 'Rétt' : 'Rangt'}</p>
+            )}
+          </div>
+        ))}
+      </div>
+      {done && <FeedbackBadge score={score} maxScore={6} msg={score === 6 ? 'Fullkomið! Allar fullyrðingar réttar.' : `${score} af 6 rétt.`} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7 – Lestu og svaraðu (10 stig)
+// ─────────────────────────────────────────────────────────────────────────
+
+const TEXT7 = `Hulda og Halima eru góðar vinkonur og leika sér oft saman. Í dag er rigning úti og þær ákváðu að leika heima hjá Huldu í stofunni, en ekki í herberginu hennar Huldu því þar er mikið drasl – hún hafði ekki tekið til eins og pabbi hennar bað hana um. Þær búa til hús úr teppum og setja þau yfir stóla og borð. Þær þurfa að passa sig á að rekast ekki í neitt því það er margt brothætt í stofunni. Allt í einu finna þær góða lykt. Mamma Huldu var að baka í eldhúsinu og bauð þeim upp á sjónvarpsköku. Þær borða kökuna með bestu lyst og halda svo áfram að leika.`;
+
+const QS7 = [
+  'Hvers vegna leika Hulda og Halima í stofunni en ekki í herberginu?',
+  'Hvernig búa þær til hús í stofunni?',
+];
+
+function Section7({ onComplete }) {
   const [answers, setAnswers] = useState(['', '']);
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -461,9 +540,9 @@ function Section5({ onComplete }) {
   const submit = async () => {
     setLoading(true);
     try {
-      const results = await Promise.all(QS5.map((q, i) =>
+      const results = await Promise.all(QS7.map((q, i) =>
         callOpenAI([{ role: 'user', content:
-          `Texti: "${TEXT5}"\n\nSpurning: "${q}"\nNemandi svaraði: "${answers[i]}"\n\nMetur svar nemanda. Þarf ekki að vera fullkomið – meginmerkingu þarf að koma fram. Vera hvetjandi.\nSTIG: [0-5]\nENDURGJÖF: [ein setning á íslensku]` }])
+          `Texti: "${TEXT7}"\n\nSpurning: "${q}"\nNemandi svaraði: "${answers[i]}"\n\nMetur svar nemanda. Þarf ekki að vera fullkomið – meginmerking þarf að koma fram. Vera hvetjandi.\nSTIG: [0-5]\nENDURGJÖF: [ein setning á íslensku]` }])
       ));
       const parsed = results.map(parseAI);
       const total = parsed.reduce((s, p) => s + p.score, 0);
@@ -476,25 +555,19 @@ function Section5({ onComplete }) {
 
   return (
     <div className="fade-in">
-      <SectionHeader number="5" title="Lestu og svaraðu" subtitle="Lestu textann og svaraðu spurningunum." points="10" />
+      <SectionHeader number="7" title="Lestu og svaraðu" subtitle="Lestu textann og svaraðu spurningunum með eigin orðum." points="10" />
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
-        <p className="text-sm text-gray-700 font-light leading-relaxed">{TEXT5}</p>
+        <p className="text-sm text-gray-700 font-light leading-relaxed">{TEXT7}</p>
       </div>
       <div className="flex flex-col gap-4 mb-5">
-        {QS5.map((q, i) => (
+        {QS7.map((q, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <p className="text-sm font-medium text-gray-800 mb-2">{i + 1}. {q}</p>
-            <textarea
-              value={answers[i]}
+            <textarea value={answers[i]}
               onChange={e => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }}
-              disabled={done}
-              rows={3}
-              placeholder="Skrifaðu svar hér…"
-              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm resize-none disabled:bg-gray-50"
-            />
-            {feedback && (
-              <FeedbackBadge score={feedback.items[i].score} maxScore={5} msg={feedback.items[i].msg} />
-            )}
+              disabled={done} rows={3} placeholder="Skrifaðu svar hér…"
+              className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm resize-none disabled:bg-gray-50" />
+            {feedback && <FeedbackBadge score={feedback.items[i].score} maxScore={5} msg={feedback.items[i].msg} />}
           </div>
         ))}
       </div>
@@ -515,28 +588,30 @@ function Section5({ onComplete }) {
 function Results({ scores }) {
   const sections = [
     { title: 'Myndir', max: 8 },
-    { title: 'Paraðu saman', max: 8 },
+    { title: 'Paraðu orð og skýringar', max: 8 },
     { title: 'Flokkaðu orðin', max: 6 },
+    { title: 'Tengdu persónu', max: 8 },
     { title: 'Eyðufylling', max: 8 },
+    { title: 'Rétt eða rangt', max: 6 },
     { title: 'Lestu og svaraðu', max: 10 },
   ];
   const total = scores.reduce((s, x) => s + x, 0);
-  const maxTotal = 40;
+  const maxTotal = 54;
   const pct = Math.round((total / maxTotal) * 100);
   const color = pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red';
   const colorMap = { green: 'text-green-600', amber: 'text-amber-600', red: 'text-red-600' };
-  const bgMap = { green: 'bg-green-500', amber: 'bg-amber-500', red: 'bg-red-400' };
 
   return (
     <div className="fade-in">
       <div className="text-center mb-8">
-        <div className={`text-6xl font-light mb-1 ${colorMap[color]}`}>{total}<span className="text-2xl text-gray-400">/{maxTotal}</span></div>
-        <div className="text-gray-500 font-light">{pct}%</div>
-        <div className={`text-lg font-medium mt-2 ${colorMap[color]}`}>
+        <div className={`text-6xl font-light mb-1 ${colorMap[color]}`}>
+          {total}<span className="text-2xl text-gray-400">/{maxTotal}</span>
+        </div>
+        <div className="text-gray-500 font-light mb-2">{pct}%</div>
+        <div className={`text-lg font-medium ${colorMap[color]}`}>
           {pct >= 80 ? '🌟 Framúrskarandi!' : pct >= 50 ? '👍 Gott starf – haltu áfram!' : '📚 Þarft að æfa meira'}
         </div>
       </div>
-
       <div className="flex flex-col gap-3 mb-8">
         {sections.map((s, i) => {
           const p = Math.round((scores[i] / s.max) * 100);
@@ -554,7 +629,6 @@ function Results({ scores }) {
           );
         })}
       </div>
-
       <button onClick={() => window.location.reload()}
         className="w-full px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
         🔄 Byrja aftur
@@ -564,20 +638,19 @@ function Results({ scores }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// AÐALFORRITIÐ
+// APP
 // ─────────────────────────────────────────────────────────────────────────
+
+const SECTIONS = [Section1, Section2, Section3, Section4, Section5, Section6, Section7];
+const TOTAL = SECTIONS.length;
 
 function App() {
   const [section, setSection] = useState(0);
-  const [scores, setScores] = useState([0, 0, 0, 0, 0]);
+  const [scores, setScores] = useState(Array(TOTAL).fill(0));
   const [sectionDone, setSectionDone] = useState(false);
 
-  const TOTAL = 5;
-
   const handleComplete = (score) => {
-    const s = [...scores];
-    s[section] = score;
-    setScores(s);
+    setScores(prev => { const s = [...prev]; s[section] = score; return s; });
     setSectionDone(true);
   };
 
@@ -587,8 +660,9 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const isLast = section === TOTAL - 1;
   const isDone = section >= TOTAL;
+  const isLast = section === TOTAL - 1;
+  const Current = !isDone ? SECTIONS[section] : null;
 
   return (
     <div>
@@ -602,20 +676,13 @@ function App() {
           <p className="text-gray-500 text-sm font-light">Sýnishorn · ÍSAT1ÍA · malstodin.org</p>
         </div>
       </header>
-
       <main className="max-w-2xl mx-auto px-6 py-8">
         {!isDone && <ProgressBar current={section} total={TOTAL} />}
-
         {isDone ? (
           <Results scores={scores} />
         ) : (
           <>
-            {section === 0 && <Section1 onComplete={handleComplete} />}
-            {section === 1 && <Section2 onComplete={handleComplete} />}
-            {section === 2 && <Section3 onComplete={handleComplete} />}
-            {section === 3 && <Section4 onComplete={handleComplete} />}
-            {section === 4 && <Section5 onComplete={handleComplete} />}
-
+            <Current onComplete={handleComplete} />
             {sectionDone && (
               <NextBtn onClick={next} label={isLast ? 'Sjá niðurstöður →' : 'Næsti liður →'} />
             )}
