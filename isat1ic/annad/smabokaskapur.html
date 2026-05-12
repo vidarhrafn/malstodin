@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smábókaskápurinn – Lesskilningur</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useCallback } = React;
+
+// ── Spurningar ────────────────────────────────────────────────────────────────
+const BOOKS = [
+  {
+    id: "vinir_afriku",
+    title: "Vinir Afríku",
+    questions: [
+      "Hvað gera Einar og Tinna á hverjum morgni?",
+      "Hvað vekur áhuga þeirra í dag?",
+      "Hvernig ætla þau að hjálpa?",
+      "Hvað er í gula kassanum?",
+      "Með hverjum býr Svala?",
+      "Hvað vill hún gefa?",
+      "Hvað gerði hún í Afríku?",
+      "Hvar býr Tóti og á hvað spilar hann?",
+      "Hvað gefur hann?",
+      "Af hverju langar hann til Afríku?",
+      "Hvað kostar hver hlutur?",
+      "Hvað kaupir mamma?",
+      "Hvað kaupir Svala?",
+      "En hvað kaupir Tóti?",
+      "Hvað kaupir pabbi og hvað ætlar hann að elda?",
+      "Hvað er Svala að gera í garðinum?",
+      "Hvað segir mamma um bolinn?",
+      "Hvað ætlar Tóti að segja ömmu um pottinn?",
+      "Hvert fara krakkarnir með peningana?",
+      "Hver á að fá peningana?",
+      "Hvað á þorpið marga vini á Íslandi?",
+    ]
+  },
+  {
+    id: "tx10_fotbolti",
+    title: "TX-10 í fótbolta",
+    questions: [
+      "Hverjum leiðist?",
+      "Er glugginn lokaður?",
+      "Hvað eru krakkarnir að gera?",
+      "Hver vill leika með krökkunum?",
+      "Af hverju getur Tx ekki verið með?",
+      "Af hverju verður Bára hissa?",
+      "Hvar finnst Tx gott að sitja?",
+      "Af hverju heitir boltinn fótbolti?",
+      "Hvað er á græna laufblaðinu?",
+      "Hvar á hún heima?",
+      "Hvað gera Tx og maríuhænan?",
+      "Af hverju fela þau sig?",
+      "Af hverju er Bára með stóra hanska?",
+      "Hvert fór bjallan og af hverju?",
+      "Hvar hvílir Tx sig?",
+      "Í hvaða liði er Tx?",
+      "Hverjir skora mörk?",
+      "Getur Tx verið einn í marki?",
+      "Hvað gerir Bára þegar hún kemur heim?",
+      "Hvað nennir Tx ekki að gera?",
+      "Hvað vill hann gera?",
+    ]
+  },
+  {
+    id: "graeni_gaukurinn",
+    title: "Græni gaukurinn",
+    questions: [
+      "Hvað ætla Tinna og Einar að gera?",
+      "Hvað kaupa þau fyrir afa?",
+      "Hvar býr afi?",
+      "Hvað er að afa?",
+      "Hvað gera Einar og Tinna fyrir afa?",
+      "Um hvað er fréttin sem Tinna las?",
+      "Hvað vill Tinna ekki lesa um og af hverju?",
+      "Hver situr á vaskinum?",
+      "Hvað borðar leynigesturinn?",
+      "Hvað sagðist afi ætla að gera við fræin?",
+      "Af hverju er afi eins og sjóræningi?",
+      "Mynd af hverjum er í blaðinu?",
+      "Hvað stendur undir myndinni?",
+      "Hvað segir Tinna við litlu stelpuna?",
+      "Af hverju slapp Mási út?",
+      "Hvað gerði Mási við kettlinginn?",
+      "Hvað þurfa þau að gera við kettlinginn?",
+      "Má vera með páfagauka hjá afa?",
+      "Hver situr hjá afa í sófanum?",
+    ]
+  },
+  {
+    id: "skrytin_dagur",
+    title: "Skrýtinn dagur hjá Gunnari",
+    questions: [
+      "Hvað er Gunnar gamall?",
+      "Hvað hefur oft komið fyrir Gunnar?",
+      "Af hverju gat Gunnar ekki farið í skólann?",
+      "Hver var heima hjá Gunnari?",
+      "Fannst Gunnari gaman að vera heima veikur?",
+      "Hvað vildi Gunnar gera?",
+      "Hvað kom fyrir pabba hans Gunnars?",
+      "Hver lá undir bókahillunni?",
+      "Hvað hugsaði Gunnar um pabba sinn?",
+      "Hvað gerði Gunnar við fötuna?",
+      "Hvað náði Gunnar í?",
+      "Hvernig vissi Gunnar að pabbi hans væri ekki dáinn?",
+      "Af hverju sá pabbi hans allt rautt?",
+      "Hvað fannst pabba skrítið?",
+      "Hvað var á pabbinn með á höfðinu?",
+      "Hvernig leið pabba Gunnars?",
+      "Hvað gerði Gunnar fyrir pabba sinn?",
+      "Hver gubbaði?",
+      "Hver svaf allan daginn?",
+      "Hvað var Gunnar að gera þegar mamma kom heim?",
+      "Hver hló ekki og hvers vegna ekki?",
+    ]
+  },
+  {
+    id: "gagga_ari",
+    title: "Gagga og Ari",
+    questions: [
+      "Hver eru Gagga og Ari?",
+      "Hver er sniðugur og af hverju?",
+      "Hvað er gotterí?",
+      "Hver er fyndin og af hverju?",
+      "Af hverju vilja mamma og pabbi tala við Göggu og Ara?",
+      "Hvað segja þau um gotterí?",
+      "Hvað segja mamma og pabbi að sé gott?",
+      "Hvað er að vera þver?",
+      "Hvað finnst pabba að Gagga og Ari eigi að gera?",
+      "Hvaða dýr langar Göggu og Ara í?",
+      "Hvaða dýr fá þau?",
+      "Lýstu því sem pabbi smíðar?",
+      "Hvað borða Gagga og Ari með kanínunni?",
+      "Hverju safnaði Ari í krukku og hvað vill hann gera?",
+      "Af hverju verður Gagga þakklát?",
+      "Af hverju vill hún ekki kaupa gotterí?",
+      "Af hverju finnst Ara systir sín gáfuð og góð?",
+      "Hvað hætta börnin að gera?",
+      "Hvaða gera þau í staðinn?",
+      "Hvað eiga þau margar kanínur?",
+    ]
+  },
+  {
+    id: "kata_vofan",
+    title: "Kata og vofan",
+    questions: [
+      "Hvað gerir Kata?",
+      "Hvaða dýr hefur Kata lesið um?",
+      "Hvernig bók langar Kötu að lesa?",
+      "Hvað nær Kata í og af hverju?",
+      "Finnur Kata það sem hún leitar að?",
+      "Hvað fær hún að heyra um?",
+      "Hvert fór Kata svo?",
+      "Hvað gerir amma Kötu?",
+      "Hvað sér Kata í húsinu hjá ömmu sinni?",
+      "Hvað heyrist og hvað gerir Kata þá?",
+      "Fann Kata vofu?",
+      "Hver söng og dansaði?",
+      "Hvað segir Kata við ömmu?",
+      "Hvað þakkar Kata ömmu fyrir?",
+      "Hvað ætlar Kata að muna?",
+      "Hvað býr Kata til?",
+    ]
+  },
+  {
+    id: "tx10_skolinn",
+    title: "TX-10 í skólanum",
+    questions: [
+      "Hvað er Bára að gera?",
+      "Hver er tölvuvera og hvað vill tölvuveran gera?",
+      "Hverju lofar tölvuveran?",
+      "Hvað nær Kata í og af hverju?",
+      "Hvar sér tölvuveran á leiðinni í skólann?",
+      "Hvar stendur TX-10 í skólastofunni?",
+      "Hver er María og hvað er hún að gera?",
+      "Hvað er það sem flýgur í loftinu?",
+      "Hvað gerði höndin?",
+      "Hvað gerir TX-10 eftir að hann lendir í ruslinu?",
+      "Vildi TX-10 vera aleinn og í friði?",
+      "Fór hann í fótbolta?",
+      "Hvar beið hann eftir að skólinn yrði búinn?",
+      "Hvað á að gera í skólanum skv. TX-10?",
+      "Hvað er Bára að gera með vinum sínum?",
+      "Hvað eiga krakkar að gera?",
+      "Hvað vill tölvuveran TX-10 helst gera?",
+    ]
+  },
+  {
+    id: "valdi_vaskur",
+    title: "Valdi og Vaskur",
+    questions: [
+      "Hver er Vaskur?",
+      "Hver vekur Valda?",
+      "Hvað borða þeir í morgunmat?",
+      "Við hvað starfar Valdi?",
+      "Bíður Vaskur heima?",
+      "Hvað gerir Valdi í vinnunni?",
+      "Hjálpar hann dýrum?",
+      "Hvað segir röddin?",
+      "Er húsið læst?",
+      "Er allt bjart?",
+      "Af hverju segir Valdi uss?",
+      "Af hverju verður Valdi reiður?",
+      "Hver er Kobbi?",
+      "Hvað er að Kobba?",
+      "Hvar á hann heima?",
+      "Hver sækir Kobba?",
+      "Hver er með kaffibolla á bls. 25?",
+      "Hver er með húfu á bls. 25?",
+    ]
+  },
+  {
+    id: "geimveran",
+    title: "Geimveran",
+    questions: [
+      "Hvað sér Pési í garðinum?",
+      "Hvað heyrist?",
+      "Hvað sá Pési þegar hann kíkti inn?",
+      "Hefur Pési séð svona veru áður?",
+      "Hvað segir veran við Pésa?",
+      "Vill Pési eiga geimveruvin?",
+      "Hvað gerir Pési þegar hann kemur inn?",
+      "En geimveran?",
+      "Hvað heitir geimveran?",
+      "Drakk geimveran kakóið?",
+      "Hvernig komast þau út í geim?",
+      "Hvað voru þau lengi í geimnum?",
+      "Hver drakk kakóið?",
+    ]
+  },
+  {
+    id: "kata_ormarnir",
+    title: "Kata og ormarnir",
+    questions: [
+      "Hvað vill Kata fá? (3 hlutir)",
+      "Hvað segja pabbi og mamma?",
+      "Hvernig líður Kötu?",
+      "Hvað sér Kata?",
+      "Hvað hugsar Kata?",
+      "Hvað heitir ormurinn?",
+      "Hvað setur Kata í krúsina?",
+      "Hvar á Muri að búa?",
+      "Hvað vantar Mura?",
+      "Hvar leitar Kata? (3 staðir)",
+      "Hvað á Muri núna?",
+      "Hvert fer Kata með krúsirnar?",
+      "Hvað gefur Kata Mura og vinum hans?",
+      "Hvað les Kata fyrir Mura og vini hans?",
+      "Hvað ætlar Kata að gera með ormana?",
+      "Hvað gerir pabbi Kötu?",
+      "Hvar leitar Kata? (3 staðir til viðbótar)",
+      "Hvar sér mamma orm?",
+      "Hvar sér pabbi orm?",
+      "Hvernig líður pabba og mömmu?",
+      "Hvar finna þau orma? (3 staðir)",
+      "Hvert fer fjölskyldan með Mura og vini hans?",
+      "Hvað setur Kata í krús að lokum?",
+      "Hvað má Kata fá?",
+    ]
+  },
+];
+
+// ── Hjálparföll ───────────────────────────────────────────────────────────────
+function pickRandom(arr, n) {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+async function callOpenAI(messages) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens: 200, model: 'gpt-4o-mini', temperature: 0.2 })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+// ── Íhlutir ───────────────────────────────────────────────────────────────────
+const ProgressBar = ({ current, total }) => (
+  <div className="flex items-center gap-2 mb-6">
+    {Array.from({ length: total }).map((_, i) => (
+      <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500
+        ${i < current ? 'bg-green-500' : i === current ? 'bg-blue-400' : 'bg-gray-200'}`} />
+    ))}
+    <span className="text-xs text-gray-400 font-light whitespace-nowrap">{current}/{total}</span>
+  </div>
+);
+
+const FeedbackBadge = ({ score, message }) => {
+  const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+  const colors = {
+    green: 'bg-green-50 border-green-200 text-green-800',
+    amber: 'bg-amber-50 border-amber-200 text-amber-800',
+    red: 'bg-red-50 border-red-200 text-red-800',
+  };
+  const label = score >= 4 ? '✓ Rétt' : score >= 2 ? '◐ Hlutrétt' : '✗ Reyndu aftur';
+  return (
+    <div className={`mt-3 p-4 rounded-xl border ${colors[color]} fade-in`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-medium text-sm">{label}</span>
+        <span className="ml-auto text-sm font-light">{score}/5 stig</span>
+      </div>
+      <p className="text-sm font-light">{message}</p>
+    </div>
+  );
+};
+
+// ── BookSelector ───────────────────────────────────────────────────────────────
+const BookSelector = ({ onSelect }) => (
+  <div className="fade-in">
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        <button onClick={() => window.history.back()}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+          ← Til baka
+        </button>
+        <h1 className="text-3xl font-light text-gray-800 mb-1">Smábókaskápurinn</h1>
+        <p className="text-gray-500 text-sm font-light">Veldu bók og svaraðu 5 spurningum um hana</p>
+      </div>
+    </header>
+    <div className="max-w-2xl mx-auto px-6 py-8">
+      <div className="grid gap-3">
+        {BOOKS.map(book => (
+          <button key={book.id} onClick={() => onSelect(book)}
+            className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-100
+              px-6 py-4 hover:border-blue-300 hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between">
+              <span className="font-light text-gray-800 text-lg group-hover:text-blue-700 transition-colors">
+                {book.title}
+              </span>
+              <span className="text-gray-300 group-hover:text-blue-400 transition-colors text-xl">→</span>
+            </div>
+            <p className="text-xs text-gray-400 font-light mt-0.5">
+              {book.questions.length} spurningar í sögunni
+            </p>
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// ── QuestionView ───────────────────────────────────────────────────────────────
+const QuestionView = ({ book, questions, qIndex, onDone }) => {
+  const [answer, setAnswer] = useState('');
+  const [feedback, setFeedback] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [scores, setScores] = useState([]);
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
+
+  const submit = async () => {
+    if (!answer.trim()) return;
+    setLoading(true);
+    try {
+      const prompt = `Þú ert kennari sem metur svar nemanda við spurning um íslenska barnabók sem heitir "${book.title}".
+
+Spurning: "${question}"
+Svar nemanda: "${answer}"
+
+Mettu svarið með tilliti til lesskilnings. Vertu sveigjanlegur – nemandinn þarf ekki að nota nákvæmlega sömu orð og í bókinni. Mundu að þetta eru nemendur sem eru að læra íslensku.
+
+Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein stuttur setning á íslensku, vinaleg og hvetjandi]`;
+
+      const result = await callOpenAI([{ role: 'user', content: prompt }]);
+      const stigMatch = result.match(/STIG:\s*(\d)/);
+      const endMatch = result.match(/ENDURGJÖF:\s*(.+)/);
+      const score = stigMatch ? parseInt(stigMatch[1]) : 0;
+      const msg = endMatch ? endMatch[1].trim() : result.trim();
+      setFeedback({ score, msg });
+      setScores(prev => [...prev, score]);
+    } catch (e) {
+      setFeedback({ score: 0, msg: 'Villa kom upp. Reyndu aftur.' });
+    }
+    setLoading(false);
+  };
+
+  const next = () => {
+    onDone(feedback.score, answer, qIndex);
+    setAnswer('');
+    setFeedback(null);
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="mb-6">
+        <ProgressBar current={qIndex} total={questions.length} />
+        <p className="text-xs text-gray-500 font-light mb-4">
+          Spurning {qIndex + 1} af {questions.length} – <span className="italic">{book.title}</span>
+        </p>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-4">
+          <p className="text-blue-900 font-light text-lg leading-relaxed">{question}</p>
+        </div>
+        <textarea
+          value={answer}
+          onChange={e => setAnswer(e.target.value)}
+          disabled={!!feedback || loading}
+          placeholder="Skrifaðu svar hér..."
+          rows={3}
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl
+            focus:outline-none focus:border-blue-400 font-light resize-none
+            disabled:bg-gray-50 text-gray-800 transition-colors"
+        />
+        {feedback && <FeedbackBadge score={feedback.score} message={feedback.msg} />}
+      </div>
+      <div className="flex gap-3">
+        {!feedback ? (
+          <button onClick={submit} disabled={loading || !answer.trim()}
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg
+              hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed
+              transition-colors font-light">
+            {loading ? 'Meti svar...' : 'Senda svar'}
+          </button>
+        ) : (
+          <button onClick={next}
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg
+              hover:bg-blue-700 transition-colors font-light">
+            {isLast ? 'Sjá niðurstöður →' : 'Næsta spurning →'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── ResultView ─────────────────────────────────────────────────────────────────
+const ResultView = ({ book, questions, results, onRestart, onNewBook }) => {
+  const total = results.reduce((s, r) => s + r.score, 0);
+  const max = questions.length * 5;
+  const pct = Math.round((total / max) * 100);
+  const color = pct >= 70 ? 'green' : pct >= 40 ? 'amber' : 'red';
+  const colors = {
+    green: 'text-green-700 bg-green-50 border-green-200',
+    amber: 'text-amber-700 bg-amber-50 border-amber-200',
+    red: 'text-red-700 bg-red-50 border-red-200',
+  };
+  const praise = pct >= 80 ? 'Framúrskarandi!' : pct >= 60 ? 'Vel gert!' : pct >= 40 ? 'Góð vinna!' : 'Reyndu aftur!';
+
+  return (
+    <div className="fade-in">
+      {/* Heildarstig */}
+      <div className={`rounded-xl border p-6 mb-6 text-center ${colors[color]}`}>
+        <div className="text-4xl font-light mb-1">{total}/{max}</div>
+        <div className="text-lg font-light mb-1">{praise}</div>
+        <div className="text-sm font-light opacity-75">{pct}% rétt</div>
+      </div>
+
+      {/* Per spurning */}
+      <div className="space-y-3 mb-6">
+        {results.map((r, i) => {
+          const c = r.score >= 4 ? 'green' : r.score >= 2 ? 'amber' : 'red';
+          const cs = {
+            green: 'bg-green-50 border-green-100',
+            amber: 'bg-amber-50 border-amber-100',
+            red: 'bg-red-50 border-red-100',
+          };
+          return (
+            <div key={i} className={`rounded-xl border p-4 ${cs[c]}`}>
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <p className="text-sm font-light text-gray-700">{questions[i]}</p>
+                <span className={`text-xs font-medium whitespace-nowrap px-2 py-0.5 rounded-full
+                  ${c === 'green' ? 'bg-green-200 text-green-800' :
+                    c === 'amber' ? 'bg-amber-200 text-amber-800' : 'bg-red-200 text-red-800'}`}>
+                  {r.score}/5
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 font-light italic">&ldquo;{r.answer}&rdquo;</p>
+              <p className="text-xs text-gray-600 font-light mt-1">{r.feedback}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Takkar */}
+      <div className="flex gap-3 flex-wrap">
+        <button onClick={onRestart}
+          className="flex-1 px-5 py-3 bg-blue-600 text-white rounded-lg
+            hover:bg-blue-700 transition-colors font-light text-sm">
+          🔄 Reyna aftur – sama bók
+        </button>
+        <button onClick={onNewBook}
+          className="flex-1 px-5 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+            hover:bg-gray-50 transition-colors font-light text-sm">
+          📚 Velja aðra bók
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── Aðalforrit ────────────────────────────────────────────────────────────────
+const App = () => {
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [qIndex, setQIndex] = useState(0);
+  const [results, setResults] = useState([]);
+  const [phase, setPhase] = useState('select'); // select | quiz | result
+
+  const selectBook = (book) => {
+    const qs = pickRandom(book.questions, 5);
+    setSelectedBook(book);
+    setQuestions(qs);
+    setQIndex(0);
+    setResults([]);
+    setPhase('quiz');
+  };
+
+  const handleDone = (score, answer, idx) => {
+    const newResults = [...results, { score, answer, feedback: '' }];
+    // Re-fetch feedback from last FeedbackBadge state is tricky; we store it via closure
+    // We'll just store score+answer here, feedback already shown inline
+    if (idx === questions.length - 1) {
+      setResults(newResults);
+      setPhase('result');
+    } else {
+      setResults(newResults);
+      setQIndex(idx + 1);
+    }
+  };
+
+  // We need feedback stored too — let's track it differently
+  const [pendingResults, setPendingResults] = useState([]);
+
+  const handleDoneFull = (score, answer, feedbackMsg, idx) => {
+    const entry = { score, answer, feedback: feedbackMsg };
+    const newResults = [...pendingResults, entry];
+    setPendingResults(newResults);
+    if (idx === questions.length - 1) {
+      setResults(newResults);
+      setPhase('result');
+    } else {
+      setQIndex(idx + 1);
+    }
+  };
+
+  const restart = () => {
+    const qs = pickRandom(selectedBook.questions, 5);
+    setQuestions(qs);
+    setQIndex(0);
+    setPendingResults([]);
+    setResults([]);
+    setPhase('quiz');
+  };
+
+  const newBook = () => {
+    setSelectedBook(null);
+    setPendingResults([]);
+    setResults([]);
+    setPhase('select');
+  };
+
+  if (phase === 'select') return <BookSelector onSelect={selectBook} />;
+
+  return (
+    <div>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-6">
+          <button onClick={newBook}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block font-light">
+            ← Velja aðra bók
+          </button>
+          <h1 className="text-2xl font-light text-gray-800">{selectedBook.title}</h1>
+          <p className="text-gray-500 text-sm font-light">
+            {phase === 'quiz' ? 'Lesskilningsspurningar' : 'Niðurstöður'}
+          </p>
+        </div>
+      </header>
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        {phase === 'quiz' && (
+          <QuizController
+            book={selectedBook}
+            questions={questions}
+            qIndex={qIndex}
+            pendingResults={pendingResults}
+            onDone={handleDoneFull}
+          />
+        )}
+        {phase === 'result' && (
+          <ResultView
+            book={selectedBook}
+            questions={questions}
+            results={results}
+            onRestart={restart}
+            onNewBook={newBook}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── QuizController – heldur utan um eina spurningu í einu ─────────────────────
+const QuizController = ({ book, questions, qIndex, pendingResults, onDone }) => {
+  const [answer, setAnswer] = useState('');
+  const [feedback, setFeedback] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const question = questions[qIndex];
+  const isLast = qIndex === questions.length - 1;
+
+  const submit = async () => {
+    if (!answer.trim()) return;
+    setLoading(true);
+    try {
+      const prompt = `Þú ert kennari sem metur svar nemanda við spurningu um íslenska barnabók sem heitir "${book.title}".
+
+Spurning: "${question}"
+Svar nemanda: "${answer}"
+
+Mettu svarið með tilliti til lesskilnings. Vertu sveigjanlegur – nemandinn þarf ekki að nota nákvæmlega sömu orð og í bókinni. Mundu að þetta eru nemendur sem eru að læra íslensku sem annað mál.
+
+Svaraðu EINUNGIS á þessu formi:
+STIG: [tala 0-5]
+ENDURGJÖF: [ein stuttur setning á íslensku, vinaleg og hvetjandi]`;
+
+      const result = await callOpenAI([{ role: 'user', content: prompt }]);
+      const stigMatch = result.match(/STIG:\s*(\d)/);
+      const endMatch = result.match(/ENDURGJÖF:\s*(.+)/);
+      const score = stigMatch ? parseInt(stigMatch[1]) : 0;
+      const msg = endMatch ? endMatch[1].trim() : result.trim();
+      setFeedback({ score, msg });
+    } catch (e) {
+      setFeedback({ score: 0, msg: 'Villa kom upp við mat. Reyndu aftur.' });
+    }
+    setLoading(false);
+  };
+
+  const next = () => {
+    onDone(feedback.score, answer, feedback.msg, qIndex);
+    setAnswer('');
+    setFeedback(null);
+  };
+
+  return (
+    <div className="fade-in">
+      <ProgressBar current={qIndex} total={questions.length} />
+      <p className="text-xs text-gray-500 font-light mb-4">
+        Spurning {qIndex + 1} af {questions.length}
+      </p>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-4">
+        <p className="text-blue-900 font-light text-lg leading-relaxed">{question}</p>
+      </div>
+
+      <textarea
+        value={answer}
+        onChange={e => setAnswer(e.target.value)}
+        disabled={!!feedback || loading}
+        placeholder="Skrifaðu svar hér..."
+        rows={3}
+        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl
+          focus:outline-none focus:border-blue-400 font-light resize-none
+          disabled:bg-gray-50 text-gray-800 transition-colors mb-3"
+      />
+
+      {feedback && <FeedbackBadge score={feedback.score} message={feedback.msg} />}
+
+      <div className="mt-4">
+        {!feedback ? (
+          <button onClick={submit} disabled={loading || !answer.trim()}
+            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg
+              hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed
+              transition-colors font-light">
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                Meti svar...
+              </span>
+            ) : 'Senda svar'}
+          </button>
+        ) : (
+          <button onClick={next}
+            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg
+              hover:bg-blue-700 transition-colors font-light">
+            {isLast ? 'Sjá niðurstöður →' : 'Næsta spurning →'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
