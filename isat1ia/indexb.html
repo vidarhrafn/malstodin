@@ -5,486 +5,617 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ÍSAT1ÍA – Málstöðin</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "FIREBASE_API_KEY",
+      authDomain: "malstodin.firebaseapp.com",
+      projectId: "malstodin",
+      storageBucket: "malstodin.appspot.com",
+      messagingSenderId: "MESSAGING_SENDER_ID",
+      appId: "APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      try {
+        const snap = await getDocs(collection(db, 'progress', user.uid, 'exercises'));
+        const done = new Set();
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (d.status === 'completed' || d.opened) done.add(doc.id);
+        });
+        window._malstodDone = done;
+        document.dispatchEvent(new CustomEvent('progressReady', { detail: done }));
+      } catch (e) {
+        console.error('Progress load failed:', e);
+      }
+    });
+  </script>
+
   <style>
     :root {
-      --paper: #f8f5ee;
-      --paper-dark: #e9e3d7;
-      --ink: #2f2a25;
-      --muted: #776f66;
-      --blue: #2563eb;
-      --green: #16a34a;
-      --orange: #ea580c;
-      --purple: #7c3aed;
+      --paper: #fdfcf9;
+      --ink: #292524;
+      --muted: #78716c;
     }
 
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.85), transparent 34rem),
-        linear-gradient(to bottom, var(--paper), var(--paper-dark));
+        radial-gradient(circle at top left, rgba(255,255,255,0.95), transparent 28rem),
+        linear-gradient(to bottom, #fdfcf9 0%, #f3eee5 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
       min-height: 100vh;
     }
 
-    .chapter-card {
-      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    .checkpoint-gradient {
+      background:
+        radial-gradient(circle at top right, rgba(250, 204, 21, 0.18), transparent 18rem),
+        linear-gradient(135deg, #1c1917 0%, #44403c 100%);
+    }
+
+    .chapter-card,
+    .task-button,
+    .checkpoint-link {
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
     }
 
     .chapter-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 18px 36px rgba(75, 64, 50, 0.12);
-      border-color: #d6c8b7;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(68, 64, 60, 0.10);
     }
 
-    .task-link {
-      transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-    }
-
-    .task-link:hover {
+    .task-button:hover,
+    .checkpoint-link:hover {
       transform: translateY(-1px);
     }
 
-    .line-clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+    .task-button:active,
+    .checkpoint-link:active {
+      transform: scale(0.98);
     }
 
-    .pill-active {
-      background: #2f2a25;
-      color: white;
+    .task-disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
 
-    .fade-in {
-      animation: fadeIn 0.25s ease-out;
+    .task-disabled:hover {
+      transform: none;
+      background: #fafaf9;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+    .chapter-badge {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .bottom-safe {
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    .task-done::after {
+      content: '✓';
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #16a34a;
+      background: #dcfce7;
+      border-radius: 999px;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 18px;
+      text-align: center;
+    }
+    .task-done {
+      position: relative;
     }
   </style>
 </head>
-<body>
-  <div class="min-h-screen pb-14">
-    <header class="bg-white/82 backdrop-blur border-b border-stone-200 shadow-sm">
-      <div class="max-w-6xl mx-auto px-5 sm:px-6 py-8 sm:py-10">
-        <a href="/" class="inline-flex items-center gap-2 text-sm text-stone-500 hover:text-stone-800 mb-7">
-          <span aria-hidden="true">←</span>
-          <span>Til baka á forsíðu</span>
+<body class="bottom-safe">
+
+  <header class="bg-white/95 backdrop-blur-md border-b border-stone-200 px-5 py-5 sm:py-7 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-3xl mx-auto flex justify-between items-end gap-4">
+      <div>
+        <a href="/" class="inline-flex items-center gap-1 text-xs text-stone-400 hover:text-stone-700 mb-2">
+          <span>←</span>
+          <span>Til baka</span>
         </a>
-
-        <div class="grid lg:grid-cols-[1.1fr_0.9fr] gap-8 items-end">
-          <div>
-            <p class="text-xs uppercase tracking-[0.24em] text-stone-400 mb-3">Málstöðin · Tækniskólinn</p>
-            <h1 class="text-4xl sm:text-6xl font-light tracking-tight text-stone-850 mb-4">ÍSAT1ÍA</h1>
-            <p class="text-lg sm:text-xl font-light text-stone-600 max-w-2xl leading-relaxed">
-              Kaflarnir eru settir fram sem námsleið. Í hverjum kafla finnur þú texta, hlustun, hljóðritun og spjall þegar það á við.
-            </p>
-          </div>
-
-          <div class="bg-stone-50 border border-stone-200 rounded-3xl p-5 shadow-sm">
-            <div class="flex items-start gap-4">
-              <div class="text-4xl" aria-hidden="true">🎓</div>
-              <div>
-                <h2 class="text-lg font-medium text-stone-800 mb-1">Hvernig nota ég síðuna?</h2>
-                <p class="text-sm font-light text-stone-600 leading-relaxed">
-                  Veldu kafla sem kennarinn bendir á. Byrjaðu yfirleitt á textanum, farðu síðan í hlustun og notaðu spjall eða hljóðritun til að æfa málið sjálf/ur.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <p class="text-[10px] uppercase tracking-[0.22em] text-stone-400 mb-1">Málstöðin · Tækniskólinn</p>
+        <h1 class="text-4xl sm:text-5xl font-light tracking-tight text-stone-900">ÍSAT1ÍA</h1>
       </div>
-    </header>
-
-    <main class="max-w-6xl mx-auto px-5 sm:px-6 mt-8 sm:mt-10">
-      <section class="grid lg:grid-cols-[1fr_auto] gap-4 mb-7 items-center">
-        <div>
-          <h2 class="text-2xl sm:text-3xl font-light text-stone-800">Aðalefni</h2>
-          <p class="text-sm text-stone-500 font-light mt-1">Kaflar 1–13 · A1–A2</p>
-        </div>
-
-        <div class="flex flex-col sm:flex-row gap-3 lg:justify-end">
-          <label class="relative block">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">🔎</span>
-            <input
-              id="searchInput"
-              type="search"
-              placeholder="Leita að kafla eða þema…"
-              class="w-full sm:w-72 rounded-2xl border border-stone-200 bg-white px-10 py-3 text-sm outline-none focus:border-stone-400 shadow-sm"
-            />
-          </label>
-
-          <div class="flex bg-white rounded-2xl border border-stone-200 p-1 shadow-sm" role="group" aria-label="Sía eftir verkefnagerð">
-            <button class="filter-btn pill-active px-3 py-2 rounded-xl text-sm font-light" data-filter="all">Allt</button>
-            <button class="filter-btn px-3 py-2 rounded-xl text-sm font-light text-stone-600" data-filter="text">Textar</button>
-            <button class="filter-btn px-3 py-2 rounded-xl text-sm font-light text-stone-600" data-filter="listening">Hlustun</button>
-            <button class="filter-btn px-3 py-2 rounded-xl text-sm font-light text-stone-600" data-filter="speaking">Spjall</button>
-          </div>
-        </div>
-      </section>
-
-      <section id="chapterGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></section>
-
-      <section class="mt-12">
-        <div class="flex items-end justify-between gap-4 mb-5">
-          <div>
-            <h2 class="text-2xl sm:text-3xl font-light text-stone-800 flex items-center gap-2">
-              <span aria-hidden="true">🎮</span>
-              <span>Leikir og endurtekning</span>
-            </h2>
-            <p class="text-sm text-stone-500 font-light mt-1">Henta vel í lok kafla eða sem upprifjun.</p>
-          </div>
-        </div>
-        <div id="gameGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
-      </section>
-
-      <section class="mt-12 grid lg:grid-cols-[1fr_1fr] gap-5">
-        <div class="bg-white/86 border border-stone-200 rounded-3xl p-6 shadow-sm">
-          <h2 class="text-xl font-light text-stone-800 mb-3">💡 Um ÍSAT1ÍA</h2>
-          <p class="text-sm text-stone-600 font-light leading-relaxed">
-            Námsefni þetta er samið af Jóhönnu Hreinsdóttur og Viðari Hrafni Steingrímssyni 2024–2025 fyrir nemendur í ÍSAT1ÍA í Tækniskólanum.
-          </p>
-          <p class="text-xs text-stone-400 mt-5">© 2025 Jóhanna Hreinsdóttir og Viðar Hrafn Steingrímsson</p>
-        </div>
-
-        <div class="bg-stone-900 text-white rounded-3xl p-6 shadow-sm">
-          <h2 class="text-xl font-light mb-3">Kennarahugmynd</h2>
-          <p class="text-sm text-stone-200 font-light leading-relaxed">
-            Þessi útgáfa reynir að sýna nemendum fyrst námsleiðina, ekki bara safn af tenglum. Kortin eru kaflamiðuð, en verkefnin inni í hverju korti eru samt fljót aðgengileg.
-          </p>
-        </div>
-      </section>
-    </main>
-
-    <footer class="max-w-6xl mx-auto px-6 mt-10 text-center">
-      <p class="text-stone-400 text-xs font-light">ÍSAT1ÍA · Málstöðin</p>
-    </footer>
-  </div>
-
-  <div id="qrModal" class="hidden fixed inset-0 z-50 bg-black/75 p-4 items-center justify-center" onclick="closeQrModal()">
-    <div class="relative w-full max-w-xl" onclick="event.stopPropagation()">
-      <button class="absolute -top-12 right-0 text-white text-4xl font-light hover:text-stone-300" onclick="closeQrModal()" aria-label="Loka">×</button>
-      <div class="bg-white rounded-3xl p-5 shadow-2xl">
-        <p id="qrTitle" class="text-center text-stone-700 font-light mb-4"></p>
-        <img id="qrImage" src="" alt="QR kóði" class="w-full rounded-2xl" />
+      <div class="text-right hidden sm:block">
+        <p class="text-xs text-stone-400">Hlustun · Lesskilningur · Spjall</p>
+        <p class="text-sm font-medium text-stone-700">Námsleið</p>
       </div>
     </div>
-  </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 mt-7">
+    <section class="bg-white border border-stone-200 rounded-3xl p-6 sm:p-7 shadow-sm mb-8">
+      <div class="flex gap-4 items-start">
+        <div class="text-4xl" aria-hidden="true">🎓</div>
+        <div>
+          <h2 class="text-2xl font-light text-stone-900 mb-2">Námsleið í ÍSAT1ÍA</h2>
+          <p class="text-sm sm:text-base font-light leading-relaxed text-stone-600">
+            Vefefnið er skipulagt í lotur. Í hverjum kafla eru þrír fastir hnappar: lestexti, hlustun og spjall, auk hljóðritunar. Eftir hverja lotu kemur áfangastöð með upprifjun, leikjum og sjálfsprófi.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <nav class="grid grid-cols-4 gap-2 mb-9" aria-label="Lotur">
+      <a href="#lota-1" class="bg-stone-900 text-white rounded-2xl px-3 py-3 text-center shadow-sm">
+        <span class="block text-lg font-bold">1</span>
+        <span class="text-[10px] uppercase tracking-wide">Kaflar 1–3</span>
+      </a>
+      <a href="#lota-2" class="bg-white border border-stone-200 text-stone-600 rounded-2xl px-3 py-3 text-center shadow-sm hover:bg-stone-50">
+        <span class="block text-lg font-bold">2</span>
+        <span class="text-[10px] uppercase tracking-wide">Kaflar 4–6</span>
+      </a>
+      <a href="#lota-3" class="bg-white border border-stone-200 text-stone-600 rounded-2xl px-3 py-3 text-center shadow-sm hover:bg-stone-50">
+        <span class="block text-lg font-bold">3</span>
+        <span class="text-[10px] uppercase tracking-wide">Kaflar 7–9</span>
+      </a>
+      <a href="#lota-4" class="bg-white border border-stone-200 text-stone-600 rounded-2xl px-3 py-3 text-center shadow-sm hover:bg-stone-50">
+        <span class="block text-lg font-bold">4</span>
+        <span class="text-[10px] uppercase tracking-wide">Kaflar 10–13</span>
+      </a>
+    </nav>
+
+    <div id="courseContent" class="space-y-14"></div>
+
+    <section class="mt-12 bg-white border border-stone-200 rounded-3xl p-7 shadow-sm">
+      <h2 class="text-xl font-light text-stone-900 mb-3">💡 Um ÍSAT1ÍA</h2>
+      <p class="text-sm font-light text-stone-600 leading-relaxed">
+        Námsefni þetta er samið af Jóhönnu Hreinsdóttur og Viðari Hrafni Steingrímssyni 2024–2025. Það er samið fyrir nemendur í áfanganum ÍSAT1ÍA í Tækniskólanum.
+      </p>
+      <p class="text-xs text-stone-400 mt-5">© 2025 Jóhanna Hreinsdóttir & Viðar Hrafn Steingrímsson</p>
+    </section>
+  </main>
+
+  <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-stone-200 px-4 py-3 flex justify-around items-center z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.04)]" aria-label="Aðalvalmynd">
+    <a href="#" class="flex flex-col items-center gap-1 text-blue-600">
+      <span class="text-xl">🏠</span>
+      <span class="text-[10px] font-bold uppercase">Heim</span>
+    </a>
+    <a href="#courseContent" class="flex flex-col items-center gap-1 text-stone-400 hover:text-stone-700">
+      <span class="text-xl">📚</span>
+      <span class="text-[10px] font-bold uppercase">Lotur</span>
+    </a>
+  </nav>
 
   <script>
-    const chapters = [
+    const lots = [
       {
+        id: 'lota-1',
         number: 1,
-        icon: '👨‍👩‍👧‍👦',
-        title: 'Árni, Elsa, Harpa og Hulda',
-        theme: 'Fjölskylda og fólk',
-        canDo: ['Ég get skilið einfaldan texta um fjölskyldu.', 'Ég get sagt frá fólki í fjölskyldu.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/01_arni_elsa_harpa_hulda' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun1_fjolskyldan' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k1' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall1' }
-        ]
+        title: 'Fjölskylda og matur',
+        subtitle: 'Kaflar 1–3',
+        description: 'Nemendur kynnast fjölskyldunni, matargerð og menningarviðburðum.',
+        chapters: [
+          {
+            number: 1,
+            title: 'Árni, Elsa, Harpa og Hulda',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið einfaldan texta um fjölskyldu og kynnt mig og fjölskyldu mína.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/01_arni_elsa_harpa_hulda',  id: 'lestextar_01' },
+              listening: { href: '/isat1ia/hlustun/hlustun1_fjolskyldan',        id: 'hlustun_01'   },
+              recording: { href: '/isat1ia/hljodritun/k1',                       id: 'hljodritun_k1' },
+              speaking:  { href: '/isat1ia/spjall/spjall1',                      id: 'spjall_01'    }
+            }
+          },
+          {
+            number: 2,
+            title: 'Ýsa í raspi',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið einfaldan uppskriftartexta og sagt frá uppáhaldsmat mínum.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/02_ysa_i_raspi',   id: 'lestextar_02' },
+              listening: { href: '/isat1ia/hlustun/hlustun2_bakstur',    id: 'hlustun_02'   },
+              recording: { href: '/isat1ia/hljodritun/k2',               id: 'hljodritun_k2' },
+              speaking:  { href: '/isat1ia/spjall/spjall2_matur',        id: 'spjall_02'    }
+            }
+          },
+          {
+            number: 3,
+            title: 'Förum í leikhús',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um menningarviðburð og sagt frá því hvað mér líður að gera.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/03_forum_i_leikhus', id: 'lestextar_03' },
+              listening: { href: '/isat1ia/hlustun/hlustun3_leikhus',     id: 'hlustun_03'   },
+              recording: { href: '/isat1ia/hljodritun/k3',                id: 'hljodritun_k3' },
+              speaking:  { href: '/isat1ia/spjall/spjall3_leikhus',       id: 'spjall_03'    }
+            }
+          }
+        ],
+        checkpoint: {
+          title: 'Áfangastöð 1',
+          theme: 'Orðaforði úr köflum 1–3',
+          selfTest: '#',
+          flash: '#',
+          drawing: '/isat1ia/leikir/teiknileikur1-kaflar1-3',
+          puzzle: '/isat1ia/leikir/visbendingaleikur1_kaflar1-6'
+        }
       },
       {
+        id: 'lota-2',
         number: 2,
-        icon: '🐟',
-        title: 'Ýsa í raspi',
-        theme: 'Matur og eldamennska',
-        canDo: ['Ég get skilið einfaldar matar- og eldunarlýsingar.', 'Ég get talað um mat sem mér finnst góður.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/02_ysa_i_raspi' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun2_bakstur' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k2' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall2_matur' }
-        ]
+        title: 'Vinir og hátíðir',
+        subtitle: 'Kaflar 4–6',
+        description: 'Nemendur vinna með vini, kærustusamband og hrekkjavöku.',
+        chapters: [
+          {
+            number: 4,
+            title: 'Hulda og Halima',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um vini og menningarmun og sagt frá vinum mínum.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/04_hulda_og_halima',        id: 'lestextar_04' },
+              listening: { href: '/isat1ia/hlustun/hlustun4_veitingastadur',     id: 'hlustun_04'   },
+              recording: { href: '/isat1ia/hljodritun/k4',                       id: 'hljodritun_k4' },
+              speaking:  { href: '/isat1ia/spjall/spjall4_veitingastadur',       id: 'spjall_04'    }
+            }
+          },
+          {
+            number: 5,
+            title: 'Harpa og Eiríkur',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um kærustusamband og lýst tengslum fólks.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/05_harpa_og_eirikur', id: 'lestextar_05' },
+              listening: { href: '/isat1ia/hlustun/hlustun5_vinir',        id: 'hlustun_05'   },
+              recording: { href: '/isat1ia/hljodritun/k5',                 id: 'hljodritun_k5' },
+              speaking:  { href: '/isat1ia/spjall/spjall5_vinir',          id: 'spjall_05'    }
+            }
+          },
+          {
+            number: 6,
+            title: 'Hrekkjavaka',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um hátíð og borið saman hátíðir í ólíkum menningarheimum.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/06_hrekkjavaka',      id: 'lestextar_06' },
+              listening: { href: '/isat1ia/hlustun/hlustun6_hrekkjavaka',  id: 'hlustun_06'   },
+              recording: { href: '/isat1ia/hljodritun/k6',                 id: 'hljodritun_k6' },
+              speaking:  { href: '/isat1ia/spjall/spjall6_hrekkjavaka',    id: 'spjall_06'    }
+            }
+          }
+        ],
+        checkpoint: {
+          title: 'Áfangastöð 2',
+          theme: 'Orðaforði úr köflum 4–6',
+          selfTest: '#',
+          flash: '#',
+          drawing: '/isat1ia/leikir/teiknileikur2_kaflar4-6',
+          puzzle: '/isat1ia/leikir/visbendingaleikur1_kaflar1-6'
+        }
       },
       {
+        id: 'lota-3',
         number: 3,
-        icon: '🎭',
-        title: 'Förum í leikhús',
-        theme: 'Menning og viðburðir',
-        canDo: ['Ég get skilið einfaldar upplýsingar um viðburð.', 'Ég get talað um hvert ég ætla að fara.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/03_forum_i_leikhus' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun3_leikhus' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k3' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall3_leikhus' }
-        ]
+        title: 'Innkaup og matargerð',
+        subtitle: 'Kaflar 7–9',
+        description: 'Nemendur vinna með innkaup, matargerð og leiki.',
+        chapters: [
+          {
+            number: 7,
+            title: 'Að kaupa í matinn',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um innkaup og sagt frá því hvað ég kaupi í búðina.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/07_harpa_og_eirikur_kaupa', id: 'lestextar_07' },
+              listening: { href: '/isat1ia/hlustun/hlustun7_bonus',              id: 'hlustun_07'   },
+              recording: { href: '/isat1ia/hljodritun/k7',                       id: 'hljodritun_k7' },
+              speaking:  { href: '/isat1ia/spjall/spjall7_bud',                  id: 'spjall_07'    }
+            }
+          },
+          {
+            number: 8,
+            title: 'Að elda mat',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið einfaldar leiðbeiningar um matargerð og lýst eldunarferlinu.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/08_harpa_og_eirikur_elda', id: 'lestextar_08' },
+              listening: { href: '/isat1ia/hlustun/hlustun8_pizza',             id: 'hlustun_08'   },
+              recording: { href: '/isat1ia/hljodritun/k8',                      id: 'hljodritun_k8' },
+              speaking:  { href: '/isat1ia/spjall/spjall8_eldhus',              id: 'spjall_08'    }
+            }
+          },
+          {
+            number: 9,
+            title: 'Að leika saman',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um leiki og sagt frá því hvað ég gerði þegar ég var barn.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/09_hulda_og_halima_leika', id: 'lestextar_09' },
+              listening: { href: '/isat1ia/hlustun/hlustun9_bjorninn',          id: 'hlustun_09'   },
+              recording: { href: '/isat1ia/hljodritun/k9',                      id: 'hljodritun_k9' },
+              speaking:  { href: '/isat1ia/spjall/spjall9_leikur',              id: 'spjall_09'    }
+            }
+          }
+        ],
+        checkpoint: {
+          title: 'Áfangastöð 3',
+          theme: 'Orðaforði úr köflum 7–9',
+          selfTest: '#',
+          flash: '#',
+          drawing: '/isat1ia/leikir/teiknileikur3_kaflar7-9',
+          puzzle: '/isat1ia/leikir/visbendingaleikur2_kaflar7-13'
+        }
       },
       {
+        id: 'lota-4',
         number: 4,
-        icon: '🌍',
-        title: 'Hulda og Halima',
-        theme: 'Vinir og menningarmunur',
-        canDo: ['Ég get skilið texta um vini.', 'Ég get sagt frá því hvað fólk á sameiginlegt.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/04_hulda_og_halima' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun4_veitingastadur' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k4' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall4_veitingastadur' }
-        ]
-      },
-      {
-        number: 5,
-        icon: '💕',
-        title: 'Harpa og Eiríkur',
-        theme: 'Vinir og samband',
-        canDo: ['Ég get skilið einfaldan texta um samband.', 'Ég get talað um vini og fólk sem ég þekki.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/05_harpa_og_eirikur' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun5_vinir' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k5' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall5_vinir' }
-        ]
-      },
-      {
-        number: 6,
-        icon: '🎃',
-        title: 'Hrekkjavaka',
-        theme: 'Hátíðir',
-        canDo: ['Ég get skilið texta um hátíð.', 'Ég get sagt frá því hvað fólk gerir á hátíð.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/06_hrekkjavaka' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun6_hrekkjavaka' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k6' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall6_hrekkjavaka' }
-        ]
-      },
-      {
-        number: 7,
-        icon: '🛒',
-        title: 'Að kaupa í matinn',
-        theme: 'Innkaup',
-        canDo: ['Ég get skilið orð um vörur og innkaup.', 'Ég get talað um hvað ég kaupi í búð.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/07_harpa_og_eirikur_kaupa' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun7_bonus' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k7' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall7_bud' }
-        ]
-      },
-      {
-        number: 8,
-        icon: '🍳',
-        title: 'Að elda mat',
-        theme: 'Eldhús og matargerð',
-        canDo: ['Ég get skilið einfaldar leiðbeiningar.', 'Ég get sagt frá því hvernig matur er búinn til.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/08_harpa_og_eirikur_elda' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun8_pizza' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k8' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall8_eldhus' }
-        ]
-      },
-      {
-        number: 9,
-        icon: '🏠',
-        title: 'Að leika saman',
-        theme: 'Leikir og vinir',
-        canDo: ['Ég get skilið texta um börn og leiki.', 'Ég get sagt frá leikjum og samveru.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/09_hulda_og_halima_leika' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun9_bjorninn' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k9' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall9_leikur' }
-        ]
-      },
-      {
-        number: 10,
-        icon: '🏫',
-        title: 'Í skólanum',
-        theme: 'Skóli og fög',
-        canDo: ['Ég get skilið texta um skóla.', 'Ég get talað um fög og skóladag.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/10_hulda_og_halima_i_skola' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun10_skolinn' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k10' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall10_fog' }
-        ]
-      },
-      {
-        number: 11,
-        icon: '💼',
-        title: 'Starfsheiti',
-        theme: 'Störf og framtíð',
-        canDo: ['Ég get skilið orð um störf.', 'Ég get sagt hvað mig langar að verða.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/11_starfsheiti' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun11_framtidin' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k11' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall11_framtid' }
-        ]
-      },
-      {
-        number: 12,
-        icon: '💪',
-        title: 'Vinna með náminu',
-        theme: 'Vinna og ábyrgð',
-        canDo: ['Ég get skilið texta um vinnu með skóla.', 'Ég get talað um starf og vinnutíma.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/12_harpa_og_eirikur_vinna' },
-          { type: 'listening', icon: '🎧', label: 'Hlustun', href: '/isat1ia/hlustun/hlustun12_sumarvinna' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k12' },
-          { type: 'speaking', icon: '💬', label: 'Spjall', href: '/isat1ia/spjall/spjall12_vinna' }
-        ]
-      },
-      {
-        number: 13,
-        icon: '💭',
-        title: 'Framtíðardraumar',
-        theme: 'Framtíð og draumar',
-        canDo: ['Ég get skilið einfaldan texta um framtíð.', 'Ég get talað um drauma og plön.'],
-        tasks: [
-          { type: 'text', icon: '📖', label: 'Texti', href: '/isat1ia/lestextar/13_hulda_og_halima_spjalla' },
-          { type: 'recording', icon: '✍️', label: 'Hljóðritun', href: '/isat1ia/hljodritun/k13' }
-        ]
+        title: 'Skóli, vinna og framtíð',
+        subtitle: 'Kaflar 10–13',
+        description: 'Nemendur vinna með skólalíf, störf og framtíðardraumar.',
+        chapters: [
+          {
+            number: 10,
+            title: 'Í skólanum',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um skóla og sagt frá uppáhaldsfögum mínum.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/10_hulda_og_halima_i_skola', id: 'lestextar_10' },
+              listening: { href: '/isat1ia/hlustun/hlustun10_skolinn',            id: 'hlustun_10'   },
+              recording: { href: '/isat1ia/hljodritun/k10',                       id: 'hljodritun_k10' },
+              speaking:  { href: '/isat1ia/spjall/spjall10_fog',                  id: 'spjall_10'    }
+            }
+          },
+          {
+            number: 11,
+            title: 'Starfsheiti',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um störf og sagt frá því hvað ég vil verða.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/11_starfsheiti',         id: 'lestextar_11' },
+              listening: { href: '/isat1ia/hlustun/hlustun11_framtidin',      id: 'hlustun_11'   },
+              recording: { href: '/isat1ia/hljodritun/k11',                   id: 'hljodritun_k11' },
+              speaking:  { href: '/isat1ia/spjall/spjall11_framtid',          id: 'spjall_11'    }
+            }
+          },
+          {
+            number: 12,
+            title: 'Vinna með náminu',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um vinnu og nám og sagt frá reynslu minni.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/12_harpa_og_eirikur_vinna', id: 'lestextar_12' },
+              listening: { href: '/isat1ia/hlustun/hlustun12_sumarvinna',        id: 'hlustun_12'   },
+              recording: { href: '/isat1ia/hljodritun/k12',                      id: 'hljodritun_k12' },
+              speaking:  { href: '/isat1ia/spjall/spjall12_vinna',               id: 'spjall_12'    }
+            }
+          },
+          {
+            number: 13,
+            title: 'Framtíðardraumar',
+            pages: '',
+            level: 'A1–A2',
+            goal: 'Ég get skilið texta um framtíðardraumar og sagt frá því hvað ég vil gera.',
+            links: {
+              text:      { href: '/isat1ia/lestextar/13_hulda_og_halima_spjalla', id: 'lestextar_13' },
+              listening: null,
+              recording: { href: '/isat1ia/hljodritun/k13',                       id: 'hljodritun_k13' },
+              speaking:  null
+            }
+          }
+        ],
+        checkpoint: {
+          title: 'Áfangastöð 4',
+          theme: 'Orðaforði úr köflum 10–13',
+          selfTest: '#',
+          flash: '#',
+          drawing: '/isat1ia/leikir/teiknileikur4_kaflar10-13',
+          puzzle: '/isat1ia/leikir/visbendingaleikur2_kaflar7-13'
+        }
       }
     ];
 
-    const games = [
-      { icon: '🎨', title: 'Teiknileikur 1', subtitle: 'Kaflar 1–3', href: '/isat1ia/leikir/teiknileikur1-kaflar1-3', qr: 'media/teiknileikur1.png' },
-      { icon: '🎨', title: 'Teiknileikur 2', subtitle: 'Kaflar 4–6', href: '/isat1ia/leikir/teiknileikur2_kaflar4-6', qr: 'media/teiknileikur2.png' },
-      { icon: '🎨', title: 'Teiknileikur 3', subtitle: 'Kaflar 7–9', href: '/isat1ia/leikir/teiknileikur3_kaflar7-9', qr: 'media/teiknileikur3.png' },
-      { icon: '🎨', title: 'Teiknileikur 4', subtitle: 'Kaflar 10–13', href: '/isat1ia/leikir/teiknileikur4_kaflar10-13', qr: 'media/teiknileikur4.png' },
-      { icon: '🔍', title: 'Finndu orðið 1', subtitle: 'Kaflar 1–6', href: '/isat1ia/leikir/visbendingaleikur1_kaflar1-6', qr: 'media/finndu_ordid.png' },
-      { icon: '🔍', title: 'Finndu orðið 2', subtitle: 'Kaflar 7–13', href: '/isat1ia/leikir/visbendingaleikur2_kaflar7-13', qr: 'media/visbendingaleikur2.png' }
-    ];
-
-    const typeStyle = {
-      text: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
-      listening: 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100',
-      recording: 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100',
-      speaking: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100'
+    const taskMeta = {
+      text:      { icon: '📖', label: 'Lestexti',    classes: 'bg-blue-50   hover:bg-blue-100   border-blue-100   text-blue-800'   },
+      listening: { icon: '🎧', label: 'Hlustun',     classes: 'bg-green-50  hover:bg-green-100  border-green-100  text-green-800'  },
+      recording: { icon: '🎙️', label: 'Hljóðritun', classes: 'bg-orange-50 hover:bg-orange-100 border-orange-100 text-orange-800' },
+      speaking:  { icon: '💬', label: 'Spjall',      classes: 'bg-purple-50 hover:bg-purple-100 border-purple-100 text-purple-800' }
     };
 
-    let activeFilter = 'all';
-
-    const chapterGrid = document.getElementById('chapterGrid');
-    const gameGrid = document.getElementById('gameGrid');
-    const searchInput = document.getElementById('searchInput');
-
-    function renderChapters() {
-      const query = searchInput.value.trim().toLowerCase();
-
-      const filtered = chapters.filter(chapter => {
-        const searchable = `${chapter.number} ${chapter.title} ${chapter.theme} ${chapter.canDo.join(' ')}`.toLowerCase();
-        const matchesSearch = !query || searchable.includes(query);
-        const matchesType = activeFilter === 'all' || chapter.tasks.some(task => task.type === activeFilter);
-        return matchesSearch && matchesType;
-      });
-
-      if (!filtered.length) {
-        chapterGrid.innerHTML = `
-          <div class="md:col-span-2 xl:col-span-3 bg-white border border-stone-200 rounded-3xl p-10 text-center shadow-sm">
-            <div class="text-4xl mb-3">🔎</div>
-            <h3 class="text-xl font-light text-stone-800 mb-2">Ekkert fannst</h3>
-            <p class="text-sm text-stone-500 font-light">Prófaðu annað leitarorð eða veldu „Allt“.</p>
-          </div>
-        `;
-        return;
-      }
-
-      chapterGrid.innerHTML = filtered.map(chapter => {
-        const tasks = chapter.tasks.filter(task => activeFilter === 'all' || task.type === activeFilter);
+    function renderTask(type, link) {
+      const meta = taskMeta[type];
+      if (!link) {
         return `
-          <article class="chapter-card fade-in bg-white/88 border border-stone-200 rounded-3xl p-5 shadow-sm flex flex-col min-h-[310px]">
-            <div class="flex items-start justify-between gap-4 mb-4">
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="w-14 h-14 rounded-2xl bg-stone-100 border border-stone-200 flex items-center justify-center text-3xl flex-shrink-0" aria-hidden="true">
-                  ${chapter.icon}
-                </div>
-                <div class="min-w-0">
-                  <p class="text-xs uppercase tracking-widest text-stone-400 mb-1">Kafli ${chapter.number}</p>
-                  <h3 class="text-xl font-normal text-stone-850 leading-snug line-clamp-2">${chapter.title}</h3>
+          <span class="task-button task-disabled flex items-center gap-2 justify-center
+            bg-stone-50 border border-stone-100 p-3 rounded-2xl"
+            title="Ekki komið inn ennþá">
+            <span class="text-lg">${meta.icon}</span>
+            <span class="text-sm font-medium">${meta.label}</span>
+          </span>`;
+      }
+      return `
+        <a href="${link.href}"
+          data-exercise-id="${link.id}"
+          class="task-button flex items-center gap-2 justify-center border p-3 rounded-2xl ${meta.classes}">
+          <span class="text-lg">${meta.icon}</span>
+          <span class="text-sm font-medium">${meta.label}</span>
+        </a>`;
+    }
+
+    function renderChapter(chapter) {
+      const pagesHtml = chapter.pages
+        ? `<span class="block text-xs bg-stone-100 px-2 py-1 rounded-lg text-stone-500 mb-1">${chapter.pages}</span>`
+        : '';
+      return `
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm">
+          <div class="flex justify-between items-start gap-3 mb-3">
+            <div>
+              <span class="chapter-badge text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli ${chapter.number}</span>
+              <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">${chapter.title}</h3>
+            </div>
+            <div class="text-right flex-shrink-0">
+              ${pagesHtml}
+              <span class="block text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">${chapter.level}</span>
+            </div>
+          </div>
+          <p class="text-sm font-light leading-relaxed text-stone-600 mb-4">${chapter.goal}</p>
+          <div class="grid grid-cols-2 gap-3">
+            ${renderTask('text',      chapter.links.text)}
+            ${renderTask('listening', chapter.links.listening)}
+            ${renderTask('recording', chapter.links.recording)}
+            ${renderTask('speaking',  chapter.links.speaking)}
+          </div>
+        </article>`;
+    }
+
+    function renderCheckpoint(checkpoint) {
+      const flashDisabled = checkpoint.flash === '#';
+      const selfTestDisabled = checkpoint.selfTest === '#';
+
+      return `
+        <div class="checkpoint-gradient rounded-3xl p-6 text-white shadow-xl mt-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded uppercase tracking-tight">Upprifjun</div>
+            <div>
+              <h3 class="text-xl font-bold uppercase tracking-tight text-yellow-300">${checkpoint.title}</h3>
+              <p class="text-xs text-white/60 mt-1">${checkpoint.theme}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            ${selfTestDisabled ? `
+            <span class="flex items-center justify-between
+              bg-yellow-400/40 border border-yellow-500/40 p-4 rounded-2xl
+              opacity-50 cursor-not-allowed text-black sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">✅</span>
+                <div>
+                  <p class="font-bold">Sjálfspróf</p>
+                  <p class="text-xs text-black/60">Kemur fljótlega</p>
                 </div>
               </div>
-              <span class="text-xs bg-blue-100 text-blue-700 rounded-full px-2.5 py-1 flex-shrink-0">A1–A2</span>
-            </div>
+            </span>` : `
+            <a href="${checkpoint.selfTest}" class="checkpoint-link flex items-center justify-between
+              bg-yellow-400 hover:bg-yellow-300 border border-yellow-500 p-4 rounded-2xl
+              transition-colors text-black sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">✅</span>
+                <div>
+                  <p class="font-bold">Sjálfspróf</p>
+                  <p class="text-xs text-black/60">Ertu tilbúin/n í næstu lotu?</p>
+                </div>
+              </div>
+              <span class="font-bold">Byrja</span>
+            </a>`}
 
-            <p class="text-sm text-stone-500 font-light mb-4">${chapter.theme}</p>
+            ${flashDisabled ? `
+            <span class="flex items-center justify-between
+              bg-white/5 border border-white/10 p-4 rounded-2xl opacity-40 cursor-not-allowed">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🗂️</span>
+                <div>
+                  <p class="font-bold">Flasskort</p>
+                  <p class="text-xs text-white/60">Kemur fljótlega</p>
+                </div>
+              </div>
+            </span>` : `
+            <a href="${checkpoint.flash}" class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl transition-colors">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🗂️</span>
+                <div>
+                  <p class="font-bold">Flasskort</p>
+                  <p class="text-xs text-white/60">Æfðu lykilorð</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>`}
 
-            <div class="bg-stone-50 border border-stone-100 rounded-2xl p-4 mb-5 flex-1">
-              <p class="text-xs uppercase tracking-widest text-stone-400 mb-2">Nú æfi ég</p>
-              <ul class="space-y-1.5">
-                ${chapter.canDo.map(item => `<li class="text-sm text-stone-650 font-light leading-snug">• ${item}</li>`).join('')}
-              </ul>
-            </div>
+            <a href="${checkpoint.drawing}" class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl transition-colors">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🎨</span>
+                <div>
+                  <p class="font-bold">Teiknileikur</p>
+                  <p class="text-xs text-white/60">Teiknaðu og giskaðu</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
 
-            <div class="grid grid-cols-2 gap-2 mt-auto">
-              ${tasks.map(task => `
-                <a href="${task.href}" class="task-link border rounded-2xl px-3 py-3 text-sm font-light flex items-center justify-center gap-2 ${typeStyle[task.type] || 'border-stone-200 bg-stone-50 text-stone-700'}">
-                  <span aria-hidden="true">${task.icon}</span>
-                  <span>${task.label}</span>
-                </a>
-              `).join('')}
-            </div>
-          </article>
-        `;
-      }).join('');
+            <a href="${checkpoint.puzzle}" class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl transition-colors sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🧩</span>
+                <div>
+                  <p class="font-bold">Orðagáta</p>
+                  <p class="text-xs text-white/60">Hlustaðu og finndu orðið</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+
+          </div>
+        </div>`;
     }
 
-    function renderGames() {
-      gameGrid.innerHTML = games.map(game => `
-        <article class="chapter-card bg-white/88 border border-stone-200 rounded-3xl p-5 shadow-sm relative">
-          <a href="${game.href}" class="block pr-12">
-            <div class="w-14 h-14 rounded-2xl bg-stone-100 border border-stone-200 flex items-center justify-center text-3xl mb-4" aria-hidden="true">
-              ${game.icon}
+    function renderLot(lot) {
+      return `
+        <section id="${lot.id}" class="scroll-mt-28">
+          <div class="flex items-center gap-4 mb-6">
+            <span class="bg-stone-900 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold">${lot.number}</span>
+            <div>
+              <p class="text-[10px] uppercase tracking-[0.22em] text-stone-400">${lot.subtitle}</p>
+              <h2 class="text-2xl sm:text-3xl font-light italic text-stone-900">${lot.title}</h2>
+              <p class="text-sm text-stone-500 font-light mt-1">${lot.description}</p>
             </div>
-            <h3 class="text-xl font-normal text-stone-850 mb-1">${game.title}</h3>
-            <p class="text-sm text-stone-500 font-light mb-3">${game.subtitle}</p>
-            <span class="text-xs bg-blue-100 text-blue-700 rounded-full px-2.5 py-1">A1–A2</span>
-          </a>
-          <button
-            class="absolute top-5 right-5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-2xl w-11 h-11 flex items-center justify-center transition-colors"
-            onclick="openQrModal('${game.qr}', '${game.title} · ${game.subtitle}')"
-            aria-label="Sýna QR kóða fyrir ${game.title}"
-            title="Sýna QR kóða">
-            ▦
-          </button>
-        </article>
-      `).join('');
+          </div>
+          <div class="space-y-4">
+            ${lot.chapters.map(renderChapter).join('')}
+            ${renderCheckpoint(lot.checkpoint)}
+          </div>
+        </section>`;
     }
 
-    function openQrModal(src, title) {
-      document.getElementById('qrImage').src = src;
-      document.getElementById('qrTitle').textContent = title;
-      const modal = document.getElementById('qrModal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
+    document.getElementById('courseContent').innerHTML = lots.map(renderLot).join('');
 
-    function closeQrModal() {
-      const modal = document.getElementById('qrModal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      document.getElementById('qrImage').src = '';
-    }
-
-    searchInput.addEventListener('input', renderChapters);
-
-    document.querySelectorAll('.filter-btn').forEach(button => {
-      button.addEventListener('click', () => {
-        activeFilter = button.dataset.filter;
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-          btn.classList.remove('pill-active');
-          btn.classList.add('text-stone-600');
-        });
-        button.classList.add('pill-active');
-        button.classList.remove('text-stone-600');
-        renderChapters();
+    function applyProgress(done) {
+      document.querySelectorAll('[data-exercise-id]').forEach(el => {
+        if (done.has(el.dataset.exerciseId)) {
+          el.classList.add('task-done');
+        }
       });
-    });
+    }
 
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeQrModal();
-    });
-
-    renderChapters();
-    renderGames();
+    if (window._malstodDone) applyProgress(window._malstodDone);
+    document.addEventListener('progressReady', (e) => applyProgress(e.detail));
   </script>
 </body>
 </html>
