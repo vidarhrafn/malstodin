@@ -48,11 +48,11 @@ const { useState, useEffect } = React;
 /* ══════════════════════════════════════════
    API
 ══════════════════════════════════════════ */
-async function callOpenAI(messages, max_tokens = 300, temperature = 0.3) {
+async function callOpenAI(messages, max_tokens = 300, temperature = 0.3, model = 'gpt-4o-mini') {
   const r = await fetch('/.netlify/functions/openai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens, temperature })
+    body: JSON.stringify({ model, messages, max_tokens, temperature })
   });
   const data = await r.json();
   if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
@@ -293,73 +293,103 @@ function TextarTab({ onDone }) {
 }
 
 /* ══════════════════════════════════════════
-   FLIPI 2 — Klofinnar setningar
+   FLIPI 2 — Klofinnar setningar (pörun)
 ══════════════════════════════════════════ */
 function KlofinnarTab({ onDone }) {
-  const [answers, setAnswers] = useState({});
-  const [checked, setChecked] = useState(false);
+  const [selUpphaf, setSelUpphaf] = useState(null);
+  const [pairs, setPairs]         = useState({});
+  const [checked, setChecked]     = useState(false);
+  const [endaList]                = useState(() => shuffleOnce(KLOFINNAR.map(s => s.endi)));
 
-  const optionsRef = React.useRef(
-    KLOFINNAR.reduce((acc, s) => ({
-      ...acc,
-      [s.id]: shuffleOnce([s.endi, ...s.rangar])
-    }), {})
-  );
-
-  const score = checked
-    ? KLOFINNAR.filter(s => answers[s.id] === s.endi).length
+  const usedEndar = new Set(Object.values(pairs));
+  const score     = checked
+    ? KLOFINNAR.filter(s => pairs[s.upphaf] === s.endi).length
     : null;
-  const allAnswered = Object.keys(answers).length === KLOFINNAR.length;
+  const wrongUpphaf = checked
+    ? new Set(KLOFINNAR.filter(s => pairs[s.upphaf] !== s.endi).map(s => s.upphaf))
+    : new Set();
+
+  const handleUpphaf = (upphaf) => {
+    if (checked || pairs[upphaf]) return;
+    setSelUpphaf(s => s === upphaf ? null : upphaf);
+  };
+  const handleEndi = (endi) => {
+    if (checked || !selUpphaf || usedEndar.has(endi)) return;
+    setPairs(p => ({ ...p, [selUpphaf]: endi }));
+    setSelUpphaf(null);
+  };
+
+  const allPaired = Object.keys(pairs).length === KLOFINNAR.length;
 
   return (
     <div className="fade-in">
       <p className="text-sm text-gray-500 font-light mb-5">
-        Veldu réttan enda fyrir hverja setningu.
+        Smelltu á upphaf setningar til vinstri, svo á réttan enda til hægri.
       </p>
-      <div className="space-y-4 mb-2">
-        {KLOFINNAR.map(s => {
-          const ans     = answers[s.id];
-          const isRight = checked && ans === s.endi;
-          const isWrong = checked && ans && ans !== s.endi;
-          return (
-            <div key={s.id} className={`p-4 rounded-xl border transition-all
-              ${isRight ? 'bg-green-50 border-green-200' :
-                isWrong ? 'bg-red-50 border-red-200' :
-                'bg-white border-gray-100 shadow-sm'}`}>
-              <p className={`text-sm font-medium mb-3
-                ${isRight ? 'text-green-800' : isWrong ? 'text-red-800' : 'text-gray-700'}`}>
-                {s.upphaf}…
-              </p>
-              <div className="space-y-2">
-                {optionsRef.current[s.id].map((opt, i) => {
-                  const isSel     = ans === opt;
-                  const isCorrect = opt === s.endi;
-                  return (
-                    <button key={i}
-                      onClick={() => !checked && setAnswers(a => ({ ...a, [s.id]: opt }))}
-                      disabled={checked}
-                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-light transition-all
-                        ${checked && isCorrect          ? 'bg-green-100 border-green-400 text-green-800' :
-                          checked && isSel && !isCorrect ? 'bg-red-100 border-red-400 text-red-800' :
-                          isSel                          ? 'bg-blue-100 border-blue-400 text-blue-800' :
-                          'bg-gray-50 border-gray-200 hover:bg-blue-50 hover:border-blue-200'}
-                        disabled:cursor-default`}>
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
-              {isWrong && (
-                <p className="text-xs text-gray-500 font-light mt-2 italic">
-                  Rétt: „{s.endi}"
-                </p>
-              )}
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        {/* Upphaf — vinstri */}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Upphaf</p>
+          {KLOFINNAR.map(s => {
+            const isPaired = !!pairs[s.upphaf];
+            const isSel    = selUpphaf === s.upphaf;
+            const isWrong  = wrongUpphaf.has(s.upphaf);
+            const isRight  = checked && isPaired && !isWrong;
+            return (
+              <button key={s.upphaf} onClick={() => handleUpphaf(s.upphaf)} disabled={checked}
+                className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-light transition-all
+                  ${isRight  ? 'bg-green-50 border-green-300 text-green-800' :
+                    isWrong  ? 'bg-red-50 border-red-300 text-red-800' :
+                    isSel    ? 'bg-blue-100 border-blue-400 text-blue-800 ring-2 ring-blue-200' :
+                    isPaired ? 'bg-gray-100 border-gray-200 text-gray-400' :
+                               'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'}
+                  disabled:cursor-default`}>
+                <span className="font-medium">{s.upphaf}…</span>
+                {isPaired && !checked && <span className="ml-2 text-xs text-gray-300">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Endar — hægri */}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Endi</p>
+          {endaList.map((endi, i) => {
+            const isUsed  = usedEndar.has(endi);
+            const matchU  = KLOFINNAR.find(s => s.endi === endi)?.upphaf;
+            const isRight = checked && isUsed && !wrongUpphaf.has(matchU);
+            const isWrong = checked && isUsed && wrongUpphaf.has(matchU);
+            return (
+              <button key={i} onClick={() => handleEndi(endi)}
+                disabled={checked || (isUsed && !selUpphaf)}
+                className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-light leading-snug transition-all
+                  ${isRight   ? 'bg-green-50 border-green-300 text-green-800' :
+                    isWrong   ? 'bg-red-50 border-red-300 text-red-800' :
+                    isUsed    ? 'bg-gray-100 border-gray-200 text-gray-400' :
+                    selUpphaf ? 'bg-white border-blue-200 hover:bg-blue-50 cursor-pointer' :
+                                'bg-white border-gray-200 text-gray-500'}
+                  disabled:cursor-default`}>
+                {endi}
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Leiðréttingar */}
+      {checked && wrongUpphaf.size > 0 && (
+        <div className="mb-4 space-y-2 fade-in">
+          {KLOFINNAR.filter(s => wrongUpphaf.has(s.upphaf)).map(s => (
+            <div key={s.upphaf} className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm">
+              <span className="font-medium text-amber-800">{s.upphaf}…</span>
+              <span className="text-amber-600 font-light"> → {s.endi}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {!checked
-        ? <CheckBtn onClick={() => { setChecked(true); onDone(); }} disabled={!allAnswered} />
+        ? <CheckBtn onClick={() => { setChecked(true); onDone(); }} disabled={!allPaired} />
         : <ScoreBadge score={score} total={KLOFINNAR.length} />}
     </div>
   );
@@ -396,7 +426,7 @@ function MyndlýsingTab({ onDone }) {
             }
           ]
         }
-      ], 150, 0.3);
+      ], 150, 0.3, 'gpt-4o');
 
       const stigMatch = result.match(/STIG:\s*(\d)/);
       const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/s);
