@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kafli 1 – Blokkin | Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+/* ══════════════════════════════════════════
+   GÖGN
+══════════════════════════════════════════ */
+
+const TEXTI = `Við Dúfnahóla 10 í Breiðholti stendur fjölbýlishús. Húsið er á fimm hæðum og á hverri hæð eru fjórar íbúðir. Það er lyfta í húsinu og hún kemur sér vel þegar fólk er að flytja inn eða kemur heim með innkaupapoka úr búðinni.
+
+Það er nýbúið að mála anddyrið í blokkinni. Málningarlyktin er enn í loftinu og íbúarnir eru ánægðir með litinn. Á síðasta húsfundi var ákveðið að skipta líka um teppi á stigaganginum síðar á árinu.
+
+Svo er garðdagurinn framundan. Þá hittast íbúarnir í garðinum og gera hann fínan fyrir sumarið. Það þarf að tína rusl, klippa trén og setja niður sumarblóm í blómakerið. Dagurinn endar með litlu grillboði og húsfélagið býður upp á pylsur fyrir alla sem taka þátt.
+
+Íbúar hússins skiptast á að þrífa sameignina — ryksuga stigaganginn og skúra sameiginlegt þvottahús í kjallara. Hver íbúð á líka geymslu niðri í kjallara og þar er einnig hjólageymsla. Garðurinn er ekki mjög stór en þar eru rólur og sandkassi sem yngstu íbúarnir leika sér í á sumrin. Íbúarnir eru fjölbreyttur hópur — sumir hafa búið í blokkinni í áratugi og þekkja alla nágrannana vel, aðrir eru nýfluttir inn og eru enn að kynnast.`;
+
+const LYKILORD = [
+  'fjölbýlishús','blokk','íbúð','hæð','stigangur','anddyri','lyfta',
+  'íbúi','nágranni','kjallari','geymsla','hjólageymsla','þvottahús',
+  'garður','húsfélag','garðdagur'
+];
+
+const NU_GET_EG = [
+  'lesið texta um fjölbýlishús og skilið orð eins og stigangur, anddyri, sameign og þvottahús.',
+  'skilið einfaldan texta um það sem íbúar gera saman í fjölbýlishúsi, til dæmis á húsfundi eða garðdegi.',
+  'giskað á merkingu samsettra orða eins og hjólageymsla, þvottahús og húsfélag út frá orðhlutunum.',
+  'sagt nokkrar setningar um húsið mitt — hvar það er, hvernig það er og hverjir búa þar.',
+];
+
+const RR_ITEMS = [
+  { id: 1, text: 'Húsið er á fjórum hæðum.',                                answer: false },
+  { id: 2, text: 'Það er lyfta í húsinu.',                                   answer: true  },
+  { id: 3, text: 'Anddyrið var nýlega málað.',                               answer: true  },
+  { id: 4, text: 'Íbúarnir skipta um teppi á stigaganginum á hverju ári.',   answer: false },
+  { id: 5, text: 'Á garðdeginum er grillað.',                                answer: true  },
+  { id: 6, text: 'Allir íbúarnir þekkja nágranna sína vel.',                 answer: false },
+];
+
+const ORD_PAIRS = [
+  { ord: 'stigangur',    skilgr: 'Gangur á milli hæða í fjölbýlishúsi'              },
+  { ord: 'anddyri',      skilgr: 'Fyrsta herbergi þegar maður opnar útidyrnar'      },
+  { ord: 'þvottahús',    skilgr: 'Rými þar sem hægt er að þvo föt'                 },
+  { ord: 'hjólageymsla', skilgr: 'Geymsla þar sem hægt er að geyma reiðhjól'       },
+  { ord: 'húsfélag',     skilgr: 'Félag íbúa sem sér um rekstur og viðhald hússins'},
+  { ord: 'garðdagur',    skilgr: 'Dagur þegar íbúar vinna saman í garðinum'         },
+];
+
+const THVOTTA_SPURNINGAR = [
+  { orð: 'þvottavél',    valkostir: ['vél til að elda mat','vél til að þvo föt','vél til að lyfta fólki'],                                             rétt: 'vél til að þvo föt'              },
+  { orð: 'þvottakarfa',  valkostir: ['karfa fyrir óhrein eða hrein föt','karfa fyrir skó','karfa fyrir rusl'],                                          rétt: 'karfa fyrir óhrein eða hrein föt' },
+  { orð: 'þvottaefni',   valkostir: ['efni sem maður notar til að þvo föt','efni sem maður notar í hárið','efni sem maður notar til að mála vegg'],    rétt: 'efni sem maður notar til að þvo föt' },
+  { orð: 'þvottadagur',  valkostir: ['dagur þegar maður þvær föt','dagur þegar maður fer í sund','dagur þegar maður kaupir föt'],                      rétt: 'dagur þegar maður þvær föt'      },
+];
+
+const GEYMSLA_PAIRS = [
+  { orð: 'hjólageymsla',     merking: 'staður þar sem maður geymir hjól'   },
+  { orð: 'skógeymsla',       merking: 'staður þar sem maður geymir skó'    },
+  { orð: 'farangursgeymsla', merking: 'staður þar sem maður geymir töskur' },
+  { orð: 'matargeymsla',     merking: 'staður þar sem maður geymir mat'    },
+];
+
+const SAMSETT = [
+  { orð: 'þvottahús',    hlutar: ['þvotta','hús']          },
+  { orð: 'húsfélag',     hlutar: ['hús','félag']           },
+  { orð: 'garðdagur',    hlutar: ['garð','dagur']          },
+  { orð: 'stigangur',    hlutar: ['stiga','gangur']        },
+  { orð: 'fjölbýlishús', hlutar: ['fjöl','býlis','hús']   },
+];
+
+const MALSGR_RATT = [
+  'Við Dúfnahóla 10 í Breiðholti stendur fjölbýlishús…',
+  'Það er nýbúið að mála anddyrið í blokkinni…',
+  'Svo er garðdagurinn framundan…',
+  'Íbúar hússins skiptast á að þrífa sameignina…',
+];
+
+/* ══════════════════════════════════════════
+   HJÁLPARFÖLL
+══════════════════════════════════════════ */
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+const norm = s => s.trim().toLowerCase().replace(/[-\s]/g, '');
+
+/* ══════════════════════════════════════════
+   SHARED COMPONENTS
+══════════════════════════════════════════ */
+const TabBar = ({ tabs, active, onSelect, done }) => (
+  <div className="flex border-b border-gray-200 overflow-x-auto">
+    {tabs.map(t => (
+      <button key={t.id} onClick={() => onSelect(t.id)}
+        className={`flex items-center gap-1.5 px-4 py-3.5 text-sm whitespace-nowrap transition-colors border-b-2
+          ${active === t.id
+            ? 'border-blue-600 text-blue-700 font-medium bg-blue-50/40'
+            : 'border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+        {done.has(t.id) && <span className="text-green-500 text-xs">✓</span>}
+        {t.label}
+      </button>
+    ))}
+  </div>
+);
+
+const CheckBtn = ({ onClick, disabled }) => (
+  <button onClick={onClick} disabled={disabled}
+    className="mt-6 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+      disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+    Athuga svör
+  </button>
+);
+
+const ScoreBadge = ({ score, total }) => {
+  const pct = score / total;
+  const cls = pct === 1   ? 'bg-green-50 border-green-200 text-green-800'
+            : pct >= 0.6  ? 'bg-amber-50 border-amber-200 text-amber-800'
+                          : 'bg-red-50 border-red-200 text-red-800';
+  const msg = pct === 1   ? 'Frábærlega gert! 🌟'
+            : pct >= 0.6  ? 'Gott starf! Skoðaðu leiðréttingarnar.'
+                          : 'Endurlestu textann og prófaðu aftur.';
+  return (
+    <div className={`mt-4 p-4 rounded-xl border fade-in ${cls}`}>
+      <p className="font-medium">{score}/{total} rétt</p>
+      <p className="text-sm font-light mt-0.5">{msg}</p>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════
+   FLIPI 1 — Lestexti
+══════════════════════════════════════════ */
+function LestextiTab() {
+  return (
+    <div className="fade-in space-y-6">
+      <div className="rounded-xl overflow-hidden border border-gray-100 shadow-sm">
+        <img
+          src="/isat2ib/media/01_blokkin.png"
+          alt="Anddyri fjölbýlishússins við Dúfnahóla 10"
+          className="w-full object-cover"
+          onError={e => {
+            e.target.parentNode.innerHTML =
+              '<div class="h-44 flex flex-col items-center justify-center gap-2 bg-gray-50 text-gray-300"><span class="text-5xl">🏢</span><span class="text-sm font-light">01_blokkin.png</span></div>';
+          }}
+        />
+        <p className="px-4 py-2 text-xs text-gray-400 font-light italic bg-gray-50 border-t border-gray-100">
+          Anddyri fjölbýlishússins við Dúfnahóla 10
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+        {TEXTI.split('\n\n').map((p, i) => (
+          <p key={i} className="text-gray-700 font-light leading-relaxed">{p}</p>
+        ))}
+      </div>
+
+      <div className="bg-amber-50 rounded-xl border border-amber-100 p-5">
+        <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Lykilorðaforði</p>
+        <div className="flex flex-wrap gap-2">
+          {LYKILORD.map(w => (
+            <span key={w} className="text-sm bg-white border border-amber-200 text-amber-900
+              font-light px-3 py-1 rounded-full">{w}</span>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-blue-50 rounded-xl border border-blue-100 p-5">
+        <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-3">Nú get ég…</p>
+        <ul className="space-y-2">
+          {NU_GET_EG.map((s, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-blue-800 font-light">
+              <span className="text-blue-400 mt-0.5 flex-shrink-0">✓</span>{s}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 2 — Rétt eða rangt
+══════════════════════════════════════════ */
+function RettRangtTab({ onDone }) {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+  const score = checked ? RR_ITEMS.filter(it => answers[it.id] === it.answer).length : null;
+
+  return (
+    <div className="fade-in">
+      <p className="text-sm text-gray-500 font-light mb-5">
+        Lestu textann og merktu <strong className="font-medium">R</strong> (rétt) eða <strong className="font-medium">X</strong> (rangt).
+      </p>
+      <div className="space-y-3">
+        {RR_ITEMS.map(item => {
+          const ans = answers[item.id];
+          const isRight = checked && ans === item.answer;
+          const isWrong = checked && ans !== item.answer;
+          return (
+            <div key={item.id} className={`p-4 rounded-xl border transition-all
+              ${isRight ? 'bg-green-50 border-green-200' :
+                isWrong ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 shadow-sm'}`}>
+              <p className={`text-sm font-light mb-3
+                ${isRight ? 'text-green-800' : isWrong ? 'text-red-800' : 'text-gray-700'}`}>
+                {item.id}. {item.text}
+              </p>
+              <div className="flex gap-2 items-center">
+                {[true, false].map(val => (
+                  <button key={String(val)}
+                    onClick={() => !checked && setAnswers(a => ({ ...a, [item.id]: val }))}
+                    disabled={checked}
+                    className={`px-4 py-1.5 rounded-lg text-sm border transition-all font-light
+                      ${ans === val
+                        ? checked
+                          ? val === item.answer ? 'bg-green-600 text-white border-green-600'
+                                                : 'bg-red-500 text-white border-red-500'
+                          : 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}
+                      disabled:cursor-default`}>
+                    {val ? 'R Rétt' : 'X Rangt'}
+                  </button>
+                ))}
+                {isWrong && (
+                  <span className="text-xs text-gray-400 font-light ml-1">
+                    → {item.answer ? 'Rétt' : 'Rangt'}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!checked
+        ? <CheckBtn onClick={() => { setChecked(true); onDone(); }}
+            disabled={Object.keys(answers).length < RR_ITEMS.length} />
+        : <ScoreBadge score={score} total={RR_ITEMS.length} />}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 3 — Orðaforði (pörun)
+══════════════════════════════════════════ */
+function PörunGrid({ pairs: pairDef, onDone }) {
+  const [selected, setSelected] = useState(null);
+  const [pairs, setPairs]       = useState({});
+  const [checked, setChecked]   = useState(false);
+  const skilgrShuffled = useRef(shuffle(pairDef.map(p => p.skilgr || p.merking)));
+  const usedSkilgr     = new Set(Object.values(pairs));
+  const score = checked ? pairDef.filter(p => pairs[p.ord] === (p.skilgr || p.merking)).length : null;
+  const wrongOrds = checked ? new Set(pairDef.filter(p => pairs[p.ord] !== (p.skilgr || p.merking)).map(p => p.ord)) : new Set();
+
+  const handleOrd = (ord) => {
+    if (checked || pairs[ord]) return;
+    setSelected(s => s === ord ? null : ord);
+  };
+  const handleSkilgr = (s) => {
+    if (checked || !selected || usedSkilgr.has(s)) return;
+    setPairs(p => ({ ...p, [selected]: s }));
+    setSelected(null);
+  };
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Orð</p>
+          {pairDef.map(({ ord }) => {
+            const isPaired = !!pairs[ord];
+            const isSel    = selected === ord;
+            const isWrong  = wrongOrds.has(ord);
+            const isRight  = checked && isPaired && !isWrong;
+            return (
+              <button key={ord} onClick={() => handleOrd(ord)} disabled={checked}
+                className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-light transition-all
+                  ${isRight  ? 'bg-green-50 border-green-300 text-green-800' :
+                    isWrong  ? 'bg-red-50 border-red-300 text-red-800' :
+                    isSel    ? 'bg-blue-100 border-blue-400 text-blue-800 ring-2 ring-blue-200' :
+                    isPaired ? 'bg-gray-100 border-gray-200 text-gray-400' :
+                               'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'}
+                  disabled:cursor-default`}>
+                <span className="font-medium">{ord}</span>
+                {isPaired && !checked && <span className="ml-2 text-xs text-gray-300">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Merking</p>
+          {skilgrShuffled.current.map((sk, i) => {
+            const isUsed  = usedSkilgr.has(sk);
+            const matchO  = pairDef.find(p => (p.skilgr || p.merking) === sk)?.ord;
+            const isRight = checked && isUsed && !wrongOrds.has(matchO);
+            const isWrong = checked && isUsed && wrongOrds.has(matchO);
+            return (
+              <button key={i} onClick={() => handleSkilgr(sk)}
+                disabled={checked || (isUsed && !selected)}
+                className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-light leading-snug transition-all
+                  ${isRight   ? 'bg-green-50 border-green-300 text-green-800' :
+                    isWrong   ? 'bg-red-50 border-red-300 text-red-800' :
+                    isUsed    ? 'bg-gray-100 border-gray-200 text-gray-400' :
+                    selected  ? 'bg-white border-blue-200 hover:bg-blue-50 cursor-pointer' :
+                                'bg-white border-gray-200 text-gray-500'}
+                  disabled:cursor-default`}>
+                {sk}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {checked && wrongOrds.size > 0 && (
+        <div className="mt-3 space-y-2 fade-in">
+          {pairDef.filter(p => wrongOrds.has(p.ord)).map(p => (
+            <div key={p.ord} className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm">
+              <span className="font-medium text-amber-800">{p.ord}</span>
+              <span className="text-amber-600 font-light"> → {p.skilgr || p.merking}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!checked
+        ? <CheckBtn onClick={() => { setChecked(true); onDone && onDone(); }}
+            disabled={Object.keys(pairs).length < pairDef.length} />
+        : <ScoreBadge score={score} total={pairDef.length} />}
+    </>
+  );
+}
+
+function OrdafordiTab({ onDone }) {
+  return (
+    <div className="fade-in">
+      <p className="text-sm text-gray-500 font-light mb-5">
+        Smelltu á orðið, svo á rétta skilgreininguna.
+      </p>
+      <PörunGrid pairs={ORD_PAIRS} onDone={onDone} />
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 4 — Orðhlutar (3 hlutar)
+══════════════════════════════════════════ */
+function OrdahlutiTab({ onDone }) {
+  // A: þvotta- fjölval
+  const [thvA, setThvA]         = useState({});
+  const [thvDone, setThvDone]   = useState(false);
+
+  // B: geymsla pörun
+  const [geymslaDone, setGeymslaDone] = useState(false);
+
+  // C: samsett orð
+  const [inputs, setInputs]     = useState(
+    SAMSETT.reduce((a, s) => ({ ...a, [s.orð]: Array(s.hlutar.length).fill('') }), {})
+  );
+  const [samsettDone, setSamsettDone] = useState(false);
+
+  const thvScore = thvDone
+    ? THVOTTA_SPURNINGAR.filter(s => thvA[s.orð] === s.rétt).length : null;
+  const samsettScore = samsettDone
+    ? SAMSETT.filter(s => s.hlutar.every((h, i) => norm(inputs[s.orð][i]) === norm(h))).length : null;
+
+  useEffect(() => {
+    if (thvDone && geymslaDone && samsettDone) onDone();
+  }, [thvDone, geymslaDone, samsettDone]);
+
+  return (
+    <div className="fade-in space-y-10">
+
+      {/* ── A: þvotta- ── */}
+      <section>
+        <h3 className="text-sm font-medium text-gray-700 mb-1">
+          A — <span className="font-light italic">Þvotta-</span>
+        </h3>
+        <p className="text-xs text-gray-400 font-light mb-4">
+          Í textanum kemur orðið <em>þvottahús</em> = þvotta + hús. Hvað þýða þessi orð?
+        </p>
+        <div className="space-y-4">
+          {THVOTTA_SPURNINGAR.map(sp => {
+            const ans = thvA[sp.orð];
+            const done = thvDone;
+            return (
+              <div key={sp.orð} className={`p-4 rounded-xl border shadow-sm
+                ${done ? ans === sp.rétt ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                       : 'bg-white border-gray-100'}`}>
+                <p className="text-sm font-medium text-gray-800 mb-3">{sp.orð}</p>
+                <div className="space-y-2">
+                  {sp.valkostir.map(v => {
+                    const sel     = ans === v;
+                    const correct = v === sp.rétt;
+                    return (
+                      <button key={v}
+                        onClick={() => !done && setThvA(a => ({ ...a, [sp.orð]: v }))}
+                        disabled={done}
+                        className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-light transition-all
+                          ${done && correct           ? 'bg-green-100 border-green-400 text-green-800' :
+                            done && sel && !correct   ? 'bg-red-100 border-red-400 text-red-800' :
+                            sel                       ? 'bg-blue-100 border-blue-400 text-blue-800' :
+                                                        'bg-gray-50 border-gray-200 hover:bg-blue-50 hover:border-blue-200'}
+                          disabled:cursor-default`}>
+                        {v}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {!thvDone
+          ? <CheckBtn onClick={() => setThvDone(true)}
+              disabled={Object.keys(thvA).length < THVOTTA_SPURNINGAR.length} />
+          : <ScoreBadge score={thvScore} total={THVOTTA_SPURNINGAR.length} />}
+      </section>
+
+      {/* ── B: geymsla pörun ── */}
+      <section>
+        <h3 className="text-sm font-medium text-gray-700 mb-1">
+          B — <span className="font-light italic">-geymsla</span>
+        </h3>
+        <p className="text-xs text-gray-400 font-light mb-4">
+          Smelltu á orðið, svo á rétta merkinguna.
+        </p>
+        <PörunGrid pairs={GEYMSLA_PAIRS} onDone={() => setGeymslaDone(true)} />
+      </section>
+
+      {/* ── C: samsett orð ── */}
+      <section>
+        <h3 className="text-sm font-medium text-gray-700 mb-1">
+          C — <span className="font-light italic">Samsett orð</span>
+        </h3>
+        <p className="text-xs text-gray-400 font-light mb-1">Skiptu orðunum í hluta.</p>
+        <p className="text-xs text-gray-400 font-light mb-4">
+          Dæmi: <em>hjólageymsla = hjóla + geymsla</em>
+        </p>
+        <div className="space-y-3">
+          {SAMSETT.map(s => {
+            const vals    = inputs[s.orð];
+            const correct = samsettDone && s.hlutar.every((h, i) => norm(vals[i]) === norm(h));
+            const wrong   = samsettDone && !correct;
+            return (
+              <div key={s.orð} className={`p-4 rounded-xl border transition-all
+                ${correct ? 'bg-green-50 border-green-200' :
+                  wrong   ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 shadow-sm'}`}>
+                <p className={`text-sm font-medium mb-3
+                  ${correct ? 'text-green-800' : wrong ? 'text-red-800' : 'text-gray-800'}`}>
+                  {s.orð} =
+                </p>
+                <div className="flex items-center flex-wrap gap-2">
+                  {vals.map((val, i) => (
+                    <React.Fragment key={i}>
+                      <input type="text" value={val}
+                        onChange={e => {
+                          if (samsettDone) return;
+                          const upd = [...vals]; upd[i] = e.target.value;
+                          setInputs(a => ({ ...a, [s.orð]: upd }));
+                        }}
+                        disabled={samsettDone}
+                        placeholder={`hluti ${i + 1}`}
+                        className={`px-3 py-2 border-2 rounded-lg text-sm font-light w-32
+                          focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors
+                          ${samsettDone
+                            ? norm(val) === norm(s.hlutar[i])
+                              ? 'border-green-400 bg-green-50 text-green-800'
+                              : 'border-red-400 bg-red-50 text-red-800'
+                            : 'border-gray-200 focus:border-blue-400'}
+                          disabled:cursor-default`}
+                      />
+                      {i < vals.length - 1 && <span className="text-gray-400">+</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
+                {wrong && (
+                  <p className="text-xs text-gray-500 font-light mt-2">
+                    Rétt: {s.hlutar.join(' + ')}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {!samsettDone
+          ? <CheckBtn onClick={() => setSamsettDone(true)}
+              disabled={!SAMSETT.every(s => inputs[s.orð].every(v => v.trim()))} />
+          : <ScoreBadge score={samsettScore} total={SAMSETT.length} />}
+      </section>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 5 — Textaröðun
+══════════════════════════════════════════ */
+function TextaroðunTab({ onDone }) {
+  const [items, setItems]     = useState(() => shuffle([...MALSGR_RATT]));
+  const [checked, setChecked] = useState(false);
+  const [dragging, setDragging] = useState(null);
+  const score = checked ? items.filter((v, i) => v === MALSGR_RATT[i]).length : null;
+
+  const moveItem = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const a = [...items]; [a[i], a[j]] = [a[j], a[i]]; setItems(a);
+  };
+  const onDragStart = i => setDragging(i);
+  const onDragOver  = (e, i) => {
+    e.preventDefault();
+    if (dragging === null || dragging === i) return;
+    const a = [...items]; const [m] = a.splice(dragging, 1); a.splice(i, 0, m);
+    setItems(a); setDragging(i);
+  };
+
+  return (
+    <div className="fade-in">
+      <p className="text-sm text-gray-500 font-light mb-2">
+        Raðaðu málsgreinunum í rétta röð (1–4).
+      </p>
+      <p className="text-xs text-gray-400 font-light mb-5">
+        Dragðu til að raða, eða notaðu örvatakkana.
+      </p>
+      <div className="space-y-2 mb-6">
+        {items.map((txt, i) => {
+          const isRight = checked && txt === MALSGR_RATT[i];
+          const isWrong = checked && txt !== MALSGR_RATT[i];
+          return (
+            <div key={txt}
+              draggable={!checked}
+              onDragStart={() => onDragStart(i)}
+              onDragOver={e => onDragOver(e, i)}
+              onDragEnd={() => setDragging(null)}
+              className={`flex items-center gap-3 p-4 rounded-xl border transition-all select-none
+                ${isRight   ? 'bg-green-50 border-green-200' :
+                  isWrong   ? 'bg-red-50 border-red-200' :
+                  dragging === i ? 'bg-blue-50 border-blue-300 shadow-md' :
+                  'bg-white border-gray-100 shadow-sm'}
+                ${!checked ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+              <span className={`text-sm font-medium w-6 h-6 rounded-full flex items-center
+                justify-center flex-shrink-0
+                ${isRight ? 'bg-green-500 text-white' :
+                  isWrong ? 'bg-red-400 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                {i + 1}
+              </span>
+              <p className="text-sm font-light text-gray-700 flex-1 leading-snug">{txt}</p>
+              {!checked && (
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  <button onClick={() => moveItem(i, -1)} disabled={i === 0}
+                    className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs px-1">▲</button>
+                  <button onClick={() => moveItem(i, 1)} disabled={i === items.length - 1}
+                    className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs px-1">▼</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {checked && score < MALSGR_RATT.length && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4 fade-in">
+          <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-2">Rétt röð</p>
+          {MALSGR_RATT.map((t, i) => (
+            <p key={i} className="text-sm text-amber-800 font-light">
+              <span className="font-medium">{i + 1}.</span> {t}
+            </p>
+          ))}
+        </div>
+      )}
+      {!checked
+        ? <CheckBtn onClick={() => { setChecked(true); onDone(); }} disabled={false} />
+        : <ScoreBadge score={score} total={MALSGR_RATT.length} />}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   AÐALFORRITIÐ
+══════════════════════════════════════════ */
+const TABS = [
+  { id: 'lestur',     label: '📖 Lestexti'    },
+  { id: 'rr',         label: '✓✗ Rétt/rangt'  },
+  { id: 'ordafordi',  label: '📝 Orðaforði'    },
+  { id: 'ordahlutar', label: '🔤 Orðhlutar'    },
+  { id: 'textrarod',  label: '🔢 Textaröðun'   },
+];
+
+function App() {
+  const [activeTab, setActiveTab] = useState('lestur');
+  const [done, setDone]           = useState(new Set(['lestur']));
+  const markDone = id => setDone(prev => new Set([...prev, id]));
+  const allDone  = TABS.every(t => done.has(t.id));
+
+  return (
+    <div className="min-h-screen">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-7">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-400 hover:text-gray-600 mb-3 inline-block font-light">
+            ← Til baka
+          </button>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-medium text-blue-400 uppercase tracking-widest mb-1">Kafli 1 · A1–A2</p>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">Blokkin</h1>
+              <p className="text-gray-500 text-sm font-light">Kynning á fjölbýlishúsinu við Dúfnahóla 10</p>
+            </div>
+            <span className="text-4xl">🏢</span>
+          </div>
+        </div>
+        <div className="max-w-4xl mx-auto bg-white">
+          <TabBar tabs={TABS} active={activeTab} onSelect={setActiveTab} done={done} />
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-7">
+          {activeTab === 'lestur'     && <LestextiTab />}
+          {activeTab === 'rr'         && <RettRangtTab   onDone={() => markDone('rr')} />}
+          {activeTab === 'ordafordi'  && <OrdafordiTab   onDone={() => markDone('ordafordi')} />}
+          {activeTab === 'ordahlutar' && <OrdahlutiTab   onDone={() => markDone('ordahlutar')} />}
+          {activeTab === 'textrarod'  && <TextaroðunTab  onDone={() => markDone('textrarod')} />}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-1.5">
+            {TABS.map(t => (
+              <div key={t.id} className={`h-1.5 w-10 rounded-full transition-all duration-500
+                ${done.has(t.id) ? 'bg-green-500' : activeTab === t.id ? 'bg-blue-400' : 'bg-gray-200'}`} />
+            ))}
+            <span className="text-xs text-gray-400 font-light ml-1">{done.size}/{TABS.length}</span>
+          </div>
+          {allDone && (
+            <div className="fade-in flex items-center gap-2 bg-green-50 border border-green-200
+              text-green-700 rounded-lg px-4 py-2 text-sm font-light">
+              🎉 Kafla 1 lokið!
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
