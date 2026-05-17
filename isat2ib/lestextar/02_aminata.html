@@ -109,10 +109,10 @@ Svaraðu ALLTAF á einfaldri íslensku (A1–A2 stig) — stuttar, einfaldar set
 Ef þér er spurt um eitthvað sem er ekki hluti af sögu þinni skaltu segja: "Það veit ég ekki."
 Svaraðu AÐEINS spurningum — bjóddu ekki upp á viðbótarupplýsingar.`;
 
-const CHAT_TASKS = [
-  { is: 'Spurðu Aminötu hvaðan hún er.',                  en: 'Ask Aminata where she is from.'                       },
-  { is: 'Spurðu Aminötu hvað hún vinnur núna.',           en: 'Ask Aminata what her job is now.'                     },
-  { is: 'Spurðu Aminötu hvers hún saknar frá Senegal.',   en: 'Ask Aminata what she misses from Senegal.'            },
+const CHAT_TASKS_EN = [
+  'Ask Aminata — in Icelandic — where she is from.',
+  'Ask Aminata — in Icelandic — what her job is now.',
+  'Ask Aminata — in Icelandic — what she misses from Senegal.',
 ];
 
 const FEEDBACK_SYSTEM = `Þú ert íslenskukennari. Nemandinn var að spyrja Aminötu þriggja spurninga á íslensku.
@@ -241,10 +241,9 @@ function ThydingarPopup({ selectedText, position, language, onClose }) {
 /* ══════════════════════════════════════════
    FLIPI 1 — Lestexti
 ══════════════════════════════════════════ */
-function LestextiTab() {
-  const [language, setLanguage]   = useState('');
+function LestextiTab({ language, setLanguage }) {
   const [langInput, setLangInput] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState(!!language);
   const [popup, setPopup]         = useState(null);
 
   const handleConfirm = () => {
@@ -407,7 +406,7 @@ function EfnisspurningarTab({ onDone }) {
     const newLoading = [...loading]; newLoading[i] = true; setLoading(newLoading);
     try {
       const result = await callOpenAI([
-        { role: 'system', content: 'Þú ert íslenskukennari sem metur svör nemenda í lesskilningsæfingu. Vertu vingjarnlegur og hvetjandi.' },
+        { role: 'system', content: 'Þú ert íslenskukennari sem metur svör nemenda í lesskilningsæfingu. Vertu vingjarnlegur og hvetjandi. Vertu sveigjanlegur um málfræði og stafsetningu — það mikilvæga er að efnið sé rétt. Vertu sérstaklega sveigjanlegur um erlend nöfn (t.d. Ousmane, Fatou, Senegal) — smávægilegar stafsetningarvillur á nöfnum eiga ekki að draga úr stigum.' },
         { role: 'user',   content: `Texti: "${TEXTI}"\n\nSpurning: "${EFNISSPURNINGAR[i]}"\n\nSvar nemanda: "${ans}"\n\nMetur svarið. Sveigjanlegur um málfræði og stafsetningu — það mikilvæga er að efnið sé rétt.\n\nSvaraðu EINUNGIS:\nSTIG: [0-5]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku]` }
       ], 120, 0.2);
       const stigMatch = result.match(/STIG:\s*(\d)/);
@@ -467,17 +466,10 @@ function EfnisspurningarTab({ onDone }) {
 /* ══════════════════════════════════════════
    FLIPI 4 — Orðasambönd (þýðing)
 ══════════════════════════════════════════ */
-function OrdasambondTab({ onDone }) {
-  const [language, setLanguage]   = useState('');
-  const [langInput, setLangInput] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
-  const [answers, setAnswers]     = useState(Array(ORDASAMBAND_ITEMS.length).fill(''));
-  const [feedback, setFeedback]   = useState(Array(ORDASAMBAND_ITEMS.length).fill(null));
-  const [loading, setLoading]     = useState(Array(ORDASAMBAND_ITEMS.length).fill(false));
-
-  const handleConfirm = () => {
-    if (langInput.trim()) { setLanguage(langInput.trim()); setConfirmed(true); }
-  };
+function OrdasambondTab({ language, onDone }) {
+  const [answers, setAnswers]   = useState(Array(ORDASAMBAND_ITEMS.length).fill(''));
+  const [feedback, setFeedback] = useState(Array(ORDASAMBAND_ITEMS.length).fill(null));
+  const [loading, setLoading]   = useState(Array(ORDASAMBAND_ITEMS.length).fill(false));
 
   const handleCheck = async (i) => {
     const ans = answers[i].trim();
@@ -486,8 +478,8 @@ function OrdasambondTab({ onDone }) {
     const newLoading = [...loading]; newLoading[i] = true; setLoading(newLoading);
     try {
       const result = await callOpenAI([
-        { role: 'system', content: `Þú ert íslenskukennari sem metur þýðingar nemenda.` },
-        { role: 'user',   content: `Íslenska orðasambandið er: "${item.is}"\nRétt þýðing á ensku er: "${item.en}"\n\nNemandinn þýddi þetta á ${language}: "${ans}"\n\nMettu hvort þýðingin sé rétt (samþykktu bæði íslensku og enska þýðinguna og þýðingar á öðrum tungumálum ef þær eru réttar).\n\nSvaraðu EINUNGIS:\nSTIG: [0-5]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku]` }
+        { role: 'system', content: `Þú ert íslenskukennari sem metur þýðingar nemenda. Vertu sveigjanlegur — smávægilegar stafsetningarvillur, sérstaklega á erlendum nöfnum, eiga ekki að draga úr stigum.` },
+        { role: 'user',   content: `Íslenska orðasambandið er: "${item.is}"\nRétt þýðing á ensku er: "${item.en}"\n\nNemandinn þýddi þetta á ${language || 'móðurmál sitt'}: "${ans}"\n\nMettu hvort þýðingin sé rétt (samþykktu bæði íslensku og enska þýðinguna og þýðingar á öðrum tungumálum ef þær eru réttar).\n\nSvaraðu EINUNGIS:\nSTIG: [0-5]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku]` }
       ], 120, 0.2);
       const stigMatch = result.match(/STIG:\s*(\d)/);
       const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/);
@@ -502,21 +494,10 @@ function OrdasambondTab({ onDone }) {
     }
   };
 
-  if (!confirmed) return (
+  if (!language) return (
     <div className="fade-in">
-      <p className="text-sm text-gray-500 font-light mb-5">Þýðdu orðasamböndin yfir á móðurmál þitt.</p>
-      <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
-        <div className="flex gap-2 items-center flex-wrap">
-          <span className="text-sm text-gray-500 font-light">🌐 Móðurmál:</span>
-          <input type="text" value={langInput} onChange={e => setLangInput(e.target.value)}
-            onKeyDown={e => e.key==='Enter' && handleConfirm()}
-            placeholder="t.d. English, Polski, 中文…"
-            className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light focus:outline-none focus:ring-2 focus:ring-blue-400" />
-          <button onClick={handleConfirm} disabled={!langInput.trim()}
-            className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
-            Staðfesta
-          </button>
-        </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 font-light">
+        ⬅️ Farðu fyrst í <strong className="font-medium">Lestexta</strong> flipann og skráðu móðurmál þitt.
       </div>
     </div>
   );
@@ -565,10 +546,7 @@ function OrdasambondTab({ onDone }) {
 /* ══════════════════════════════════════════
    FLIPI 5 — Spjallbottur (Aminata)
 ══════════════════════════════════════════ */
-function SpjallbotturTab({ onDone }) {
-  const [language, setLanguage]   = useState('');
-  const [langInput, setLangInput] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
+function SpjallbotturTab({ language, onDone }) {
   const [messages, setMessages]   = useState([]);
   const [input, setInput]         = useState('');
   const [loading, setLoading]     = useState(false);
@@ -577,13 +555,29 @@ function SpjallbotturTab({ onDone }) {
   const [feedback, setFeedback]   = useState(null);
   const [fetchingFeedback, setFetchingFeedback] = useState(false);
   const [userQuestions, setUserQuestions] = useState([]);
+  const [translatedTasks, setTranslatedTasks] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, feedback]);
 
-  const handleConfirm = () => {
-    if (langInput.trim()) { setLanguage(langInput.trim()); setConfirmed(true); }
-  };
+  // Þýða verkefni þegar flipinn opnast
+  useEffect(() => {
+    if (!language) { setTranslatedTasks(CHAT_TASKS_EN); return; }
+    const lang = language.toLowerCase();
+    if (lang === 'english' || lang === 'enska') { setTranslatedTasks(CHAT_TASKS_EN); return; }
+    // Þýða á móðurmál með AI
+    (async () => {
+      try {
+        const result = await callOpenAI([
+          { role: 'system', content: 'You are a translator. Translate the given English instructions to the requested language. Keep the structure exactly the same, just translate. Return ONLY a JSON array of strings, no markdown.' },
+          { role: 'user', content: `Translate these 3 instructions to ${language}. Keep "in Icelandic" as is (do not translate those words):\n${JSON.stringify(CHAT_TASKS_EN)}` }
+        ], 300, 0.1);
+        const cleaned = result.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        setTranslatedTasks(parsed);
+      } catch(e) { setTranslatedTasks(CHAT_TASKS_EN); }
+    })();
+  }, [language]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -609,14 +603,13 @@ function SpjallbotturTab({ onDone }) {
       const newIndex = taskIndex + 1;
       setTaskIndex(newIndex);
 
-      if (newIndex >= CHAT_TASKS.length) {
+      if (newIndex >= CHAT_TASKS_EN.length) {
         setChatDone(true);
-        // Sækja feedback
         setFetchingFeedback(true);
         try {
           const fbResult = await callOpenAI([
             { role: 'system', content: FEEDBACK_SYSTEM },
-            { role: 'user',   content: `Verkefni 1: "${CHAT_TASKS[0][language==='Íslenska'?'is':'en'] || CHAT_TASKS[0].en}"\nSpurning nemanda: "${newUserQ[0] || ''}"\n\nVerkefni 2: "${CHAT_TASKS[1][language==='Íslenska'?'is':'en'] || CHAT_TASKS[1].en}"\nSpurning nemanda: "${newUserQ[1] || ''}"\n\nVerkefni 3: "${CHAT_TASKS[2][language==='Íslenska'?'is':'en'] || CHAT_TASKS[2].en}"\nSpurning nemanda: "${newUserQ[2] || ''}"` }
+            { role: 'user', content: `Verkefni 1: "${CHAT_TASKS_EN[0]}"\nSpurning nemanda: "${newUserQ[0] || ''}"\n\nVerkefni 2: "${CHAT_TASKS_EN[1]}"\nSpurning nemanda: "${newUserQ[1] || ''}"\n\nVerkefni 3: "${CHAT_TASKS_EN[2]}"\nSpurning nemanda: "${newUserQ[2] || ''}"` }
           ], 400, 0.2);
           setFeedback(fbResult);
           onDone();
@@ -630,29 +623,13 @@ function SpjallbotturTab({ onDone }) {
     }
   };
 
-  if (!confirmed) return (
-    <div className="fade-in space-y-5">
-      <div className="bg-blue-50 rounded-xl border border-blue-100 p-5">
-        <p className="text-sm font-medium text-blue-800 mb-1">💬 Talaðu við Aminötu</p>
-        <p className="text-sm text-blue-700 font-light">Þú munt fá þrjú verkefni. Þú þarft að spyrja Aminötu spurningar á íslensku. Í lokin færðu endurgjöf á spurningamyndunina þína.</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
-        <p className="text-sm text-gray-600 font-light mb-3">Hvert er móðurmál þitt? (Verkefnin birtast á þínu máli.)</p>
-        <div className="flex gap-2 items-center flex-wrap">
-          <input type="text" value={langInput} onChange={e => setLangInput(e.target.value)}
-            onKeyDown={e => e.key==='Enter' && handleConfirm()}
-            placeholder="t.d. English, Polski, 中文…"
-            className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light focus:outline-none focus:ring-2 focus:ring-blue-400" />
-          <button onClick={handleConfirm} disabled={!langInput.trim()}
-            className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
-            Byrja
-          </button>
-        </div>
-      </div>
+  if (!translatedTasks) return (
+    <div className="fade-in flex items-center justify-center py-12">
+      <p className="text-sm text-gray-400 font-light"><span className="loading-dots">Undirbý verkefni</span></p>
     </div>
   );
 
-  const currentTask = CHAT_TASKS[Math.min(taskIndex, CHAT_TASKS.length-1)];
+  const currentTask = translatedTasks[Math.min(taskIndex, CHAT_TASKS_EN.length-1)];
 
   return (
     <div className="fade-in space-y-4">
@@ -666,7 +643,7 @@ function SpjallbotturTab({ onDone }) {
               <p className="text-xs text-blue-400 uppercase tracking-wide font-medium mb-1">
                 Verkefni {taskIndex+1}/{CHAT_TASKS.length}
               </p>
-              <p className="text-sm text-blue-800 font-light">{currentTask.en}</p>
+              <p className="text-sm text-blue-800 font-light">{currentTask}</p>
             </div>
           ) : (
             <div className="bg-green-50 border border-green-200 rounded-xl p-4">
@@ -777,6 +754,7 @@ const TABS = [
 function App() {
   const [activeTab, setActiveTab] = useState('lestur');
   const [done, setDone]           = useState(new Set(['lestur']));
+  const [language, setLanguage]   = useState('');
   const markDone = id => setDone(prev => new Set([...prev, id]));
   const allDone  = TABS.every(t => done.has(t.id));
 
@@ -804,11 +782,11 @@ function App() {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-7">
-          {activeTab === 'lestur'   && <LestextiTab />}
+          {activeTab === 'lestur'   && <LestextiTab language={language} setLanguage={setLanguage} />}
           {activeTab === 'rr'       && <RettRangtTab       onDone={() => markDone('rr')} />}
           {activeTab === 'efnis'    && <EfnisspurningarTab onDone={() => markDone('efnis')} />}
-          {activeTab === 'ordasamb' && <OrdasambondTab     onDone={() => markDone('ordasamb')} />}
-          {activeTab === 'spjall'   && <SpjallbotturTab    onDone={() => markDone('spjall')} />}
+          {activeTab === 'ordasamb' && <OrdasambondTab     language={language} onDone={() => markDone('ordasamb')} />}
+          {activeTab === 'spjall'   && <SpjallbotturTab    language={language} onDone={() => markDone('spjall')} />}
         </div>
 
         <div className="mt-5 flex items-center justify-between flex-wrap gap-3">
