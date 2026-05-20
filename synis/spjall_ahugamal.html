@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="is">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🎯 Málmenni: Áhugamál – Málstöðin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💬 Spjall 1: Áhugamál – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -15,463 +14,574 @@
       background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
       min-height: 100vh;
     }
-    .chat-container {
-      max-height: 600px;
-      overflow-y: auto;
+    .sticky-player {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: white;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08);
     }
-    .chat-container::-webkit-scrollbar {
-      width: 6px;
+    .chat-bubble-user {
+      background: #dbeafe;
+      border-radius: 1rem 0 1rem 1rem;
     }
-    .chat-container::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 10px;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .chat-container::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 10px;
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
     }
+    .speaking-pulse { animation: pulse 1s ease infinite; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+  <!-- Firebase progress — optional, fails silently if not logged in -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-    const SendIcon = () => (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <line x1="22" y1="2" x2="11" y2="13"></line>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
+      authDomain: "malstodin-90f85.firebaseapp.com",
+      projectId: "malstodin-90f85",
+      storageBucket: "malstodin-90f85.firebasestorage.app",
+      messagingSenderId: "190485777754",
+      appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const COURSE = 'isat1ic';
+
+    const authReady = new Promise(resolve => {
+      const unsub = onAuthStateChanged(auth, (user) => { unsub(); resolve(user); });
+    });
+
+    async function writeProgress(exerciseId, status) {
+      try {
+        const user = await authReady;
+        if (!user) return;
+        const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
+        const data = { status, updated_at: serverTimestamp() };
+        if (status === 'opened')    data.opened_at    = serverTimestamp();
+        if (status === 'completed') data.completed_at = serverTimestamp();
+        await setDoc(ref, data, { merge: true });
+      } catch(e) { /* fail silently */ }
+    }
+
+    window.writeProgress = writeProgress;
+  </script>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    const KEYWORDS = [
+      'áhugamál', 'lyfta lóðum', 'vöðvar', 'þrek', 'tónlist',
+      'einbeita sér', 'róa sig', 'markvörður', 'lúðrasveit', 'líkamsrækt',
+    ];
+
+    const MAX_PER_TOPIC = 5;
+
+    const TOPIC_TITLES = [
+      '1. Íþróttir og áhugamál',
+      '2. Tónlist',
+      '3. Líkamsrækt',
+    ];
+
+    const TOPIC_INTROS = [
+      'Hæ! Við erum að læra um áhugamál í íslensku. Hvaða íþróttir eða áhugamál hefur þú?',
+      'Flott! Nú vil ég spyrja þig um tónlist. Hlustar þú á tónlist? Hvernig tónlist líkar þér?',
+      'Áhugavert! Og hvað með líkamsrækt – ferðu í ræktina eða stundar þú aðra líkamsrækt?',
+    ];
+
+    const buildSystemPrompt = (topicIndex, exchangeCount) => {
+      const isLast = exchangeCount >= MAX_PER_TOPIC - 1;
+
+      const followups = [
+        [
+          'Hvaða útbúnað þarftu til að stunda þetta?',
+          'Kostar eitthvað að stunda þetta?',
+          'Hversu oft stundar þú þetta?',
+        ],
+        [
+          'Áttu einhvern uppáhalds listamann eða hljómsveit?',
+          'Hlustar þú á tónlist þegar þú ert að gera eitthvað annað?',
+          'Kemur fyrir að þú viljir ekki hlusta á tónlist? Hvenær?',
+        ],
+        [],
+      ];
+
+      const gymFollowups = [
+        'Ferðu ein/einn eða með vinum?',
+        'Hvaða æfingar líkar þér best – lyfta lóðum, hlaupa eða eitthvað annað?',
+        'Hversu lengi ert þú venjulega í ræktinni?',
+      ];
+
+      const noGymFollowups = [
+        'Hvaða líkamsrækt stundar þú þá – hjólreiðar, sund, dans eða að ganga?',
+        'Hreyfir þú þig reglulega?',
+        'Myndir þú vilja fara í ræktina einhvern tímann?',
+      ];
+
+      let followupSection = '';
+      if (topicIndex < 2) {
+        followupSection = 'Ef nemandinn gefur stutt svar, spyrðu einnar af þessum undirspurningum:\n' +
+          followups[topicIndex].map(f => '- ' + f).join('\n');
+      } else {
+        followupSection =
+          'Ef nemandinn fer í ræktina, spyrðu einnar af þessum:\n' +
+          gymFollowups.map(f => '- ' + f).join('\n') +
+          '\n\nEf nemandinn fer EKKI í ræktina, spyrðu einnar af þessum:\n' +
+          noGymFollowups.map(f => '- ' + f).join('\n');
+      }
+
+      const lastNote = isLast
+        ? '\n\nMIKILVÆGT: Þetta er síðasta svar þitt í þessum hluta. Ljúktu á hlýlegan hátt og EKKI spyrja fleiri spurninga.'
+        : '';
+
+      return (
+        'Þú ert íslenskukennari sem er að spjalla við nemanda um áhugamál. ' +
+        'Talaðu óformlega og hvetjandi – eins og vinur.\n\n' +
+        'LYKILORÐ sem þú reynir að hvetja nemandann til að nota:\n' +
+        KEYWORDS.join(', ') + '\n\n' +
+        followupSection + '\n\n' +
+        'REGLUR:\n' +
+        '1. AÐEINS EIN spurning í hvert skipti\n' +
+        '2. Hrósaðu stutt eftir svar (t.d. „Flott!", „Geggjað!", „Áhugavert!")\n' +
+        '3. Ef nemandinn gerir málfræðivillu, leiðréttu hana beint í svarinu, ' +
+        't.d.: „Já! (Við segjum \'í ræktina\' ekki \'í ræktinni\'). Ferðu..."\n' +
+        '4. Svaraðu ALLTAF á íslensku – einföld A1-A2 setningar\n' +
+        '5. ALDREI nota markdown, lista eða sérstaka stafi í svari\n' +
+        '6. Haltu svari stuttu – 1-2 setningar\n' +
+        lastNote
+      );
+    };
+
+    async function callOpenAI(messages, maxTokens = 120, temperature = 0.5) {
+      const r = await fetch('/.netlify/functions/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens: maxTokens, model: 'gpt-4o-mini', temperature }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+      return data.content;
+    }
+
+    const speakText = (text, onEnd) => {
+      const audioRef = { current: null };
+      fetch('/.netlify/functions/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text_to_speak: text }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (!data.audio_base64) { onEnd?.(); return; }
+          const audio = new Audio('data:audio/mp3;base64,' + data.audio_base64);
+          audioRef.current = audio;
+          audio.onended = () => onEnd?.();
+          audio.onerror = () => onEnd?.();
+          audio.play().catch(() => onEnd?.());
+        })
+        .catch(() => onEnd?.());
+      return audioRef;
+    };
+
+    const SpeakerIcon = ({ speaking }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        className={`w-4 h-4 ${speaking ? 'text-red-500 speaking-pulse' : 'text-green-600'}`}>
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
       </svg>
     );
 
-    const QUESTIONS = [
-      { id: 'what', text: 'Hvert er áhugamálið?' },
-      { id: 'needs', text: 'Hvað þarf maður til þess að stunda það?' },
-      { id: 'where', text: 'Er hægt að stunda það hvar sem er?' },
-      { id: 'frequency', text: 'Hversu oft í viku/mánuði/ári stundar þú þitt áhugamál?' },
-      { id: 'duration_how_long', text: 'Ertu búin/n að stunda þitt áhugamál lengi?' },
-      { id: 'duration_session', text: 'Hversu lengi í einu? Hálftíma/klukkutíma/annað?' },
-      { id: 'cost', text: 'Hvað kostar að stunda þetta áhugamál?' },
-      { id: 'fun_fact', text: 'Skemmtileg staðreynd um áhugamálið þitt' },
-      { id: 'other', text: 'Annað sem þér dettur í hug 😊' }
-    ];
+    const SpjallAhugamal = () => {
+      const inputRef  = useRef(null);
+      const chatRef   = useRef(null);
+      const audioRef  = useRef(null);
 
-    const MalmenniAhugamal = () => {
-      const [messages, setMessages] = useState([]);
-      const [input, setInput] = useState('');
-      const [loading, setLoading] = useState(false);
-      const [answeredQuestions, setAnsweredQuestions] = useState([]);
-      const [stage, setStage] = useState('chatting'); // 'chatting' or 'summary'
-      const [summaryData, setSummaryData] = useState(null);
-      const messagesEndRef = useRef(null);
-      const inputRef = useRef(null);
+      const [topicIndex,     setTopicIndex]     = useState(0);
+      const [userMessages,   setUserMessages]   = useState([[], [], []]);
+      const [fullConvs,      setFullConvs]      = useState([[], [], []]);
+      const [exchangeCounts, setExchangeCounts] = useState([0, 0, 0]);
+      const [topicDone,      setTopicDone]      = useState([false, false, false]);
+      const [allDone,        setAllDone]        = useState(false);
+      const [speakingMsgId,  setSpeakingMsgId]  = useState(null);
+      const [aiMessages,     setAiMessages]     = useState([[], [], []]);
+      const nextMsgId = useRef(0);
+
+      const [userInput,   setUserInput]   = useState('');
+      const [isLoading,   setIsLoading]   = useState(false);
+      const [isRecording, setIsRecording] = useState(false);
+      const [recognition, setRecognition] = useState(null);
+
+      const progressWritten = useRef(false);
+      useEffect(() => {
+        window.writeProgress && window.writeProgress('spjall1_ahugamal', 'opened');
+      }, []);
+      useEffect(() => {
+        if (allDone && !progressWritten.current) {
+          progressWritten.current = true;
+          window.writeProgress && window.writeProgress('spjall1_ahugamal', 'completed');
+        }
+      }, [allDone]);
 
       useEffect(() => {
-        setMessages([
-          { 
-            role: 'assistant', 
-            content: 'Hæ! 👋 Ég er hér til að hjálpa þér að æfa íslensku og undirbúa þig fyrir munnlegt próf um áhugamál. Skulum bara spjalla saman um áhugamálið þitt! Hvert er áhugamálið þitt?' 
-          }
-        ]);
+        const conv = fullConvs[topicIndex];
+        if (conv.length === 0) {
+          const intro = TOPIC_INTROS[topicIndex];
+          const msgId = nextMsgId.current++;
+          const newFull = fullConvs.slice();
+          newFull[topicIndex] = [{ role: 'assistant', content: intro }];
+          setFullConvs(newFull);
+          const newAi = aiMessages.slice();
+          newAi[topicIndex] = [{ id: msgId, content: intro }];
+          setAiMessages(newAi);
+        }
+      }, [topicIndex]);
+
+      useEffect(() => {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SR) {
+          const r = new SR();
+          r.lang = 'is-IS';
+          r.continuous = false;
+          r.interimResults = false;
+          r.onresult = (e) => { setUserInput(e.results[0][0].transcript); setIsRecording(false); };
+          r.onerror  = () => setIsRecording(false);
+          r.onend    = () => setIsRecording(false);
+          setRecognition(r);
+        }
       }, []);
 
       useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        if (stage === 'chatting' && inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, [messages, loading, stage]);
+        setTimeout(() => {
+          if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+        }, 80);
+      }, [userMessages, aiMessages, isLoading]);
 
-      async function callOpenAI(payload) {
-        const r = await fetch('/.netlify/functions/openai', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await r.json();
-        if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
-        return data.content;
-      }
+      const stopAudio = () => {
+        if (audioRef.current?.current) {
+          audioRef.current.current.pause();
+          audioRef.current.current.currentTime = 0;
+        }
+        setSpeakingMsgId(null);
+      };
+
+      const toggleSpeak = (msgId, text) => {
+        if (speakingMsgId === msgId) { stopAudio(); return; }
+        stopAudio();
+        setSpeakingMsgId(msgId);
+        const ref = speakText(text, () => setSpeakingMsgId(null));
+        audioRef.current = ref;
+      };
+
+      const toggleRecording = () => {
+        if (!recognition) return;
+        if (isRecording) { recognition.stop(); setIsRecording(false); }
+        else { recognition.start(); setIsRecording(true); }
+      };
 
       const sendMessage = async () => {
-        const trimmed = input.trim();
-        if (!trimmed || loading) return;
+        const msg = userInput.trim();
+        if (!msg || isLoading) return;
 
-        const userMessage = { role: 'user', content: trimmed };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
-        setLoading(true);
+        stopAudio();
+        setUserInput('');
+        setIsLoading(true);
 
-        // Málfarsendurgjöf
+        const newUserMsgs = userMessages.slice();
+        newUserMsgs[topicIndex] = userMessages[topicIndex].concat([msg]);
+        setUserMessages(newUserMsgs);
+
+        const currentFull = fullConvs[topicIndex];
+        const newFull = currentFull.concat([{ role: 'user', content: msg }]);
+        const newCount = exchangeCounts[topicIndex] + 1;
+        const newCounts = exchangeCounts.slice();
+        newCounts[topicIndex] = newCount;
+        setExchangeCounts(newCounts);
+
         try {
-          const feedbackMessages = [
-            {
-              role: 'system',
-              content: `Þú ert íslenskukennari sem gefur örstutta, hlýja og hvetjandi endurgjöf á íslensku (A1–A2).
-REGLUR:
-- 1–2 stuttar setningar, aldrei lengra.
-- Leiðréttu aðeins þegar þú ert >80% viss.
-- Forðastu of formlegt/bóklegt mál.
-- Ekki nota ensku. Ekki útskýra nema nauðsynlegt sé fyrir skilning.`.trim()
-            },
-            {
-              role: 'user',
-              content: `Skilaboð nemanda: "${trimmed}". Gefðu aðeins endurgjöfarlínuna, ekkert annað.`
-            }
-          ];
+          const allMessages = [{ role: 'system', content: buildSystemPrompt(topicIndex, newCount) }, ...newFull];
+          const reply = await callOpenAI(allMessages, 120, 0.5);
 
-          const feedback = await callOpenAI({
-            model: 'gpt-4o-mini',
-            temperature: 0.2,
-            max_tokens: 60,
-            messages: feedbackMessages,
+          const updatedFull = newFull.concat([{ role: 'assistant', content: reply }]);
+          const updatedConvs = fullConvs.slice();
+          updatedConvs[topicIndex] = updatedFull;
+          setFullConvs(updatedConvs);
+
+          const msgId = nextMsgId.current++;
+          const newAi = aiMessages.slice();
+          newAi[topicIndex] = aiMessages[topicIndex].concat([{ id: msgId, content: reply }]);
+          setAiMessages(newAi);
+
+          setIsLoading(false);
+
+          setSpeakingMsgId(msgId);
+          const ref = speakText(reply, () => {
+            setSpeakingMsgId(null);
+            if (newCount >= MAX_PER_TOPIC) {
+              const newDone = topicDone.slice();
+              newDone[topicIndex] = true;
+              setTopicDone(newDone);
+            }
           });
-
-          if (feedback && typeof feedback === 'string') {
-            setMessages(prev => [...prev, { role: 'feedback', content: feedback }]);
-            await new Promise(res => setTimeout(res, 500));
-          }
-        } catch (e) {
-          console.error('Feedback error:', e);
-        }
-
-        // Aðal-svar
-        try {
-          const questionsText = QUESTIONS.map((q, i) => `${i + 1}. ${q.text}`).join('\n');
-          const answeredText = answeredQuestions.map(id => {
-            const q = QUESTIONS.find(x => x.id === id);
-            return q ? q.text : '';
-          }).join(', ');
-
-          const sys = `Þú ert vingjarnlegur íslenskukennari sem spjallar við A1-A2 nemanda um áhugamál.
-
-VERKEFNI:
-Þú átt að fá nemandann til að svara öllum þessum 9 spurningum á náttúrulegan hátt:
-
-${questionsText}
-
-SPURNINGAR SEM HAFA VERIÐ SVARAÐAR:
-${answeredText || 'Engar ennþá'}
-
-REGLUR:
-1. Spjallaðu á náttúrulegan hátt - ekki bara lesa upp spurningar í röð
-2. Þegar nemandi svarar spurningu, þá staðfestu að þú hafir skilið og færðu samtalsþráðinn áfram
-3. Spurðu næstu spurningu á náttúrulegan hátt sem hluti af samtali
-4. Vertu hvetjandi og jákvæður
-5. Notaðu einfalda íslensku (A1-A2)
-6. ALDREI leiðrétta málfar - það er annað kerfi sem gerir það
-7. Haltu svörum stuttum (2-4 setningar)
-
-ÞEGAR NEMANDI SVARAR:
-- Greindu hvaða spurningu hann svaraði
-- Gefðu jákvæða staðfestingu
-- Færðu samtalsþráðinn áfram með næstu spurningu
-
-SKILAÐU JSON Á ÞESSU FORMI í síðustu línu:
-{"answered": ["question_id"], "all_done": false}
-
-Þegar allar 9 spurningar eru svaraðar, settu "all_done": true
-
-DÆMI á question_id:
-"what", "needs", "where", "frequency", "duration_how_long", "duration_session", "cost", "fun_fact", "other"
-
-MIKILVÆGT: Skilaðu alltaf JSON í síðustu línu, þó svarið þitt sé stutt.`.trim();
-
-          const conversationHistory = messages
-            .filter(m => m.role === 'assistant' || m.role === 'user')
-            .map(m => ({ role: m.role, content: m.content }));
-
-          const assistantReply = await callOpenAI({
-            model: 'gpt-4o-mini',
-            temperature: 0.7,
-            max_tokens: 300,
-            messages: [
-              { role: 'system', content: sys },
-              ...conversationHistory,
-              userMessage,
-            ],
-          });
-
-          if (assistantReply) {
-            // Parse JSON from last line
-            const lines = assistantReply.trim().split('\n');
-            const lastLine = lines[lines.length - 1].trim();
-            const cleanLine = lastLine.replace(/```json\s*/g, '').replace(/```/g, '').trim();
-            let jsonData = null;
-
-            try {
-              jsonData = JSON.parse(cleanLine);
-            } catch {
-              // If parsing fails, just show the message
-            }
-
-            // Remove JSON line from display
-            const displayText = lines.slice(0, -1).join('\n').trim() || assistantReply;
-            
-            setMessages(prev => [...prev, { role: 'assistant', content: displayText }]);
-
-            // Update answered questions
-            if (jsonData && jsonData.answered && Array.isArray(jsonData.answered)) {
-              setAnsweredQuestions(prev => {
-                const newAnswered = [...new Set([...prev, ...jsonData.answered])];
-                return newAnswered;
-              });
-
-              // Check if all done
-              if (jsonData.all_done === true) {
-                // Generate summary
-                setTimeout(() => generateSummary(), 1000);
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Assistant error:', e);
-          setMessages(prev => [
-            ...prev,
-            { role: 'assistant', content: 'Úps, eitthvað fór úrskeiðis. Prófum aftur!' }
-          ]);
-        } finally {
-          setLoading(false);
+          audioRef.current = ref;
+        } catch {
+          setIsLoading(false);
         }
       };
 
-      const generateSummary = async () => {
-        setLoading(true);
-        
-        try {
-          const conversationText = messages
-            .filter(m => m.role === 'user')
-            .map(m => m.content)
-            .join('\n\n');
-
-          const summaryPrompt = `Þú ert íslenskukennari. Nemandinn hefur spjallað um áhugamál sitt og svarað spurningum.
-
-SAMTAL NEMANDA:
-${conversationText}
-
-VERKEFNI:
-Búðu til samantekt í stikkorðum/punktaformi sem nemandinn getur notað til að undirbúa munnlegt próf.
-
-FORMIÐ:
-Búðu til JSON á þessu formi:
-{
-  "hobby": "Nafn áhugamáls",
-  "points": [
-    "Punktur 1: stuttur texti",
-    "Punktur 2: stuttur texti",
-    ...
-  ]
-}
-
-REGLUR:
-- 6-10 stuttir punktar
-- Einföld íslenska
-- Gott fyrir munnlegt próf
-- Notaðu upplýsingar úr samtalinu
-
-SKILAÐU BARA JSON, ekkert annað.`.trim();
-
-          const summaryReply = await callOpenAI({
-            model: 'gpt-4o-mini',
-            temperature: 0.5,
-            max_tokens: 400,
-            messages: [
-              { role: 'user', content: summaryPrompt }
-            ],
-          });
-
-          let cleanResult = summaryReply.trim();
-          if (cleanResult.startsWith('```')) {
-            cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          }
-
-          const parsed = JSON.parse(cleanResult);
-          setSummaryData(parsed);
-          setStage('summary');
-        } catch (e) {
-          console.error('Summary error:', e);
-          // Fallback summary
-          setSummaryData({
-            hobby: 'Áhugamálið þitt',
-            points: [
-              'Þú svaraðir öllum spurningum!',
-              'Þú ert tilbúin/n fyrir munnlegt próf',
-              'Blessaður!'
-            ]
-          });
-          setStage('summary');
-        } finally {
-          setLoading(false);
+      const goNext = () => {
+        stopAudio();
+        if (topicIndex < 2) {
+          setTopicIndex(topicIndex + 1);
+          setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 200);
+        } else {
+          setAllDone(true);
         }
       };
 
-      const resetChat = () => {
-        setStage('chatting');
-        setMessages([
-          { 
-            role: 'assistant', 
-            content: 'Hæ aftur! 👋 Skulum spjalla um annað áhugamál. Hvert er næsta áhugamálið þitt?' 
-          }
-        ]);
-        setAnsweredQuestions([]);
-        setSummaryData(null);
-      };
+      const currentUserMsgs = userMessages[topicIndex];
+      const currentAiMsgs   = aiMessages[topicIndex];
+      const currentDone     = topicDone[topicIndex];
+      const exchangeLeft    = MAX_PER_TOPIC - exchangeCounts[topicIndex];
+
+      if (allDone) {
+        return (
+          <div className="min-h-screen pb-16">
+            <header className="bg-white shadow-sm border-b border-gray-200">
+              <div className="max-w-2xl mx-auto px-6 py-8">
+                <button onClick={() => window.history.back()}
+                  className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+                <h1 className="text-3xl font-light text-gray-800">💬 Spjall 1: Áhugamál</h1>
+                <p className="text-gray-500 text-sm font-light mt-1">Samtalsæfing · A1–A2</p>
+              </div>
+            </header>
+            <main className="max-w-2xl mx-auto px-6 mt-10">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center fade-in">
+                <div className="text-5xl mb-4">🎉</div>
+                <h2 className="text-2xl font-light text-gray-800 mb-2">Frábært!</h2>
+                <p className="text-gray-500 font-light mb-6">Þú kláraðir öll þrjú samtölin um áhugamál.</p>
+                <div className="flex gap-3 justify-center flex-wrap">
+                  <button onClick={() => {
+                    stopAudio();
+                    setTopicIndex(0); setUserMessages([[], [], []]); setFullConvs([[], [], []]);
+                    setAiMessages([[], [], []]); setExchangeCounts([0, 0, 0]);
+                    setTopicDone([false, false, false]); setAllDone(false);
+                  }} className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light">
+                    🔄 Byrja aftur
+                  </button>
+                  <button onClick={() => window.history.back()}
+                    className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+                    ← Til baka
+                  </button>
+                </div>
+              </div>
+            </main>
+          </div>
+        );
+      }
 
       return (
-        <div className="min-h-screen pb-12">
+        <div className="min-h-screen pb-16">
           <header className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-4xl mx-auto px-6 py-8">
-              <button 
-                onClick={() => window.history.back()} 
-                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light"
-              >
-                ← Til baka
-              </button>
-              <h1 className="text-3xl font-light text-gray-800 mb-2">Málmenni: Áhugamál</h1>
-              <p className="text-gray-500 text-sm font-light">Samtalsæfing · A1-A2</p>
+            <div className="max-w-2xl mx-auto px-6 py-6">
+              <button onClick={() => window.history.back()}
+                className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+              <h1 className="text-3xl font-light text-gray-800">💬 Spjall: Áhugamál</h1>
+              <p className="text-gray-500 text-sm font-light mt-1">Samtalsæfing · A1–A2</p>
             </div>
           </header>
 
-          <main className="max-w-4xl mx-auto px-6 mt-8">
-            {stage === 'chatting' && (
-              <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                {/* Progress bar */}
-                <div className="bg-gray-50 border-b border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-light text-gray-600">Framvinda</span>
-                    <span className="text-sm font-normal text-gray-800">{answeredQuestions.length}/9</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(answeredQuestions.length / 9) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
+          <main className="max-w-2xl mx-auto px-6 mt-5 space-y-4 pb-20">
 
-                {/* Chat messages */}
-                <div className="chat-container p-6 space-y-4">
-                  {messages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex ${
-                        msg.role === 'user'
-                          ? 'justify-end'
-                          : msg.role === 'feedback'
-                          ? 'justify-center'
-                          : 'justify-start'
-                      }`}
-                    >
-                      <div
-                        className={`max-w-lg px-4 py-2 rounded-lg font-light ${
-                          msg.role === 'user'
-                            ? 'bg-blue-500 text-white'
-                            : msg.role === 'feedback'
-                            ? 'bg-blue-50 text-blue-800 border border-blue-200 text-sm'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {msg.role === 'feedback' && <span className="font-normal">📚 Málfar: </span>}
-                        {msg.content}
-                      </div>
-                    </div>
-                  ))}
+            <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4">
+              <ul className="text-sm text-blue-800 font-light space-y-1">
+                <li>💬 Spjallaðu um efnið með AI-kennaranum</li>
+                <li>🔄 Ef þú færð rangt: prófaðu að laga setninguna</li>
+                <li>✅ Þegar þú hefur lokið öllum efnisþáttum ertu búin/n</li>
+              </ul>
+            </div>
 
-                  {loading && (
-                    <div className="flex justify-start">
-                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
-                        <div className="flex space-x-2">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                        </div>
-                      </div>
-                    </div>
+            <div className="sticky-player rounded-xl overflow-hidden">
+              <div className="bg-white border border-gray-200 px-5 py-3 flex items-center justify-between">
+                <span className="text-sm text-gray-600 font-light">{TOPIC_TITLES[topicIndex]}</span>
+                <div className="flex items-center gap-3">
+                  {!currentDone && (
+                    <span className="text-xs text-gray-400 font-light">
+                      {exchangeLeft > 0 ? exchangeLeft + ' tilsvör eftir' : 'Síðasta svar'}
+                    </span>
                   )}
-                  <div ref={messagesEndRef} />
+                  <div className="flex gap-1.5">
+                    {TOPIC_TITLES.map((t, i) => (
+                      <button key={i}
+                        onClick={() => {
+                          if (!speakingMsgId && !isLoading && (topicDone[i] || i <= topicIndex)) {
+                            stopAudio(); setTopicIndex(i);
+                          }
+                        }}
+                        title={t}
+                        className={`w-7 h-7 rounded-full text-xs font-light flex items-center justify-center transition-colors border ${
+                          i === topicIndex         ? 'bg-green-600 text-white border-green-600'
+                          : topicDone[i]           ? 'bg-green-100 text-green-700 border-green-300'
+                          : i < topicIndex         ? 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200'
+                          : 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'}`}>
+                        {topicDone[i] ? '✓' : (i + 1)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Input */}
-                <div className="border-t border-gray-200 p-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      ref={inputRef}
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                      placeholder="Skrifaðu svarið þitt hér..."
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 font-light"
-                      disabled={loading}
+            <div className="bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
+              <div ref={chatRef} className="px-4 py-4 space-y-4 overflow-y-auto"
+                style={{ minHeight: '400px', maxHeight: '500px' }}>
+
+                {currentAiMsgs.length === 0 && !isLoading && (
+                  <div className="flex items-center justify-center h-full py-12">
+                    <p className="text-sm text-gray-400 font-light text-center px-6">🎧 Bíddu eftir spurningu...</p>
+                  </div>
+                )}
+
+                {(() => {
+                  const items = [];
+                  const aiList = currentAiMsgs, userList = currentUserMsgs;
+                  let ai = 0, u = 0;
+                  while (ai < aiList.length || u < userList.length) {
+                    if (ai < aiList.length) { items.push({ type: 'ai',   data: aiList[ai]   }); ai++; }
+                    if (u  < userList.length) { items.push({ type: 'user', data: userList[u] }); u++;  }
+                  }
+                  return items.map((item, idx) => {
+                    if (item.type === 'ai') {
+                      const isSpeaking = speakingMsgId === item.data.id;
+                      return (
+                        <div key={'ai-' + item.data.id} className="flex items-start gap-2 fade-in">
+                          <button onClick={() => toggleSpeak(item.data.id, item.data.content)}
+                            className={`mt-1 p-2.5 rounded-full transition-colors flex-shrink-0 ${
+                              isSpeaking ? 'bg-red-100 hover:bg-red-200' : 'bg-green-100 hover:bg-green-200'}`}
+                            title={isSpeaking ? 'Stoppa' : 'Hlusta'}>
+                            <SpeakerIcon speaking={isSpeaking} />
+                          </button>
+                          <div className="bg-gray-100 px-3 py-2.5 rounded-2xl text-sm font-light text-gray-800 leading-relaxed max-w-xs">
+                            {isSpeaking
+                              ? <span className="text-green-600 text-xs">🔊 Í gangi...</span>
+                              : <span className="text-gray-400 text-xs italic">Smelltu á hátalarann til að hlusta</span>}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div key={'user-' + idx} className="flex gap-2 flex-row-reverse fade-in">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-medium flex-shrink-0 mt-1">Þú</div>
+                          <div className="max-w-xs px-3 py-2.5 text-sm font-light leading-relaxed chat-bubble-user text-gray-800">{item.data}</div>
+                        </div>
+                      );
+                    }
+                  });
+                })()}
+
+                {isLoading && (
+                  <div className="flex justify-start fade-in">
+                    <div className="bg-gray-100 px-4 py-3 rounded-2xl">
+                      <div className="flex gap-1">
+                        {[0, 150, 300].map(d => (
+                          <div key={d} className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: d + 'ms' }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentDone && !isLoading && (
+                  <div className="text-center py-2 fade-in">
+                    <span className="text-xs text-gray-400 font-light bg-gray-100 px-3 py-1 rounded-full">✓ Þessum hluta er lokið</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-100 p-3">
+                {!currentDone ? (
+                  <div className="flex gap-2 items-end">
+                    <textarea ref={inputRef}
+                      value={userInput}
+                      onChange={e => setUserInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                      placeholder={isRecording ? '🔴 Hlustar...' : 'Skrifaðu svar þitt á íslensku...'}
+                      disabled={isLoading} rows="2"
+                      className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-400 font-light text-sm resize-none disabled:bg-gray-50"
                     />
-                    <button
-                      onClick={sendMessage}
-                      disabled={loading || !input.trim()}
-                      className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
-                      aria-label="Senda skilaboð"
-                      title="Senda"
-                    >
-                      <SendIcon />
+                    {(window.SpeechRecognition || window.webkitSpeechRecognition) && (
+                      <button onClick={toggleRecording} disabled={isLoading}
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors border-2 ${
+                          isRecording ? 'bg-red-500 text-white border-red-500'
+                          : 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 disabled:opacity-40 disabled:cursor-not-allowed'}`}>
+                        🎤
+                      </button>
+                    )}
+                    <button onClick={sendMessage} disabled={isLoading || !userInput.trim()}
+                      className="w-10 h-10 bg-green-600 text-white rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                      </svg>
                     </button>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {stage === 'summary' && summaryData && (
-              <div className="bg-white rounded-lg shadow-sm p-8">
-                <div className="text-center mb-8">
-                  <div className="text-6xl mb-4">🎉</div>
-                  <h2 className="text-3xl font-light text-gray-800 mb-2">Frábært!</h2>
-                  <p className="text-gray-600 font-light">Þú hefur svarað öllum spurningum</p>
-                </div>
-
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-8">
-                  <h3 className="text-xl font-normal text-gray-800 mb-4">📝 Samantekt fyrir munnlegt próf</h3>
-                  <div className="bg-white rounded-lg p-6">
-                    <h4 className="text-lg font-normal text-gray-800 mb-4">Áhugamál: {summaryData.hobby}</h4>
-                    <ul className="space-y-3">
-                      {summaryData.points.map((point, idx) => (
-                        <li key={idx} className="flex items-start gap-3">
-                          <span className="text-blue-500 font-normal">•</span>
-                          <span className="font-light text-gray-700">{point}</span>
-                        </li>
-                      ))}
-                    </ul>
+                ) : (
+                  <div className="text-center py-1">
+                    <button onClick={goNext} disabled={isLoading}
+                      className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+                      {topicIndex < 2 ? 'Áfram í næsta þema →' : '🎉 Ljúka æfingunni'}
+                    </button>
                   </div>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                  <h3 className="text-lg font-normal text-gray-800 mb-3">💡 Ábending</h3>
-                  <p className="text-gray-600 font-light leading-relaxed">
-                    Notaðu þessa samantekt til að æfa þig fyrir munnlegt próf. 
-                    Reyndu að segja frá áhugamálinu þínu í 2-3 mínútur með þínum eigin orðum!
-                  </p>
-                </div>
-
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={resetChat}
-                    className="bg-blue-500 text-white px-8 py-3 rounded-md hover:bg-blue-600 transition-colors font-light"
-                  >
-                    Æfa annað áhugamál
-                  </button>
-                  <button
-                    onClick={() => window.history.back()}
-                    className="bg-gray-200 text-gray-800 px-8 py-3 rounded-md hover:bg-gray-300 transition-colors font-light"
-                  >
-                    Til baka
-                  </button>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <p className="text-xs text-gray-500 font-light mb-2">📘 Lykilorð til að nota:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {KEYWORDS.map(kw => (
+                  <span key={kw} className="text-xs px-2.5 py-1 bg-green-50 text-green-700 border border-green-100 rounded-full font-light">{kw}</span>
+                ))}
+              </div>
+            </div>
+
           </main>
+
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+            <div className="max-w-2xl mx-auto px-6 py-3 flex gap-2">
+              {TOPIC_TITLES.map((title, i) => {
+                const label = title.replace(/^\d+\.\s*/, '');
+                const canNav = topicDone[i] || i <= topicIndex;
+                return (
+                  <button key={i}
+                    onClick={() => { if (canNav && !isLoading) { stopAudio(); setTopicIndex(i); } }}
+                    className={`flex-1 py-2 rounded-lg text-sm font-light transition-colors ${
+                      topicDone[i]     ? 'bg-blue-600 text-white'
+                      : i === topicIndex ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                    {topicDone[i] ? '✓ ' : ''}{label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       );
     };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<MalmenniAhugamal />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpjallAhugamal />);
   </script>
 </body>
 </html>
