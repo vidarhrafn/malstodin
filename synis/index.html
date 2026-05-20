@@ -6,41 +6,79 @@
   <title>Málstöðin – Íslenskuæfingar</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    :root {
+      --paper: #fdfcf9;
+      --ink: #292524;
+      --muted: #78716c;
+    }
+
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.95), transparent 28rem),
+        linear-gradient(to bottom, #fdfcf9 0%, #f3eee5 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
       min-height: 100vh;
     }
-    .exercise-card {
-      transition: all 0.3s ease;
-      border: 2px solid #e5e7eb;
+
+    .checkpoint-gradient {
+      background:
+        radial-gradient(circle at top right, rgba(250, 204, 21, 0.18), transparent 18rem),
+        linear-gradient(135deg, #1c1917 0%, #44403c 100%);
     }
-    .exercise-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
-      border-color: #3b82f6;
+
+    .chapter-card,
+    .task-button,
+    .checkpoint-link {
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
     }
-    .chatbot-card {
-      transition: all 0.3s ease;
-      border: 2px solid #e5e7eb;
-      opacity: 0.6;
+
+    .chapter-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(68, 64, 60, 0.10);
+    }
+
+    .task-button:hover,
+    .checkpoint-link:hover {
+      transform: translateY(-1px);
+    }
+
+    .task-button:active,
+    .checkpoint-link:active {
+      transform: scale(0.98);
+    }
+
+    .corner-image {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 96px;
+      height: 96px;
+      overflow: hidden;
+      border-radius: 0 16px 0 72px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .corner-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      opacity: 0.5;
+    }
+
+    .task-disabled {
+      opacity: 0.38;
       cursor: not-allowed;
+      pointer-events: none;
     }
-    .chatbot-card:hover {
-      opacity: 0.8;
+
+    .bottom-safe {
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom));
     }
-    .level-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-    }
-    .level-a1 { background: #dbeafe; color: #1e40af; }
-    .level-a2 { background: #bfdbfe; color: #1e3a8a; }
-    .level-b1 { background: #fef3c7; color: #92400e; }
-    .level-b2 { background: #fed7aa; color: #9a3412; }
+
     .coming-soon {
       background: #f3f4f6;
       color: #6b7280;
@@ -51,314 +89,780 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
+
+    .locked-card {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
   </style>
 </head>
-<body>
-  <div class="min-h-screen pb-12">
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b border-gray-200">
-      <div class="max-w-6xl mx-auto px-6 py-12">
-        <div class="text-center">
-          <h1 class="text-5xl font-light text-gray-800 mb-3">Málstöðin</h1>
-          <p class="text-gray-500 text-lg font-light">Íslenskuæfingar með gervigreind</p>
-          <p class="text-gray-400 text-sm font-light mt-2">Lesskilningur · Orðaforði · Umræða</p>
-        </div>
-      </div>
-    </header>
+<body class="bottom-safe">
 
-    <!-- Main Content -->
-    <main class="max-w-6xl mx-auto px-6 mt-12">
-      
-      <!-- Intro Text -->
-      <div class="bg-white rounded-lg shadow-sm p-8 mb-8">
-        <div class="text-center max-w-2xl mx-auto">
-          <div class="text-4xl mb-4">📚</div>
-          <h2 class="text-2xl font-light text-gray-800 mb-4">Velkomin/n!</h2>
-          <p class="text-gray-600 font-light leading-relaxed">
-            Hér getur þú æft íslensku með gervigreindaraðstoð. Veldu æfingu hér að neðan til að byrja. 
-            Allar æfingarnar innihalda lestexta, spurningar og persónulega endurgjöf frá gervigreind.
+  <!-- HEADER -->
+  <header class="bg-white/95 backdrop-blur-md border-b border-stone-200 px-5 py-5 sm:py-7 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-3xl mx-auto flex justify-between items-end gap-4">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.22em] text-stone-400 mb-1">Málstöðin · Tækniskólinn</p>
+        <h1 class="text-4xl sm:text-5xl font-light tracking-tight text-stone-900">Málstöðin</h1>
+      </div>
+      <div class="text-right hidden sm:block">
+        <p class="text-xs text-stone-400">Íslenskt</p>
+        <p class="text-sm font-medium text-stone-700">Tungumálakerfi</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 mt-7">
+
+    <!-- Kynning -->
+    <section class="bg-white border border-stone-200 rounded-3xl p-6 sm:p-7 shadow-sm mb-10">
+      <div class="flex gap-4 items-start">
+        <div class="text-4xl" aria-hidden="true">📚</div>
+        <div>
+          <h2 class="text-2xl font-light text-stone-900 mb-2">Velkomin/n!</h2>
+          <p class="text-sm sm:text-base font-light leading-relaxed text-stone-600">
+            Hér getur þú æft íslensku með gervigreindaraðstoð. Æfingarnar innihalda lestexta, hlustanarverkefni og spjall. Eftir hverja lotu er áfangastöð með upprifjun og sjálfsprófi.
           </p>
         </div>
       </div>
+    </section>
 
-      <!-- 🎨 Áhugamál & Tómstundir (VIRKIR TENGLAR) -->
-      <section class="mb-12">
-        <div class="mb-6">
-          <h2 class="text-2xl font-light text-gray-800 flex items-center gap-2">
-            <span>🎨</span>
-            <span>Áhugamál & Tómstundir</span>
-          </h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          <!-- 1) Áhugamál -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='ahugamal'>
-            <div class="text-4xl mb-3">🎯</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Áhugamál</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Um áhugamál og tómstundir</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </a>
 
-          <!-- 2) Hlustun - sund -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='hlustun_sund.html'>
-            <div class="text-4xl mb-3">🎧</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Hlustun – sund</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Hlustunarverkefni um sund</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </a>
-
-          <!-- 3) Hlustun - áhugamál -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='hlustun_ahugamal.html'>
-            <div class="text-4xl mb-3">🎧</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Hlustun – áhugamál</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Hlustunarverkefni um áhugamál</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </a>
-
-          <!-- 4) Myndaspjall - Áhugamál -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='spjall2_ahugamal.html'>
-            <div class="text-4xl mb-3">💬</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Myndaspjall – Áhugamál</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Vídeóspjall um áhugamál</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </a>
-
-          <!-- 5) Líkamsrækt -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='likamsraekt'>
-            <div class="text-4xl mb-3">🏋️</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Líkamsrækt</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Hreyfing og heilsa</p>
-            <span class="level-badge level-a2">A2</span>
-          </a>
-          
-          <!-- 6) Hlustun - Líkamsrækt -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='hlustun3_latur.html'>
-            <div class="text-4xl mb-3">🎧</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Hlustun – Jónas rífur sig upp</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Hlustun um líkamsrækt</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </a>
-
-          <!-- 7) Björgunarsveitir -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='bjorgunarsveitir'>
-            <div class="text-4xl mb-3">🆘</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Björgunarsveitir á Íslandi</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Sjálfboðaliðar og björgunarstörf</p>
-            <span class="level-badge level-a2">A2</span>
-          </a>
-
-          <!-- 8) Hlustun - Björgun -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='hlustun4_bjorgun.html'>
-            <div class="text-4xl mb-3">🎧</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Hlustun - björgun</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Hlustun um björgunarstörf</p>
-            <span class="level-badge level-a2">A2</span>
-          </a>
-          
-          <!-- 9) Spjall - Áhugamál -->
-          <a class='exercise-card bg-white rounded-lg p-6 block' href='spjall_ahugamal.html'>
-            <div class="text-4xl mb-3">💬</div>
-            <h3 class="text-xl font-normal text-gray-800 mb-2">Spjall – Áhugamál</h3>
-            <p class="text-gray-600 text-sm font-light mb-3">Spjallaðu um áhugamál þín</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </a>
-
-        </div>
-      </section>
-
-      <!-- 🎉 Merkisdagar & Hefðir (ÓVIRKIR) -->
-      <section class="mb-12">
-        <div class="mb-6">
-          <h2 class="text-2xl font-light text-gray-800 flex items-center gap-2">
-            <span>🎉</span>
-            <span>Merkisdagar & Hefðir</span>
-            <span class="coming-soon">Sýnishorn</span>
-          </h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🎄</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Jól á Íslandi</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Íslenskar jólahefðir</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🐣</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Páskar</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Páskahefðir á Íslandi</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">☀️</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Sumardagurinn fyrsti</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Snjóar?</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🪔</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Dívali - Ljósahátíðin</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Indversk hátíð ljóssins</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🇮🇸</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">17. júní - Þjóðhátíðardagur Íslands</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Sjálfstæðisdagurinn</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- 💼 Vinna (ÓVIRKIR) -->
-      <section class="mb-12">
-        <div class="mb-6">
-          <h2 class="text-2xl font-light text-gray-800 flex items-center gap-2">
-            <span>💼</span>
-            <span>Vinna</span>
-            <span class="coming-soon">Sýnishorn</span>
-          </h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🏪</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Sumarvinnan hans Alex</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Saga um sumarstarf í verslun</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🛒</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Sumarvinnan hennar Veroniku</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Verónika fær vinnu á Hagkaup</p>
-            <span class="level-badge level-a2">A2-B1</span>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- 📖 Annað (Sögur & Ráðgátur) (ÓVIRKIR) -->
-      <section class="mb-12">
-        <div class="mb-6">
-          <h2 class="text-2xl font-light text-gray-800 flex items-center gap-2">
-            <span>📖</span>
-            <span>Annað</span>
-            <span class="coming-soon">Sýnishorn</span>
-          </h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🪂</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Fallhlífin opnaðist ekki – saga Victoria Cilliers</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Sönn saga um morðtilraun</p>
-            <span class="level-badge level-b1">A2-B1</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">✈️</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">D.B. Cooper</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Ráðgáta um flugrán</p>
-            <span class="level-badge level-b1">A2-B1</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🖼️</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Mona Lisa</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Málverkið fræga</p>
-            <span class="level-badge level-b1">A2-B1</span>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- 🤖 Spjallbottar (ÓVIRKIR) -->
-      <section class="mb-12">
-        <div class="mb-6">
-          <h2 class="text-2xl font-light text-gray-800 flex items-center gap-2">
-            <span>🤖</span>
-            <span>Spjallbottar</span>
-            <span class="coming-soon">Væntanlegt</span>
-          </h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">💼</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Atvinnuviðtal</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Æfðu atvinnuviðtöl með AI</p>
-            <span class="level-badge level-a2">A2-B1</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🎯</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Áhugamál</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Spjallaðu um áhugamál þín</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </div>
-
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🎉</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Merkisdagur</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Lærðu um íslenska hefði</p>
-            <span class="level-badge level-a2">A2</span>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- 🎧 Hlustun (ÓVIRKIR) -->
-      <section class="mb-12">
-        <div class="mb-6">
-          <h2 class="text-2xl font-light text-gray-800 flex items-center gap-2">
-            <span>🎧</span>
-            <span>Hlustun</span>
-            <span class="coming-soon">Sýnishorn</span>
-          </h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          <div class="chatbot-card bg-white rounded-lg p-6">
-            <div class="text-4xl mb-3">🏊</div>
-            <h3 class="text-xl font-normal text-gray-700 mb-2">Sund</h3>
-            <p class="text-gray-500 text-sm font-light mb-3">Hlustunarverkefni um sund</p>
-            <span class="level-badge level-a1">A1-A2</span>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- Footer Info -->
-      <div class="mt-12 bg-white rounded-lg shadow-sm p-8">
-        <div class="text-center max-w-2xl mx-auto">
-          <h3 class="text-lg font-normal text-gray-800 mb-3">💡 Um æfingarnar</h3>
-          <div class="text-sm text-gray-600 font-light space-y-2">
-            <p>Námsefni þetta er samið af Sigurþóri Einarssyni og Viðari Hrafni Steingrímssyni 2024-2025. Það er samið fyrir nemendur í áfanganum ÍSAT1ÍC í Tækniskólanum.</p>
-            <p><strong class="font-normal">A1-A2:</strong> Byrjendur og byrjendur komnir áleiðis</p>
-            <p><strong class="font-normal">A2-B1:</strong> Nemendur með grunnkunnáttu</p>
-            <p><strong class="font-normal">B1-B2:</strong> Millistig og lengra komið</p>
-          </div>
-          <p class="text-gray-500 text-xs mt-4">Allar æfingar nota gervigreind til að gefa persónulega endurgjöf.</p>
+    <!-- ═══════════════════════════════════ LOTA 1 ═══════════════════════════════════ -->
+    <section id="lota-1" class="scroll-mt-28 mb-14">
+      <div class="flex items-center gap-4 mb-6">
+        <span class="bg-stone-900 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">1</span>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.22em] text-stone-400">Kaflar 1–3</p>
+          <h2 class="text-2xl sm:text-3xl font-light italic text-stone-900">Áhugamál & Tómstundir</h2>
+          <p class="text-sm text-stone-500 font-light mt-1">Við tölum um áhugamál, hlustum og hreyfum okkur.</p>
         </div>
       </div>
 
-    </main>
+      <div class="space-y-4">
 
-    <!-- Footer -->
-    <footer class="mt-12 pb-8">
-      <div class="max-w-6xl mx-auto px-6 text-center">
-        <p class="text-gray-400 text-sm font-light">
-          Málstöðin · Íslenskuæfingar með AI
-        </p>
+        <!-- Kafli 1 – Áhugamál -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/ahugamal.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 1</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Áhugamál</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">A1–A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get skilið og tjáð mig um áhugamál og tómstundir.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="ahugamal"
+                class="task-button flex items-center gap-2 justify-center
+                  bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="/synis/hlustun_ahugamal"
+                class="task-button flex items-center gap-2
+                  bg-green-50 hover:bg-green-100 border border-green-100
+                  text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">1 · Hlustun – Áhugamál</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="/synis/spjall_ahugamal"
+                class="task-button flex items-center gap-2
+                  bg-purple-50 hover:bg-purple-100 border border-purple-100
+                  text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall · Áhugamál</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Kafli 2 – Hlustun sund -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/sund.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 2</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Hlustun – Sund</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">A1–A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get skilið talað mál um sund og líkamsrækt.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="/synis/hlustun_sund"
+                class="task-button flex items-center gap-2
+                  bg-green-50 hover:bg-green-100 border border-green-100
+                  text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">2 · Hlustun – Sund</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-purple-50 border border-purple-100 text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall – kemur fljótlega</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Kafli 3 – Myndaspjall áhugamál -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/spjall.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 3</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Myndaspjall – Áhugamál</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-lg">A1–A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get átt samtal um áhugamál mín og spurt aðra.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-green-50 border border-green-100 text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">3 · Hlustun – kemur fljótlega</span>
+              </a>
+            </div>
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="/synis/spjall2_ahugamal"
+                class="task-button flex items-center gap-2
+                  bg-purple-50 hover:bg-purple-100 border border-purple-100
+                  text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Myndaspjall · Áhugamál</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Áfangastöð 1 -->
+        <div class="checkpoint-gradient rounded-3xl p-6 text-white shadow-xl mt-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded uppercase tracking-tight">Upprifjun</div>
+            <div>
+              <h3 class="text-xl font-bold uppercase tracking-tight text-yellow-300">Áfangastöð 1</h3>
+              <p class="text-xs text-white/60 mt-1">Áhugamál & Tómstundir — kaflar 1–3</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-yellow-400 hover:bg-yellow-300 border border-yellow-500 p-4 rounded-2xl
+              text-black sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">✅</span>
+                <div>
+                  <p class="font-bold">Sjálfspróf</p>
+                  <p class="text-xs text-black/60">Ertu tilbúin/n í næstu lotu?</p>
+                </div>
+              </div>
+              <span class="font-bold">Byrja</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🗂️</span>
+                <div>
+                  <p class="font-bold">Flasskort</p>
+                  <p class="text-xs text-white/60">Æfðu lykilorð</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🎨</span>
+                <div>
+                  <p class="font-bold">Teiknileikur</p>
+                  <p class="text-xs text-white/60">Teiknaðu og giskaðu</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🧩</span>
+                <div>
+                  <p class="font-bold">Orðagáta</p>
+                  <p class="text-xs text-white/60">Hlustaðu og finndu orðið</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+          </div>
+        </div>
+
       </div>
-    </footer>
+    </section>
 
-  </div>
+
+    <!-- ═══════════════════════════════════ LOTA 2 ═══════════════════════════════════ -->
+    <section id="lota-2" class="scroll-mt-28 mb-14">
+      <div class="flex items-center gap-4 mb-6">
+        <span class="bg-stone-900 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">2</span>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.22em] text-stone-400">Kaflar 4–6</p>
+          <h2 class="text-2xl sm:text-3xl font-light italic text-stone-900">Líkamsrækt & Heilsa</h2>
+          <p class="text-sm text-stone-500 font-light mt-1">Við lærum um hreyfingu, heilsu og daglegar venjur.</p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+
+        <!-- Kafli 4 – Líkamsrækt -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/raekt.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 4</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Líkamsrækt</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get tjáð mig um hreyfingu, heilsu og líkamlega virkni.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="likamsraekt"
+                class="task-button flex items-center gap-2 justify-center
+                  bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="/synis/hlustun3_latur"
+                class="task-button flex items-center gap-2
+                  bg-green-50 hover:bg-green-100 border border-green-100
+                  text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">4 · Hlustun – Jónas rífur sig upp</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-purple-50 border border-purple-100 text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall – kemur fljótlega</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Kafli 5 – Björgunarsveitir -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/bjorgun.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 5</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Björgunarsveitir á Íslandi</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get skilið texta um sjálfboðaliða og björgunarstörf á Íslandi.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="bjorgunarsveitir"
+                class="task-button flex items-center gap-2 justify-center
+                  bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="/synis/hlustun4_bjorgun"
+                class="task-button flex items-center gap-2
+                  bg-green-50 hover:bg-green-100 border border-green-100
+                  text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">5 · Hlustun – Björgunarsveitir</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-purple-50 border border-purple-100 text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall – kemur fljótlega</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Kafli 6 – Spjall áhugamál (Myndaspjall) -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/spjall2.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 6</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Spjall – Áhugamál þín</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get haldið lengra samtali um áhugamál og daglegar venjur.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-green-50 border border-green-100 text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">6 · Hlustun – kemur fljótlega</span>
+              </a>
+            </div>
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="/synis/spjall_ahugamal"
+                class="task-button flex items-center gap-2
+                  bg-purple-50 hover:bg-purple-100 border border-purple-100
+                  text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall · Áhugamál þín</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Áfangastöð 2 -->
+        <div class="checkpoint-gradient rounded-3xl p-6 text-white shadow-xl mt-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded uppercase tracking-tight">Upprifjun</div>
+            <div>
+              <h3 class="text-xl font-bold uppercase tracking-tight text-yellow-300">Áfangastöð 2</h3>
+              <p class="text-xs text-white/60 mt-1">Líkamsrækt & Heilsa — kaflar 4–6</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-yellow-400 hover:bg-yellow-300 border border-yellow-500 p-4 rounded-2xl
+              text-black sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">✅</span>
+                <div>
+                  <p class="font-bold">Sjálfspróf</p>
+                  <p class="text-xs text-black/60">Ertu tilbúin/n í næstu lotu?</p>
+                </div>
+              </div>
+              <span class="font-bold">Byrja</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🗂️</span>
+                <div>
+                  <p class="font-bold">Flasskort</p>
+                  <p class="text-xs text-white/60">Æfðu lykilorð</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🎨</span>
+                <div>
+                  <p class="font-bold">Teiknileikur</p>
+                  <p class="text-xs text-white/60">Teiknaðu og giskaðu</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🧩</span>
+                <div>
+                  <p class="font-bold">Orðagáta</p>
+                  <p class="text-xs text-white/60">Hlustaðu og finndu orðið</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ═══════════════════════════════════ LOTA 3 ═══════════════════════════════════ -->
+    <section id="lota-3" class="scroll-mt-28 mb-14">
+      <div class="flex items-center gap-4 mb-6">
+        <span class="bg-stone-900 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0">3</span>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.22em] text-stone-400">Kaflar 7–9</p>
+          <h2 class="text-2xl sm:text-3xl font-light italic text-stone-900">Samfélag & Sjálfboðastarf</h2>
+          <p class="text-sm text-stone-500 font-light mt-1">Við lærum um samfélag, sjálfboðaliðavinnu og íslensku í notkun.</p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+
+        <!-- Kafli 7 – Björgunarsveitir (dýpra) -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="corner-image" aria-hidden="true">
+            <img src="media/bjorgun2.png" alt="" />
+          </div>
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 7</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Björgunarsveitir – dýpri kafli</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Ég get lesið og skilið flóknari texta um björgunarsveitir og samfélagsþátttöku.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-green-50 border border-green-100 text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">7 · Hlustun – kemur fljótlega</span>
+              </a>
+            </div>
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-purple-50 border border-purple-100 text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall – kemur fljótlega</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Kafli 8 -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 8</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Kafli 8</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Kemur fljótlega.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-green-50 border border-green-100 text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">8 · Hlustun – kemur fljótlega</span>
+              </a>
+            </div>
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-purple-50 border border-purple-100 text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall – kemur fljótlega</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Kafli 9 -->
+        <article class="chapter-card bg-white border border-stone-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div class="relative z-10">
+            <div class="flex justify-between items-start gap-3 mb-3">
+              <div>
+                <span class="text-[10px] uppercase font-bold text-blue-600 tracking-wide">Kafli 9</span>
+                <h3 class="text-xl sm:text-2xl font-semibold text-stone-900 leading-tight mt-1">Kafli 9</h3>
+              </div>
+              <span class="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">A2</span>
+            </div>
+
+            <p class="text-sm font-light leading-relaxed text-stone-500 mb-4">Kemur fljótlega.</p>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-2xl">
+                <span class="text-lg">📖</span>
+                <span class="text-sm font-medium">Lestexti</span>
+              </a>
+              <a href="#"
+                class="task-button task-disabled flex items-center gap-2 justify-center
+                  bg-orange-50 border border-orange-100 text-orange-800 p-3 rounded-2xl">
+                <span class="text-lg">🎙️</span>
+                <span class="text-sm font-medium">Hljóðritun</span>
+              </a>
+            </div>
+
+            <div class="space-y-2 mb-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Hlustunaræfingar</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-green-50 border border-green-100 text-green-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🎧</span>
+                <span class="text-xs font-medium leading-tight">9 · Hlustun – kemur fljótlega</span>
+              </a>
+            </div>
+            <div class="space-y-2 mt-2">
+              <p class="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Spjall</p>
+              <a href="#" class="task-button task-disabled flex items-center gap-2
+                bg-purple-50 border border-purple-100 text-purple-800 px-3 py-2.5 rounded-2xl">
+                <span class="text-base flex-shrink-0">🗣️</span>
+                <span class="text-xs font-medium leading-tight">Spjall – kemur fljótlega</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Áfangastöð 3 -->
+        <div class="checkpoint-gradient rounded-3xl p-6 text-white shadow-xl mt-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="bg-yellow-400 text-black text-xs font-bold px-2 py-1 rounded uppercase tracking-tight">Upprifjun</div>
+            <div>
+              <h3 class="text-xl font-bold uppercase tracking-tight text-yellow-300">Áfangastöð 3</h3>
+              <p class="text-xs text-white/60 mt-1">Samfélag & Sjálfboðastarf — kaflar 7–9</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-yellow-400 hover:bg-yellow-300 border border-yellow-500 p-4 rounded-2xl
+              text-black sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">✅</span>
+                <div>
+                  <p class="font-bold">Sjálfspróf</p>
+                  <p class="text-xs text-black/60">Ertu tilbúin/n í næstu lotu?</p>
+                </div>
+              </div>
+              <span class="font-bold">Byrja</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🗂️</span>
+                <div>
+                  <p class="font-bold">Flasskort</p>
+                  <p class="text-xs text-white/60">Æfðu lykilorð</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🎨</span>
+                <div>
+                  <p class="font-bold">Teiknileikur</p>
+                  <p class="text-xs text-white/60">Teiknaðu og giskaðu</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+            <a href="#"
+              class="checkpoint-link flex items-center justify-between
+              bg-white/10 hover:bg-white/20 border border-white/20 p-4 rounded-2xl sm:col-span-2">
+              <div class="flex items-center gap-4">
+                <span class="text-2xl">🧩</span>
+                <div>
+                  <p class="font-bold">Orðagáta</p>
+                  <p class="text-xs text-white/60">Hlustaðu og finndu orðið</p>
+                </div>
+              </div>
+              <span>→</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- Um námsefnið -->
+    <section class="mt-4 bg-white border border-stone-200 rounded-3xl p-7 shadow-sm mb-8">
+      <h2 class="text-xl font-light text-stone-900 mb-3">💡 Um æfingarnar</h2>
+      <p class="text-sm font-light text-stone-600 leading-relaxed">
+        Námsefni þetta er samið af Sigurþóri Einarssyni og Viðari Hrafni Steingrímssyni 2024–2025 fyrir nemendur í áfanganum ÍSAT1ÍC í Tækniskólanum.
+      </p>
+      <div class="mt-4 space-y-1 text-xs text-stone-500 font-light">
+        <p><span class="font-medium text-stone-600">A1–A2</span> · Byrjendur og byrjendur komnir áleiðis</p>
+        <p><span class="font-medium text-stone-600">A2–B1</span> · Nemendur með grunnkunnáttu</p>
+        <p><span class="font-medium text-stone-600">B1–B2</span> · Millistig og lengra komið</p>
+      </div>
+      <p class="text-xs text-stone-400 mt-5">© 2025 Sigurþór Einarsson og Viðar Hrafn Steingrímsson</p>
+    </section>
+
+  </main>
+
+  <!-- Neðri stikla -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-stone-200 px-4 py-3 flex justify-around items-center z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.04)]" aria-label="Aðalvalmynd">
+    <a href="#" class="flex flex-col items-center gap-1 text-blue-600">
+      <span class="text-xl">🏠</span>
+      <span class="text-[10px] font-bold uppercase">Heim</span>
+    </a>
+    <a href="#lota-1" class="flex flex-col items-center gap-1 text-stone-400 hover:text-stone-700">
+      <span class="text-xl">📚</span>
+      <span class="text-[10px] font-bold uppercase">Lota 1</span>
+    </a>
+    <a href="#lota-2" class="flex flex-col items-center gap-1 text-stone-400 hover:text-stone-700">
+      <span class="text-xl">💪</span>
+      <span class="text-[10px] font-bold uppercase">Lota 2</span>
+    </a>
+    <a href="#lota-3" class="flex flex-col items-center gap-1 text-stone-400 hover:text-stone-700">
+      <span class="text-xl">🆘</span>
+      <span class="text-[10px] font-bold uppercase">Lota 3</span>
+    </a>
+  </nav>
+
 </body>
 </html>
