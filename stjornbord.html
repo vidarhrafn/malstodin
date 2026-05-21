@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>📊 Stjórnborð – Málstöðin</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -20,9 +21,56 @@
     .tab-btn:not(.active):hover { background: #f3f4f6; }
     .main-tab-btn { transition: all 0.2s; border-bottom: 3px solid transparent; }
     .main-tab-btn.active { border-bottom-color: #2563eb; color: #2563eb; font-weight: 500; }
+
+    /* ── Prentun ─────────────────────────────────────────── */
+    @media print {
+      body { background: white !important; }
+      .no-print { display: none !important; }
+      #print-preview { display: block !important; }
+      .print-page {
+        box-shadow: none !important;
+        margin: 0 !important;
+        page-break-after: always;
+      }
+    }
+    @media screen {
+      #print-preview { display: none; }
+    }
+
+    /* ── Prentblöð ───────────────────────────────────────── */
+    .print-page {
+      width: 210mm;
+      min-height: 297mm;
+      background: white;
+      margin: 20px auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
+    }
+    .print-card {
+      height: calc(297mm / 5);
+      border-bottom: 2px dashed #d1d5db;
+      display: flex;
+      align-items: center;
+      padding: 10mm 14mm;
+      gap: 12mm;
+    }
+    .print-card:last-child { border-bottom: none; }
+    .qr-wrap { flex-shrink: 0; width: 44mm; height: 44mm; }
+    .qr-wrap canvas, .qr-wrap img { width: 44mm !important; height: 44mm !important; }
+    .card-divider { width: 1px; height: 44mm; background: #e5e7eb; flex-shrink: 0; }
+    .card-info { flex: 1; }
+    .card-course-tag { font-size: 9pt; color: #6b7280; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4mm; }
+    .card-student-name { font-size: 15pt; font-weight: 300; color: #1f2937; margin-bottom: 5mm; line-height: 1.2; }
+    .card-code-label { font-size: 8pt; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2mm; }
+    .card-code { font-size: 14pt; font-weight: 500; color: #2563eb; letter-spacing: 0.12em; font-family: 'Courier New', monospace; }
+    .card-url { margin-top: 4mm; font-size: 8pt; color: #9ca3af; }
   </style>
 </head>
 <body>
+
+  <!-- ── Prentforskoðun (falið á skjá, sýnt við print) ─── -->
+  <div id="print-preview"></div>
 
   <div id="loading" class="min-h-screen flex items-center justify-center">
     <p class="text-gray-400 font-light">Hleður...</p>
@@ -70,7 +118,8 @@
   <div id="app" style="display:none" class="min-h-screen p-6">
     <div class="max-w-7xl mx-auto">
 
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
+      <!-- Header -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center no-print">
         <div>
           <h1 class="text-3xl font-light text-gray-800 mb-1">📊 Stjórnborð kennara</h1>
           <p class="text-gray-500 text-sm font-light">Málstöðin · Tækniskólinn</p>
@@ -87,8 +136,8 @@
         </div>
       </div>
 
-      <!-- Aðalflipor: Framvinda / Kóðar -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
+      <!-- Aðalflipor -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 no-print">
         <div class="flex border-b border-gray-100 px-4">
           <button onclick="setMainTab('progress')" id="main-tab-progress"
             class="main-tab-btn active px-6 py-4 text-sm font-light text-gray-700">
@@ -98,12 +147,15 @@
             class="main-tab-btn px-6 py-4 text-sm font-light text-gray-700">
             🔑 Kóðar
           </button>
+          <button onclick="setMainTab('cards')" id="main-tab-cards"
+            class="main-tab-btn px-6 py-4 text-sm font-light text-gray-700">
+            🖨️ Aðgangskort
+          </button>
         </div>
       </div>
 
-      <!-- Framvinda hluti -->
+      <!-- ── FRAMVINDA ──────────────────────────────────────── -->
       <div id="section-progress">
-        <!-- Síur -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-4 items-center">
           <div class="flex items-center gap-2">
             <span class="text-sm font-light text-gray-500">Áfangi:</span>
@@ -129,13 +181,9 @@
           </div>
           <span id="student-count" class="text-sm font-light text-gray-400 ml-auto"></span>
         </div>
-
-        <!-- Æfingaflipor -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
           <div class="flex flex-wrap gap-2" id="tabs"></div>
         </div>
-
-        <!-- Tafla -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div id="table-container" class="overflow-x-auto p-6">
             <p class="text-gray-400 font-light text-center py-8">Sæki gögn...</p>
@@ -143,9 +191,65 @@
         </div>
       </div>
 
-      <!-- Kóðahluti -->
+      <!-- ── KÓÐAR ──────────────────────────────────────────── -->
       <div id="section-codes" style="display:none">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex gap-4 items-center">
+
+        <!-- Búa til kóða -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 class="text-lg font-light text-gray-800 mb-5">➕ Búa til nýja kóða</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Námskeið</label>
+              <select id="new-course"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="isat1ic">ÍSAT1ÍC – Út og suður (uogs)</option>
+                <option value="isat1ia">ÍSAT1ÍA – Fólkið í hverfinu (fih)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Hópur <span class="text-gray-400">(t.d. h1, h2)</span></label>
+              <input id="new-class" type="text" placeholder="h1"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Fjöldi kóða</label>
+              <input id="new-count" type="number" min="1" max="50" value="20"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Önn</label>
+              <input id="new-semester" type="text" placeholder="V26"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Gildir til</label>
+              <input id="new-expires" type="date"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div id="create-err" class="text-red-600 text-sm font-light mb-3"></div>
+          <div id="create-ok" class="text-green-600 text-sm font-light mb-3"></div>
+          <div class="flex gap-3">
+            <button id="btn-create-codes"
+              class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+              Búa til kóða
+            </button>
+            <button id="btn-download-new" style="display:none"
+              class="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+              ⬇️ Hlaða niður CSV
+            </button>
+          </div>
+          <!-- Forskoðun nýrra kóða -->
+          <div id="new-codes-preview" class="mt-5" style="display:none">
+            <p class="text-xs font-light text-gray-400 mb-3">Nýir kóðar:</p>
+            <div id="new-codes-list" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+          </div>
+        </div>
+
+        <!-- Yfirlit kóða -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-4 items-center">
           <div class="flex items-center gap-2">
             <span class="text-sm font-light text-gray-500">Áfangi:</span>
             <select id="codes-filter-course" onchange="renderCodesTable()"
@@ -163,7 +267,11 @@
               <option value="unused">Ónotaðir</option>
             </select>
           </div>
-          <span id="codes-count" class="text-sm font-light text-gray-400 ml-auto"></span>
+          <button id="btn-download-csv"
+            class="ml-auto px-4 py-1.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+            ⬇️ CSV
+          </button>
+          <span id="codes-count" class="text-sm font-light text-gray-400"></span>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -173,14 +281,79 @@
         </div>
       </div>
 
+      <!-- ── AÐGANGSKORT ────────────────────────────────────── -->
+      <div id="section-cards" style="display:none">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 class="text-lg font-light text-gray-800 mb-5">🖨️ Prenta aðgangskort</h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Námskeið</label>
+              <select id="cards-course"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="isat1ic">ÍSAT1ÍC – Út og suður</option>
+                <option value="isat1ia">ÍSAT1ÍA – Fólkið í hverfinu</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">
+                Hópur <span class="text-gray-400">(síar lausar kóðar)</span>
+              </label>
+              <input id="cards-class" type="text" placeholder="h1 (skildu eftir tómt = allir)"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Nafn skóla</label>
+              <input id="cards-school" type="text" value="Tækniskólinn"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <div class="mb-5">
+            <label class="block text-xs font-light text-gray-500 mb-1.5">
+              Nöfn nemenda <span class="text-gray-400">(eitt nafn per lína)</span>
+            </label>
+            <textarea id="cards-names" rows="8" placeholder="Jón Jónsson&#10;Anna Sigurðardóttir&#10;María Guðmundsdóttir"
+              class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"></textarea>
+          </div>
+
+          <div id="cards-err" class="text-red-600 text-sm font-light mb-3"></div>
+          <div id="cards-info" class="text-blue-600 text-sm font-light mb-3"></div>
+
+          <div class="flex gap-3">
+            <button id="btn-preview-cards"
+              class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+              Forskoðun
+            </button>
+            <button id="btn-print-cards" style="display:none"
+              class="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light text-sm">
+              🖨️ Prenta PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- Forskoðunartafla (á skjá) -->
+        <div id="cards-preview-table" style="display:none"
+          class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h3 class="text-sm font-light text-gray-500 mb-4">Forskoðun – <span id="cards-preview-count"></span></h3>
+          <div id="cards-preview-list" class="overflow-x-auto"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signOut, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import {
+      getAuth, onAuthStateChanged, signOut, signInWithPopup,
+      signInWithEmailAndPassword, GoogleAuthProvider
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import {
+      getFirestore, collection, onSnapshot, doc, setDoc, Timestamp, query, where, getDocs
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+    // ── Config ────────────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
       authDomain: "malstodin-90f85.firebaseapp.com",
@@ -198,6 +371,22 @@
       'dfWBTm0O5daqXESYH6WvN5zvz7x2',
       '00hPDLPXQnVFwGMBTH4drNUdj822'
     ];
+
+    // Kóðaforskeyti per námskeið
+    const COURSE_PREFIX = {
+      isat1ic: 'uogs',
+      isat1ia: 'fih'
+    };
+
+    const COURSE_LABEL = {
+      isat1ic: 'ÍSAT1ÍC – Út og suður',
+      isat1ia: 'ÍSAT1ÍA – Fólkið í hverfinu'
+    };
+
+    const LOGIN_URL = {
+      isat1ic: 'https://malstodin.org/isat1ic/login.html',
+      isat1ia: 'https://malstodin.org/isat1ia/login.html'
+    };
 
     const COURSES = {
       isat1ic: {
@@ -284,7 +473,7 @@
       }
     };
 
-    const app = initializeApp(firebaseConfig);
+    const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
@@ -297,19 +486,34 @@
     let filterClass    = 'all';
     let filterSemester = 'all';
     let progressUnsubscribers = {};
+    let lastCreatedCodes = [];   // Nýir kóðar til að hlaða niður
+    let previewStudents = [];    // Nemendur + kóðar fyrir prentun
+
+    // ── Hjálparföll ───────────────────────────────────────────────
+
+    function randomSuffix() {
+      const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+      let s = '';
+      for (let i = 0; i < 3; i++) s += chars[Math.floor(Math.random() * chars.length)];
+      return s;
+    }
+
+    function generateCodeId(course) {
+      return COURSE_PREFIX[course] + '-' + randomSuffix();
+    }
 
     // ── Aðalflipor ────────────────────────────────────────────────
 
     window.setMainTab = (tab) => {
       activeMainTab = tab;
-      document.getElementById('section-progress').style.display = tab === 'progress' ? 'block' : 'none';
-      document.getElementById('section-codes').style.display    = tab === 'codes'    ? 'block' : 'none';
-      document.getElementById('main-tab-progress').classList.toggle('active', tab === 'progress');
-      document.getElementById('main-tab-codes').classList.toggle('active', tab === 'codes');
+      ['progress','codes','cards'].forEach(t => {
+        document.getElementById('section-' + t).style.display = t === tab ? 'block' : 'none';
+        document.getElementById('main-tab-' + t).classList.toggle('active', t === tab);
+      });
       if (tab === 'codes') renderCodesTable();
     };
 
-    // ── Login ──────────────────────────────────────────────────────
+    // ── Login ─────────────────────────────────────────────────────
 
     function showLogin() {
       document.getElementById('loading').style.display = 'none';
@@ -341,15 +545,27 @@
       document.getElementById('login').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       document.getElementById('btn-logout').onclick = () => signOut(auth);
+      setDefaultExpiry();
       updateClassDropdown();
       renderTabs();
       startListening();
+      setupCreateCodes();
+      setupCards();
     });
 
-    // ── Gögn ──────────────────────────────────────────────────────
+    // ── Sjálfgefinn gildistími ────────────────────────────────────
+
+    function setDefaultExpiry() {
+      const today = new Date();
+      // 1. september sama ár ef fyrir september, annars næsta ár
+      const year = today.getMonth() < 8 ? today.getFullYear() : today.getFullYear() + 1;
+      const d = new Date(year, 8, 1); // September = 8
+      document.getElementById('new-expires').value = d.toISOString().split('T')[0];
+    }
+
+    // ── Gögn ─────────────────────────────────────────────────────
 
     function startListening() {
-      // Hlusta á user_access
       onSnapshot(collection(db, 'user_access'), (snap) => {
         allUserData = [];
         window._rawUserData = [];
@@ -388,40 +604,136 @@
         if (activeMainTab === 'codes') renderCodesTable();
       });
 
-      // Hlusta á access_codes
       onSnapshot(collection(db, 'access_codes'), (snap) => {
         allCodes = [];
-        snap.forEach(d => {
-          allCodes.push({ id: d.id, ...d.data() });
-        });
+        snap.forEach(d => { allCodes.push({ id: d.id, ...d.data() }); });
         if (activeMainTab === 'codes') renderCodesTable();
       });
     }
 
-    // ── Kóðatafla ────────────────────────────────────────────────
+    // ── Búa til kóða ─────────────────────────────────────────────
 
-    window.renderCodesTable = () => {
+    function setupCreateCodes() {
+      document.getElementById('btn-create-codes').onclick = createCodes;
+      document.getElementById('btn-download-new').onclick = downloadNewCodes;
+      document.getElementById('btn-download-csv').onclick = downloadFilteredCsv;
+    }
+
+    async function createCodes() {
+      const course   = document.getElementById('new-course').value;
+      const cls      = document.getElementById('new-class').value.trim();
+      const count    = parseInt(document.getElementById('new-count').value);
+      const semester = document.getElementById('new-semester').value.trim();
+      const expVal   = document.getElementById('new-expires').value;
+
+      document.getElementById('create-err').textContent = '';
+      document.getElementById('create-ok').textContent = '';
+
+      if (!cls)        { document.getElementById('create-err').textContent = 'Sláðu inn hóp.'; return; }
+      if (!count || count < 1 || count > 50) { document.getElementById('create-err').textContent = 'Fjöldi verður að vera 1–50.'; return; }
+      if (!expVal)     { document.getElementById('create-err').textContent = 'Veldu gildistíma.'; return; }
+
+      const expiresAt = Timestamp.fromDate(new Date(expVal + 'T23:59:59'));
+
+      const btn = document.getElementById('btn-create-codes');
+      btn.textContent = 'Bý til...';
+      btn.disabled = true;
+
+      try {
+        // Sækja til að fá lista af kóðum sem eru þegar til til að forðast árekstur
+        const existingIds = new Set(allCodes.map(c => c.id));
+        lastCreatedCodes = [];
+
+        for (let i = 0; i < count; i++) {
+          let codeId;
+          let attempts = 0;
+          do {
+            codeId = generateCodeId(course);
+            attempts++;
+            if (attempts > 100) throw new Error('Gat ekki búið til einstakan kóða.');
+          } while (existingIds.has(codeId));
+          existingIds.add(codeId);
+
+          await setDoc(doc(db, 'access_codes', codeId), {
+            course,
+            class: cls,
+            semester: semester || '',
+            expires_at: expiresAt,
+            activated: false,
+            activated_at: null,
+            activated_by: null
+          });
+
+          lastCreatedCodes.push(codeId);
+        }
+
+        document.getElementById('create-ok').textContent = `✓ ${count} kóðar búnir til!`;
+        document.getElementById('btn-download-new').style.display = 'inline-block';
+
+        // Sýna forskoðun
+        const preview = document.getElementById('new-codes-preview');
+        const list    = document.getElementById('new-codes-list');
+        preview.style.display = 'block';
+        list.innerHTML = lastCreatedCodes.map(c =>
+          `<div class="font-mono text-xs bg-gray-50 rounded px-3 py-2 text-blue-700 border border-gray-100">${c}</div>`
+        ).join('');
+
+      } catch (e) {
+        document.getElementById('create-err').textContent = 'Villa: ' + e.message;
+      }
+
+      btn.textContent = 'Búa til kóða';
+      btn.disabled = false;
+    }
+
+    function downloadNewCodes() {
+      if (!lastCreatedCodes.length) return;
+      const course   = document.getElementById('new-course').value;
+      const cls      = document.getElementById('new-class').value.trim();
+      const semester = document.getElementById('new-semester').value.trim();
+      const rows = [['Kóði','Námskeið','Hópur','Önn']];
+      lastCreatedCodes.forEach(c => rows.push([c, course, cls, semester]));
+      downloadCsv(rows, `kodar-${course}-${cls}-${Date.now()}.csv`);
+    }
+
+    function downloadFilteredCsv() {
       const courseFilter = document.getElementById('codes-filter-course').value;
       const statusFilter = document.getElementById('codes-filter-status').value;
-
-      // Búa til map: code_used → email
-      const codeToEmail = {};
-      allUserData.forEach(u => {
-        Object.keys(u.courses).forEach(c => {
-          const cd = u.courses[c];
-          // Finna kóðann í user_access (við þurfum að sækja þetta úr raw data)
-        });
-      });
-
-      // Sía kóða
       let codes = allCodes.filter(c => c.course === courseFilter);
       if (statusFilter === 'used')   codes = codes.filter(c => c.activated);
       if (statusFilter === 'unused') codes = codes.filter(c => !c.activated);
 
-      // Búa til notenda map úr allUserData með code_used
+      const userByCode = buildUserByCode();
+      const rows = [['Kóði','Námskeið','Hópur','Önn','Staða','Notandi','Virkjað']];
+      codes.sort((a,b) => a.id.localeCompare(b.id)).forEach(code => {
+        const user = userByCode[code.id];
+        let dateStr = '';
+        if (user && user.activated_at && user.activated_at.toDate) {
+          dateStr = user.activated_at.toDate().toLocaleDateString('is-IS');
+        }
+        rows.push([
+          code.id, code.course || '', code.class || '', code.semester || '',
+          code.activated ? 'Notaður' : 'Ónotaður',
+          user ? user.email : '',
+          dateStr
+        ]);
+      });
+      downloadCsv(rows, `kodar-${courseFilter}-${Date.now()}.csv`);
+    }
+
+    function downloadCsv(rows, filename) {
+      const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+
+    // ── Kóðatafla ────────────────────────────────────────────────
+
+    function buildUserByCode() {
       const userByCode = {};
-      // Við þurfum raw user data - hlustum á það í startListening
-      // Notum allRawUserData sem við vistar hér að neðan
       if (window._rawUserData) {
         window._rawUserData.forEach(u => {
           Object.keys(COURSES).forEach(c => {
@@ -434,7 +746,17 @@
           });
         });
       }
+      return userByCode;
+    }
 
+    window.renderCodesTable = () => {
+      const courseFilter = document.getElementById('codes-filter-course').value;
+      const statusFilter = document.getElementById('codes-filter-status').value;
+      let codes = allCodes.filter(c => c.course === courseFilter);
+      if (statusFilter === 'used')   codes = codes.filter(c => c.activated);
+      if (statusFilter === 'unused') codes = codes.filter(c => !c.activated);
+
+      const userByCode = buildUserByCode();
       const countEl = document.getElementById('codes-count');
       if (countEl) countEl.textContent = codes.length + ' kóðar';
 
@@ -447,26 +769,28 @@
       let html = '<table class="w-full text-sm">';
       html += '<thead><tr class="border-b border-gray-100">';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Kóði</th>';
+      html += '<th class="text-left py-3 pr-4 font-light text-gray-500">Hópur</th>';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Staða</th>';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Notandi</th>';
       html += '<th class="text-left py-3 font-light text-gray-500">Virkjað</th>';
       html += '</tr></thead><tbody>';
 
-      codes.sort((a, b) => a.id.localeCompare(b.id)).forEach(code => {
+      codes.sort((a,b) => a.id.localeCompare(b.id)).forEach(code => {
         const user = userByCode[code.id];
         const status = code.activated
           ? '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-light">Notaður</span>'
           : '<span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-light">Ónotaður</span>';
-        const email = user ? user.email : '–';
+        const email   = user ? user.email : '–';
         let dateStr = '–';
         if (user && user.activated_at && user.activated_at.toDate) {
-          dateStr = user.activated_at.toDate().toLocaleDateString('is-IS', { year: 'numeric', month: 'short', day: 'numeric' });
+          dateStr = user.activated_at.toDate().toLocaleDateString('is-IS', { year:'numeric', month:'short', day:'numeric' });
         }
         html += '<tr class="border-b border-gray-50 hover:bg-gray-50">';
-        html += '<td class="py-3 pr-6 font-mono text-gray-800 text-sm">' + code.id + '</td>';
-        html += '<td class="py-3 pr-6">' + status + '</td>';
-        html += '<td class="py-3 pr-6 font-light text-gray-600">' + email + '</td>';
-        html += '<td class="py-3 font-light text-gray-400 text-sm">' + dateStr + '</td>';
+        html += `<td class="py-3 pr-6 font-mono text-gray-800 text-sm">${code.id}</td>`;
+        html += `<td class="py-3 pr-4 font-light text-gray-500 text-xs">${code.class || '–'}</td>`;
+        html += `<td class="py-3 pr-6">${status}</td>`;
+        html += `<td class="py-3 pr-6 font-light text-gray-600">${email}</td>`;
+        html += `<td class="py-3 font-light text-gray-400 text-sm">${dateStr}</td>`;
         html += '</tr>';
       });
 
@@ -474,12 +798,137 @@
       container.innerHTML = html;
     };
 
+    // ── Aðgangskort ──────────────────────────────────────────────
+
+    function setupCards() {
+      document.getElementById('btn-preview-cards').onclick = previewCards;
+      document.getElementById('btn-print-cards').onclick   = printCards;
+    }
+
+    async function previewCards() {
+      const course  = document.getElementById('cards-course').value;
+      const cls     = document.getElementById('cards-class').value.trim();
+      const namesRaw = document.getElementById('cards-names').value;
+      const names   = namesRaw.split('\n').map(n => n.trim()).filter(Boolean);
+
+      document.getElementById('cards-err').textContent = '';
+      document.getElementById('cards-info').textContent = '';
+
+      if (names.length === 0) {
+        document.getElementById('cards-err').textContent = 'Settu inn nafnalista.';
+        return;
+      }
+
+      // Finna lausar kóðar fyrir þetta námskeið + hóp
+      let available = allCodes.filter(c =>
+        c.course === course &&
+        !c.activated &&
+        (cls === '' || c.class === cls)
+      );
+
+      if (available.length < names.length) {
+        document.getElementById('cards-err').textContent =
+          `Ekki nóg af lausum kóðum! Þú þarft ${names.length} en ${available.length} eru til.`;
+        return;
+      }
+
+      // Para saman nöfn og kóða
+      previewStudents = names.map((name, i) => ({
+        name,
+        code: available[i].id
+      }));
+
+      document.getElementById('cards-info').textContent =
+        `✓ ${names.length} nemendur paraðir við kóða`;
+
+      // Sýna forskoðunartöflu á skjá
+      const tableDiv = document.getElementById('cards-preview-table');
+      const listDiv  = document.getElementById('cards-preview-list');
+      document.getElementById('cards-preview-count').textContent = names.length + ' nemendur';
+
+      let html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-100">';
+      html += '<th class="text-left py-2 pr-6 font-light text-gray-500">Nafn</th>';
+      html += '<th class="text-left py-2 font-light text-gray-500">Kóði</th>';
+      html += '</tr></thead><tbody>';
+      previewStudents.forEach(s => {
+        html += `<tr class="border-b border-gray-50">
+          <td class="py-2 pr-6 font-light text-gray-700">${s.name}</td>
+          <td class="py-2 font-mono text-blue-700 text-xs">${s.code}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      listDiv.innerHTML = html;
+      tableDiv.style.display = 'block';
+
+      document.getElementById('btn-print-cards').style.display = 'inline-block';
+    }
+
+    function printCards() {
+      if (!previewStudents.length) return;
+
+      const course = document.getElementById('cards-course').value;
+      const school = document.getElementById('cards-school').value.trim() || 'Tækniskólinn';
+      const loginBase = LOGIN_URL[course];
+      const courseLabel = COURSE_LABEL[course];
+
+      const printDiv = document.getElementById('print-preview');
+      printDiv.innerHTML = '';
+
+      // Búa til síður (5 nemendur per síða)
+      for (let i = 0; i < previewStudents.length; i += 5) {
+        const chunk = previewStudents.slice(i, i + 5);
+        const page = document.createElement('div');
+        page.className = 'print-page';
+
+        chunk.forEach(student => {
+          const card = document.createElement('div');
+          card.className = 'print-card';
+
+          const qrWrap = document.createElement('div');
+          qrWrap.className = 'qr-wrap';
+
+          const divider = document.createElement('div');
+          divider.className = 'card-divider';
+
+          const info = document.createElement('div');
+          info.className = 'card-info';
+          info.innerHTML = `
+            <div class="card-course-tag">${courseLabel} · ${school}</div>
+            <div class="card-student-name">${student.name}</div>
+            <div class="card-code-label">Aðgangskóði</div>
+            <div class="card-code">${student.code}</div>
+            <div class="card-url">malstodin.org</div>
+          `;
+
+          card.appendChild(qrWrap);
+          card.appendChild(divider);
+          card.appendChild(info);
+          page.appendChild(card);
+
+          // QR kóði með kóðanum í URL
+          new QRCode(qrWrap, {
+            text: `${loginBase}?code=${student.code}`,
+            width: 166,
+            height: 166,
+            colorDark: '#1f2937',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        });
+
+        printDiv.appendChild(page);
+      }
+
+      // Prenta
+      window.print();
+    }
+
     // ── Framvindutafla ───────────────────────────────────────────
 
     window.setCourseFilter = (val) => {
       activeCourse = val;
-      activeGroup = COURSES[val].groups[0].id;
-      filterClass = 'all';
+      activeGroup  = COURSES[val].groups[0].id;
+      filterClass  = 'all';
       filterSemester = 'all';
       document.getElementById('filter-class').value = 'all';
       document.getElementById('filter-semester').value = 'all';
@@ -515,7 +964,8 @@
       container.innerHTML = '';
       COURSES[activeCourse].groups.forEach(group => {
         const btn = document.createElement('button');
-        btn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-light border border-gray-200 ' + (group.id === activeGroup ? 'active' : '');
+        btn.className = 'tab-btn px-4 py-2 rounded-lg text-sm font-light border border-gray-200 ' +
+          (group.id === activeGroup ? 'active' : '');
         btn.textContent = group.label;
         btn.onclick = () => { activeGroup = group.id; renderTabs(); renderTable(); };
         container.appendChild(btn);
@@ -523,11 +973,11 @@
     }
 
     function renderTable() {
-      const groups = COURSES[activeCourse].groups;
-      const group = groups.find(g => g.id === activeGroup) || groups[0];
+      const groups  = COURSES[activeCourse].groups;
+      const group   = groups.find(g => g.id === activeGroup) || groups[0];
       const container = document.getElementById('table-container');
-      const students = filteredStudents();
-      const countEl = document.getElementById('student-count');
+      const students  = filteredStudents();
+      const countEl   = document.getElementById('student-count');
       if (countEl) countEl.textContent = students.length + ' nemendur';
 
       if (students.length === 0) {
@@ -540,12 +990,12 @@
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500 whitespace-nowrap">Nemandi</th>';
       html += '<th class="py-3 pr-4 font-light text-gray-400 text-xs text-left whitespace-nowrap">Hópur</th>';
       group.exercises.forEach(ex => {
-        html += '<th class="py-3 px-1 font-light text-gray-400 text-xs text-center">' + ex.label + '</th>';
+        html += `<th class="py-3 px-1 font-light text-gray-400 text-xs text-center">${ex.label}</th>`;
       });
       html += '<th class="py-3 pl-4 font-light text-gray-400 text-xs text-center">Lokið</th>';
       html += '</tr></thead><tbody>';
 
-      students.sort((a, b) => {
+      students.sort((a,b) => {
         const ca = a.courses[activeCourse], cb = b.courses[activeCourse];
         const classA = ca ? ca.class || '' : '';
         const classB = cb ? cb.class || '' : '';
@@ -553,22 +1003,22 @@
         return (a.email || '').localeCompare(b.email || '');
       }).forEach(student => {
         const courseProgress = (allProgress[student.uid] || {})[activeCourse] || {};
-        const studentClass = (student.courses[activeCourse] || {}).class || '–';
+        const studentClass   = (student.courses[activeCourse] || {}).class || '–';
         let completedCount = 0;
         html += '<tr class="border-b border-gray-50 hover:bg-gray-50">';
-        html += '<td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">' + student.email + '</td>';
-        html += '<td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">' + studentClass + '</td>';
+        html += `<td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">${student.email}</td>`;
+        html += `<td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">${studentClass}</td>`;
         group.exercises.forEach(ex => {
           const status = courseProgress[ex.id];
           let cls = 'cell-none', title = 'Ekki byrjað';
           if (status === 'opened')    { cls = 'cell-opened';    title = 'Opnað'; }
           if (status === 'completed') { cls = 'cell-completed'; title = 'Lokið'; completedCount++; }
-          html += '<td class="py-3 px-1 text-center"><span class="cell ' + cls + '" title="' + title + '"></span></td>';
+          html += `<td class="py-3 px-1 text-center"><span class="cell ${cls}" title="${title}"></span></td>`;
         });
         const total = group.exercises.length;
-        const pct = Math.round(completedCount / total * 100);
+        const pct   = Math.round(completedCount / total * 100);
         const color = pct === 100 ? 'text-green-600' : pct > 0 ? 'text-amber-600' : 'text-gray-400';
-        html += '<td class="py-3 pl-4 text-center font-light ' + color + '">' + completedCount + '/' + total + '</td>';
+        html += `<td class="py-3 pl-4 text-center font-light ${color}">${completedCount}/${total}</td>`;
         html += '</tr>';
       });
       html += '</tbody></table>';
