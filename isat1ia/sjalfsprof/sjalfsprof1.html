@@ -205,8 +205,10 @@ const MATCH_PAIRS = [
 
 // Setningafylling – 5 eyður
 // Orð í réttri röð: sjúkrahúsi, Tækniskólanum, Hlíðunum, leikhús, búning
-const FILL_WORDS   = ['Hlíðunum', 'sjúkrahúsi', 'Tækniskólanum', 'leikhús', 'búning'];
-const FILL_ANSWERS = ['Hlíðunum', 'sjúkrahúsi', 'Tækniskólanum', 'leikhús', 'búning'];
+// Orðin í FILL_WORDS eru stokkuð til að nemandinn sjái þau ekki í réttri röð.
+// FILL_ANSWERS heldur réttri röð eyðna – þarf að passa við FILL_PARTS.
+const FILL_WORDS   = ['leikhús', 'búningi', 'sjúkrahúsi', 'Hlíðunum', 'Tækniskólanum'];
+const FILL_ANSWERS = ['Hlíðunum', 'sjúkrahúsi', 'Tækniskólanum', 'leikhús', 'búningi'];
 const FILL_PARTS   = [
   'Árni og Elsa búa í ',
   '. Elsa vinnur á ',
@@ -283,19 +285,22 @@ const ThyddingaTab = ({ nativeLang, onDone, onScore }) => {
     if (!input.trim() || loading) return;
     setLoading(true);
     try {
-      const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
-Íslenska orðið: "${current.word}"
-Kyn: ${current.kyn}
-Svar nemanda: "${input.trim()}"
-Móðurmál nemanda: ${nativeLang}
+      const sys = `You are an Icelandic language teacher evaluating a student's translation.
 
-SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
+The student was asked to translate the Icelandic word "${current.word}" into ${nativeLang}.
+The student answered: "${input.trim()}"
+
+Evaluate whether the answer is a correct translation of "${current.word}" into ${nativeLang}.
+The correct_translation field must be a ${nativeLang} word or phrase — NEVER Icelandic.
+The feedback_native field must be written entirely in ${nativeLang}.
+
+Return ONLY valid JSON, nothing else:
 {
   "correct": boolean,
-  "score": number (0-5),
-  "feedback_is": "Endurgjöf á íslensku (ein setning, vinaleg)",
-  "feedback_native": "Endurgjöf á ${nativeLang} (ein setning, vinaleg)",
-  "correct_translation": "Rétt þýðing ef rangt, annars null"
+  "score": number between 0 and 5,
+  "feedback_is": "one short encouraging sentence in Icelandic",
+  "feedback_native": "one short encouraging sentence in ${nativeLang}",
+  "correct_translation": "correct ${nativeLang} translation if wrong, otherwise null"
 }`;
       const raw = await callOpenAI([{ role: 'system', content: sys }], 200, 'gpt-4o', 0.2);
       const clean = raw.replace(/```json\s*/g, '').replace(/```/g, '').trim();
