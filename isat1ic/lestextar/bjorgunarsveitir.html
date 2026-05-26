@@ -71,7 +71,28 @@
     .chat-scroll::-webkit-scrollbar { width: 6px; }
     .chat-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
     .chat-scroll::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+    .selectable-text {
+      user-select: text;
+      -webkit-user-select: text;
+      cursor: text;
+    }
+    .selectable-text::selection { background: #dbeafe; }
+    @keyframes popupIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    .popup-anim { animation: popupIn 0.2s ease both; }
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40%      { content: '..'; }
+      60%, 100%{ content: '...'; }
+    }
+    .loading-dots::after {
+      content: '...';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
   </style>
+
 </head>
 <body>
   <div id="root"></div>
@@ -617,11 +638,85 @@ ALDREI nota markdown eða \`\`\`json\`\`\` – BARA hrein JSON!`;
       );
     };
 
+    // ── ThyðingarPopup ──────────────────────────────────────────────────────
+
+    function ThyðingarPopup({ selectedText, position, language, onClose }) {
+      const [translation, setTranslation] = useState('');
+      const [loading, setLoading]         = useState(false);
+      const handleTranslate = async () => {
+        setLoading(true);
+        try {
+          const result = await callOpenAI([
+            { role: 'system', content: 'You are a helpful language learning assistant for Icelandic students.' },
+            { role: 'user',   content: `A student learning Icelandic has selected this text and needs help understanding it in ${language}.\n\nSELECTED TEXT (Icelandic): "${selectedText}"\n\nProvide:\n1. Translation to ${language}\n2. Brief explanation if needed (in ${language})\n\nKeep it concise. Respond ONLY in ${language}.` }
+          ], 300, 'gpt-4o-mini', 0.3);
+          setTranslation(result);
+        } catch (e) {
+          setTranslation('Villa kom upp. Reyndu aftur.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      return (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <div className="popup-anim fixed z-50 bg-white border-2 border-blue-300 rounded-2xl shadow-xl p-5"
+            style={{
+              left: position.x + 'px',
+              top:  position.y + 'px',
+              transform: 'translateX(-50%)',
+              width: '340px',
+              maxWidth: '90vw',
+            }}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 mb-1">Valinn texti:</p>
+                <p className="text-sm text-gray-700 italic font-light">„{selectedText}"</p>
+              </div>
+              <button onClick={onClose}
+                className="text-gray-300 hover:text-gray-600 text-2xl leading-none ml-3">×</button>
+            </div>
+            {!translation ? (
+              <button onClick={handleTranslate} disabled={loading}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                  disabled:bg-gray-300 transition-colors font-light text-sm">
+                {loading
+                  ? <span className="loading-dots">Þýði</span>
+                  : `🌐 Þýða á ${language}`}
+              </button>
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 fade-in">
+                <p className="text-xs text-blue-400 mb-2">🌐 Þýðing:</p>
+                <p className="text-sm text-gray-800 font-light whitespace-pre-wrap">{translation}</p>
+              </div>
+            )}
+          </div>
+        </>
+      );
+    }
+
     // ── App ─────────────────────────────────────────────────────────────────
 
     const App = () => {
       const [activeTab, setActiveTab] = useState('krossar');
       const [showText, setShowText] = useState(true);
+      const [language, setLanguage]   = useState('');
+      const [langInput, setLangInput] = useState('');
+      const [confirmed, setConfirmed] = useState(false);
+      const [popup, setPopup]         = useState(null);
+      const handleSelection = () => {
+        if (!confirmed) return;
+        setTimeout(() => {
+          const sel  = window.getSelection();
+          const text = sel.toString().trim();
+          if (!text || text.length < 2) return;
+          const range = sel.getRangeAt(0);
+          const rect  = range.getBoundingClientRect();
+          const x = Math.min(Math.max(rect.left + rect.width / 2, 180), window.innerWidth - 180);
+          const y = rect.bottom + window.scrollY + 12;
+          setPopup({ text, x, y });
+        }, 80);
+      };
       const [tabDone, setTabDone] = useState({ krossar: false, stuttar: false, umraeda: false });
       const progressWritten = React.useRef(false);
       useEffect(() => {
@@ -675,9 +770,71 @@ ALDREI nota markdown eða \`\`\`json\`\`\` – BARA hrein JSON!`;
               </button>
               {showText && (
                 <div className="px-6 pb-6 fade-in">
-                  <div className="bg-gray-50 rounded-lg p-5 text-gray-700 font-light text-sm leading-relaxed whitespace-pre-line">
-                    {READING_TEXT}
+              <div className="pb-4">
+                {/* Tungumálval */}
+                <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 mb-4">
+                  {!confirmed ? (
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <span className="text-sm text-gray-500 font-light">🌐 Móðurmál:</span>
+                      <input
+                        type="text"
+                        value={langInput}
+                        onChange={e => setLangInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && langInput.trim() && (setLanguage(langInput.trim()), setConfirmed(true))}
+                        placeholder="t.d. English, Polski, 中文…"
+                        className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-sm
+                          font-light focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
+                      <button
+                        onClick={() => { if (langInput.trim()) { setLanguage(langInput.trim()); setConfirmed(true); } }}
+                        disabled={!langInput.trim()}
+                        className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-light
+                          hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                        Staðfesta
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-600 font-light">
+                        🌐 <span className="font-medium">{language}</span>
+                        <span className="text-gray-400 ml-2">— Merktu orð í textanum til að þýða</span>
+                      </p>
+                      <button onClick={() => { setConfirmed(false); setLangInput(''); setPopup(null); }}
+                        className="text-xs text-blue-500 hover:text-blue-700 font-light">Breyta</button>
+                    </div>
+                  )}
+                </div>
+                {/* Texti með mynd */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+                  <img
+                    src="../media/texti3.png"
+                    alt="Myndskreyting"
+                    className="w-full rounded-xl border border-gray-100 shadow-sm object-cover mb-5"
+                    style={{ maxHeight: '280px' }}
+                  />
+                  <div
+                    className={`selectable-text ${!confirmed ? 'opacity-60' : ''}`}
+                    onMouseUp={handleSelection}
+                    onTouchEnd={handleSelection}>
+                    <div className="bg-gray-50 rounded-lg p-5 text-gray-700 font-light text-sm leading-relaxed whitespace-pre-line">
+                      {READING_TEXT}
+                    </div>
                   </div>
+                  {!confirmed && (
+                    <p className="text-xs text-gray-400 font-light mt-3 text-center">
+                      ⬆️ Skráðu móðurmál þitt til að geta þýtt orð í textanum
+                    </p>
+                  )}
+                </div>
+                {popup && confirmed && (
+                  <ThyðingarPopup
+                    selectedText={popup.text}
+                    position={{ x: popup.x, y: popup.y }}
+                    language={language}
+                    onClose={() => { setPopup(null); window.getSelection().removeAllRanges(); }}
+                  />
+                )}
+              </div>
                 </div>
               )}
             </div>
