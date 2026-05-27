@@ -40,7 +40,6 @@
       to   { opacity: 1; transform: translateY(0); }
     }
     .fade-in { animation: fadeIn 0.35s ease both; }
-    /* Þýðingarpopup */
     .selectable-text {
       user-select: text;
       -webkit-user-select: text;
@@ -115,7 +114,6 @@
     } catch {
       window.location.href = LOGIN; return;
     }
-    // Access confirmed – show the page
     writeProgress('opened');
     document.getElementById('auth-loading').style.display = 'none';
     const root = document.getElementById('root');
@@ -148,7 +146,7 @@
       return data.content;
     }
 
-    const READING_TEXT = `Í Austurbæjarskóla eru margir nemendur. Hulda og Halima eru nemendur í sjötta bekk. Þeim finnst skemmtilegast í smíði og í heimilisfræði. Í smíði fá þær að nota allskonar verkfæri og búa til hluti úr við. Hulda ætlar að búa til skál og skeið og Halima ætlar að búa til skóhorn. Í heimilisfræði læra vinkonurnar til dæmis að búa til brauð, smákökur og vöfflur. Í heimilisfræði læra þær ekki bara að baka heldur læra þær líka hreinlæti. Nemendum er kennt að alltaf áður en byrjað er að elda þarf að þvo hendur og borð. Eftir að búið er að baka minnir kennari nemendur á að þrífa og ganga frá eftir sig. Það þarf að sópa gólfin og þurrka af borðum með tusku. Skemmtilegast finnst Huldu og Halima að þær fá að taka matinn sem þær bjuggu til heim til sín og geta leyft fjölskyldunni sinni að smakka.`;
+    const READING_TEXT = `Í Austurbæjarskóla eru margir nemendur. Hulda og Halima eru í sjötta bekk. Þeim finnst skemmtilegast í smíði og í heimilisfræði. Í smíði fá þær að nota alls konar verkfæri og búa til hluti úr við. Hulda ætlar að búa til skál og skeið og Halima ætlar að búa til skóhorn. Í heimilisfræði læra vinkonurnar til dæmis að búa til brauð, smákökur og vöfflur. Í heimilisfræði læra þær ekki bara að baka heldur læra þær líka að þrífa. Nemendur læra að þvo hendur og borð áður en þeir byrja að elda. Eftir að þeir baka, minnir kennarinn alla á að þrífa og ganga frá. Það þarf að sópa gólfin. Líka að þurrka af borðunum með tusku. Skemmtilegast finnst Huldu og Halima að þær fá að taka matinn sem þær bjuggu til heim til sín og þær leyfa fjölskyldunni sinni að smakka.`;
 
     const MULTIPLE_CHOICE_RAW = [
       {
@@ -185,7 +183,7 @@
 
     const SHORT_QUESTIONS = [
       'Hvaða læra Hulda og Halima að búa til í heimilisfræði?',
-      'Hvað gerir kennarinn eftir að nemendur hafa bakað?',
+      'Hvað gerir kennarinn eftir að nemendur eru búnir að baka?',
       'Hvað finnst Huldu og Halima skemmtilegast við heimilisfræði?'
     ];
 
@@ -220,9 +218,6 @@
       );
     };
 
-    /* ══════════════════════════════════════════
-       ÞÝÐINGARPOPUP
-    ══════════════════════════════════════════ */
     function ThyðingarPopup({ selectedText, position, language, onClose }) {
       const [translation, setTranslation] = useState('');
       const [loading, setLoading]         = useState(false);
@@ -307,7 +302,6 @@
         }, 80);
       };
 
-
       const markDone = (i) => {
         setTabs(prev => prev.map((t, idx) => idx === i ? { ...t, done: true } : t));
       };
@@ -315,7 +309,6 @@
         if (tabs.length > 0 && tabs.every(t => t.done)) window.writeProgress && window.writeProgress('completed');
       }, [tabs]);
 
-      // --- Tab 1: MC ---
       const shuffledMC = useMemo(() => MULTIPLE_CHOICE_RAW.map(q => {
         const shuffled = shuffle(q.options.map((o, i) => ({ text: o, isCorrect: i === q.correct })));
         return { question: q.question, options: shuffled };
@@ -336,7 +329,6 @@
         if (allCorrect) markDone(0);
       };
 
-      // --- Tab 2: Short answers ---
       const [shortAnswers, setShortAnswers] = useState(Array(SHORT_QUESTIONS.length).fill(''));
       const [shortFeedback, setShortFeedback] = useState(Array(SHORT_QUESTIONS.length).fill(null));
       const [shortLoading, setShortLoading] = useState(Array(SHORT_QUESTIONS.length).fill(false));
@@ -361,7 +353,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
           const score = stigMatch ? parseInt(stigMatch[1]) : 0;
           const msg = endMatch ? endMatch[1].trim() : result.trim();
           setShortFeedback(prev => { const a = [...prev]; a[i] = { score, msg }; return a; });
-          if (shortFeedback.filter(Boolean).length + 1 >= SHORT_QUESTIONS.length) markDone(1);
         } catch(e) {
           alert('Villa. Reyndu aftur.');
         } finally {
@@ -373,7 +364,6 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
         if (shortFeedback.every(f => f !== null)) markDone(1);
       }, [shortFeedback]);
 
-      // --- Tab 3: Discussion ---
       const [convs, setConvs] = useState(Array(DISCUSSION_QUESTIONS.length).fill(null).map(() => []));
       const [inputs, setInputs] = useState(Array(DISCUSSION_QUESTIONS.length).fill(''));
       const [chatLoading, setChatLoading] = useState(Array(DISCUSSION_QUESTIONS.length).fill(false));
@@ -392,8 +382,11 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
       const stopChat = (i) => {
         setClosed(prev => { const a = [...prev]; a[i] = true; return a; });
         setAwaitingChoice(prev => { const a = [...prev]; a[i] = false; return a; });
-        if (closed.filter(Boolean).length + 1 >= DISCUSSION_QUESTIONS.length) markDone(2);
       };
+
+      useEffect(() => {
+        if (closed.every(Boolean)) markDone(2);
+      }, [closed]);
 
       const continueChat = (i) => {
         setAwaitingChoice(prev => { const a = [...prev]; a[i] = false; return a; });
@@ -466,7 +459,6 @@ Aldrei nefna fleiri en eina villu.`;
 
       return (
         <div className="min-h-screen pb-24">
-          {/* Header */}
           <header className="bg-white shadow-sm border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-6 py-8">
               <button onClick={() => window.history.back()}
@@ -479,7 +471,6 @@ Aldrei nefna fleiri en eina villu.`;
           </header>
 
           <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-20">
-            {/* Leiðbeiningabox */}
             <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-6">
               <p className="text-sm font-light text-blue-800">📖 Lestu textann hægt og rólega</p>
               <p className="text-sm font-light text-blue-800">✏️ Svaraðu krossaspurningunum</p>
@@ -487,8 +478,6 @@ Aldrei nefna fleiri en eina villu.`;
               <p className="text-sm font-light text-blue-800">💬 Ræddu spurningarnar með AI</p>
             </div>
 
-            {/* Texti */}
-            {/* Tungumálval */}
             <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 mb-4">
               {!confirmed ? (
                 <div className="flex gap-2 items-center flex-wrap">
@@ -522,7 +511,6 @@ Aldrei nefna fleiri en eina villu.`;
               )}
             </div>
 
-            {/* Texti með mynd og þýðingarfúnksjón */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in" style={{ overflow: 'hidden' }}>
               <img
                 src="../media/texti10.png"
@@ -543,7 +531,6 @@ Aldrei nefna fleiri en eina villu.`;
               )}
             </div>
 
-            {/* Popup */}
             {popup && confirmed && (
               <ThyðingarPopup
                 selectedText={popup.text}
@@ -553,7 +540,6 @@ Aldrei nefna fleiri en eina villu.`;
               />
             )}
 
-            {/* Flipar */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex border-b border-gray-200 bg-gray-50">
                 {tabs.map((tab, i) => (
@@ -566,7 +552,6 @@ Aldrei nefna fleiri en eina villu.`;
 
               <div className="p-6 fade-in" key={activeTab}>
 
-                {/* --- Flipi 1: Krossaspurningar --- */}
                 {activeTab === 0 && (
                   <div className="space-y-6">
                     {shuffledMC.map((q, qi) => (
@@ -624,7 +609,6 @@ Aldrei nefna fleiri en eina villu.`;
                   </div>
                 )}
 
-                {/* --- Flipi 2: Stuttar spurningar --- */}
                 {activeTab === 1 && (
                   <div className="space-y-6">
                     {SHORT_QUESTIONS.map((q, i) => (
@@ -661,7 +645,6 @@ Aldrei nefna fleiri en eina villu.`;
                   </div>
                 )}
 
-                {/* --- Flipi 3: Umræðuspurningar --- */}
                 {activeTab === 2 && (
                   <div className="space-y-6">
                     {DISCUSSION_QUESTIONS.map((q, i) => (
@@ -745,7 +728,6 @@ Aldrei nefna fleiri en eina villu.`;
             </div>
           </main>
 
-          {/* Framvinduraking */}
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
             <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
               {tabs.map((tab, i) => (
