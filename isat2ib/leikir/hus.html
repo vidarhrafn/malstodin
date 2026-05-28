@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Herbergjaleikur — íbúð ofan frá</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(12px);} to {opacity:1; transform:translateY(0);} }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes popIn { from { opacity:0; transform: scale(0.92);} to {opacity:1; transform:scale(1);} }
+    .pop-in { animation: popIn 0.3s ease both; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ---------------------------------------------------------------------------
+   ÍBÚÐ OFAN FRÁ — reitalíkan (grid).
+   Hnit: col (x, vinstri→hægri), row (y, efst→neðst).
+   Tegundir reita:
+     'wall'  = veggur / utan íbúðar (ófær)
+     'hall'  = gangur (fær)
+     'door'  = innangengt í herbergi (fær; ekki herbergi sjálft)
+     'room'  = herbergi með mynd (fær; triggar popup)
+   Hönnun (eins og lýst): inngangur neðst, 4 reitir inn ganginn,
+   herbergi til vinstri og hægri, áfram inn, tvö herbergi á hvora hönd,
+   og eitt herbergi við enda gangsins.
+--------------------------------------------------------------------------- */
+
+const W = '#';   // wall
+const H = '.';   // hall
+const R = 'R';   // room (mynd)
+const S = 'S';   // start (inngangur, telst hall)
+
+/* 7 dálkar × 8 raðir. Gangurinn er dálkur 3 (miðja).
+   Herbergi sitja sitt hvoru megin við ganginn og eitt við endann (efst). */
+const MAP = [
+  // col: 0    1    2    3    4    5    6
+  [    W,   W,   W,   R,   W,   W,   W ], // row 0  — herbergi við enda gangsins (efst)
+  [    W,   W,   W,   H,   W,   W,   W ], // row 1
+  [    W,   R,   H,   H,   H,   R,   W ], // row 2  — herbergi vinstri + hægri (innar)
+  [    W,   W,   W,   H,   W,   W,   W ], // row 3
+  [    W,   R,   H,   H,   H,   R,   W ], // row 4  — herbergi vinstri + hægri (fremri)
+  [    W,   W,   W,   H,   W,   W,   W ], // row 5
+  [    W,   W,   W,   H,   W,   W,   W ], // row 6
+  [    W,   W,   W,   S,   W,   W,   W ], // row 7  — inngangur (neðst)
+];
+
+const ROWS = MAP.length;
+const COLS = MAP[0].length;
+
+/* Herbergi → mynd. Lykill = "col,row".
+   Myndir eru staðglar (litaðar senur + heiti) þar til alvöru myndir koma.
+   B spyr um myndina; A lýsir því sem hann sér. */
+const ROOMS = {
+  '3,0': { name: 'Eldhús',        bg: '#b45309', emoji: '🍳', desc: 'Eldhús með ísskáp, ofni og borði.' },
+  '1,2': { name: 'Svefnherbergi', bg: '#4338ca', emoji: '🛏️', desc: 'Svefnherbergi með rúmi og glugga.' },
+  '5,2': { name: 'Baðherbergi',   bg: '#0e7490', emoji: '🛁', desc: 'Baðherbergi með baðkari og spegli.' },
+  '1,4': { name: 'Stofa',         bg: '#15803d', emoji: '🛋️', desc: 'Stofa með sófa, lampa og sjónvarpi.' },
+  '5,4': { name: 'Barnaherbergi', bg: '#be185d', emoji: '🧸', desc: 'Barnaherbergi með leikföngum og kojum.' },
+};
+
+function cellType(col, row) {
+  if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return W;
+  return MAP[row][col];
+}
+function isWalkable(col, row) {
+  const t = cellType(col, row);
+  return t === H || t === R || t === S;
+}
+function isRoom(col, row) {
+  return cellType(col, row) === R;
+}
+
+/* ---------------------------------------------------------------------------
+   Mynd-popup — sést þegar A gengur inn í herbergi
+--------------------------------------------------------------------------- */
+function RoomPopup({ room, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-6 z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-md w-full p-6 pop-in" onClick={e => e.stopPropagation()}>
+        <div className="rounded-xl overflow-hidden mb-4 flex items-center justify-center h-44" style={{ background: room.bg }}>
+          <span className="text-6xl">{room.emoji}</span>
+        </div>
+        <div className="font-medium text-gray-800 text-lg mb-1">{room.name}</div>
+        <p className="text-gray-500 font-light text-sm mb-4">{room.desc}</p>
+        <p className="text-gray-400 font-light text-xs mb-4">
+          Lýstu fyrir félaga þínum hvað þú sérð. B spyr þig um myndina á íslensku.
+        </p>
+        <button onClick={onClose}
+          className="w-full px-4 py-2 rounded-xl border border-gray-200 text-gray-500 font-light text-sm hover:bg-gray-50">
+          Loka og halda áfram
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Kortið + leikmaður
+--------------------------------------------------------------------------- */
+function Apartment() {
+  // Byrjunarreitur = inngangurinn (S)
+  const start = (() => {
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (MAP[r][c] === S) return { col: c, row: r };
+    return { col: 3, row: 7 };
+  })();
+
+  const [pos, setPos] = useState(start);
+  const [facing, setFacing] = useState('up'); // up/down/left/right — sjónræn vísbending
+  const [activeRoom, setActiveRoom] = useState(null);
+  const [visited, setVisited] = useState({});
+  const [bump, setBump] = useState(false);
+
+  const move = useCallback((dir) => {
+    if (activeRoom) return; // læst meðan popup er opið
+    setFacing(dir);
+    const delta = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] }[dir];
+    setPos(prev => {
+      const nc = prev.col + delta[0];
+      const nr = prev.row + delta[1];
+      if (!isWalkable(nc, nr)) {
+        setBump(true);
+        setTimeout(() => setBump(false), 250);
+        return prev;
+      }
+      if (isRoom(nc, nr)) {
+        const key = `${nc},${nr}`;
+        const room = ROOMS[key];
+        if (room) {
+          setActiveRoom({ key, ...room });
+          setVisited(v => ({ ...v, [key]: true }));
+        }
+      }
+      return { col: nc, row: nr };
+    });
+  }, [activeRoom]);
+
+  // Lyklaborð (örvatakkar)
+  useEffect(() => {
+    const onKey = (e) => {
+      const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+      if (map[e.key]) { e.preventDefault(); move(map[e.key]); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [move]);
+
+  const facingArrow = { up: '▲', down: '▼', left: '◀', right: '▶' }[facing];
+  const roomCount = Object.keys(ROOMS).length;
+  const visitedCount = Object.keys(visited).length;
+
+  return (
+    <div className="max-w-2xl mx-auto px-6 py-6 fade-in">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm font-medium text-gray-700">Íbúðin — séð ofan frá</span>
+        <span className="text-xs text-gray-400 font-light">Herbergi heimsótt: {visitedCount} / {roomCount}</span>
+      </div>
+
+      {/* Kort */}
+      <div className={`bg-white rounded-xl shadow-sm border p-3 transition ${bump ? 'border-red-300' : 'border-gray-100'}`}>
+        <div className="grid gap-1 mx-auto" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, maxWidth: 420 }}>
+          {Array.from({ length: ROWS }).map((_, r) =>
+            Array.from({ length: COLS }).map((_, c) => {
+              const t = cellType(c, r);
+              const here = pos.col === c && pos.row === r;
+              const key = `${c},${r}`;
+              const isV = visited[key];
+
+              let cls = 'aspect-square rounded-md flex items-center justify-center text-sm transition ';
+              if (t === W) cls += 'bg-transparent';
+              else if (t === R) cls += isV ? 'bg-violet-200 border border-violet-300' : 'bg-amber-100 border border-amber-200';
+              else cls += 'bg-gray-100 border border-gray-200'; // hall / start
+
+              return (
+                <div key={key} className={cls}>
+                  {here ? (
+                    <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs shadow">
+                      {facingArrow}
+                    </div>
+                  ) : t === R ? (
+                    <span className="text-xs opacity-60">{isV ? '🖼️' : '🚪'}</span>
+                  ) : t === S ? (
+                    <span className="text-[10px] text-gray-400 font-light">inn</span>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Örvatakkar */}
+      <div className="mt-5 flex flex-col items-center gap-2">
+        <button onClick={() => move('up')} className="w-16 h-12 rounded-xl bg-white border border-gray-200 shadow-sm text-gray-600 text-lg hover:bg-gray-50 active:scale-95 transition">↑</button>
+        <div className="flex gap-2">
+          <button onClick={() => move('left')} className="w-16 h-12 rounded-xl bg-white border border-gray-200 shadow-sm text-gray-600 text-lg hover:bg-gray-50 active:scale-95 transition">←</button>
+          <button onClick={() => move('down')} className="w-16 h-12 rounded-xl bg-white border border-gray-200 shadow-sm text-gray-600 text-lg hover:bg-gray-50 active:scale-95 transition">↓</button>
+          <button onClick={() => move('right')} className="w-16 h-12 rounded-xl bg-white border border-gray-200 shadow-sm text-gray-600 text-lg hover:bg-gray-50 active:scale-95 transition">→</button>
+        </div>
+      </div>
+
+      <p className="text-center text-gray-400 font-light text-xs mt-5">
+        Notaðu örvatakkana (eða lyklaborð). B segir þér leiðina: „farðu fjögur skref áfram og beygðu svo til vinstri".
+      </p>
+
+      {activeRoom && <RoomPopup room={activeRoom} onClose={() => setActiveRoom(null)} />}
+    </div>
+  );
+}
+
+function Header() {
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-2xl mx-auto px-6 py-6">
+        <h1 className="text-2xl font-medium text-gray-800 mb-1">🏠 Herbergjaleikur</h1>
+        <p className="text-gray-500 text-sm font-light">Íbúð séð ofan frá · grunnur með örvavirkni (Skjár A)</p>
+      </div>
+    </header>
+  );
+}
+
+function App() {
+  return (
+    <div>
+      <Header />
+      <Apartment />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
