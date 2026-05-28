@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lyklaleitin — Dúfnahólar 10</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(12px);} to {opacity:1; transform:translateY(0);} }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes popIn { from { opacity:0; transform: scale(0.92);} to {opacity:1; transform:scale(1);} }
+    .pop-in { animation: popIn 0.3s ease both; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.55;} }
+    .pulsing { animation: pulse 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+/* ---------------------------------------------------------------------------
+   API-föll — Málstöðvar-staðall.
+   /.netlify/functions/* virka aðeins á Netlify-uppsetningu Viðars.
+   Í forskoðun bregðast þau; þá fellur UI á textann (sjá fallback í TalandiHnappur).
+--------------------------------------------------------------------------- */
+async function playAudio(text, onEnd) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(false); return; }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended = () => onEnd && onEnd(true);
+    audio.onerror = () => onEnd && onEnd(false);
+    await audio.play().catch(() => onEnd && onEnd(false));
+    return audio;
+  } catch (e) { console.error(e); onEnd && onEnd(false); }
+}
+
+/* ---------------------------------------------------------------------------
+   Normun á lykilorði — engin AI-þýðing, bara einföld hreinsun.
+   Lágstafa, fjarlægja greinarmerki, þjappa bilum.
+--------------------------------------------------------------------------- */
+function normalize(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[.,!?;:„""'`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ---------------------------------------------------------------------------
+   EFNIÐ — keðjan. Kanóna úr Blokkinni:
+   Aminata 1B (1. hæð), Gunnar 3A (3. hæð), Tariq 4D (4. hæð).
+   Umgjörð: Aminata bakar köku (eins og hún gerir um helgar) og vantar hráefni.
+   Lyklar víxlast: síðustu tvö / fyrstu tvö / síðustu tvö orð.
+--------------------------------------------------------------------------- */
+const STEPS = [
+  {
+    id: 1,
+    floor: 1,
+    apartment: '1B',
+    door: { side: 'vinstri', index: 1 }, // aðrar dyr til vinstri
+    resident: 'Aminata',
+    img: 'aminata',
+    greeting: 'Góðan daginn! Gaman að sjá þig.',
+    say: 'Mig vantar egg í kökuna. Farðu til Gunnars, vinur minn.',
+    keyPart: 'last',           // síðustu tvö orðin
+    key: 'vinur minn',
+    bInstruction: 'Aminata is going to bake a cake but she is missing ingredients. Go to her (floor 1, second door on the LEFT) and listen. Type the LAST two words she says.',
+    bHint: 'Síðustu tvö orðin sem Aminata segir.'
+  },
+  {
+    id: 2,
+    floor: 3,
+    apartment: '3A',
+    door: { side: 'haegri', index: 0 }, // fyrstu dyr til hægri
+    resident: 'Gunnar',
+    img: 'gunnar',
+    greeting: 'Sæl(l)! Hvað get ég gert fyrir þig?',
+    say: 'Ekkert mál, sjáumst!',
+    keyPart: 'first',          // fyrstu tvö orðin
+    key: 'ekkert mál',
+    bInstruction: 'Take the elevator to floor 3. Gunnar (first door on the RIGHT) has eggs. Ask for them, then type the FIRST two words Gunnar says.',
+    bHint: 'Fyrstu tvö orðin sem Gunnar segir.'
+  },
+  {
+    id: 3,
+    floor: 4,
+    apartment: '4D',
+    door: { side: 'haegri', index: 2 }, // þriðju dyr til hægri
+    resident: 'Tariq',
+    img: 'tariq',
+    greeting: 'Salaam! Komdu inn, vinur.',
+    say: 'Gjörðu svo vel — verði þér að góðu!',
+    keyPart: 'last',           // síðustu tvö orðin
+    key: 'að góðu',
+    bInstruction: 'Take the elevator to floor 4. Tariq the baker (third door on the RIGHT) has lemons. Ask for them, then type the LAST two words Tariq says.',
+    bHint: 'Síðustu tvö orðin sem Tariq segir.'
+  }
+];
+
+const FLOORS = [4, 3, 2, 1]; // efst niður
+
+/* Einföld haus-andlit (SVG) — staðgenglar þar til alvöru myndir koma. */
+const FACES = {
+  aminata: { bg: '#7c3f1d', initial: 'A', name: 'Aminata', sub: 'Íbúð 1B · móttökustarfsmaður' },
+  gunnar:  { bg: '#1d4e7c', initial: 'G', name: 'Gunnar', sub: 'Íbúð 3A · nágranni' },
+  tariq:   { bg: '#1d6e56', initial: 'T', name: 'Tariq', sub: 'Íbúð 4D · bakari' }
+};
+
+/* ---------------------------------------------------------------------------
+   Sameiginlegir íhlutir
+--------------------------------------------------------------------------- */
+function FeedbackBadge({ kind, children }) {
+  const styles = {
+    green: 'bg-green-50 text-green-700 border-green-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    red: 'bg-red-50 text-red-700 border-red-200'
+  };
+  return (
+    <div className={`mt-3 px-4 py-3 rounded-xl border text-sm font-light ${styles[kind]} fade-in`}>
+      {children}
+    </div>
+  );
+}
+
+function ProgressDots({ current, total }) {
+  return (
+    <div className="flex gap-2 items-center">
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} className={`h-2 rounded-full transition-all ${i < current ? 'w-8 bg-blue-600' : i === current ? 'w-8 bg-blue-300' : 'w-2 bg-gray-300'}`} />
+      ))}
+    </div>
+  );
+}
+
+function Header({ title, subtitle, onBack }) {
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-4xl mx-auto px-6 py-6">
+        {onBack && (
+          <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Skipta um hlutverk</button>
+        )}
+        <h1 className="text-2xl font-medium text-gray-800 mb-1">{title}</h1>
+        <p className="text-gray-500 text-sm font-light">{subtitle}</p>
+      </div>
+    </header>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Hlutverkaval
+--------------------------------------------------------------------------- */
+function RoleSelect({ onPick }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="max-w-2xl w-full fade-in">
+        <div className="text-center mb-10">
+          <div className="text-4xl mb-3">🔑</div>
+          <h1 className="text-3xl font-medium text-gray-800 mb-2">Lyklaleitin</h1>
+          <p className="text-gray-500 font-light">Dúfnahólar 10 · paraæfing fyrir tvo nemendur</p>
+          <p className="text-gray-400 font-light text-sm mt-3 max-w-md mx-auto">
+            Opnið skrána á sitt hvoru tækinu. Þið talið saman á íslensku — það er eina tengingin milli ykkar.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <button onClick={() => onPick('A')}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-left hover:shadow-md hover:border-blue-200 transition">
+            <div className="text-2xl mb-2">🏠</div>
+            <div className="font-medium text-gray-800 mb-1">Ég er A</div>
+            <div className="text-sm text-gray-500 font-light">Þú ert inni í húsinu. Þú ratar um, bankar á dyr og hlustar á íbúana.</div>
+          </button>
+          <button onClick={() => onPick('B')}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-left hover:shadow-md hover:border-purple-200 transition">
+            <div className="text-2xl mb-2">🗺️</div>
+            <div className="font-medium text-gray-800 mb-1">Ég er B</div>
+            <div className="text-sm text-gray-500 font-light">Þú ert leiðbeinandinn. Þú færð fyrirmæli og segir A hvert á að fara.</div>
+          </button>
+        </div>
+        <p className="text-center text-gray-400 font-light text-xs mt-8">
+          Ábending: parið nemendur sem deila ekki móðurmáli — þá verður íslenskan eina sameiginlega málið.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Talandi hnappur — spilar TTS. Textinn sést EKKI nema:
+   (a) fallback þegar hljóð bregst (forskoðun), eða
+   (b) nemandi á A1-stigi smellir á "Sýna texta".
+--------------------------------------------------------------------------- */
+function TalandiHnappur({ text, label }) {
+  const [state, setState] = useState('idle'); // idle | playing
+  const [forceText, setForceText] = useState(false);
+  const [showText, setShowText] = useState(false);
+
+  const play = () => {
+    setState('playing');
+    playAudio(text, (ok) => {
+      setState('idle');
+      if (!ok) setForceText(true); // hljóð virkaði ekki → sýna texta svo hægt sé að prófa
+    });
+  };
+
+  const textVisible = forceText || showText;
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 items-center">
+        <button onClick={play} disabled={state === 'playing'}
+          className={`px-4 py-2 rounded-xl text-white font-light text-sm transition ${state === 'playing' ? 'bg-green-400 pulsing' : 'bg-green-600 hover:bg-green-700'}`}>
+          🔊 {state === 'playing' ? 'Spila…' : label}
+        </button>
+        <button onClick={play}
+          className="px-3 py-2 rounded-xl border border-gray-200 text-gray-500 font-light text-sm hover:bg-gray-50">
+          ↻ Endurtaka
+        </button>
+        <button onClick={() => setShowText(v => !v)}
+          className="px-3 py-2 rounded-xl border border-gray-200 text-gray-400 font-light text-xs hover:bg-gray-50">
+          👁 {showText ? 'Fela texta' : 'Sýna texta (A1)'}
+        </button>
+      </div>
+      {textVisible && (
+        <div className="mt-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 text-gray-700 font-light italic fade-in">
+          „{text}"
+          {forceText && !showText && (
+            <div className="text-xs text-gray-400 not-italic mt-1">(Hljóð ekki tiltækt í forskoðun — textinn birtur í staðinn.)</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Íbúa-popup (sést hjá A þegar bankað er á réttar dyr)
+--------------------------------------------------------------------------- */
+function ResidentPopup({ step, onClose }) {
+  const face = FACES[step.img];
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-6 z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-md w-full p-6 pop-in" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-medium shrink-0" style={{ background: face.bg }}>
+            {face.initial}
+          </div>
+          <div>
+            <div className="font-medium text-gray-800">{face.name}</div>
+            <div className="text-sm text-gray-500 font-light">{face.sub}</div>
+          </div>
+        </div>
+        <div className="px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 font-light text-sm mb-5">
+          {step.greeting}
+        </div>
+        <p className="text-gray-500 font-light text-sm mb-3">
+          Spurðu {face.name} upphátt (talaðu við félaga þinn). Þegar þú ert búin/n, hlustaðu á svarið:
+        </p>
+        <TalandiHnappur text={step.say} label={`${face.name} svarar`} />
+        <button onClick={onClose}
+          className="mt-5 w-full px-4 py-2 rounded-xl border border-gray-200 text-gray-500 font-light text-sm hover:bg-gray-50">
+          Loka hurð
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Reitakort fyrir A — blindur A (sér EKKI hvar markmiðið er).
+   6 dyr á hæð: 3 vinstra megin, 3 hægra megin, lyfta í miðju.
+--------------------------------------------------------------------------- */
+function Kort({ currentFloor, setCurrentFloor, step, onKnockCorrect }) {
+  const [msg, setMsg] = useState(null);
+
+  const knock = (side, index) => {
+    const onThisFloor = step.floor === currentFloor;
+    const right = onThisFloor && step.door.side === side && step.door.index === index;
+    if (right) {
+      setMsg(null);
+      onKnockCorrect();
+    } else {
+      setMsg('🚪 Enginn heima á þessum dyrum. Spurðu B hvert þú átt að fara.');
+      setTimeout(() => setMsg(null), 2600);
+    }
+  };
+
+  const Door = ({ side, index }) => (
+    <button onClick={() => knock(side, index)}
+      className="w-full aspect-[3/4] rounded-lg bg-amber-100 border border-amber-200 hover:bg-amber-200 transition flex items-center justify-center text-amber-700 text-xs font-light">
+      🚪
+    </button>
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-gray-700">Hæð {currentFloor}</span>
+        <span className="text-xs text-gray-400 font-light">Þú sérð ekki hvar markmiðið er — fylgdu leiðsögn B</span>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div className="grid grid-cols-7 gap-2 items-center">
+          {/* vinstri dyr */}
+          <div className="col-span-3 grid grid-cols-3 gap-2">
+            {[0,1,2].map(i => <Door key={'v'+i} side="vinstri" index={i} />)}
+          </div>
+          {/* lyfta / gangur */}
+          <div className="col-span-1 flex flex-col items-center">
+            <div className="text-[10px] text-gray-400 font-light mb-1">gangur</div>
+            <div className="w-full aspect-[3/4] rounded-lg bg-gray-200 border border-gray-300 flex items-center justify-center text-gray-500 text-lg">🛗</div>
+          </div>
+          {/* hægri dyr */}
+          <div className="col-span-3 grid grid-cols-3 gap-2">
+            {[0,1,2].map(i => <Door key={'h'+i} side="haegri" index={i} />)}
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-2 mt-1">
+          <div className="col-span-3 text-center text-[10px] text-gray-400 font-light">vinstri</div>
+          <div className="col-span-1" />
+          <div className="col-span-3 text-center text-[10px] text-gray-400 font-light">hægri</div>
+        </div>
+      </div>
+
+      {msg && <FeedbackBadge kind="amber">{msg}</FeedbackBadge>}
+
+      {/* Lyfta */}
+      <div className="mt-4 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div className="text-sm font-medium text-gray-700 mb-2">🛗 Lyfta — veldu hæð</div>
+        <div className="flex gap-2">
+          {FLOORS.map(f => (
+            <button key={f} onClick={() => { setCurrentFloor(f); setMsg(null); }}
+              className={`flex-1 py-2 rounded-lg font-light text-sm transition ${f === currentFloor ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {f}. hæð
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Skjár A
+--------------------------------------------------------------------------- */
+function ScreenA({ onBack }) {
+  const [stepIdx, setStepIdx] = useState(0);
+  const [currentFloor, setCurrentFloor] = useState(1);
+  const [popup, setPopup] = useState(false);
+  const done = stepIdx >= STEPS.length;
+  const step = done ? null : STEPS[stepIdx];
+
+  if (done) {
+    return (
+      <div>
+        <Header title="🏠 Skjár A — í húsinu" subtitle="Lyklaleitin · Dúfnahólar 10" onBack={onBack} />
+        <div className="max-w-2xl mx-auto px-6 py-16 text-center fade-in">
+          <div className="text-5xl mb-4">🎂</div>
+          <h2 className="text-2xl font-medium text-gray-800 mb-2">Þið söfnuðuð öllu í kökuna!</h2>
+          <p className="text-gray-500 font-light">Aminata getur nú bakað senegölsku kökuna sína. Vel gert — þið unnuð þetta saman.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Header title="🏠 Skjár A — í húsinu" subtitle="Lyklaleitin · Dúfnahólar 10" onBack={onBack} />
+      <div className="max-w-2xl mx-auto px-6 py-6 fade-in">
+        <div className="mb-5"><ProgressDots current={stepIdx} total={STEPS.length} /></div>
+        <Kort
+          currentFloor={currentFloor}
+          setCurrentFloor={setCurrentFloor}
+          step={step}
+          onKnockCorrect={() => setPopup(true)}
+        />
+        <p className="text-center text-gray-400 font-light text-xs mt-6">
+          B segir þér á hvaða hæð og hvaða dyr. Notaðu lyftuna til að skipta um hæð.
+        </p>
+      </div>
+      {popup && step && (
+        <ResidentPopup
+          step={step}
+          onClose={() => { setPopup(false); setStepIdx(i => i + 1); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Skjár B — fyrirmæli á móðurmáli + lykilorðalás
+--------------------------------------------------------------------------- */
+const LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'pl', name: 'Polski' },
+  { code: 'es', name: 'Español' },
+  { code: 'uk', name: 'Українська' },
+  { code: 'ar', name: 'العربية' },
+  { code: 'is', name: 'Íslenska (einföld)' }
+];
+
+/* Forþýdd fyrirmæli (kennsludæmi). Á Netlify myndi OpenAI þýða bInstruction
+   í rauntíma; hér eru nokkur tungumál sýnd til að prófa virknina. */
+const TRANSLATIONS = {
+  1: {
+    en: 'Aminata wants to bake a cake but is missing ingredients. Go to her — floor 1, second door on the LEFT — and listen. Type the LAST two words she says.',
+    pl: 'Aminata chce upiec ciasto, ale brakuje jej składników. Idź do niej — piętro 1, drugie drzwi po LEWEJ — i słuchaj. Wpisz DWA OSTATNIE słowa, które powie.',
+    es: 'Aminata quiere hornear un pastel pero le faltan ingredientes. Ve a ella — piso 1, segunda puerta a la IZQUIERDA — y escucha. Escribe las DOS ÚLTIMAS palabras que diga.',
+    uk: 'Аміната хоче спекти торт, але їй бракує інгредієнтів. Іди до неї — поверх 1, другі двері ЛІВОРУЧ — і слухай. Введи ДВА ОСТАННІ слова, які вона скаже.',
+    ar: 'تريد أميناتا أن تخبز كعكة لكن تنقصها المكونات. اذهب إليها — الطابق 1، الباب الثاني على اليسار — واستمع. اكتب آخر كلمتين تقولهما.',
+    is: 'Aminata ætlar að baka köku en vantar hráefni. Farðu til hennar — 1. hæð, aðrar dyr til VINSTRI — og hlustaðu. Skrifaðu SÍÐUSTU tvö orðin sem hún segir.'
+  },
+  2: {
+    en: 'Take the elevator to floor 3. Gunnar (first door on the RIGHT) has eggs. Ask for them, then type the FIRST two words Gunnar says.',
+    pl: 'Wjedź windą na piętro 3. Gunnar (pierwsze drzwi po PRAWEJ) ma jajka. Poproś o nie, a potem wpisz DWA PIERWSZE słowa, które powie Gunnar.',
+    es: 'Sube en ascensor al piso 3. Gunnar (primera puerta a la DERECHA) tiene huevos. Pídeselos y escribe las DOS PRIMERAS palabras que diga Gunnar.',
+    uk: 'Підніміться ліфтом на поверх 3. У Гуннара (перші двері ПРАВОРУЧ) є яйця. Попроси їх, потім введи ДВА ПЕРШІ слова, які скаже Гуннар.',
+    ar: 'اصعد بالمصعد إلى الطابق 3. غونار (أول باب على اليمين) لديه بيض. اطلبه، ثم اكتب أول كلمتين يقولهما غونار.',
+    is: 'Taktu lyftuna á 3. hæð. Gunnar (fyrstu dyr til HÆGRI) á egg. Biddu um þau og skrifaðu svo FYRSTU tvö orðin sem Gunnar segir.'
+  },
+  3: {
+    en: 'Take the elevator to floor 4. Tariq the baker (third door on the RIGHT) has lemons. Ask for them, then type the LAST two words Tariq says.',
+    pl: 'Wjedź windą na piętro 4. Piekarz Tariq (trzecie drzwi po PRAWEJ) ma cytryny. Poproś o nie, a potem wpisz DWA OSTATNIE słowa, które powie Tariq.',
+    es: 'Sube en ascensor al piso 4. Tariq el panadero (tercera puerta a la DERECHA) tiene limones. Pídeselos y escribe las DOS ÚLTIMAS palabras que diga Tariq.',
+    uk: 'Підніміться ліфтом на поверх 4. Пекар Тарік (треті двері ПРАВОРУЧ) має лимони. Попроси їх, потім введи ДВА ОСТАННІ слова, які скаже Тарік.',
+    ar: 'اصعد بالمصعد إلى الطابق 4. الخباز طارق (الباب الثالث على اليمين) لديه ليمون. اطلبه، ثم اكتب آخر كلمتين يقولهما طارق.',
+    is: 'Taktu lyftuna á 4. hæð. Tariq bakari (þriðju dyr til HÆGRI) á sítrónur. Biddu um þær og skrifaðu svo SÍÐUSTU tvö orðin sem Tariq segir.'
+  }
+};
+
+function ScreenB({ onBack }) {
+  const [lang, setLang] = useState('en');
+  const [stepIdx, setStepIdx] = useState(0);
+  const [input, setInput] = useState('');
+  const [feedback, setFeedback] = useState(null);
+  const done = stepIdx >= STEPS.length;
+  const step = done ? null : STEPS[stepIdx];
+
+  const check = () => {
+    if (!step) return;
+    if (normalize(input) === normalize(step.key)) {
+      setFeedback({ kind: 'green', text: '✓ Rétt! Næsta vísbending opnast.' });
+      setTimeout(() => {
+        setStepIdx(i => i + 1);
+        setInput('');
+        setFeedback(null);
+      }, 1100);
+    } else {
+      setFeedback({ kind: 'red', text: 'Ekki alveg rétt. Hlustaðu aftur með A og reyndu á ný.' });
+    }
+  };
+
+  if (done) {
+    return (
+      <div>
+        <Header title="🗺️ Skjár B — leiðbeinandinn" subtitle="Lyklaleitin · Dúfnahólar 10" onBack={onBack} />
+        <div className="max-w-2xl mx-auto px-6 py-16 text-center fade-in">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-2xl font-medium text-gray-800 mb-2">Leiknum er lokið!</h2>
+          <p className="text-gray-500 font-light">Þið funduð öll hráefnin saman. Frábær samvinna.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const instruction = (TRANSLATIONS[step.id] && TRANSLATIONS[step.id][lang]) || step.bInstruction;
+
+  return (
+    <div>
+      <Header title="🗺️ Skjár B — leiðbeinandinn" subtitle="Lyklaleitin · Dúfnahólar 10" onBack={onBack} />
+      <div className="max-w-2xl mx-auto px-6 py-6 fade-in">
+        <div className="mb-5"><ProgressDots current={stepIdx} total={STEPS.length} /></div>
+
+        <div className="flex justify-end mb-4">
+          <select value={lang} onChange={e => setLang(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-light text-gray-600 bg-white">
+            {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
+          </select>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
+          <div className="text-xs uppercase tracking-wide text-purple-600 font-medium mb-2">Vísbending {step.id} af {STEPS.length}</div>
+          <p className="text-gray-800 font-light leading-relaxed" dir={lang === 'ar' ? 'rtl' : 'ltr'}>{instruction}</p>
+          <div className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-400 font-light">
+            🇮🇸 {step.bHint}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Sláðu inn lykilorðið sem A las fyrir þig</label>
+          <div className="flex gap-2">
+            <input value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') check(); }}
+              placeholder="t.d. tvö orð…"
+              className="flex-1 px-4 py-2 rounded-xl border border-gray-200 font-light focus:outline-none focus:border-blue-400" />
+            <button onClick={check}
+              className="px-5 py-2 rounded-xl bg-blue-600 text-white font-light text-sm hover:bg-blue-700 transition">
+              Athuga
+            </button>
+          </div>
+          {feedback && <FeedbackBadge kind={feedback.kind}>{feedback.text}</FeedbackBadge>}
+        </div>
+
+        <p className="text-center text-gray-400 font-light text-xs mt-6">
+          Segðu A á hvaða hæð og hvaða dyr. A heyrir svarið — þú slærð það inn.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   App
+--------------------------------------------------------------------------- */
+function App() {
+  const [role, setRole] = useState(null);
+  if (!role) return <RoleSelect onPick={setRole} />;
+  if (role === 'A') return <ScreenA onBack={() => setRole(null)} />;
+  return <ScreenB onBack={() => setRole(null)} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
