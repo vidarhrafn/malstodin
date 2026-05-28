@@ -53,38 +53,6 @@
     }
     .fade-in { animation: fadeIn 0.35s ease both; }
 
-    /* Interaktívur texti */
-    .word-token {
-      cursor: pointer;
-      border-radius: 3px;
-      padding: 0 1px;
-      transition: background 0.15s;
-    }
-    .word-token:hover {
-      background: #dbeafe;
-    }
-    .word-token.loading {
-      background: #fef3c7;
-      animation: pulse 1s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
-    }
-
-    /* Þýðingagluggi */
-    .tooltip-box {
-      position: fixed;
-      z-index: 9999;
-      background: white;
-      border: 2px solid #3b82f6;
-      border-radius: 12px;
-      padding: 12px 16px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-      max-width: 280px;
-      animation: fadeIn 0.2s ease both;
-      pointer-events: none;
-    }
-
     /* Svarmöguleikar */
     .answer-option {
       border: 2px solid #e5e7eb;
@@ -117,19 +85,6 @@
     .text-panel.open  { max-height: 1200px; opacity: 1; }
     .text-panel.closed { max-height: 0; opacity: 0; }
 
-    /* Tungumálaval */
-    .lang-btn {
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 4px 10px;
-      font-size: 0.75rem;
-      cursor: pointer;
-      transition: all 0.15s;
-      background: white;
-      white-space: nowrap;
-    }
-    .lang-btn:hover { border-color: #93c5fd; background: #eff6ff; }
-    .lang-btn.active { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; font-weight: 500; }
     .selectable-text {
       user-select: text;
       -webkit-user-select: text;
@@ -223,16 +178,6 @@
       return a;
     };
 
-    /* ─── Tungumál ─── */
-    const QUICK_LANGS = [
-      { code: 'en', label: '🇬🇧 English' },
-      { code: 'vi', label: '🇻🇳 Tiếng Việt' },
-      { code: 'es', label: '🇪🇸 Español' },
-      { code: 'pl', label: '🇵🇱 Polski' },
-      { code: 'uk', label: '🇺🇦 Українська' },
-      { code: 'ar', label: '🇸🇦 العربية' },
-    ];
-
     /* ─── EFNI ─── */
     const READING_PARAGRAPHS = [
       'Páskarnir eru spennandi tími á Íslandi. Þetta er tími þar sem við fáum frí frá skólanum og vinnu og við getum verið með fjölskyldunni okkar. Páskarnir eru kristin trúarhátíð. Þá minnumst við þess að Jesús var krossfestur á föstudaginn langa, sem er mjög sorglegur dagur í kristinni trú. Hins vegar eru páskarnir líka um von og nýtt líf, því á páskadag reis Jesús upp frá dauðum.',
@@ -314,104 +259,66 @@
       );
     };
 
-    /* ─── InteractiveText ─── */
-    const InteractiveText = ({ paragraphs, lang }) => {
-      const [tooltip, setTooltip] = useState(null); // { word, translation, x, y }
-      const [loadingWord, setLoadingWord] = useState(null);
-      const cacheRef = useRef({});
-
-      const handleWordClick = useCallback(async (word, e) => {
-        const clean = word.replace(/[„"".,!?;:()–—\[\]]/g, '').trim();
-        if (!clean || clean.length < 2) return;
-
-        const rect = e.target.getBoundingClientRect();
-        const x = Math.min(rect.left, window.innerWidth - 300);
-        const y = rect.bottom + 8;
-
-        const cacheKey = `${clean}__${lang}`;
-        if (cacheRef.current[cacheKey]) {
-          setTooltip({ word: clean, translation: cacheRef.current[cacheKey], x, y });
-          return;
-        }
-
-        setLoadingWord(clean);
-        setTooltip(null);
-
+    /* ─── ThyðingarPopup ─── */
+    function ThyðingarPopup({ selectedText, position, language, onClose }) {
+      const [translation, setTranslation] = useState('');
+      const [loading, setLoading]         = useState(false);
+      const handleTranslate = async () => {
+        setLoading(true);
         try {
-          const langName = lang;
           const result = await callOpenAI([
-            {
-              role: 'system',
-              content: `You are a helpful Icelandic language teacher. The student is learning Icelandic and their native language is ${langName}.
-Translate the Icelandic word or phrase into ${langName}. Give a short, clear answer.
-Format: "[word in ${langName}]" – optionally add a very short note (e.g. grammatical gender, plural) in parentheses if helpful.
-Maximum 1 line. Do not explain further.`,
-            },
-            { role: 'user', content: `Translate this Icelandic word: "${clean}"` },
-          ], 60, 0.1);
-
-          cacheRef.current[cacheKey] = result.trim();
-          setTooltip({ word: clean, translation: result.trim(), x, y });
-        } catch {
-          setTooltip({ word: clean, translation: '–', x, y });
+            { role: 'system', content: 'You are a helpful language learning assistant for Icelandic students.' },
+            { role: 'user',   content: `A student learning Icelandic has selected this text and needs help understanding it in ${language}.\n\nSELECTED TEXT (Icelandic): "${selectedText}"\n\nProvide:\n1. Translation to ${language}\n2. Brief explanation if needed (in ${language})\n\nKeep it concise. Respond ONLY in ${language}.` }
+          ], 300, 0.3);
+          setTranslation(result);
+        } catch (e) {
+          setTranslation('Villa kom upp. Reyndu aftur.');
         } finally {
-          setLoadingWord(null);
+          setLoading(false);
         }
-      }, [lang]);
-
-      useEffect(() => {
-        const handler = () => setTooltip(null);
-        document.addEventListener('click', handler);
-        return () => document.removeEventListener('click', handler);
-      }, []);
-
-      const tokenize = (text) =>
-        text.split(/(\s+)/).map((chunk, i) => {
-          if (/^\s+$/.test(chunk)) return chunk;
-          const isLoading = loadingWord === chunk.replace(/[„"".,!?;:()–—\[\]]/g, '').trim();
-          return (
-            <span
-              key={i}
-              className={`word-token${isLoading ? ' loading' : ''}`}
-              onClick={(e) => { e.stopPropagation(); handleWordClick(chunk, e); }}
-            >
-              {chunk}
-            </span>
-          );
-        });
-
+      };
       return (
         <>
-          <div className="space-y-4">
-            {paragraphs.map((para, i) => (
-              <p key={i} className="text-gray-700 leading-relaxed font-light text-sm select-none">
-                {tokenize(para)}
-              </p>
-            ))}
-          </div>
-          {tooltip && (
-            <div
-              className="tooltip-box"
-              style={{ left: tooltip.x, top: tooltip.y }}
-            >
-              <div className="text-xs text-gray-500 font-light mb-0.5">🇮🇸 {tooltip.word}</div>
-              <div className="text-sm font-medium text-gray-800">{tooltip.translation}</div>
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <div className="popup-anim fixed z-50 bg-white border-2 border-blue-300 rounded-2xl shadow-xl p-5"
+            style={{
+              left: position.x + 'px',
+              top:  position.y + 'px',
+              transform: 'translateX(-50%)',
+              width: '340px',
+              maxWidth: '90vw',
+              maxHeight: 'calc(100vh - 32px)',
+              overflowY: 'auto',
+            }}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 mb-1">Valinn texti:</p>
+                <p className="text-sm text-gray-700 italic font-light">„{selectedText}"</p>
+              </div>
+              <button onClick={onClose}
+                className="text-gray-300 hover:text-gray-600 text-2xl leading-none ml-3">×</button>
             </div>
-          )}
+            {!translation ? (
+              <button onClick={handleTranslate} disabled={loading}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                  disabled:bg-gray-300 transition-colors font-light text-sm">
+                {loading
+                  ? <span className="loading-dots">Þýði</span>
+                  : `🌐 Þýða á ${language}`}
+              </button>
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 fade-in">
+                <p className="text-xs text-blue-400 mb-2">🌐 Þýðing:</p>
+                <p className="text-sm text-gray-800 font-light whitespace-pre-wrap">{translation}</p>
+              </div>
+            )}
+          </div>
         </>
       );
-    };
+    }
 
     /* ─── TextPanel ─── */
-    const TextPanel = ({ open, onToggle, lang, onLangChange }) => {
-      const [customInput, setCustomInput] = React.useState('');
-
-      const handleCustomSubmit = (e) => {
-        e.preventDefault();
-        const val = customInput.trim();
-        if (val) { onLangChange(val); setCustomInput(''); }
-      };
-
+    const TextPanel = ({ open, onToggle, language, confirmed, langInput, setLangInput, setLanguage, setConfirmed, popup, setPopup, handleSelection }) => {
       return (
       <div className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
         <div className="max-w-4xl mx-auto px-6">
@@ -427,61 +334,70 @@ Maximum 1 line. Do not explain further.`,
           </button>
 
           <div className={`text-panel ${open ? 'open' : 'closed'}`}>
-            <div className="pb-4">
+            <div className="pb-6 space-y-3">
               {/* Tungumálaval */}
-              <div className="mb-4 space-y-2">
-                <p className="text-xs text-gray-500 font-light">Veldu þýðingarmál:</p>
-                {/* Frítexti */}
-                <form onSubmit={handleCustomSubmit} className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={customInput}
-                    onChange={e => setCustomInput(e.target.value)}
-                    placeholder="Skrifaðu móðurmál þitt…"
-                    className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!customInput.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm"
-                  >
-                    Velja
-                  </button>
-                </form>
-                {/* Hraðhnappar */}
-                <div className="flex flex-wrap gap-1.5">
-                  {QUICK_LANGS.map(l => {
-                    const langLabel = l.label.replace(/^[\S]+\s/, '');
-                    return (
-                      <button
-                        key={l.code}
-                        className={`lang-btn ${lang === langLabel ? 'active' : ''}`}
-                        onClick={() => onLangChange(langLabel)}
-                      >
-                        {l.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {lang && (
-                  <p className="text-xs text-blue-700 font-light">
-                    🌐 Þýðing á: <strong>{lang}</strong>
-                  </p>
+              <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+                {!confirmed ? (
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <span className="text-sm text-gray-500 font-light">🌐 Móðurmál:</span>
+                    <input
+                      type="text"
+                      value={langInput}
+                      onChange={e => setLangInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && langInput.trim() && (setLanguage(langInput.trim()), setConfirmed(true))}
+                      placeholder="t.d. English, Polski, 中文…"
+                      className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-sm
+                        font-light focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <button
+                      onClick={() => { if (langInput.trim()) { setLanguage(langInput.trim()); setConfirmed(true); } }}
+                      disabled={!langInput.trim()}
+                      className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-light
+                        hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                      Staðfesta
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600 font-light">
+                      🌐 <span className="font-medium">{language}</span>
+                      <span className="text-gray-400 ml-2">— Merktu texta í textanum til að þýða</span>
+                    </p>
+                    <button onClick={() => { setConfirmed(false); setLangInput(''); setPopup(null); }}
+                      className="text-xs text-blue-500 hover:text-blue-700 font-light">Breyta</button>
+                  </div>
                 )}
               </div>
-              <p className="text-xs text-gray-400 font-light mb-4 italic">
-                💡 Smelltu á orð til að fá þýðingu
-              </p>
-              <div style={{ overflow: 'hidden' }}>
+              {/* Texti */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in" style={{ overflow: 'hidden' }}>
                 <img
                   src="../media/texti5.png"
                   alt="Myndskreyting"
                   className="rounded-xl border border-gray-100 shadow-sm object-cover"
                   style={{ float: 'left', width: '38%', maxHeight: '190px', marginRight: '1.25rem', marginBottom: '0.5rem' }}
                 />
-                <InteractiveText paragraphs={READING_PARAGRAPHS} lang={lang} />
+                <div
+                  className={`selectable-text ${!confirmed ? 'opacity-60' : ''}`}
+                  onMouseUp={handleSelection}
+                  onTouchEnd={handleSelection}>
+                  {READING_PARAGRAPHS.map((para, i) => (
+                    <p key={i} className="text-gray-700 leading-relaxed font-light text-sm">{para}</p>
+                  ))}
+                </div>
+                {!confirmed && (
+                  <p className="text-xs text-gray-400 font-light mt-3 text-center">
+                    ⬆️ Skráðu móðurmál þitt til að geta þýtt texta
+                  </p>
+                )}
               </div>
-              <div className="pb-2" />
+              {popup && confirmed && (
+                <ThyðingarPopup
+                  selectedText={popup.text}
+                  position={{ x: popup.x, y: popup.y }}
+                  language={language}
+                  onClose={() => { setPopup(null); window.getSelection().removeAllRanges(); }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -927,7 +843,35 @@ SVARAÐU MEÐ JSON (BARA JSON):
           window.writeProgress && window.writeProgress('lestextar_05', 'completed');
         }
       }, [done]);
-      const [lang, setLang] = useState('English');
+
+      const [language, setLanguage] = useState('');
+      const [langInput, setLangInput] = useState('');
+      const [confirmed, setConfirmed] = useState(false);
+      const [popup, setPopup] = useState(null);
+
+      const handleSelection = () => {
+        if (!confirmed) return;
+        setTimeout(() => {
+          const sel  = window.getSelection();
+          const text = sel.toString().trim();
+          if (!text || text.length < 2) return;
+          const range = sel.getRangeAt(0);
+          const rect  = range.getBoundingClientRect();
+          const popupWidth = 340;
+          const margin = 16;
+          const halfWidth = popupWidth / 2;
+          const x = Math.min(
+            Math.max(rect.left + rect.width / 2, halfWidth + margin),
+            window.innerWidth - halfWidth - margin
+          );
+          const estimatedPopupHeight = 260;
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const y = spaceBelow < estimatedPopupHeight
+            ? Math.max(margin, rect.top - estimatedPopupHeight - 12)
+            : rect.bottom + 12;
+          setPopup({ text, x, y });
+        }, 80);
+      };
 
       const markDone = (tab) => setDone(d => ({ ...d, [tab]: true }));
 
@@ -946,14 +890,20 @@ SVARAÐU MEÐ JSON (BARA JSON):
             </div>
           </header>
 
-          <TextPanel open={textOpen} onToggle={() => setTextOpen(o => !o)} lang={lang} onLangChange={setLang} />
+          <TextPanel
+            open={textOpen} onToggle={() => setTextOpen(o => !o)}
+            language={language} confirmed={confirmed}
+            langInput={langInput} setLangInput={setLangInput}
+            setLanguage={setLanguage} setConfirmed={setConfirmed}
+            popup={popup} setPopup={setPopup}
+            handleSelection={handleSelection}
+          />
           <TabBar active={activeTab} done={done} onSelect={setActiveTab} />
 
           <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-20">
-            {/* Leiðbeiningabox */}
             <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-500 rounded-lg p-4 mb-6">
               <ul className="text-sm text-blue-800 font-light space-y-1">
-                <li>📖 Lestu textann hægt og rólega – smelltu á orð til að fá þýðingu</li>
+                <li>📖 Lestu textann hægt og rólega – merktu texta til að fá þýðingu</li>
                 <li>✏️ Svaraðu krossaspurningunum</li>
                 <li>📝 Svaraðu stuttum spurningum með heilum setningum</li>
                 <li>💬 Ræddu spurningarnar með AI</li>
