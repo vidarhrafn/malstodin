@@ -67,6 +67,7 @@ async function translateTo(islenska, malName, enHint) {
 const ROOMS = {
   eldhus: {
     name: 'Eldhús', img: 'media/eldhus.png', fallbackBg: '#b45309', emoji: '🍳',
+    geo: { c0:2, r0:0, c1:7, r1:1, door:{c:4,r:1}, into:{c:4,r:2} },
     questions: [
       { is: 'Hvað er á milli hnífs og skeiðar?', svar: ['gaffall','gaffallinn'],
         ml: { en:'What is between the knife and the spoon?', pl:'Co jest między nożem a łyżką?', es:'¿Qué hay entre el cuchillo y la cuchara?', uk:'Що знаходиться між ножем і ложкою?', ar:'ما الذي يقع بين السكين والملعقة؟' } },
@@ -82,6 +83,7 @@ const ROOMS = {
   },
   badherbergi: {
     name: 'Baðherbergi', img: 'media/badherbergi.png', fallbackBg: '#0e7490', emoji: '🛁',
+    geo: { c0:6, r0:3, c1:8, r1:4, door:{c:6,r:3}, into:{c:5,r:3} },
     questions: [
       { is: 'Hvað er á milli bursta og tannkrems?', svar: ['tannbursti','tannburstinn'],
         ml: { en:'What is between the hairbrush and the toothpaste?', pl:'Co jest między szczotką a pastą do zębów?', es:'¿Qué hay entre el cepillo y la pasta de dientes?', uk:'Що між щіткою та зубною пастою?', ar:'ما الذي بين الفرشاة ومعجون الأسنان؟' } },
@@ -97,6 +99,7 @@ const ROOMS = {
   },
   bordstofa: {
     name: 'Borðstofa', img: 'media/bordstofa.png', fallbackBg: '#15803d', emoji: '🍽️',
+    geo: { c0:6, r0:8, c1:8, r1:10, door:{c:6,r:9}, into:{c:5,r:9} },
     questions: [
       { is: 'Hvað eru margir stólar við borðið?', svar: ['fimm','5'],
         ml: { en:'How many chairs are at the table?', pl:'Ile krzeseł jest przy stole?', es:'¿Cuántas sillas hay en la mesa?', uk:'Скільки стільців біля столу?', ar:'كم عدد الكراسي حول الطاولة؟' } },
@@ -114,6 +117,7 @@ const ROOMS = {
   },
   svefnherbergi: {
     name: 'Svefnherbergi', img: 'media/svefnherbergi.png', fallbackBg: '#4338ca', emoji: '🛏️',
+    geo: { c0:0, r0:3, c1:3, r1:5, door:{c:3,r:4}, into:{c:4,r:4} },
     questions: [
       { is: 'Hvaða litur er á sænginni?', svar: ['grænt','grænn','græn'],
         ml: { en:'What colour is the duvet?', pl:'Jakiego koloru jest kołdra?', es:'¿De qué color es el edredón?', uk:'Якого кольору ковдра?', ar:'ما لون اللحاف؟' } },
@@ -133,6 +137,7 @@ const ROOMS = {
   },
   stofa: {
     name: 'Stofa', img: 'media/stofa.png', fallbackBg: '#15803d', emoji: '🛋️',
+    geo: { c0:0, r0:8, c1:3, r1:11, door:{c:3,r:9}, into:{c:4,r:9} },
     questions: [
       { is: 'Hvað eru margar myndir á veggnum fyrir ofan sófann?', svar: ['tvær','2'],
         ml: { en:'How many pictures are on the wall above the sofa?', pl:'Ile obrazów wisi na ścianie nad sofą?', es:'¿Cuántos cuadros hay en la pared sobre el sofá?', uk:'Скільки картин на стіні над диваном?', ar:'كم عدد اللوحات على الحائط فوق الأريكة؟' } },
@@ -154,27 +159,44 @@ const ROOMS = {
 
 /* ===========================================================================
    HLUTI 2 — GOGN: KORTID (ibudin sed ofan fra)
-   # veggur · . gangur · S inngangur · annad = herbergislykill
+   Herbergi eru retthyrningar (geo i ROOMS). Gangur + inngangur skilgreind her.
+   Genglegir reitir = gangur + herbergi + hurdir. Allt reiknast af thessu.
 =========================================================================== */
-const W = '#', H = '.', S = 'S';
-const MAP = [
-  [ W, W,              W, 'eldhus', W, W,             W ],
-  [ W, W,              W, H,        W, W,             W ],
-  [ W, 'svefnherbergi', H, H,        H, 'badherbergi', W ],
-  [ W, W,              W, H,        W, W,             W ],
-  [ W, 'stofa',        H, H,        H, 'bordstofa',   W ],
-  [ W, W,              W, H,        W, W,             W ],
-  [ W, W,              W, H,        W, W,             W ],
-  [ W, W,              W, S,        W, W,             W ],
-];
-const ROWS = MAP.length, COLS = MAP[0].length;
+const COLS = 10, ROWS = 13;
+const HALL = { c0:4, r0:2, c1:5, r1:12 };   // langur gangur i midju
+const START = { col:4, row:12 };             // inngangur nedst
 
-function cellAt(c, r) { if (r<0||r>=ROWS||c<0||c>=COLS) return W; return MAP[r][c]; }
-function isWall(c, r) { return cellAt(c, r) === W; }
-function isWalkable(c, r) { return !isWall(c, r); }
-function roomKeyAt(c, r) { const v = cellAt(c, r); return (v!==W && v!==H && v!==S) ? v : null; }
-function findStart() { for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) if (MAP[r][c]===S) return {col:c,row:r}; return {col:3,row:7}; }
-function findRoomCell(key) { for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) if (MAP[r][c]===key) return {col:c,row:r}; return null; }
+// Byggja mengi genglegra reita af gangi + herbergjum + hurdum
+const WALK = (() => {
+  const s = new Set();
+  const k = (c,r) => c+','+r;
+  for (let c=HALL.c0;c<=HALL.c1;c++) for (let r=HALL.r0;r<=HALL.r1;r++) s.add(k(c,r));
+  for (const rk in ROOMS) { const g = ROOMS[rk].geo;
+    for (let c=g.c0;c<=g.c1;c++) for (let r=g.r0;r<=g.r1;r++) s.add(k(c,r));
+    s.add(k(g.door.c,g.door.r)); s.add(k(g.into.c,g.into.r));
+  }
+  return s;
+})();
+
+// Hurdasamskeyti (par reita thar sem vegg a ad sleppa)
+const DOOR_EDGES = (() => {
+  const s = new Set(); const k = (c,r) => c+','+r;
+  for (const rk in ROOMS) { const g = ROOMS[rk].geo;
+    s.add(k(g.door.c,g.door.r)+'|'+k(g.into.c,g.into.r));
+    s.add(k(g.into.c,g.into.r)+'|'+k(g.door.c,g.door.r));
+  }
+  return s;
+})();
+
+function isWalkable(c, r) { return WALK.has(c+','+r); }
+function isWall(c, r) { return !isWalkable(c, r); }
+function roomKeyAt(c, r) {
+  for (const rk in ROOMS) { const g = ROOMS[rk].geo; if (c>=g.c0&&c<=g.c1&&r>=g.r0&&r<=g.r1) return rk; }
+  return null;
+}
+function findStart() { return { col: START.col, row: START.row }; }
+// Skilar hurdarreit herbergis (thangad er leidin reiknud)
+function findRoomCell(key) { const g = ROOMS[key].geo; return { col: g.door.c, row: g.door.r }; }
 
 /* ===========================================================================
    HLUTI 3 — VEL: LEIDARUTREIKNINGUR + AFSTAED FYRIRMAELI
@@ -200,7 +222,8 @@ function bfsPath(from, to) {
   return path;
 }
 
-const NUM = ['núll','eitt','tvö','þrjú','fjögur','fimm','sex','sjö','átta'];
+const NUM = ['núll','eitt','tvö','þrjú','fjögur','fimm','sex','sjö','átta','níu','tíu','ellefu','tólf','þrettán','fjórtán','fimmtán'];
+function numWord(n) { return NUM[n] !== undefined ? NUM[n] : String(n); }
 const TURN = {
   up:    { left:'left',  right:'right' },
   down:  { left:'right', right:'left'  },
@@ -223,7 +246,7 @@ function pathToInstructions(path, startFacing) {
   const out = []; let facing = startFacing;
   segs.forEach((seg, idx) => {
     const turn = relativeTurn(facing, seg.dir);
-    const steps = `${NUM[seg.n]} skref`;
+    const steps = `${numWord(seg.n)} skref`;
     if (idx === 0 && turn === 'beint áfram') out.push(`farðu ${steps} áfram`);
     else if (turn === 'beint áfram') out.push(`haltu áfram ${steps}`);
     else if (turn === 'við') out.push(`snúðu við og farðu ${steps}`);
@@ -329,6 +352,84 @@ function RoomPopup({ room, onClose }) {
   );
 }
 
+/* Grunnmynd (SVG) — teiknar veggi, hurdir, glugga, reiti og leikmann af gognunum.
+   Skalast med viewBox (simi/vafri). CELL = px per reitur i SVG-einingum. */
+const CELL = 30;
+const PAD = 10;
+function FloorPlan({ pos, facing, visited }) {
+  const Wpx = COLS * CELL + PAD*2, Hpx = ROWS * CELL + PAD*2;
+  const gx = c => PAD + c*CELL, gy = r => PAD + r*CELL;
+  const k = (c,r) => c+','+r;
+
+  // veggsegment: adgreina utvegg (snyr ut fyrir kort) fra innvegg
+  const outer = [], inner = [];
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+    if (!isWalkable(c,r)) continue;
+    const edges = [
+      { dc:0, dr:-1, x1:gx(c), y1:gy(r),       x2:gx(c+1), y2:gy(r) },
+      { dc:0, dr:1,  x1:gx(c), y1:gy(r+1),     x2:gx(c+1), y2:gy(r+1) },
+      { dc:-1,dr:0,  x1:gx(c), y1:gy(r),       x2:gx(c),   y2:gy(r+1) },
+      { dc:1, dr:0,  x1:gx(c+1),y1:gy(r),      x2:gx(c+1), y2:gy(r+1) },
+    ];
+    for (const e of edges) {
+      const nc=c+e.dc, nr=r+e.dr;
+      if (isWalkable(nc,nr)) continue;
+      const oob = nc<0||nc>=COLS||nr<0||nr>=ROWS;
+      (oob ? outer : inner).push(e);
+    }
+  }
+  // gluggar: a ytri veggjum herbergja (efsti/nedsti/hlidar reitur sem snyr ut)
+  // einfalt: setja glugga a midjan ytravegg hvers herbergis sem snyr fra gangi
+  const windows = [];
+  for (const rk in ROOMS) {
+    const g = ROOMS[rk].geo;
+    // efsta herbergi (eldhus): gluggi a toppvegg
+    if (g.r0 === 0) { const cm = Math.floor((g.c0+g.c1)/2); windows.push({ x1:gx(cm), y1:gy(0), x2:gx(cm+1), y2:gy(0) }); }
+    // vinstri herbergi: gluggi a vinstri vegg
+    if (g.c0 === 0) { const rm = Math.floor((g.r0+g.r1)/2); windows.push({ x1:gx(0), y1:gy(rm), x2:gx(0), y2:gy(rm+1) }); }
+    // haegri herbergi: gluggi a haegri vegg
+    if (g.c1 === COLS-2) { const rm = Math.floor((g.r0+g.r1)/2); windows.push({ x1:gx(g.c1+1), y1:gy(rm), x2:gx(g.c1+1), y2:gy(rm+1) }); }
+  }
+
+  const px = gx(pos.col)+CELL/2, py = gy(pos.row)+CELL/2;
+  const arrowPath = {
+    up:    `${px},${py-9} ${px+5},${py+3} ${px},${py} ${px-5},${py+3}`,
+    down:  `${px},${py+9} ${px-5},${py-3} ${px},${py} ${px+5},${py-3}`,
+    left:  `${px-9},${py} ${px+3},${py-5} ${px},${py} ${px+3},${py+5}`,
+    right: `${px+9},${py} ${px-3},${py+5} ${px},${py} ${px-3},${py-5}`,
+  }[facing];
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${Wpx} ${Hpx}`} style={{ maxWidth: 360, display:'block', margin:'0 auto' }} role="img" aria-label="Grunnmynd íbúðarinnar">
+      {/* gólf herbergja + gangs (ljós fylling) */}
+      {Object.keys(ROOMS).map(rk => { const g=ROOMS[rk].geo; const isV=visited[rk];
+        return <rect key={rk} x={gx(g.c0)} y={gy(g.r0)} width={(g.c1-g.c0+1)*CELL} height={(g.r1-g.r0+1)*CELL}
+          fill={isV ? '#ede9fe' : '#f1ede4'} />; })}
+      <rect x={gx(HALL.c0)} y={gy(HALL.r0)} width={(HALL.c1-HALL.c0+1)*CELL} height={(HALL.r1-HALL.r0+1)*CELL} fill="#f1ede4" />
+      {/* reitalinur (daufar) */}
+      <g stroke="#d8d2c4" strokeWidth="0.5">
+        {Array.from({length: COLS+1}).map((_,i)=><line key={'v'+i} x1={gx(i)} y1={PAD} x2={gx(i)} y2={Hpx-PAD} />)}
+        {Array.from({length: ROWS+1}).map((_,i)=><line key={'h'+i} x1={PAD} y1={gy(i)} x2={Wpx-PAD} y2={gy(i)} />)}
+      </g>
+      {/* gluggar (ljos rof teiknud sem ljosgra thykk lina undir vegg) */}
+      <g stroke="#a8c8e8" strokeWidth="5" strokeLinecap="butt">
+        {windows.map((w,i)=><line key={i} {...{x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2}} />)}
+      </g>
+      {/* innveggir (mjoir) */}
+      <g stroke="#2b2823" strokeWidth="2.5" strokeLinecap="round">
+        {inner.map((w,i)=><line key={i} x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2} />)}
+      </g>
+      {/* utveggir (thykkir) */}
+      <g stroke="#2b2823" strokeWidth="6" strokeLinecap="round">
+        {outer.map((w,i)=><line key={i} x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2} />)}
+      </g>
+      {/* leikmadur */}
+      <circle cx={px} cy={py} r="11" fill="#185fa5" />
+      <polygon points={arrowPath} fill="#ffffff" />
+    </svg>
+  );
+}
+
 function ScreenA({ plan, onBack }) {
   const [pos, setPos] = useState(findStart());
   const [facing, setFacing] = useState('up');
@@ -347,9 +448,10 @@ function ScreenA({ plan, onBack }) {
       const nc = prev.col + DIRS[dir][0], nr = prev.row + DIRS[dir][1];
       if (!isWalkable(nc, nr)) { setBump(true); setTimeout(() => setBump(false), 220); return prev; }
       const rk = roomKeyAt(nc, nr);
-      // Mynd birtist í HVAÐA herbergi sem er — A getur ráfað inn í rangt herbergi.
-      // `correct` ræður hvort skrefið telst klárað þegar popup lokast.
-      if (rk) { setPopupRoom({ ...ROOMS[rk], correct: rk === targetKey }); setVisitedCells(v => ({ ...v, [`${nc},${nr}`]: true })); }
+      // Mynd birtist thegar gengid er INN i herbergi (ekki vid hreyfingu innan thess).
+      // `correct` raedur hvort skrefid telst klarad thegar popup lokast.
+      const prevRk = roomKeyAt(prev.col, prev.row);
+      if (rk && rk !== prevRk) { setPopupRoom({ ...ROOMS[rk], correct: rk === targetKey }); setVisitedCells(v => ({ ...v, [rk]: true })); }
       return { col: nc, row: nr };
     });
   }, [popupRoom, done, targetKey]);
@@ -359,8 +461,6 @@ function ScreenA({ plan, onBack }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [move]);
-
-  const arrow = { up:'▲', down:'▼', left:'◀', right:'▶' }[facing];
 
   if (done) {
     return (
@@ -385,26 +485,7 @@ function ScreenA({ plan, onBack }) {
         </div>
 
         <div className={`bg-white rounded-xl shadow-sm border p-3 transition ${bump ? 'border-red-300' : 'border-gray-100'}`}>
-          <div className="grid gap-1 mx-auto" style={{ gridTemplateColumns:`repeat(${COLS}, minmax(0,1fr))`, maxWidth: 360 }}>
-            {Array.from({ length: ROWS }).map((_, r) =>
-              Array.from({ length: COLS }).map((_, c) => {
-                const here = pos.col === c && pos.row === r;
-                const rk = roomKeyAt(c, r);
-                const isV = visitedCells[`${c},${r}`];
-                let cls = 'aspect-square rounded-md flex items-center justify-center text-sm transition ';
-                if (isWall(c, r)) cls += 'bg-transparent';
-                else if (rk) cls += isV ? 'bg-violet-200 border border-violet-300' : 'bg-amber-100 border border-amber-200';
-                else cls += 'bg-gray-100 border border-gray-200';
-                return (
-                  <div key={`${c},${r}`} className={cls}>
-                    {here ? <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs shadow">{arrow}</div>
-                      : rk ? <span className="text-xs opacity-50">{isV ? '🖼️' : '🚪'}</span>
-                      : cellAt(c, r) === S ? <span className="text-[10px] text-gray-400 font-light">inn</span> : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <FloorPlan pos={pos} facing={facing} visited={visitedCells} />
         </div>
 
         <div className="mt-5 flex flex-col items-center gap-2">
