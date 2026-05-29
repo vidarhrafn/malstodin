@@ -26,6 +26,38 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 /* ===========================================================================
+   API — OpenAI þýðing (Málstöðvar-staðall).
+   /.netlify/functions/openai virkar aðeins á Netlify-uppsetningu Viðars.
+   Í forskoðun bregst kallið; þá fellur B-skjár á íslenska textann.
+=========================================================================== */
+async function callOpenAI(messages, max_tokens = 200, model = 'gpt-4o-mini', temperature = 0.2) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens, model, temperature })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+// Þýðir íslenskan texta yfir á valið móðurmál. Skilar frumtexta ef kall bregst.
+async function translateTo(islenska, malName) {
+  try {
+    const messages = [
+      { role: 'system', content:
+        `Þú þýðir texta fyrir tungumálanemanda. Þýddu eftirfarandi íslenska texta nákvæmlega yfir á ${malName}. ` +
+        `Haltu tölum og áttum (vinstri/hægri) óbreyttum að merkingu. Ekki bæta við skýringum. Skilaðu EINUNGIS þýðingunni.` },
+      { role: 'user', content: islenska }
+    ];
+    const out = await callOpenAI(messages, 200, 'gpt-4o-mini', 0.2);
+    return (out || '').trim() || islenska;
+  } catch (e) {
+    return islenska; // fallback í forskoðun
+  }
+}
+
+/* ===========================================================================
    HLUTI 1 — GOGN: HERBERGIN OG SPURNINGARNAR
    Breyttu her til ad laga efni. Snertir ekki velina.
 =========================================================================== */
@@ -283,7 +315,11 @@ function RoomPopup({ room, onClose }) {
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-md w-full p-6 pop-in" onClick={e => e.stopPropagation()}>
         <RoomImage room={room} />
         <div className="font-medium text-gray-800 text-lg mb-1">{room.name}</div>
-        <p className="text-gray-400 font-light text-xs mb-4">Skoðaðu myndina. B spyr þig spurningu — svaraðu upphátt.</p>
+        {room.correct ? (
+          <p className="text-gray-400 font-light text-xs mb-4">Skoðaðu myndina. B spyr þig spurningu — svaraðu upphátt.</p>
+        ) : (
+          <p className="text-amber-600 font-light text-xs mb-4">Lýstu fyrir B hvað þú sérð. Passar þetta við spurninguna hjá B? Ef ekki, finnið rétta herbergið saman.</p>
+        )}
         <button onClick={onClose} className="w-full px-4 py-2 rounded-xl border border-gray-200 text-gray-500 font-light text-sm hover:bg-gray-50">Loka og halda áfram</button>
       </div>
     </div>
@@ -308,7 +344,9 @@ function ScreenA({ plan, onBack }) {
       const nc = prev.col + DIRS[dir][0], nr = prev.row + DIRS[dir][1];
       if (!isWalkable(nc, nr)) { setBump(true); setTimeout(() => setBump(false), 220); return prev; }
       const rk = roomKeyAt(nc, nr);
-      if (rk && rk === targetKey) { setPopupRoom(ROOMS[rk]); setVisitedCells(v => ({ ...v, [`${nc},${nr}`]: true })); }
+      // Mynd birtist í HVAÐA herbergi sem er — A getur ráfað inn í rangt herbergi.
+      // `correct` ræður hvort skrefið telst klárað þegar popup lokast.
+      if (rk) { setPopupRoom({ ...ROOMS[rk], correct: rk === targetKey }); setVisitedCells(v => ({ ...v, [`${nc},${nr}`]: true })); }
       return { col: nc, row: nr };
     });
   }, [popupRoom, done, targetKey]);
@@ -376,37 +414,76 @@ function ScreenA({ plan, onBack }) {
         </div>
         <p className="text-center text-gray-400 font-light text-xs mt-5">Fylgdu leiðsögn B. Bláa örin sýnir hvert þú snýrð.</p>
       </div>
-      {popupRoom && <RoomPopup room={popupRoom} onClose={() => { setPopupRoom(null); setStepIdx(i => i + 1); }} />}
+      {popupRoom && <RoomPopup room={popupRoom} onClose={() => { const wasCorrect = popupRoom.correct; setPopupRoom(null); if (wasCorrect) setStepIdx(i => i + 1); }} />}
     </div>
   );
 }
 
 const LANGUAGES = [
   { code:'en', name:'English' }, { code:'pl', name:'Polski' }, { code:'es', name:'Español' },
-  { code:'uk', name:'Українська' }, { code:'ar', name:'العربية' }, { code:'is', name:'Íslenska' },
+  { code:'uk', name:'Українська' }, { code:'ar', name:'العربية' }, { code:'pt', name:'Português' },
+  { code:'fr', name:'Français' }, { code:'de', name:'Deutsch' }, { code:'th', name:'ไทย' },
+  { code:'tl', name:'Tagalog' }, { code:'vi', name:'Tiếng Việt' }, { code:'ru', name:'Русский' },
+  { code:'lt', name:'Lietuvių' }, { code:'fa', name:'فارسی' }, { code:'is', name:'Íslenska' },
 ];
+const RTL = ['ar', 'fa'];
+
+/* Móðurmálsskráning — sést áður en leikurinn byrjar hjá B */
+function LanguagePick({ onPick }) {
+  return (
+    <div className="max-w-2xl mx-auto px-6 py-10 fade-in">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="font-medium text-gray-800 mb-1">Veldu móðurmál þitt</h2>
+        <p className="text-gray-500 font-light text-sm mb-5">Allar leiðbeiningar og spurningar birtast á því máli sem þú velur.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {LANGUAGES.map(l => (
+            <button key={l.code} onClick={() => onPick(l)}
+              className="px-4 py-3 rounded-xl border border-gray-200 text-gray-700 font-light text-sm hover:bg-blue-50 hover:border-blue-200 transition" dir={RTL.includes(l.code) ? 'rtl' : 'ltr'}>
+              {l.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ScreenB({ plan, onBack }) {
-  const [lang, setLang] = useState('en');
+  const [mal, setMal] = useState(null); // { code, name } — móðurmál B
   const [stepIdx, setStepIdx] = useState(0);
   const [input, setInput] = useState('');
   const [fb, setFb] = useState(null);
   const [aPos, setAPos] = useState(findStart());
   const [facing, setFacing] = useState('up');
+  const [tInstr, setTInstr] = useState('');   // þýdd leiðsögn
+  const [tQ, setTQ] = useState('');           // þýdd spurning
+  const [loading, setLoading] = useState(false);
 
   const done = stepIdx >= plan.length;
-
-  const instr = (() => {
-    if (done) return null;
-    const target = findRoomCell(plan[stepIdx].roomKey);
-    const path = bfsPath(aPos, target);
-    if (!path) return ['(engin leið fannst)'];
-    return pathToInstructions(path, facing);
-  })();
-
   const step = done ? null : plan[stepIdx];
   const room = step ? ROOMS[step.roomKey] : null;
   const q = step ? room.questions[step.qIdx] : null;
+
+  // íslensk leiðsögn (reiknuð) — grunnur sem er þýddur
+  const instrIs = (() => {
+    if (done) return '';
+    const target = findRoomCell(plan[stepIdx].roomKey);
+    const path = bfsPath(aPos, target);
+    if (!path) return '(engin leið fannst)';
+    return pathToInstructions(path, facing).join(', ') + '.';
+  })();
+
+  // Þýða leiðsögn + spurningu í rauntíma þegar skref eða mál breytist
+  useEffect(() => {
+    if (!mal || done || !q) return;
+    let cancelled = false;
+    if (mal.code === 'is') { setTInstr(instrIs); setTQ(q.is); return; }
+    setLoading(true);
+    Promise.all([ translateTo(instrIs, mal.name), translateTo(q.is, mal.name) ])
+      .then(([ti, tq]) => { if (!cancelled) { setTInstr(ti); setTQ(tq); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [mal, stepIdx, done]); // q og instrIs leiðast af stepIdx
 
   const check = () => {
     if (!q) return;
@@ -438,8 +515,16 @@ function ScreenB({ plan, onBack }) {
     );
   }
 
-  const qText = lang === 'is' ? q.is : (q.ml[lang] || q.is);
-  const instrText = instr.join(', ') + '.';
+  if (!mal) {
+    return (
+      <div>
+        <Header title="🗺️ Skjár B — leiðbeinandinn" subtitle="Herbergjaleikur · Dúfnahólar 10" onBack={onBack} />
+        <LanguagePick onPick={setMal} />
+      </div>
+    );
+  }
+
+  const dir = RTL.includes(mal.code) ? 'rtl' : 'ltr';
 
   return (
     <div>
@@ -447,21 +532,19 @@ function ScreenB({ plan, onBack }) {
       <div className="max-w-2xl mx-auto px-6 py-6 fade-in">
         <div className="flex items-center justify-between mb-4">
           <ProgressDots current={stepIdx} total={plan.length} />
-          <select value={lang} onChange={e => setLang(e.target.value)} className="px-3 py-1.5 rounded-xl border border-gray-200 text-sm font-light text-gray-600 bg-white">
-            {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
-          </select>
+          <button onClick={() => setMal(null)} className="text-xs text-gray-400 font-light hover:text-gray-600">{mal.name} ⌄</button>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
           <div className="text-xs uppercase tracking-wide text-blue-600 font-medium mb-2">1 · Segðu A leiðina</div>
-          <p className="text-gray-800 font-light leading-relaxed">{instrText}</p>
-          <div className="mt-2 text-xs text-gray-400 font-light">Frá þeim stað þar sem A stendur núna. „Beygðu" miðast við hvert A snýr.</div>
+          {loading ? <p className="text-gray-300 font-light">…</p>
+            : <p className="text-gray-800 font-light leading-relaxed" dir={dir}>{tInstr}</p>}
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="text-xs uppercase tracking-wide text-purple-600 font-medium mb-2">2 · Spurðu A um myndina</div>
-          <p className="text-gray-800 font-light leading-relaxed mb-1" dir={lang === 'ar' ? 'rtl' : 'ltr'}>{qText}</p>
-          <div className="text-sm text-gray-400 font-light mb-4">🇮🇸 {q.is}</div>
+          {loading ? <p className="text-gray-300 font-light mb-4">…</p>
+            : <p className="text-gray-800 font-light leading-relaxed mb-4" dir={dir}>{tQ}</p>}
           <div className="flex gap-2">
             <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') check(); }} placeholder="Svar A…" className="flex-1 px-4 py-2 rounded-xl border border-gray-200 font-light focus:outline-none focus:border-blue-400" />
             <button onClick={check} className="px-5 py-2 rounded-xl bg-blue-600 text-white font-light text-sm hover:bg-blue-700 transition">Athuga</button>
