@@ -306,7 +306,7 @@ function RoomImage({ room }) {
       </div>
     );
   }
-  return <img src={room.img} alt={room.name} onError={() => setErr(true)} className="rounded-xl mb-4 w-full h-56 object-cover border border-gray-100" />;
+  return <img src={room.img} alt={room.name} onError={() => setErr(true)} className="rounded-xl mb-4 w-full object-contain bg-gray-50 border border-gray-100" style={{ maxHeight: '320px' }} />;
 }
 
 function RoomPopup({ room, onClose }) {
@@ -419,29 +419,27 @@ function ScreenA({ plan, onBack }) {
   );
 }
 
-const LANGUAGES = [
-  { code:'en', name:'English' }, { code:'pl', name:'Polski' }, { code:'es', name:'Español' },
-  { code:'uk', name:'Українська' }, { code:'ar', name:'العربية' }, { code:'pt', name:'Português' },
-  { code:'fr', name:'Français' }, { code:'de', name:'Deutsch' }, { code:'th', name:'ไทย' },
-  { code:'tl', name:'Tagalog' }, { code:'vi', name:'Tiếng Việt' }, { code:'ru', name:'Русский' },
-  { code:'lt', name:'Lietuvių' }, { code:'fa', name:'فارسی' }, { code:'is', name:'Íslenska' },
-];
-const RTL = ['ar', 'fa'];
+const RTL_HINT = ['arabíska','arabic','العربية','farsi','persian','فارسی','hebrew','עברית','urdu','اردو'];
+function looksRTL(name) { return RTL_HINT.some(h => (name||'').toLowerCase().includes(h)); }
 
-/* Móðurmálsskráning — sést áður en leikurinn byrjar hjá B */
+/* Móðurmálsskráning — frjáls textareitur (kerfið ræður við hvaða mál sem er) */
 function LanguagePick({ onPick }) {
+  const [val, setVal] = useState('');
+  const submit = () => { if (val.trim()) onPick({ name: val.trim() }); };
   return (
     <div className="max-w-2xl mx-auto px-6 py-10 fade-in">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="font-medium text-gray-800 mb-1">Veldu móðurmál þitt</h2>
-        <p className="text-gray-500 font-light text-sm mb-5">Allar leiðbeiningar og spurningar birtast á því máli sem þú velur.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {LANGUAGES.map(l => (
-            <button key={l.code} onClick={() => onPick(l)}
-              className="px-4 py-3 rounded-xl border border-gray-200 text-gray-700 font-light text-sm hover:bg-blue-50 hover:border-blue-200 transition" dir={RTL.includes(l.code) ? 'rtl' : 'ltr'}>
-              {l.name}
-            </button>
-          ))}
+        <h2 className="font-medium text-gray-800 mb-1">🌐 Skráðu móðurmál þitt</h2>
+        <p className="text-gray-500 font-light text-sm mb-5">Allar leiðbeiningar og spurningar birtast á því máli sem þú skráir.</p>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input type="text" value={val} onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+            placeholder="t.d. English, Polski, 中文, العربية…"
+            className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-light focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <button onClick={submit} disabled={!val.trim()}
+            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition">
+            Staðfesta
+          </button>
         </div>
       </div>
     </div>
@@ -477,7 +475,8 @@ function ScreenB({ plan, onBack }) {
   useEffect(() => {
     if (!mal || done || !q) return;
     let cancelled = false;
-    if (mal.code === 'is') { setTInstr(instrIs); setTQ(q.is); return; }
+    const isIcelandic = /íslensk|islensk|icelandic/i.test(mal.name);
+    if (isIcelandic) { setTInstr(instrIs); setTQ(q.is); return; }
     setLoading(true);
     Promise.all([ translateTo(instrIs, mal.name), translateTo(q.is, mal.name) ])
       .then(([ti, tq]) => { if (!cancelled) { setTInstr(ti); setTQ(tq); } })
@@ -524,7 +523,7 @@ function ScreenB({ plan, onBack }) {
     );
   }
 
-  const dir = RTL.includes(mal.code) ? 'rtl' : 'ltr';
+  const dir = looksRTL(mal.name) ? 'rtl' : 'ltr';
 
   return (
     <div>
