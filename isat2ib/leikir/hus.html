@@ -41,13 +41,16 @@ async function callOpenAI(messages, max_tokens = 200, model = 'gpt-4o-mini', tem
   return data.content;
 }
 
-// Þýðir íslenskan texta yfir á valið móðurmál. Skilar frumtexta ef kall bregst.
-async function translateTo(islenska, malName) {
+// Þýðir íslenskan texta yfir á valið móðurmál. enHint = ensk merking (disambiguation, valfrjáls).
+async function translateTo(islenska, malName, enHint) {
   try {
+    const hintLine = enHint
+      ? `Til að taka af allan vafa um merkingu: á ensku er þetta "${enHint}". Notaðu þá merkingu ef íslenskan er tvíræð.\n`
+      : '';
     const messages = [
       { role: 'system', content:
         `Þú þýðir texta fyrir tungumálanemanda. Þýddu eftirfarandi íslenska texta nákvæmlega yfir á ${malName}. ` +
-        `Haltu tölum og áttum (vinstri/hægri) óbreyttum að merkingu. Ekki bæta við skýringum. Skilaðu EINUNGIS þýðingunni.` },
+        `Haltu tölum og áttum (vinstri/hægri) óbreyttum að merkingu. ${hintLine}Ekki bæta við skýringum. Skilaðu EINUNGIS þýðingunni.` },
       { role: 'user', content: islenska }
     ];
     const out = await callOpenAI(messages, 200, 'gpt-4o-mini', 0.2);
@@ -478,7 +481,7 @@ function ScreenB({ plan, onBack }) {
     const isIcelandic = /íslensk|islensk|icelandic/i.test(mal.name);
     if (isIcelandic) { setTInstr(instrIs); setTQ(q.is); return; }
     setLoading(true);
-    Promise.all([ translateTo(instrIs, mal.name), translateTo(q.is, mal.name) ])
+    Promise.all([ translateTo(instrIs, mal.name), translateTo(q.is, mal.name, q.en || (q.ml && q.ml.en)) ])
       .then(([ti, tq]) => { if (!cancelled) { setTInstr(ti); setTQ(tq); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
