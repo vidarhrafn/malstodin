@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Orðabrú</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+    .shake { animation: shake 0.4s ease; }
+
+    @keyframes pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .pop { animation: pop 0.25s ease; }
+
+    .letter-tile {
+      width: 3rem;
+      height: 3.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 300;
+      border: 2px solid #d1d5db;
+      border-radius: 0.5rem;
+      background: white;
+      transition: all 0.15s;
+      cursor: pointer;
+      user-select: none;
+    }
+    .letter-tile:hover { border-color: #3b82f6; background: #eff6ff; }
+    .letter-tile.selected { border-color: #2563eb; background: #dbeafe; color: #1d4ed8; }
+    .letter-tile.correct { border-color: #16a34a; background: #dcfce7; color: #15803d; }
+    .letter-tile.locked { background: #f9fafb; color: #6b7280; cursor: default; border-color: #e5e7eb; }
+    .letter-tile.locked:hover { border-color: #e5e7eb; background: #f9fafb; }
+
+    .chain-word {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .chain-tile {
+      width: 2.4rem;
+      height: 2.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 300;
+      border-radius: 0.4rem;
+      border: 2px solid;
+    }
+    .chain-tile.changed {
+      border-color: #16a34a;
+      background: #dcfce7;
+      color: #15803d;
+      font-weight: 500;
+    }
+    .chain-tile.same {
+      border-color: #e5e7eb;
+      background: #f9fafb;
+      color: #374151;
+    }
+    .chain-tile.start {
+      border-color: #7c3aed;
+      background: #f5f3ff;
+      color: #6d28d9;
+    }
+    .chain-tile.goal {
+      border-color: #d97706;
+      background: #fffbeb;
+      color: #b45309;
+    }
+  </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+// ── Leikjagögn ──────────────────────────────────────────────────────────────
+const PUZZLE = {
+  start: 'inni',
+  goal:  'ungt',
+  hint:  'inni → unni → ungi → ungt',
+  minSteps: 3,
+};
+
+// ── BÍN sannprófun ──────────────────────────────────────────────────────────
+async function isValidWord(word) {
+  try {
+    const res = await fetch('/api/binsannprofun', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ord: word }),
+    });
+    const data = await res.json();
+    return data.gilt === true;
+  } catch {
+    return false;
+  }
+}
+
+function countDiffs(a, b) {
+  if (a.length !== b.length) return Infinity;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+  return d;
+}
+
+// ── Stafurinn sem er breyttur litaður ──────────────────────────────────────
+function ChainWord({ word, prevWord, variant }) {
+  const tiles = word.split('').map((ch, i) => {
+    let cls = 'same';
+    if (variant === 'start') cls = 'start';
+    else if (variant === 'goal') cls = 'goal';
+    else if (prevWord && prevWord[i] !== ch) cls = 'changed';
+    return (
+      <div key={i} className={`chain-tile ${cls}`}>{ch}</div>
+    );
+  });
+  return <div className="chain-word">{tiles}</div>;
+}
+
+// ── Aðal íhlutur ─────────────────────────────────────────────────────────────
+function OrdaBru() {
+  const [chain, setChain] = useState([PUZZLE.start]);
+  const [current, setCurrent] = useState(PUZZLE.start.split(''));
+  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [status, setStatus] = useState('playing'); // playing | won
+  const [error, setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [shakeKey, setShakeKey] = useState(0);
+  const [showHint, setShowHint] = useState(false);
+
+  const inputRef = useRef(null);
+  const lastWord = chain[chain.length - 1];
+
+  // Íslenskt lyklaborð – bara stafir sem geta birst í 4-5 stafa ísl. orðum
+  const KEYBOARD = [
+    ['a','á','b','d','ð','e','é'],
+    ['f','g','h','i','í','j','k'],
+    ['l','m','n','o','ó','p','r'],
+    ['s','t','u','ú','v','y','ý'],
+    ['þ','æ','ö','x','z','ng','nn'],
+  ];
+
+  const triggerShake = () => {
+    setShakeKey(k => k + 1);
+  };
+
+  const handleTileClick = (idx) => {
+    if (status !== 'playing' || loading) return;
+    setSelectedIdx(idx);
+    setError('');
+  };
+
+  const handleKey = useCallback((ch) => {
+    if (selectedIdx === null || status !== 'playing' || loading) return;
+    const next = [...current];
+    next[selectedIdx] = ch;
+    setCurrent(next);
+    setSelectedIdx(null);
+    setError('');
+  }, [selectedIdx, current, status, loading]);
+
+  const handleSubmit = async () => {
+    const word = current.join('');
+    if (word === lastWord) {
+      setError('Þetta er sama orðið og þú ert með.');
+      triggerShake();
+      return;
+    }
+    const diffs = countDiffs(word, lastWord);
+    if (diffs !== 1) {
+      setError(`Þú breyttir ${diffs} stöfum. Breyttu nákvæmlega einum staf.`);
+      triggerShake();
+      return;
+    }
+    if (chain.includes(word)) {
+      setError('Þetta orð hefur þegar komið fyrir í keðjunni.');
+      triggerShake();
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    const valid = await isValidWord(word);
+    setLoading(false);
+
+    if (!valid) {
+      setError(`„${word}" finnst ekki í íslenskri orðabók.`);
+      triggerShake();
+      return;
+    }
+
+    const newChain = [...chain, word];
+    setChain(newChain);
+
+    if (word === PUZZLE.goal) {
+      setStatus('won');
+    } else {
+      setCurrent(word.split(''));
+    }
+  };
+
+  const handleReset = () => {
+    setChain([PUZZLE.start]);
+    setCurrent(PUZZLE.start.split(''));
+    setSelectedIdx(null);
+    setStatus('playing');
+    setError('');
+    setShowHint(false);
+    setLoading(false);
+  };
+
+  const steps = chain.length - 1;
+
+  return (
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">
+            ← Til baka
+          </button>
+          <h1 className="text-3xl font-light text-gray-800 mb-1">🌉 Orðabrú</h1>
+          <p className="text-gray-500 text-sm font-light">
+            Komstu frá upphafsinu til markmiðsins — einn stafur í einu.
+          </p>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-6 mt-8 pb-20 space-y-6">
+
+        {/* Markmið */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="text-center">
+              <p className="text-xs text-purple-600 font-medium uppercase tracking-wide mb-2">Upphaf</p>
+              <ChainWord word={PUZZLE.start} variant="start" />
+            </div>
+            <div className="text-2xl text-gray-300">→</div>
+            <div className="text-center">
+              <p className="text-xs text-amber-600 font-medium uppercase tracking-wide mb-2">Markmið</p>
+              <ChainWord word={PUZZLE.goal} variant="goal" />
+            </div>
+            <div className="ml-auto text-right">
+              <p className="text-xs text-gray-400 font-light">Skref</p>
+              <p className="text-2xl font-light text-gray-700">{steps}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Keðjan */}
+        {chain.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-4">Keðjan þín</p>
+            <div className="space-y-2">
+              {chain.map((w, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-300 w-5 text-right font-light">{i}</span>
+                  <ChainWord
+                    word={w}
+                    prevWord={i > 0 ? chain[i - 1] : null}
+                    variant={i === 0 ? 'start' : (w === PUZZLE.goal ? 'goal' : null)}
+                  />
+                  {i === 0 && <span className="text-xs text-purple-400 font-light">upphaf</span>}
+                  {w === PUZZLE.goal && <span className="text-xs text-amber-500 font-light">🎉 markmið!</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Leiksvæði */}
+        {status === 'playing' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-4">
+              Veldu staf til að breyta, svo smelltu á nýjan staf
+            </p>
+
+            {/* Núverandi orð – klikkanlegar flísar */}
+            <div
+              key={shakeKey}
+              className={`flex gap-2 mb-6 ${shakeKey > 0 ? 'shake' : ''}`}
+            >
+              {current.map((ch, i) => {
+                const isChanged = ch !== lastWord[i];
+                const isSelected = selectedIdx === i;
+                let cls = '';
+                if (isSelected) cls = 'selected';
+                else if (isChanged) cls = 'correct';
+                return (
+                  <div
+                    key={i}
+                    className={`letter-tile ${cls}`}
+                    onClick={() => handleTileClick(i)}
+                  >
+                    {ch}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Villuskilaboð */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg fade-in">
+                <p className="text-sm text-red-700 font-light">{error}</p>
+              </div>
+            )}
+
+            {/* Lyklaborð */}
+            <div className="space-y-2 mb-6">
+              {KEYBOARD.map((row, ri) => (
+                <div key={ri} className="flex gap-1.5 flex-wrap">
+                  {row.map(ch => (
+                    <button
+                      key={ch}
+                      onClick={() => handleKey(ch)}
+                      disabled={selectedIdx === null || loading}
+                      className={`px-3 py-2 rounded-lg border text-sm font-light transition-colors
+                        ${selectedIdx !== null && !loading
+                          ? 'bg-gray-50 border-gray-200 hover:bg-blue-50 hover:border-blue-300 text-gray-700'
+                          : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'}`}
+                    >
+                      {ch}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Takkar */}
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={handleSubmit}
+                disabled={loading || countDiffs(current.join(''), lastWord) !== 1}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                  disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light"
+              >
+                {loading ? '⏳ Athuga...' : 'Staðfesta orð →'}
+              </button>
+              <button
+                onClick={() => { setCurrent(lastWord.split('')); setSelectedIdx(null); setError(''); }}
+                className="px-4 py-3 border-2 border-gray-200 text-gray-600 rounded-lg
+                  hover:bg-gray-50 transition-colors font-light text-sm"
+              >
+                Hreinsa
+              </button>
+              <button
+                onClick={() => setShowHint(h => !h)}
+                className="px-4 py-3 border-2 border-amber-200 text-amber-600 rounded-lg
+                  hover:bg-amber-50 transition-colors font-light text-sm"
+              >
+                {showHint ? 'Fela vísbendingu' : '💡 Vísbending'}
+              </button>
+            </div>
+
+            {showHint && (
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg fade-in">
+                <p className="text-sm text-amber-700 font-light">
+                  Ein möguleg leið: <span className="font-medium">{PUZZLE.hint}</span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sigursíða */}
+        {status === 'won' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center fade-in">
+            <div className="text-5xl mb-4">🎉</div>
+            <h2 className="text-2xl font-light text-gray-800 mb-2">Vel gert!</h2>
+            <p className="text-gray-500 font-light mb-2">
+              Þú komst frá <span className="text-purple-600 font-medium">{PUZZLE.start}</span> til{' '}
+              <span className="text-amber-600 font-medium">{PUZZLE.goal}</span> í{' '}
+              <span className="text-blue-600 font-medium">{steps} skref{steps === 1 ? '' : 'um'}</span>.
+            </p>
+            {steps <= PUZZLE.minSteps && (
+              <p className="text-green-600 text-sm font-light mb-4">
+                ✨ Þetta er ein stysta mögulega leið!
+              </p>
+            )}
+            <button
+              onClick={handleReset}
+              className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                transition-colors font-light"
+            >
+              Spila aftur
+            </button>
+          </div>
+        )}
+
+        {/* Leiðbeiningar */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 fade-in">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Hvernig spila ég?</h3>
+          <ul className="space-y-1.5 text-sm text-gray-500 font-light">
+            <li>• Smelltu á staf í orðinu til að velja hann</li>
+            <li>• Smelltu síðan á nýjan staf á lyklaborðinu</li>
+            <li>• Þú mátt breyta <strong>einum staf í einu</strong></li>
+            <li>• Öll orð á leiðinni þurfa að vera íslensk orð</li>
+            <li>• Engar takmarkaðar tilraunir — prófaðu þig áfram!</li>
+          </ul>
+        </div>
+
+      </main>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<OrdaBru />);
+</script>
+</body>
+</html>
