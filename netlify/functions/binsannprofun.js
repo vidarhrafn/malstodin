@@ -8,21 +8,22 @@ exports.handler = async (event) => {
   try {
     const { ord } = JSON.parse(event.body);
     if (!ord || typeof ord !== 'string') {
-      return { statusCode: 400, body: JSON.stringify({ gilt: false, villa: 'Vantar orð' }) };
+      return { statusCode: 400, body: JSON.stringify({ gilt: false }) };
     }
 
-    const encoded = encodeURIComponent(ord.toLowerCase().trim());
-    const res = await fetch(
-      `https://bin.arnastofnun.is/django/api/v1/ord/${encoded}/`,
-      { headers: { 'Accept': 'application/json' } }
-    );
+    const q = encodeURIComponent(ord.toLowerCase().trim());
+    const base = 'https://bin.arnastofnun.is/php_bin/ajaxleit2.php';
 
-    if (!res.ok) {
-      return { statusCode: 200, body: JSON.stringify({ gilt: false }) };
-    }
+    // Sækjum báðar leitir samhliða: grunnorð og beygingarmynd
+    const [r1, r2] = await Promise.all([
+      fetch(`${base}?q=${q}`,                   { headers: { 'Accept': 'text/html' } }),
+      fetch(`${base}?q=${q}&ordmyndir=on`,      { headers: { 'Accept': 'text/html' } }),
+    ]);
 
-    const data = await res.json();
-    const gilt = Array.isArray(data.results) && data.results.length > 0;
+    const [html1, html2] = await Promise.all([r1.text(), r2.text()]);
+
+    // Ef annar hvór inniheldur <li> er orðið gilt í BÍN
+    const gilt = html1.includes('<li>') || html2.includes('<li>');
 
     return {
       statusCode: 200,
@@ -30,7 +31,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ gilt }),
     };
   } catch (e) {
-    console.error('BÍN sannprófun villa:', e);
+    console.error('BÍN villa:', e);
     return { statusCode: 200, body: JSON.stringify({ gilt: false, villa: e.message }) };
   }
 };
