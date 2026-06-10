@@ -12,18 +12,18 @@ exports.handler = async (event) => {
     }
 
     const q = encodeURIComponent(ord.toLowerCase().trim());
-    const base = 'https://bin.arnastofnun.is/php_bin/ajaxleit2.php';
+    const res = await fetch(
+      `https://bin.arnastofnun.is/api/beygingarmynd/${q}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
 
-    // Sækjum báðar leitir samhliða: grunnorð og beygingarmynd
-    const [r1, r2] = await Promise.all([
-      fetch(`${base}?q=${q}`,                   { headers: { 'Accept': 'text/html' } }),
-      fetch(`${base}?q=${q}&ordmyndir=on`,      { headers: { 'Accept': 'text/html' } }),
-    ]);
+    if (!res.ok) {
+      return { statusCode: 200, body: JSON.stringify({ gilt: false }) };
+    }
 
-    const [html1, html2] = await Promise.all([r1.text(), r2.text()]);
-
-    // Ef annar hvór inniheldur <li> er orðið gilt í BÍN
-    const gilt = html1.includes('<li>') || html2.includes('<li>');
+    const data = await res.json();
+    // Skilar fylki — gilt ef það er ekki tómt
+    const gilt = Array.isArray(data) && data.length > 0;
 
     return {
       statusCode: 200,
