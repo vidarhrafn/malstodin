@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stafalækur — íslenskur orðaleikur</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --ink: #253044;
+      --soft: #f8f7f4;
+      --track: #c7d2fe;
+      --track-dark: #93c5fd;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --rose: #e11d48;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(to bottom, #f8f7f4, #e8e6e1);
+      min-height: 100vh;
+    }
+    .font-lightish { font-weight: 300; }
+    .game-card {
+      background: rgba(255,255,255,0.88);
+      border: 1px solid rgba(229,231,235,0.95);
+      box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+      border-radius: 1.25rem;
+    }
+    .letter-node {
+      cursor: pointer;
+      transition: transform 420ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease, filter 160ms ease;
+      filter: drop-shadow(0 5px 8px rgba(15,23,42,.14));
+    }
+    .letter-node:hover { filter: drop-shadow(0 8px 12px rgba(37,99,235,.24)); }
+    .letter-node circle.main { transition: fill 160ms ease, stroke 160ms ease, transform 160ms ease; }
+    .letter-node:hover circle.main { transform: scale(1.08); transform-origin: center; }
+    .letter-node text { pointer-events: none; user-select: none; }
+    .track-line {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .shot-line {
+      stroke: #2563eb;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 10 12;
+      animation: dash 260ms linear infinite, fadeShot 360ms ease forwards;
+      filter: drop-shadow(0 0 7px rgba(37,99,235,.55));
+    }
+    .shot-dot {
+      fill: #2563eb;
+      animation: pulseDot 360ms ease forwards;
+    }
+    @keyframes dash { to { stroke-dashoffset: -22; } }
+    @keyframes fadeShot { 0% { opacity: .15; } 30% { opacity: .95; } 100% { opacity: 0; } }
+    @keyframes pulseDot { 0% { r: 4; opacity: .2; } 45% { r: 11; opacity: .95; } 100% { r: 18; opacity: 0; } }
+    .soft-grid {
+      background-image: radial-gradient(rgba(37,99,235,.12) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+      border-radius: .85rem; padding: .65rem .9rem; font-weight: 500;
+      transition: transform 130ms ease, opacity 130ms ease, box-shadow 130ms ease, background 130ms ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: #2563eb; color: white; box-shadow: 0 7px 18px rgba(37,99,235,.25); }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-green { background: #16a34a; color: white; box-shadow: 0 7px 18px rgba(22,163,74,.22); }
+    .btn-green:hover { background: #15803d; }
+    .btn-light { background: white; color: #334155; border: 1px solid #e5e7eb; }
+    .btn-light:hover { background: #f8fafc; }
+    .btn-danger { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+    .btn-danger:hover { background: #ffe4e6; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+    .pill { border-radius: 999px; padding: .18rem .55rem; font-size: .75rem; border: 1px solid #e5e7eb; background: white; }
+    .win-pop { animation: popIn 260ms cubic-bezier(.2,.9,.3,1.15); }
+    @keyframes popIn { from { transform: scale(.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    details summary { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    /*
+      Stafalækur — íslenskur orðaleikur í anda Zuma
+      -------------------------------------------------
+      Orðastaðfesting í þessari frumgerð:
+      - Notaður er innbyggður, handvalinn orðalisti (WORD_ENTRIES) með algengum íslenskum orðmyndum.
+      - Öll orð eru geymd sem orðmyndir, ekki bara grunnmyndir. Því má samþykkja t.d. "húsið", "fara", "kennslu".
+      - Í alvöru útgáfu væri WORD_ENTRIES skipt út fyrir stóran lista úr BÍN eða opnum íslenskum orðmyndalista.
+      - Til að stækka orðasafnið: bættu við færslum í WORD_ENTRIES eða sæktu JSON með sömu gagnagerð.
+
+      Borðin eru leysanleg vegna þess að þau eru hönnuð þannig að markorð er alltaf hlutruna í keðjunni.
+      Kennarastillingarnar sýna sömu aðferð: fyrst er valið markorð og truflandi stöfum er fléttað inn.
+    */
+
+    const { useEffect, useMemo, useRef, useState, useLayoutEffect } = React;
+
+    const STAFGILDI = {
+      a:1, r:1, i:1, n:1, s:1,
+      t:2, u:2, l:2, ð:2, k:2, m:2,
+      e:3, f:3, g:3, á:3, ó:3,
+      æ:4, h:4, í:4, ú:4,
+      b:5, d:5, o:5, p:5, v:5, ý:5,
+      j:6, y:6, ö:6,
+      é:7, þ:7,
+      x:10
+    };
+
+    const WORD_ENTRIES = [
+      // Skóli og nám
+      { word:"skóli", lemma:"skóli", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"skólinn", lemma:"skóli", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"skóla", lemma:"skóli", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"nemandi", lemma:"nemandi", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"nemendur", lemma:"nemandi", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"kennari", lemma:"kennari", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"kennarinn", lemma:"kennari", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"kennsla", lemma:"kennsla", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"kennslu", lemma:"kennsla", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"bók", lemma:"bók", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"bókin", lemma:"bók", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"bóka", lemma:"bók", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"lesa", lemma:"lesa", pos:"sögn", level:"A1", theme:"skóli" },
+      { word:"les", lemma:"lesa", pos:"sögn", level:"A1", theme:"skóli" },
+      { word:"lesið", lemma:"lesa", pos:"sögn", level:"A2", theme:"skóli" },
+      { word:"verkefni", lemma:"verkefni", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"próf", lemma:"próf", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"orð", lemma:"orð", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"orðin", lemma:"orð", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"texti", lemma:"texti", pos:"nafnorð", level:"A1", theme:"skóli" },
+      { word:"textann", lemma:"texti", pos:"nafnorð", level:"A2", theme:"skóli" },
+      { word:"íslenska", lemma:"íslenska", pos:"nafnorð/lýsingarorð", level:"A1", theme:"skóli" },
+      { word:"tungumál", lemma:"tungumál", pos:"nafnorð", level:"A2", theme:"skóli" },
+
+      // Heimili og daglegt líf
+      { word:"hús", lemma:"hús", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"húsið", lemma:"hús", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"heima", lemma:"heima", pos:"atviksorð", level:"A1", theme:"heimili" },
+      { word:"íbúð", lemma:"íbúð", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"íbúðin", lemma:"íbúð", pos:"nafnorð", level:"A2", theme:"heimili" },
+      { word:"herbergi", lemma:"herbergi", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"eldhús", lemma:"eldhús", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"stofa", lemma:"stofa", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"borð", lemma:"borð", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"stóll", lemma:"stóll", pos:"nafnorð", level:"A1", theme:"heimili" },
+      { word:"matur", lemma:"matur", pos:"nafnorð", level:"A1", theme:"matur" },
+      { word:"mat", lemma:"matur", pos:"nafnorð", level:"A1", theme:"matur" },
+      { word:"matinn", lemma:"matur", pos:"nafnorð", level:"A2", theme:"matur" },
+      { word:"maturinn", lemma:"matur", pos:"nafnorð", level:"A2", theme:"matur" },
+      { word:"kaffi", lemma:"kaffi", pos:"nafnorð", level:"A1", theme:"matur" },
+      { word:"brauð", lemma:"brauð", pos:"nafnorð", level:"A1", theme:"matur" },
+      { word:"vatn", lemma:"vatn", pos:"nafnorð", level:"A1", theme:"matur" },
+      { word:"vinur", lemma:"vinur", pos:"nafnorð", level:"A1", theme:"félag" },
+      { word:"vini", lemma:"vinur", pos:"nafnorð", level:"A2", theme:"félag" },
+      { word:"vinátta", lemma:"vinátta", pos:"nafnorð", level:"B1", theme:"félag" },
+      { word:"fjölskylda", lemma:"fjölskylda", pos:"nafnorð", level:"A1", theme:"fjölskylda" },
+      { word:"fjölskyldan", lemma:"fjölskylda", pos:"nafnorð", level:"A2", theme:"fjölskylda" },
+      { word:"mamma", lemma:"mamma", pos:"nafnorð", level:"A1", theme:"fjölskylda" },
+      { word:"pabbi", lemma:"pabbi", pos:"nafnorð", level:"A1", theme:"fjölskylda" },
+      { word:"barn", lemma:"barn", pos:"nafnorð", level:"A1", theme:"fjölskylda" },
+      { word:"börn", lemma:"barn", pos:"nafnorð", level:"A1", theme:"fjölskylda" },
+
+      // Samfélag, vinna og samskipti
+      { word:"samtal", lemma:"samtal", pos:"nafnorð", level:"A2", theme:"samskipti" },
+      { word:"samtalið", lemma:"samtal", pos:"nafnorð", level:"A2", theme:"samskipti" },
+      { word:"spurning", lemma:"spurning", pos:"nafnorð", level:"A2", theme:"samskipti" },
+      { word:"svar", lemma:"svar", pos:"nafnorð", level:"A1", theme:"samskipti" },
+      { word:"hjálp", lemma:"hjálp", pos:"nafnorð", level:"A1", theme:"samskipti" },
+      { word:"takk", lemma:"takk", pos:"upphrópun", level:"A1", theme:"samskipti" },
+      { word:"vinna", lemma:"vinna", pos:"nafnorð/sögn", level:"A1", theme:"vinna" },
+      { word:"vinnan", lemma:"vinna", pos:"nafnorð", level:"A2", theme:"vinna" },
+      { word:"umsókn", lemma:"umsókn", pos:"nafnorð", level:"A2", theme:"vinna" },
+      { word:"laun", lemma:"laun", pos:"nafnorð", level:"A2", theme:"vinna" },
+      { word:"starf", lemma:"starf", pos:"nafnorð", level:"A2", theme:"vinna" },
+      { word:"afgreiðsla", lemma:"afgreiðsla", pos:"nafnorð", level:"B1", theme:"vinna" },
+      { word:"læknir", lemma:"læknir", pos:"nafnorð", level:"A2", theme:"heilsa" },
+      { word:"verkir", lemma:"verkur", pos:"nafnorð", level:"A2", theme:"heilsa" },
+      { word:"sjúk", lemma:"sjúkur", pos:"lýsingarorð", level:"A2", theme:"heilsa" },
+      { word:"veður", lemma:"veður", pos:"nafnorð", level:"A1", theme:"samfélag" },
+      { word:"breyting", lemma:"breyting", pos:"nafnorð", level:"B1", theme:"samfélag" },
+      { word:"ferming", lemma:"ferming", pos:"nafnorð", level:"B1", theme:"samfélag" },
+
+      // Algengar sagnir og orðmyndir
+      { word:"vera", lemma:"vera", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"er", lemma:"vera", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"var", lemma:"vera", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"eru", lemma:"vera", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"fara", lemma:"fara", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"fer", lemma:"fara", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"fór", lemma:"fara", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"farið", lemma:"fara", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"koma", lemma:"koma", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"kem", lemma:"koma", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"kom", lemma:"koma", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"komin", lemma:"koma", pos:"sögn/lýsingarorð", level:"A2", theme:"sagnir" },
+      { word:"eiga", lemma:"eiga", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"á", lemma:"eiga", pos:"sögn/forsetning", level:"A1", theme:"sagnir" },
+      { word:"átti", lemma:"eiga", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"segja", lemma:"segja", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"segir", lemma:"segja", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"sagði", lemma:"segja", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"skrifa", lemma:"skrifa", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"skrifar", lemma:"skrifa", pos:"sögn", level:"A1", theme:"sagnir" },
+      { word:"skrifaði", lemma:"skrifa", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"langa", lemma:"langa", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"langar", lemma:"langa", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"velja", lemma:"velja", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"velur", lemma:"velja", pos:"sögn", level:"A2", theme:"sagnir" },
+      { word:"valdi", lemma:"velja", pos:"sögn", level:"B1", theme:"sagnir" },
+
+      // Lýsingarorð og gagnleg orð
+      { word:"góður", lemma:"góður", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"góð", lemma:"góður", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"gott", lemma:"góður", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"góðan", lemma:"góður", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"nýr", lemma:"nýr", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"ný", lemma:"nýr", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"nýtt", lemma:"nýr", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"gamall", lemma:"gamall", pos:"lýsingarorð", level:"A1", theme:"lýsingarorð" },
+      { word:"gömul", lemma:"gamall", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"erfiður", lemma:"erfiður", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"erfið", lemma:"erfiður", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"auðvelt", lemma:"auðveldur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"rólegur", lemma:"rólegur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"fallegur", lemma:"fallegur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"fallegt", lemma:"fallegur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"kátur", lemma:"kátur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"kát", lemma:"kátur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"sátt", lemma:"sáttur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"hrædd", lemma:"hræddur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" },
+      { word:"þreytt", lemma:"þreyttur", pos:"lýsingarorð", level:"A2", theme:"lýsingarorð" }
+    ];
+
+    const LEVELS = [
+      {
+        title: "Fyrsta skotið",
+        theme: "Skóli",
+        chain: "skáólfi",
+        targets: ["skóli", "skál"],
+        hint: "Eitt falið orð er staður þar sem nemendur læra.",
+        note: "Mjög stutt keðja. Tveir truflandi stafir duga."
+      },
+      {
+        title: "Húsið lokast",
+        theme: "Heimili",
+        chain: "hústi ð".replace(/\s/g,""),
+        targets: ["húsið", "hús"],
+        hint: "Leitaðu að orði með ákveðnum greini: húsið.",
+        note: "Hér sést hvernig ein beygingarmynd getur verið lausn."
+      },
+      {
+        title: "Kennsla eða kenna?",
+        theme: "Skóli og sagnir",
+        chain: "kenansla",
+        targets: ["kennsla", "kenna"],
+        hint: "Keðjan getur falið bæði nafnorð og sögn.",
+        note: "Gott borð til að ræða orðfjölskyldu: kenna, kennari, kennsla."
+      },
+      {
+        title: "Bókin og bóka",
+        theme: "Skóli",
+        chain: "bókaina",
+        targets: ["bókin", "bóka"],
+        hint: "Beygingarmynd með greini er falin í keðjunni.",
+        note: "Margar lausnir: nafnorð í ólíkum myndum."
+      },
+      {
+        title: "Fara rólega",
+        theme: "Sagnir",
+        chain: "falrað",
+        targets: ["fara"],
+        hint: "Leitaðu að nafnhætti sagnar.",
+        note: "Nemendur eyða tveimur stöfum til að fá algenga sögn."
+      },
+      {
+        title: "Maturinn",
+        theme: "Matur",
+        chain: "mateurinn",
+        targets: ["maturinn", "matur", "mat"],
+        hint: "Lengsta lausnin er matur með ákveðnum greini.",
+        note: "Stutt orð eru gild en gefa færri stig."
+      },
+      {
+        title: "Fjölskyldan",
+        theme: "Fjölskylda",
+        chain: "fjöleskylda",
+        targets: ["fjölskylda"],
+        hint: "Þetta orð er mjög gagnlegt í kynningum.",
+        note: "Lengra orð, en aðeins einn truflandi stafur."
+      },
+      {
+        title: "Samtalið",
+        theme: "Samskipti",
+        chain: "samtralið",
+        targets: ["samtalið", "samtal"],
+        hint: "Orðið tengist því að tala saman.",
+        note: "Áhersla á ákveðinn greini og endingu."
+      },
+      {
+        title: "Vinátta",
+        theme: "Félag",
+        chain: "vináxtta",
+        targets: ["vinátta", "vini"],
+        hint: "Falið orð tengist góðu sambandi milli fólks.",
+        note: "Sjaldgæfari stafir hækka stig, en X þarf að hverfa."
+      },
+      {
+        title: "Breyting",
+        theme: "B1 orð",
+        chain: "breytxing",
+        targets: ["breyting"],
+        hint: "Orðið merkir að eitthvað verður öðruvísi.",
+        note: "B1-orð með gagnlegri -ing-endingu."
+      },
+      {
+        title: "Íslenska",
+        theme: "Tungumál",
+        chain: "íslfenska",
+        targets: ["íslenska"],
+        hint: "Þú ert líklega að læra þetta orð nú þegar.",
+        note: "Áhersla á séríslenska stafi og langa lesröð."
+      },
+      {
+        title: "Afgreiðsla",
+        theme: "Vinna",
+        chain: "afgreiðtsla",
+        targets: ["afgreiðsla"],
+        hint: "Þetta orð gæti komið fyrir í verslun eða þjónustu.",
+        note: "Lengra B1-orð með ð og samsettri hljóðmynd."
+      }
+    ];
+
+    const DISTRACTORS = Array.from("arstulinðkemfgáóæhíúbdopvýjyöéþx");
+    const TRACK_D = "M 68 92 C 185 28, 356 45, 460 118 C 566 192, 430 245, 276 190 C 112 132, 72 326, 220 386 C 390 455, 486 292, 620 275 C 778 256, 870 370, 744 466 C 628 555, 450 488, 340 438";
+    const CENTER = { x: 480, y: 300 };
+
+    function normaliseWord(value) {
+      return (value || "").toLocaleLowerCase("is-IS").replace(/\s+/g, "").trim();
+    }
+
+    function upperIS(value) {
+      return (value || "").toLocaleUpperCase("is-IS");
+    }
+
+    function scoreWord(word) {
+      return Array.from(normaliseWord(word)).reduce((sum, ch) => sum + (STAFGILDI[ch] || 0), 0);
+    }
+
+    function makeLetters(chain) {
+      return Array.from(normaliseWord(chain)).map((ch, idx) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${idx}`,
+        ch
+      }));
+    }
+
+    function chainText(letters) {
+      return letters.map(l => l.ch).join("");
+    }
+
+    function weightedDistractor(index) {
+      // Algengir stafir koma oftar, en sjaldgæfir birtast stundum til að gera borð skemmtilegri.
+      const common = Array.from("arstulinðkemfgáó");
+      if (index % 7 === 0) return DISTRACTORS[(index * 5 + 3) % DISTRACTORS.length];
+      return common[(index * 11 + 2) % common.length];
+    }
+
+    function makeSolvableChain(targetWord, noise = 4) {
+      const chars = Array.from(normaliseWord(targetWord));
+      const out = [];
+      let added = 0;
+      chars.forEach((ch, i) => {
+        if (added < noise && (i === 0 || i % 2 === 1)) {
+          out.push(weightedDistractor(i + added));
+          added++;
+        }
+        out.push(ch);
+        if (added < noise && i % 3 === 2) {
+          out.push(weightedDistractor(i + added + 9));
+          added++;
+        }
+      });
+      while (added < noise) {
+        out.splice(Math.min(out.length, 1 + added * 2), 0, weightedDistractor(added + 17));
+        added++;
+      }
+      return out.join("");
+    }
+
+    function App() {
+      const wordMap = useMemo(() => new Map(WORD_ENTRIES.map(e => [normaliseWord(e.word), e])), []);
+      const wordSet = useMemo(() => new Set(WORD_ENTRIES.map(e => normaliseWord(e.word))), []);
+      const themes = useMemo(() => ["öll", ...Array.from(new Set(WORD_ENTRIES.map(e => e.theme))).sort((a,b) => a.localeCompare(b, "is"))], []);
+
+      const [levelIndex, setLevelIndex] = useState(0);
+      const [customLevel, setCustomLevel] = useState(null);
+      const currentLevel = customLevel || LEVELS[levelIndex];
+
+      const [letters, setLetters] = useState(() => makeLetters(currentLevel.chain));
+      const [history, setHistory] = useState([]);
+      const [totalScore, setTotalScore] = useState(0);
+      const [foundWords, setFoundWords] = useState([]);
+      const [hintOpen, setHintOpen] = useState(false);
+      const [shot, setShot] = useState(null);
+      const [isMoving, setIsMoving] = useState(true);
+      const [drift, setDrift] = useState(0);
+      const [teacherTheme, setTeacherTheme] = useState("skóli");
+      const [teacherNoise, setTeacherNoise] = useState(4);
+      const [teacherMessage, setTeacherMessage] = useState("");
+      const [lastAction, setLastAction] = useState("Smelltu á staf til að skjóta hann burt.");
+
+      const pathRef = useRef(null);
+      const [positions, setPositions] = useState([]);
+
+      useEffect(() => {
+        setLetters(makeLetters(currentLevel.chain));
+        setHistory([]);
+        setHintOpen(false);
+        setShot(null);
+        setLastAction("Nýtt borð. Finndu íslenskt orð með því að fjarlægja truflandi stafi.");
+      }, [currentLevel.title, currentLevel.chain]);
+
+      useEffect(() => {
+        if (!isMoving) return;
+        const timer = setInterval(() => setDrift(d => d + 0.035), 90);
+        return () => clearInterval(timer);
+      }, [isMoving]);
+
+      useLayoutEffect(() => {
+        const path = pathRef.current;
+        if (!path || letters.length === 0) {
+          setPositions([]);
+          return;
+        }
+        const total = path.getTotalLength();
+        const n = letters.length;
+        const maxSpan = total * 0.74;
+        const spacing = n <= 1 ? 0 : Math.min(58, maxSpan / Math.max(n - 1, 1));
+        const driftLen = Math.sin(drift) * 18;
+        const start = total * 0.105 + driftLen;
+        const pts = letters.map((_, i) => {
+          const p = path.getPointAtLength(Math.max(0, Math.min(total, start + i * spacing)));
+          return { x: p.x, y: p.y };
+        });
+        setPositions(pts);
+      }, [letters, drift]);
+
+      const currentWord = chainText(letters);
+      const normalizedCurrent = normaliseWord(currentWord);
+      const validNow = normalizedCurrent.length >= 3 && wordSet.has(normalizedCurrent);
+      const currentEntry = wordMap.get(normalizedCurrent);
+      const currentScore = scoreWord(normalizedCurrent);
+      const targetBest = (currentLevel.targets || []).slice().sort((a,b) => scoreWord(b) - scoreWord(a))[0];
+
+      function shootLetter(index) {
+        if (shot || letters.length <= 1) return;
+        const target = positions[index] || CENTER;
+        setShot({ from: CENTER, to: target, key: `${Date.now()}-${index}` });
+        const before = letters;
+        const removed = letters[index];
+        setLastAction(`Skotið á ${upperIS(removed.ch)}.`);
+        setTimeout(() => {
+          setHistory(h => [...h, before]);
+          setLetters(prev => prev.filter((_, i) => i !== index));
+        }, 170);
+        setTimeout(() => setShot(null), 390);
+      }
+
+      function undo() {
+        setHistory(h => {
+          if (!h.length) return h;
+          const previous = h[h.length - 1];
+          setLetters(previous);
+          setLastAction("Síðasta skot var afturkallað.");
+          return h.slice(0, -1);
+        });
+      }
+
+      function resetLevel() {
+        setLetters(makeLetters(currentLevel.chain));
+        setHistory([]);
+        setHintOpen(false);
+        setLastAction("Borðið var endurræst.");
+      }
+
+      function finishLevel() {
+        if (!validNow) return;
+        const word = normalizedCurrent;
+        const entry = wordMap.get(word);
+        const score = scoreWord(word);
+        setTotalScore(s => s + score);
+        setFoundWords(list => [{ word, score, entry, level: currentLevel.title }, ...list].slice(0, 12));
+        setLastAction(`Þú kláraðir borðið með orðinu ${upperIS(word)} og fékkst ${score} stig.`);
+        if (customLevel) {
+          setTeacherMessage(`Æfiborð klárað með orðinu ${upperIS(word)}.`);
+          resetLevel();
+          return;
+        }
+        if (levelIndex < LEVELS.length - 1) {
+          setLevelIndex(i => i + 1);
+        } else {
+          setLevelIndex(0);
+        }
+      }
+
+      function nextLevel() {
+        if (customLevel) {
+          setCustomLevel(null);
+          return;
+        }
+        setLevelIndex(i => (i + 1) % LEVELS.length);
+      }
+
+      function buildTeacherLevel() {
+        const pool = WORD_ENTRIES.filter(e => teacherTheme === "öll" || e.theme === teacherTheme);
+        const candidates = pool.filter(e => normaliseWord(e.word).length >= 4);
+        if (!candidates.length) return;
+        const pick = candidates[(Date.now() + candidates.length + teacherNoise) % candidates.length];
+        const chain = makeSolvableChain(pick.word, Number(teacherNoise));
+        setCustomLevel({
+          title: `Kennaraborð: ${upperIS(pick.word)}`,
+          theme: pick.theme,
+          chain,
+          targets: [pick.word],
+          hint: `Markorðið er ${upperIS(pick.word)}. Það er ${pick.pos} úr þemanu „${pick.theme}“ (${pick.level}).`,
+          note: "Þetta borð var búið til með því að velja fyrst markorð og flétta truflandi stöfum inn í það."
+        });
+        setTeacherMessage(`Búið til borð úr orðinu ${upperIS(pick.word)}.`);
+      }
+
+      return (
+        <main className="max-w-7xl mx-auto px-4 py-6 md:py-10">
+          <header className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 pill text-blue-700 border-blue-100 bg-blue-50 mb-3">
+                <span>✦</span><span>Íslenskur orðaleikur í anda Zuma</span>
+              </div>
+              <h1 className="text-3xl md:text-5xl font-lightish tracking-tight text-slate-800">Stafalækur</h1>
+              <p className="text-slate-600 mt-2 max-w-2xl leading-relaxed">
+                Skjóttu burt truflandi stafi. Keðjan lokast saman. Þegar stafirnir sem eftir standa mynda gilt íslenskt orð geturðu klárað borðið.
+              </p>
+            </div>
+            <div className="game-card px-4 py-3 flex items-center gap-4">
+              <div>
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Heildarstig</div>
+                <div className="text-3xl font-lightish text-blue-700">{totalScore}</div>
+              </div>
+              <div className="h-10 w-px bg-slate-200" />
+              <div>
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Orð fundin</div>
+                <div className="text-3xl font-lightish text-green-700">{foundWords.length}</div>
+              </div>
+            </div>
+          </header>
+
+          <section className="grid grid-cols-1 lg:grid-cols-[1fr_390px] gap-6 items-start">
+            <div className="game-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-lightish text-slate-800">
+                    {customLevel ? "Æfiborð" : `Borð ${levelIndex + 1}/${LEVELS.length}`}: {currentLevel.title}
+                  </h2>
+                  <p className="text-sm text-slate-500">Þema: {currentLevel.theme} · Stafir eftir: {letters.length}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="pill">Rólegt púsl</span>
+                  <span className="pill">Enginn tímamælir</span>
+                  <span className="pill">Beygingarmyndir gildar</span>
+                </div>
+              </div>
+
+              <div className="relative soft-grid bg-slate-50/80">
+                <svg viewBox="0 0 960 560" className="w-full h-auto block" aria-label="Braut með bókstöfum">
+                  <defs>
+                    <linearGradient id="trackGrad" x1="0" x2="1" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#bfdbfe" />
+                      <stop offset="100%" stopColor="#ddd6fe" />
+                    </linearGradient>
+                    <radialGradient id="orbGrad" cx="35%" cy="30%" r="70%">
+                      <stop offset="0%" stopColor="#ffffff" />
+                      <stop offset="100%" stopColor="#dbeafe" />
+                    </radialGradient>
+                  </defs>
+
+                  <path d={TRACK_D} className="track-line" stroke="rgba(30,64,175,.12)" strokeWidth="44" />
+                  <path d={TRACK_D} className="track-line" stroke="url(#trackGrad)" strokeWidth="28" />
+                  <path ref={pathRef} d={TRACK_D} className="track-line" stroke="rgba(255,255,255,.72)" strokeWidth="4" />
+
+                  <g transform={`translate(${CENTER.x},${CENTER.y})`}>
+                    <circle r="56" fill="white" stroke="#dbeafe" strokeWidth="3" filter="drop-shadow(0 10px 18px rgba(15,23,42,.12))" />
+                    <circle r="35" fill="#eff6ff" stroke="#bfdbfe" />
+                    <text y="-2" textAnchor="middle" dominantBaseline="middle" fontSize="22" fontWeight="700" fill="#2563eb">Mímir</text>
+                    <text y="22" textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="#64748b">smelltu á staf</text>
+                  </g>
+
+                  {shot && (
+                    <g key={shot.key}>
+                      <line className="shot-line" x1={shot.from.x} y1={shot.from.y} x2={shot.to.x} y2={shot.to.y} />
+                      <circle className="shot-dot" cx={shot.to.x} cy={shot.to.y} r="4" />
+                    </g>
+                  )}
+
+                  {letters.map((letter, index) => {
+                    const p = positions[index] || { x: 0, y: 0 };
+                    const val = STAFGILDI[letter.ch] || 0;
+                    const selected = validNow;
+                    return (
+                      <g key={letter.id} className="letter-node" transform={`translate(${p.x},${p.y})`} onClick={() => shootLetter(index)} role="button" aria-label={`Skjóta stafnum ${upperIS(letter.ch)}`}>
+                        <circle className="main" r="28" fill={selected ? "#dcfce7" : "url(#orbGrad)"} stroke={selected ? "#16a34a" : "#93c5fd"} strokeWidth="2" />
+                        <text y="3" textAnchor="middle" dominantBaseline="middle" fontSize="28" fontWeight="700" fill="#1e3a8a">{upperIS(letter.ch)}</text>
+                        <circle cx="20" cy="20" r="10" fill="white" stroke="#dbeafe" />
+                        <text x="20" y="21" textAnchor="middle" dominantBaseline="middle" fontSize="10" fontWeight="700" fill="#64748b">{val}</text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              <div className="px-5 py-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="text-sm text-slate-600">{lastAction}</div>
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn btn-light" onClick={() => setIsMoving(m => !m)}>{isMoving ? "Stöðva mjúka hreyfingu" : "Kveikja á hreyfingu"}</button>
+                  <button className="btn btn-light" onClick={undo} disabled={!history.length}>Afturkalla</button>
+                  <button className="btn btn-danger" onClick={resetLevel}>Endurræsa</button>
+                </div>
+              </div>
+            </div>
+
+            <aside className="space-y-5">
+              <div className="game-card p-5">
+                <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Núverandi keðja</div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="text-3xl md:text-4xl tracking-[.18em] font-lightish text-slate-800 break-all">{upperIS(currentWord)}</div>
+                  <div className="text-sm text-slate-500 mt-2">Krafla-stig ef þetta er lausn: <strong>{currentScore}</strong></div>
+                </div>
+
+                {validNow ? (
+                  <div className="win-pop mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
+                    <div className="font-medium text-green-800">✓ Gilt íslenskt orð: {upperIS(normalizedCurrent)}</div>
+                    {currentEntry && (
+                      <p className="text-sm text-green-800/85 mt-1">
+                        Grunnmynd: <strong>{currentEntry.lemma}</strong> · {currentEntry.pos} · {currentEntry.level} · {currentEntry.theme}
+                      </p>
+                    )}
+                    <p className="text-sm text-green-900/75 mt-2">Þú getur klárað borðið núna eða haldið áfram að eyða stöfum til að leita að annarri lausn.</p>
+                    <button className="btn btn-green w-full mt-3" onClick={finishLevel}>Klára borð og fá {currentScore} stig</button>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    Þetta er ekki gilt orð í innbyggða orðalistanum. Haltu áfram að fjarlægja truflandi stafi.
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button className="btn btn-primary flex-1" onClick={() => setHintOpen(h => !h)}>{hintOpen ? "Fela vísbendingu" : "Sýna vísbendingu"}</button>
+                  <button className="btn btn-light" onClick={nextLevel}>{customLevel ? "Tilbúin borð" : "Næsta borð"}</button>
+                </div>
+
+                {hintOpen && (
+                  <div className="mt-4 rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-950">
+                    <p><strong>Vísbending:</strong> {currentLevel.hint}</p>
+                    <p className="mt-2"><strong>Eitt mögulegt markorð:</strong> {upperIS(targetBest || currentLevel.targets?.[0] || "")}</p>
+                    <p className="mt-2 text-blue-900/80">{currentLevel.note}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="game-card p-5">
+                <h3 className="text-lg font-lightish text-slate-800 mb-3">Fundin orð</h3>
+                {foundWords.length === 0 ? (
+                  <p className="text-sm text-slate-500">Engin orð komin enn. Kláraðu fyrsta borðið til að sjá orðasafnið þitt.</p>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-auto pr-1">
+                    {foundWords.map((item, idx) => (
+                      <div key={`${item.word}-${idx}`} className="rounded-xl border border-slate-100 bg-white px-3 py-2 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-medium text-slate-800">{upperIS(item.word)}</div>
+                          <div className="text-xs text-slate-500">{item.entry?.lemma || item.word} · {item.entry?.pos || "orð"}</div>
+                        </div>
+                        <div className="text-blue-700 font-semibold">{item.score}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="game-card p-5">
+                <h3 className="text-lg font-lightish text-slate-800 mb-2">Kennarastillingar</h3>
+                <p className="text-sm text-slate-600 mb-4">Veldu þema og smíðaðu leysanlegt æfiborð úr markorði. Þetta sýnir hvernig hægt væri að tengja leikinn við kaflaorðaforða.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-sm">
+                    <span className="block text-slate-500 mb-1">Þema</span>
+                    <select className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2" value={teacherTheme} onChange={e => setTeacherTheme(e.target.value)}>
+                      {themes.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="block text-slate-500 mb-1">Truflandi stafir</span>
+                    <select className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2" value={teacherNoise} onChange={e => setTeacherNoise(e.target.value)}>
+                      {[2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <button className="btn btn-primary w-full mt-3" onClick={buildTeacherLevel}>Búa til æfiborð</button>
+                {teacherMessage && <p className="text-sm text-green-700 mt-3">{teacherMessage}</p>}
+              </div>
+
+              <div className="game-card p-5">
+                <details>
+                  <summary className="text-lg font-lightish text-slate-800">Hönnunarákvarðanir</summary>
+                  <div className="mt-3 text-sm text-slate-600 leading-relaxed space-y-3">
+                    <p><strong>Orðastaðfesting:</strong> Frumgerðin notar innbyggðan orðmyndalista með grunnmynd, orðflokki, stigi og þema. Þetta er áreiðanlegt í lítilli kennsluútgáfu, en takmarkað. Í fullri útgáfu ætti að skipta listanum út fyrir BÍN eða stóran JSON-lista af íslenskum orðmyndum.</p>
+                    <p><strong>Braut:</strong> Ég valdi hlykkjótta „orðalækjar“-braut frekar en lokaðan hring. Hún er rólegri, læsileg og minnir á að stafirnir flæði í lesröð. Mjúk hreyfing gefur Zuma-tilfinningu án tímpressu.</p>
+                    <p><strong>Kennslugildi:</strong> Borðin fela beygingarmyndir, orðfjölskyldur og þemu. Nemandi sér grunnmynd og orðflokk þegar hann finnur gilt orð. Kennari getur smíðað æfiborð úr þemaorðum.</p>
+                    <p><strong>Stig:</strong> Stig eru nákvæmlega summa Krafla-stafagilda í orðinu. Þannig gefa lengri orð og sjaldgæfari stafir meira án þess að flækja reglurnar.</p>
+                  </div>
+                </details>
+              </div>
+            </aside>
+          </section>
+        </main>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
