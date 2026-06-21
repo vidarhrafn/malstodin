@@ -6,7 +6,6 @@
   <title>Stafabrautin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -96,25 +95,54 @@
 <body>
   <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useMemo, useRef } = React;
+  <script>
+const {
+  useState,
+  useEffect,
+  useMemo,
+  useRef
+} = React;
 
-    /* ---------- Krafla stafagildi (Skraflfélag Íslands / Netskrafl) ---------- */
-    const STAFGILDI = {
-      a:1, r:1, i:1, n:1, s:1,
-      t:2, u:2, l:2, ð:2, k:2, m:2,
-      e:3, f:3, g:3, á:3, ó:3,
-      æ:4, h:4, í:4, ú:4,
-      b:5, d:5, o:5, p:5, v:5, ý:5,
-      j:6, y:6, ö:6,
-      é:7, þ:7,
-      x:10
-    };
-    const wordScore = (w) => [...w.toLowerCase()].reduce((s,c)=> s + (STAFGILDI[c]||0), 0);
+/* ---------- Krafla stafagildi (Skraflfélag Íslands / Netskrafl) ---------- */
+const STAFGILDI = {
+  a: 1,
+  r: 1,
+  i: 1,
+  n: 1,
+  s: 1,
+  t: 2,
+  u: 2,
+  l: 2,
+  ð: 2,
+  k: 2,
+  m: 2,
+  e: 3,
+  f: 3,
+  g: 3,
+  á: 3,
+  ó: 3,
+  æ: 4,
+  h: 4,
+  í: 4,
+  ú: 4,
+  b: 5,
+  d: 5,
+  o: 5,
+  p: 5,
+  v: 5,
+  ý: 5,
+  j: 6,
+  y: 6,
+  ö: 6,
+  é: 7,
+  þ: 7,
+  x: 10
+};
+const wordScore = w => [...w.toLowerCase()].reduce((s, c) => s + (STAFGILDI[c] || 0), 0);
 
-    /* ---------- Innbyggð orðabók (gild íslensk orð, m.a. beygingar) ----------
-       Í uppsettri útgáfu má skipta þessu út fyrir BÍN eða OpenAI-staðfestingu.   */
-    const ORÐ = `
+/* ---------- Innbyggð orðabók (gild íslensk orð, m.a. beygingar) ----------
+   Í uppsettri útgáfu má skipta þessu út fyrir BÍN eða OpenAI-staðfestingu.   */
+const ORÐ = `
       sól sólin hús húsið kaffi kaffið bók bókin glas glasið
       hundur hundinn hundar bíll bílinn bílar köttur kisa kisan
       vatn vatnið matur maturinn brauð brauðið mjólk mjólkin ostur osturinn
@@ -136,327 +164,462 @@
       svara hugsa vita skilja muna gleyma búa eiga vilja geta
       og að ég þú hann hún það við þið nú þá hér þar en ef eða já nei
     `.trim().split(/\s+/);
-    const DICT = new Set(ORÐ);
-    const erOrð = (w) => w.length >= 2 && DICT.has(w.toLowerCase());
+const DICT = new Set(ORÐ);
+const erOrð = w => w.length >= 2 && DICT.has(w.toLowerCase());
 
-    /* ---------- Borð ---------- */
-    const LEVELS = [
-      { name: "Hlý dögun",     theme: "Byrjun",  chain: "SÓNLR",     target: "SÓL"     },
-      { name: "Heimilið",      theme: "Byrjun",  chain: "HÚRST",     target: "HÚS"     },
-      { name: "Morgunsopinn",  theme: "Orðaforði", chain: "KARFFIN", target: "KAFFI"   },
-      { name: "Á náttborðinu", theme: "Orðaforði", chain: "BLÓKSA",  target: "BÓK"     },
-      { name: "Við matarborðið", theme: "Orðaforði", chain: "GRLANST", target: "GLAS"  },
-      { name: "Hver beit?",    theme: "Þolfall", chain: "HUNDRINNT", target: "HUNDINN" },
-      { name: "Hvað sástu?",   theme: "Þolfall", chain: "BÍLAINRN",  target: "BÍLINN"  },
-    ];
+/* ---------- Borð ---------- */
+const LEVELS = [{
+  name: "Hlý dögun",
+  theme: "Byrjun",
+  chain: "SÓNLR",
+  target: "SÓL"
+}, {
+  name: "Heimilið",
+  theme: "Byrjun",
+  chain: "HÚRST",
+  target: "HÚS"
+}, {
+  name: "Morgunsopinn",
+  theme: "Orðaforði",
+  chain: "KARFFIN",
+  target: "KAFFI"
+}, {
+  name: "Á náttborðinu",
+  theme: "Orðaforði",
+  chain: "BLÓKSA",
+  target: "BÓK"
+}, {
+  name: "Við matarborðið",
+  theme: "Orðaforði",
+  chain: "GRLANST",
+  target: "GLAS"
+}, {
+  name: "Hver beit?",
+  theme: "Þolfall",
+  chain: "HUNDRINNT",
+  target: "HUNDINN"
+}, {
+  name: "Hvað sástu?",
+  theme: "Þolfall",
+  chain: "BÍLAINRN",
+  target: "BÍLINN"
+}];
 
-    // Greedy: merktu hvaða stafir tilheyra markorðinu (subsequence)
-    function markTarget(chainArr, target) {
-      const keep = chainArr.map(()=>false);
-      let j = 0; const t = [...target.toUpperCase()];
-      for (let i=0; i<chainArr.length && j<t.length; i++) {
-        if (chainArr[i].toUpperCase() === t[j]) { keep[i] = true; j++; }
-      }
-      return keep;
+// Greedy: merktu hvaða stafir tilheyra markorðinu (subsequence)
+function markTarget(chainArr, target) {
+  const keep = chainArr.map(() => false);
+  let j = 0;
+  const t = [...target.toUpperCase()];
+  for (let i = 0; i < chainArr.length && j < t.length; i++) {
+    if (chainArr[i].toUpperCase() === t[j]) {
+      keep[i] = true;
+      j++;
     }
+  }
+  return keep;
+}
 
-    // Staðsetning perla á spírals-braut (ytri = fyrsti stafur, innri = síðasti)
-    function spiralPoints(n) {
-      const cx = 170, cy = 175, pts = [];
-      let r = 140, a = -Math.PI/2; const spacing = 44;
-      for (let i=0; i<n; i++) {
-        pts.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) });
-        a += spacing / r;
-        r = Math.max(72, r - 7);
-      }
-      return pts;
-    }
+// Staðsetning perla á spírals-braut (ytri = fyrsti stafur, innri = síðasti)
+function spiralPoints(n) {
+  const cx = 170,
+    cy = 175,
+    pts = [];
+  let r = 140,
+    a = -Math.PI / 2;
+  const spacing = 44;
+  for (let i = 0; i < n; i++) {
+    pts.push({
+      x: cx + r * Math.cos(a),
+      y: cy + r * Math.sin(a)
+    });
+    a += spacing / r;
+    r = Math.max(72, r - 7);
+  }
+  return pts;
+}
 
-    /* ---------- Hljóð (Azure TTS gegnum Netlify – virkar þegar uppsett) ---------- */
-    async function playAudio(text) {
-      try {
-        const r = await fetch('/.netlify/functions/speak', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ text_to_speak: text })
-        });
-        const data = await r.json();
-        if (!r.ok || !data.audio_base64) return false;
-        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
-        await audio.play().catch(()=>{});
-        return true;
-      } catch { return false; }
-    }
+/* ---------- Hljóð (Azure TTS gegnum Netlify – virkar þegar uppsett) ---------- */
+async function playAudio(text) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text_to_speak: text
+      })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.audio_base64) return false;
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    await audio.play().catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-    /* ---------- Valfrjáls AI-staðfesting fyrir orð utan orðabókar ---------- */
-    async function aiCheckWord(word) {
-      const r = await fetch('/.netlify/functions/openai', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          messages: [{ role:'user', content:
-            `Er "${word}" gild íslensk orðmynd (eitthvert beygingarform raunverulegs orðs)? Svaraðu EINUNGIS með JÁ eða NEI.` }],
-          max_tokens: 5, model: 'gpt-4o-mini', temperature: 0
-        })
+/* ---------- Valfrjáls AI-staðfesting fyrir orð utan orðabókar ---------- */
+async function aiCheckWord(word) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      messages: [{
+        role: 'user',
+        content: `Er "${word}" gild íslensk orðmynd (eitthvert beygingarform raunverulegs orðs)? Svaraðu EINUNGIS með JÁ eða NEI.`
+      }],
+      max_tokens: 5,
+      model: 'gpt-4o-mini',
+      temperature: 0
+    })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error('AI');
+  return /JÁ/i.test(data.content || '');
+}
+
+/* =================== Íhlutir =================== */
+
+function ReadingStrip({
+  word,
+  good
+}) {
+  const letters = [...word];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-center gap-1.5 flex-wrap " + (good ? "strip-good" : "")
+  }, letters.length === 0 ? /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-400 font-light text-sm"
+  }, "— engir stafir —") : letters.map((c, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    className: "chip pop"
+  }, c)));
+}
+function Intro({
+  onStart
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "max-w-xl mx-auto px-6 py-12 fade-in"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-center mb-8"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-5xl mb-3"
+  }, "ᛟ"), /*#__PURE__*/React.createElement("h1", {
+    className: "display text-5xl font-medium tracking-tight mb-3"
+  }, "Stafabrautin"), /*#__PURE__*/React.createElement("p", {
+    className: "text-gray-600 font-light text-lg"
+  }, "Skjóttu stafi burt þar til gilt íslenskt orð stendur eftir.")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6"
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "display text-xl font-medium mb-4"
+  }, "Svona spilarðu"), /*#__PURE__*/React.createElement("ol", {
+    className: "space-y-3 text-gray-700 font-light"
+  }, /*#__PURE__*/React.createElement("li", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium text-gray-900"
+  }, "1."), " Stafir renna eftir brautinni að rúnasteininum."), /*#__PURE__*/React.createElement("li", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium text-gray-900"
+  }, "2."), " Smelltu á staf til að ", /*#__PURE__*/React.createElement("span", {
+    className: "font-medium"
+  }, "skjóta honum burt"), ". Keðjan lokast og stafirnir sem eftir standa lesast áfram í röð."), /*#__PURE__*/React.createElement("li", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium text-gray-900"
+  }, "3."), " Þegar stafirnir mynda gilt orð kviknar á steininum — þá hefurðu unnið borðið."), /*#__PURE__*/React.createElement("li", null, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium text-gray-900"
+  }, "4."), " Stigin fara eftir ", /*#__PURE__*/React.createElement("span", {
+    className: "font-medium"
+  }, "Krafla"), "-gildum stafanna. Lengri og sjaldgæfari orð gefa meira."))), /*#__PURE__*/React.createElement("button", {
+    onClick: onStart,
+    className: "btn w-full px-6 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium text-lg shadow-sm"
+  }, "Byrja"), /*#__PURE__*/React.createElement("p", {
+    className: "text-center text-gray-400 text-xs font-light mt-4"
+  }, "Hljóðlestur og AI-staðfesting virkjast þegar leikurinn er settur upp í Málstöðinni."));
+}
+function Game() {
+  const [screen, setScreen] = useState('intro'); // intro | play | done
+  const [li, setLi] = useState(0);
+  const [tiles, setTiles] = useState([]);
+  const [removed, setRemoved] = useState([]); // stack af id
+  const [removingId, setRemovingId] = useState(null);
+  const [hintId, setHintId] = useState(null);
+  const [total, setTotal] = useState(0);
+  const [levelScores, setLevelScores] = useState({});
+  const [aiState, setAiState] = useState({
+    checking: false,
+    ok: false,
+    msg: ''
+  });
+  const [speaking, setSpeaking] = useState(false);
+  const level = LEVELS[li];
+  function loadLevel(idx) {
+    const chainArr = [...LEVELS[idx].chain];
+    const keep = markTarget(chainArr, LEVELS[idx].target);
+    setTiles(chainArr.map((ch, i) => ({
+      id: idx + '-' + i,
+      ch,
+      isTarget: keep[i],
+      alive: true
+    })));
+    setRemoved([]);
+    setRemovingId(null);
+    setHintId(null);
+    setAiState({
+      checking: false,
+      ok: false,
+      msg: ''
+    });
+  }
+  function start() {
+    setLi(0);
+    setTotal(0);
+    setLevelScores({});
+    loadLevel(0);
+    setScreen('play');
+  }
+  const alive = tiles.filter(t => t.alive);
+  const word = alive.map(t => t.ch).join('');
+  const found = erOrð(word) || aiState.ok;
+  const pts = spiralPoints(alive.length);
+  const liveScore = found ? wordScore(word) : 0;
+  function shoot(id) {
+    if (removingId || found) return;
+    setRemovingId(id);
+    setHintId(null);
+    setAiState({
+      checking: false,
+      ok: false,
+      msg: ''
+    });
+    setTimeout(() => {
+      setTiles(ts => ts.map(t => t.id === id ? {
+        ...t,
+        alive: false
+      } : t));
+      setRemoved(r => [...r, id]);
+      setRemovingId(null);
+    }, 280);
+  }
+  function undo() {
+    if (!removed.length || found) return;
+    const last = removed[removed.length - 1];
+    setTiles(ts => ts.map(t => t.id === last ? {
+      ...t,
+      alive: true
+    } : t));
+    setRemoved(r => r.slice(0, -1));
+    setAiState({
+      checking: false,
+      ok: false,
+      msg: ''
+    });
+  }
+  function restart() {
+    loadLevel(li);
+  }
+  function hint() {
+    const distractors = alive.filter(t => !t.isTarget);
+    if (!distractors.length) {
+      setAiState({
+        checking: false,
+        ok: false,
+        msg: 'Aðeins markstafir eftir — raðaðu orðinu saman!'
       });
-      const data = await r.json();
-      if (!r.ok || data.error) throw new Error('AI');
-      return /JÁ/i.test(data.content || '');
+      return;
     }
-
-    /* =================== Íhlutir =================== */
-
-    function ReadingStrip({ word, good }) {
-      const letters = [...word];
-      return (
-        <div className={"flex items-center justify-center gap-1.5 flex-wrap " + (good ? "strip-good" : "")}>
-          {letters.length === 0
-            ? <span className="text-gray-400 font-light text-sm">— engir stafir —</span>
-            : letters.map((c,i)=> <span key={i} className="chip pop">{c}</span>)}
-        </div>
-      );
+    const pick = distractors[Math.floor(Math.random() * distractors.length)];
+    setHintId(pick.id);
+    setTimeout(() => setHintId(null), 2300);
+  }
+  async function checkAI() {
+    setAiState({
+      checking: true,
+      ok: false,
+      msg: ''
+    });
+    try {
+      const ok = await aiCheckWord(word);
+      setAiState({
+        checking: false,
+        ok,
+        msg: ok ? '' : `„${word}" er ekki gilt orð. Haltu áfram.`
+      });
+    } catch {
+      setAiState({
+        checking: false,
+        ok: false,
+        msg: 'Náði ekki í AI. Það virkar þegar leikurinn er uppsettur á netinu.'
+      });
     }
-
-    function Intro({ onStart }) {
-      return (
-        <div className="max-w-xl mx-auto px-6 py-12 fade-in">
-          <div className="text-center mb-8">
-            <div className="text-5xl mb-3">ᛟ</div>
-            <h1 className="display text-5xl font-medium tracking-tight mb-3">Stafabrautin</h1>
-            <p className="text-gray-600 font-light text-lg">Skjóttu stafi burt þar til gilt íslenskt orð stendur eftir.</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-            <h2 className="display text-xl font-medium mb-4">Svona spilarðu</h2>
-            <ol className="space-y-3 text-gray-700 font-light">
-              <li><span className="font-medium text-gray-900">1.</span> Stafir renna eftir brautinni að rúnasteininum.</li>
-              <li><span className="font-medium text-gray-900">2.</span> Smelltu á staf til að <span className="font-medium">skjóta honum burt</span>. Keðjan lokast og stafirnir sem eftir standa lesast áfram í röð.</li>
-              <li><span className="font-medium text-gray-900">3.</span> Þegar stafirnir mynda gilt orð kviknar á steininum — þá hefurðu unnið borðið.</li>
-              <li><span className="font-medium text-gray-900">4.</span> Stigin fara eftir <span className="font-medium">Krafla</span>-gildum stafanna. Lengri og sjaldgæfari orð gefa meira.</li>
-            </ol>
-          </div>
-          <button onClick={onStart}
-            className="btn w-full px-6 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium text-lg shadow-sm">
-            Byrja
-          </button>
-          <p className="text-center text-gray-400 text-xs font-light mt-4">
-            Hljóðlestur og AI-staðfesting virkjast þegar leikurinn er settur upp í Málstöðinni.
-          </p>
-        </div>
-      );
+  }
+  async function say() {
+    setSpeaking(true);
+    await playAudio(word);
+    setTimeout(() => setSpeaking(false), 1200);
+  }
+  function confirmWord() {
+    const sc = wordScore(word);
+    setLevelScores(s => ({
+      ...s,
+      [li]: {
+        word,
+        sc
+      }
+    }));
+    setTotal(t => t + sc);
+    if (li + 1 < LEVELS.length) {
+      const next = li + 1;
+      setLi(next);
+      loadLevel(next);
+    } else {
+      setScreen('done');
     }
+  }
+  if (screen === 'intro') return /*#__PURE__*/React.createElement(Intro, {
+    onStart: start
+  });
+  if (screen === 'done') {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "max-w-xl mx-auto px-6 py-14 text-center fade-in"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-5xl mb-4"
+    }, "ᛟ"), /*#__PURE__*/React.createElement("h1", {
+      className: "display text-4xl font-medium mb-2"
+    }, "Brautinni lokið"), /*#__PURE__*/React.createElement("p", {
+      className: "text-gray-600 font-light mb-8"
+    }, "Þú leystir öll borðin."), /*#__PURE__*/React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 text-left"
+    }, LEVELS.map((lv, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "font-light text-gray-600"
+    }, lv.name), /*#__PURE__*/React.createElement("span", {
+      className: "font-medium"
+    }, levelScores[i] ? /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-900"
+    }, levelScores[i].word) : /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-300"
+    }, "—"), /*#__PURE__*/React.createElement("span", {
+      className: "text-blue-600 ml-3"
+    }, levelScores[i] ? levelScores[i].sc : 0)))), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-between pt-4 mt-2 border-t border-gray-200"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "display text-lg font-medium"
+    }, "Samtals"), /*#__PURE__*/React.createElement("span", {
+      className: "display text-2xl font-medium text-blue-600"
+    }, total, " stig"))), /*#__PURE__*/React.createElement("button", {
+      onClick: start,
+      className: "btn px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium shadow-sm"
+    }, "Spila aftur"));
+  }
 
-    function Game() {
-      const [screen, setScreen] = useState('intro');     // intro | play | done
-      const [li, setLi] = useState(0);
-      const [tiles, setTiles] = useState([]);
-      const [removed, setRemoved] = useState([]);          // stack af id
-      const [removingId, setRemovingId] = useState(null);
-      const [hintId, setHintId] = useState(null);
-      const [total, setTotal] = useState(0);
-      const [levelScores, setLevelScores] = useState({});
-      const [aiState, setAiState] = useState({ checking:false, ok:false, msg:'' });
-      const [speaking, setSpeaking] = useState(false);
-
-      const level = LEVELS[li];
-
-      function loadLevel(idx) {
-        const chainArr = [...LEVELS[idx].chain];
-        const keep = markTarget(chainArr, LEVELS[idx].target);
-        setTiles(chainArr.map((ch,i)=>({ id: idx+'-'+i, ch, isTarget: keep[i], alive: true })));
-        setRemoved([]); setRemovingId(null); setHintId(null);
-        setAiState({ checking:false, ok:false, msg:'' });
-      }
-
-      function start() { setLi(0); setTotal(0); setLevelScores({}); loadLevel(0); setScreen('play'); }
-
-      const alive = tiles.filter(t=>t.alive);
-      const word = alive.map(t=>t.ch).join('');
-      const found = erOrð(word) || aiState.ok;
-      const pts = spiralPoints(alive.length);
-      const liveScore = found ? wordScore(word) : 0;
-
-      function shoot(id) {
-        if (removingId || found) return;
-        setRemovingId(id);
-        setHintId(null);
-        setAiState({ checking:false, ok:false, msg:'' });
-        setTimeout(() => {
-          setTiles(ts => ts.map(t => t.id===id ? {...t, alive:false} : t));
-          setRemoved(r => [...r, id]);
-          setRemovingId(null);
-        }, 280);
-      }
-
-      function undo() {
-        if (!removed.length || found) return;
-        const last = removed[removed.length-1];
-        setTiles(ts => ts.map(t => t.id===last ? {...t, alive:true} : t));
-        setRemoved(r => r.slice(0,-1));
-        setAiState({ checking:false, ok:false, msg:'' });
-      }
-
-      function restart() { loadLevel(li); }
-
-      function hint() {
-        const distractors = alive.filter(t=>!t.isTarget);
-        if (!distractors.length) { setAiState({checking:false, ok:false, msg:'Aðeins markstafir eftir — raðaðu orðinu saman!'}); return; }
-        const pick = distractors[Math.floor(Math.random()*distractors.length)];
-        setHintId(pick.id);
-        setTimeout(()=> setHintId(null), 2300);
-      }
-
-      async function checkAI() {
-        setAiState({ checking:true, ok:false, msg:'' });
-        try {
-          const ok = await aiCheckWord(word);
-          setAiState({ checking:false, ok, msg: ok ? '' : `„${word}" er ekki gilt orð. Haltu áfram.` });
-        } catch {
-          setAiState({ checking:false, ok:false, msg:'Náði ekki í AI. Það virkar þegar leikurinn er uppsettur á netinu.' });
-        }
-      }
-
-      async function say() {
-        setSpeaking(true);
-        await playAudio(word);
-        setTimeout(()=>setSpeaking(false), 1200);
-      }
-
-      function confirmWord() {
-        const sc = wordScore(word);
-        setLevelScores(s => ({ ...s, [li]: { word, sc } }));
-        setTotal(t => t + sc);
-        if (li + 1 < LEVELS.length) {
-          const next = li + 1;
-          setLi(next); loadLevel(next);
-        } else {
-          setScreen('done');
-        }
-      }
-
-      if (screen === 'intro') return <Intro onStart={start} />;
-
-      if (screen === 'done') {
-        return (
-          <div className="max-w-xl mx-auto px-6 py-14 text-center fade-in">
-            <div className="text-5xl mb-4">ᛟ</div>
-            <h1 className="display text-4xl font-medium mb-2">Brautinni lokið</h1>
-            <p className="text-gray-600 font-light mb-8">Þú leystir öll borðin.</p>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 text-left">
-              {LEVELS.map((lv,i)=> (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                  <span className="font-light text-gray-600">{lv.name}</span>
-                  <span className="font-medium">
-                    {levelScores[i] ? <span className="text-gray-900">{levelScores[i].word}</span> : <span className="text-gray-300">—</span>}
-                    <span className="text-blue-600 ml-3">{levelScores[i] ? levelScores[i].sc : 0}</span>
-                  </span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200">
-                <span className="display text-lg font-medium">Samtals</span>
-                <span className="display text-2xl font-medium text-blue-600">{total} stig</span>
-              </div>
-            </div>
-            <button onClick={start} className="btn px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium shadow-sm">
-              Spila aftur
-            </button>
-          </div>
-        );
-      }
-
-      // play
-      return (
-        <div className="max-w-xl mx-auto px-5 py-8">
-          <header className="flex items-center justify-between mb-5 fade-in">
-            <button onClick={()=>setScreen('intro')} className="text-sm text-gray-400 hover:text-gray-600 font-light">← Hætta</button>
-            <div className="text-right">
-              <div className="text-xs text-gray-400 font-light uppercase tracking-wide">{level.theme}</div>
-              <div className="display text-base font-medium">Borð {li+1} · {level.name}</div>
-            </div>
-          </header>
-
-          <div className="flex items-center justify-between mb-4 text-sm font-light">
-            <span className="text-gray-500">{li+1} / {LEVELS.length}</span>
-            <span className="text-gray-500">Samtals: <span className="font-medium text-gray-800">{total}</span></span>
-          </div>
-
-          {/* BRAUTIN */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
-            <div className="board">
-              <svg width="340" height="360" className="absolute inset-0" style={{zIndex:0}}>
-                {pts.length > 1 && (
-                  <polyline
-                    points={pts.map(p=>`${p.x},${p.y}`).join(' ')}
-                    fill="none" stroke="#e7e0d2" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-                )}
-              </svg>
-              <div className={"stone " + (found ? "lit" : "")}>{found ? "✦" : "ᛟ"}</div>
-              {alive.map((t,i)=> {
-                const p = pts[i] || {x:170,y:175};
-                const cls = "bead " + (removingId===t.id ? "removing " : "") + (hintId===t.id ? "hint " : "");
-                return (
-                  <div key={t.id} className={cls}
-                       style={{ left: p.x, top: p.y }}
-                       onClick={()=>shoot(t.id)}
-                       title="Skjóta burt">
-                    {t.ch}
-                    <span className="val">{STAFGILDI[t.ch.toLowerCase()] ?? ''}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* LESRÖND */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-            <div className="text-xs text-gray-400 font-light uppercase tracking-wide mb-2 text-center">Orðið sem myndast</div>
-            <ReadingStrip word={word} good={found} />
-            {found && (
-              <div className="mt-4 text-center fade-in">
-                <div className="inline-flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-2">
-                  <span className="font-medium">Gilt orð! {liveScore} stig</span>
-                  <button onClick={say}
-                    className="btn inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-100 hover:bg-green-200 text-green-700 text-sm">
-                    <span className={speaking ? "animate-pulse" : ""}>🔊</span> Hlusta
-                  </button>
-                </div>
-              </div>
-            )}
-            {!found && word.length >= 2 && (
-              <div className="mt-3 text-center">
-                <button onClick={checkAI} disabled={aiState.checking}
-                  className="text-xs text-gray-400 hover:text-gray-600 font-light underline underline-offset-2 disabled:opacity-50">
-                  {aiState.checking ? 'Athuga…' : 'Er þetta orð? (AI)'}
-                </button>
-              </div>
-            )}
-            {aiState.msg && <p className="mt-2 text-center text-xs text-amber-600 font-light">{aiState.msg}</p>}
-          </div>
-
-          {/* STJÓRN */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <button onClick={hint} disabled={found}
-              className="btn px-3 py-3 rounded-lg border-2 border-amber-100 text-amber-700 bg-amber-50 hover:bg-amber-100 font-light text-sm disabled:opacity-40">
-              Vísbending
-            </button>
-            <button onClick={undo} disabled={!removed.length || found}
-              className="btn px-3 py-3 rounded-lg border-2 border-gray-200 text-gray-600 hover:bg-gray-50 font-light text-sm disabled:opacity-40">
-              Afturkalla
-            </button>
-            <button onClick={restart}
-              className="btn px-3 py-3 rounded-lg border-2 border-gray-200 text-gray-600 hover:bg-gray-50 font-light text-sm">
-              Endurræsa
-            </button>
-          </div>
-
-          <button onClick={confirmWord} disabled={!found}
-            className="btn w-full px-6 py-4 rounded-xl font-medium text-lg shadow-sm transition-colors
-              disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed
-              bg-green-600 text-white hover:bg-green-700">
-            {found ? `Staðfesta „${word}" → ${liveScore} stig` : 'Myndaðu gilt orð'}
-          </button>
-        </div>
-      );
+  // play
+  return /*#__PURE__*/React.createElement("div", {
+    className: "max-w-xl mx-auto px-5 py-8"
+  }, /*#__PURE__*/React.createElement("header", {
+    className: "flex items-center justify-between mb-5 fade-in"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setScreen('intro'),
+    className: "text-sm text-gray-400 hover:text-gray-600 font-light"
+  }, "← Hætta"), /*#__PURE__*/React.createElement("div", {
+    className: "text-right"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-400 font-light uppercase tracking-wide"
+  }, level.theme), /*#__PURE__*/React.createElement("div", {
+    className: "display text-base font-medium"
+  }, "Borð ", li + 1, " · ", level.name))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-4 text-sm font-light"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-500"
+  }, li + 1, " / ", LEVELS.length), /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-500"
+  }, "Samtals: ", /*#__PURE__*/React.createElement("span", {
+    className: "font-medium text-gray-800"
+  }, total))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "board"
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "340",
+    height: "360",
+    className: "absolute inset-0",
+    style: {
+      zIndex: 0
     }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<Game />);
-  </script>
+  }, pts.length > 1 && /*#__PURE__*/React.createElement("polyline", {
+    points: pts.map(p => `${p.x},${p.y}`).join(' '),
+    fill: "none",
+    stroke: "#e7e0d2",
+    strokeWidth: "6",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "stone " + (found ? "lit" : "")
+  }, found ? "✦" : "ᛟ"), alive.map((t, i) => {
+    const p = pts[i] || {
+      x: 170,
+      y: 175
+    };
+    const cls = "bead " + (removingId === t.id ? "removing " : "") + (hintId === t.id ? "hint " : "");
+    return /*#__PURE__*/React.createElement("div", {
+      key: t.id,
+      className: cls,
+      style: {
+        left: p.x,
+        top: p.y
+      },
+      onClick: () => shoot(t.id),
+      title: "Skjóta burt"
+    }, t.ch, /*#__PURE__*/React.createElement("span", {
+      className: "val"
+    }, STAFGILDI[t.ch.toLowerCase()] ?? ''));
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-gray-400 font-light uppercase tracking-wide mb-2 text-center"
+  }, "Orðið sem myndast"), /*#__PURE__*/React.createElement(ReadingStrip, {
+    word: word,
+    good: found
+  }), found && /*#__PURE__*/React.createElement("div", {
+    className: "mt-4 text-center fade-in"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "inline-flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium"
+  }, "Gilt orð! ", liveScore, " stig"), /*#__PURE__*/React.createElement("button", {
+    onClick: say,
+    className: "btn inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-100 hover:bg-green-200 text-green-700 text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: speaking ? "animate-pulse" : ""
+  }, "🔊"), " Hlusta"))), !found && word.length >= 2 && /*#__PURE__*/React.createElement("div", {
+    className: "mt-3 text-center"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: checkAI,
+    disabled: aiState.checking,
+    className: "text-xs text-gray-400 hover:text-gray-600 font-light underline underline-offset-2 disabled:opacity-50"
+  }, aiState.checking ? 'Athuga…' : 'Er þetta orð? (AI)')), aiState.msg && /*#__PURE__*/React.createElement("p", {
+    className: "mt-2 text-center text-xs text-amber-600 font-light"
+  }, aiState.msg)), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-3 gap-2 mb-3"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: hint,
+    disabled: found,
+    className: "btn px-3 py-3 rounded-lg border-2 border-amber-100 text-amber-700 bg-amber-50 hover:bg-amber-100 font-light text-sm disabled:opacity-40"
+  }, "Vísbending"), /*#__PURE__*/React.createElement("button", {
+    onClick: undo,
+    disabled: !removed.length || found,
+    className: "btn px-3 py-3 rounded-lg border-2 border-gray-200 text-gray-600 hover:bg-gray-50 font-light text-sm disabled:opacity-40"
+  }, "Afturkalla"), /*#__PURE__*/React.createElement("button", {
+    onClick: restart,
+    className: "btn px-3 py-3 rounded-lg border-2 border-gray-200 text-gray-600 hover:bg-gray-50 font-light text-sm"
+  }, "Endurræsa")), /*#__PURE__*/React.createElement("button", {
+    onClick: confirmWord,
+    disabled: !found,
+    className: "btn w-full px-6 py-4 rounded-xl font-medium text-lg shadow-sm transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed bg-green-600 text-white hover:bg-green-700"
+  }, found ? `Staðfesta „${word}" → ${liveScore} stig` : 'Myndaðu gilt orð'));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Game, null));
+</script>
 </body>
 </html>
