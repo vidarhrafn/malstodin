@@ -25,6 +25,10 @@
       transition:left .14s linear, top .14s linear, transform .15s ease, opacity .2s ease;
       z-index:2; }
     .bead:hover{ transform:scale(1.1); box-shadow:0 4px 10px rgba(60,50,30,0.28); z-index:3; }
+    .bead.flash{ background:var(--good-soft); border-color:#86c79c; color:var(--good); z-index:4;
+      box-shadow:0 0 0 3px rgba(21,128,61,0.25), 0 0 14px rgba(21,128,61,0.45);
+      animation:flashpulse .3s ease-in-out 1; }
+    @keyframes flashpulse{ 0%{transform:scale(1);} 45%{transform:scale(1.2);} 100%{transform:scale(1.08);} }
     .bead .val{ position:absolute; right:3px; bottom:1px; font-size:8px; font-weight:600; color:#9a8f7a; }
     .stone{ position:absolute; left:180px; top:195px; width:54px; height:54px; margin-left:-27px; margin-top:-27px;
       border-radius:50%; background:radial-gradient(circle at 38% 32%,#6a655c 0%,#403c36 70%,#2c2924 100%);
@@ -143,13 +147,15 @@ function findSpanningWord(chars, L, R) {
 
 /* Skot á index k → fjarlægja, leita yfir saum, keðjuverkun */
 function resolveShot(beads, k) {
+  const shotId = beads[k].id;
   let arr = beads.slice(0, k).concat(beads.slice(k + 1));
   let seamL = k - 1,
     seamR = k,
     cleared = [],
     combo = 0,
     gained = 0,
-    clearedCount = 0;
+    clearedCount = 0,
+    clearedIds = [];
   while (seamL >= 0 && seamR < arr.length) {
     const chars = arr.map(b => b.ch);
     const span = findSpanningWord(chars, seamL, seamR);
@@ -163,6 +169,7 @@ function resolveShot(beads, k) {
       word,
       mult: combo
     });
+    clearedIds.push(...arr.slice(i, j + 1).map(b => b.id));
     arr = arr.slice(0, i).concat(arr.slice(j + 1));
     seamL = i - 1;
     seamR = i;
@@ -172,7 +179,9 @@ function resolveShot(beads, k) {
     cleared,
     gained,
     clearedCount,
-    combo
+    combo,
+    clearedIds,
+    shotId
   };
 }
 
@@ -221,7 +230,7 @@ function pathPos(d) {
 
 /* ===== Stillanlegar tölur (fínstilltar eftir tilfinningu) ===== */
 const GAP = 30; // bil milli perla (fjarlægðareiningar)
-const START_HEAD = 235; // upphafs-fjarlægð höfuðs frá steini
+const START_HEAD = 340; // upphafs-fjarlægð höfuðs frá steini (utar í spíralnum)
 const STONE_D = 30; // game over þegar höfuð nær þessu
 const BASE_SPEED = 6; // px/sek í byrjun
 const RAMP = 0.22; // hröðun á sek
@@ -240,6 +249,7 @@ function Game() {
   const [cleared, setCleared] = useState(0);
   const [combo, setCombo] = useState(null);
   const [floats, setFloats] = useState([]);
+  const [flashing, setFlashing] = useState(() => new Set());
   const [best, setBest] = useState([]); // lengstu orð
 
   const g = useRef({});
@@ -274,6 +284,7 @@ function Game() {
     setBest([]);
     setCombo(null);
     setFloats([]);
+    setFlashing(new Set());
     setStatus('play');
   }
   const endGame = useCallback(() => {
@@ -329,8 +340,29 @@ function Game() {
     const G = g.current;
     if (!G.running) return;
     const res = resolveShot(G.beads, idx);
-    G.beads = res.arr;
-    if (res.cleared.length) {
+    if (!res.cleared.length) {
+      // ekkert orð: stafurinn flýgur bara út
+      G.beads = res.arr;
+      setBeads([...G.beads]);
+      setHeadD(G.headD);
+      return;
+    }
+
+    // Þrep 1: skotni stafurinn fer strax út → hliðarnar mætast
+    G.beads = G.beads.filter(b => b.id !== res.shotId);
+    setBeads([...G.beads]);
+
+    // Þrep 2: orðið blikkar grænt (sýnir að það var rétt)
+    setFlashing(prev => {
+      const s = new Set(prev);
+      res.clearedIds.forEach(id => s.add(id));
+      return s;
+    });
+
+    // Þrep 3: orðið hverfur, stig og keðjuverkun
+    setTimeout(() => {
+      const ids = new Set(res.clearedIds);
+      G.beads = G.beads.filter(b => !ids.has(b.id));
       G.score += res.gained;
       G.cleared += res.cleared.length;
       G.headD = Math.min(G.headD + res.clearedCount * GAP, SPIRAL.maxS - GAP);
@@ -338,18 +370,22 @@ function Game() {
         word: c.word,
         sc: wordScore(c.word)
       }));
-      // svífandi stig nálægt steini
       const p = pathPos(G.headD);
       addFloat(p.x, p.y - 30, '+' + res.gained);
       if (res.combo > 1) {
         setCombo('Keðja ×' + res.combo + '!');
         setTimeout(() => setCombo(null), 800);
       }
+      setFlashing(prev => {
+        const s = new Set(prev);
+        res.clearedIds.forEach(id => s.delete(id));
+        return s;
+      });
       setScore(G.score);
       setCleared(G.cleared);
-    }
-    setBeads([...G.beads]);
-    setHeadD(G.headD);
+      setBeads([...G.beads]);
+      setHeadD(G.headD);
+    }, 300);
   }
   const dangerD = STONE_D + 70;
   const inDanger = headD < dangerD;
@@ -462,7 +498,7 @@ function Game() {
     const p = pathPos(headD + i * GAP);
     return /*#__PURE__*/React.createElement("div", {
       key: b.id,
-      className: "bead",
+      className: "bead" + (flashing.has(b.id) ? " flash" : ""),
       style: {
         left: p.x,
         top: p.y
