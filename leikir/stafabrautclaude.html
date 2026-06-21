@@ -16,15 +16,15 @@
       background:linear-gradient(to bottom,#f8f7f4 0%,#e8e6e1 100%); min-height:100vh; color:var(--ink); }
     .display{ font-family:'Fraunces',Georgia,serif; }
     .board{ position:relative; width:360px; height:400px; margin:0 auto; overflow:hidden; }
-    .bead{ position:absolute; width:36px; height:36px; margin-left:-18px; margin-top:-18px; border-radius:10px;
+    .bead{ position:absolute; width:34px; height:34px; margin-left:-17px; margin-top:-17px; border-radius:9px;
       display:flex; align-items:center; justify-content:center;
       background:linear-gradient(155deg,var(--parchment) 0%,var(--parchment-edge) 100%);
       border:1px solid rgba(0,0,0,0.06);
       box-shadow:0 2px 5px rgba(60,50,30,0.16), inset 0 1px 0 rgba(255,255,255,0.7);
-      font-weight:600; font-size:17px; color:var(--ink); cursor:pointer; user-select:none;
+      font-weight:600; font-size:16px; color:var(--ink); cursor:pointer; user-select:none;
       transition:left .14s linear, top .14s linear, transform .15s ease, opacity .2s ease;
       z-index:2; }
-    .bead:hover{ transform:scale(1.1); box-shadow:0 4px 10px rgba(60,50,30,0.28); z-index:3; }
+    .bead:hover{ transform:scale(1.12); box-shadow:0 4px 10px rgba(60,50,30,0.28); z-index:3; }
     .bead.flash{ background:var(--good-soft); border-color:#86c79c; color:var(--good); z-index:4;
       box-shadow:0 0 0 3px rgba(21,128,61,0.25), 0 0 14px rgba(21,128,61,0.45);
       animation:flashpulse .3s ease-in-out 1; }
@@ -185,7 +185,8 @@ function resolveShot(beads, k) {
   };
 }
 
-/* ===== Spírals-braut (innri = nálægt steini = hætta) ===== */
+/* ===== Spírals-braut (innri = nálægt steini = hætta) =====
+   coef 4.6, thmax 26 → ~2130 eininga braut, ~4 snúningar, ytri radíus ~142px (rúmast í 360px borði) */
 const SPIRAL = (() => {
   const cx = 180,
     cy = 195,
@@ -193,8 +194,8 @@ const SPIRAL = (() => {
   let s = 0,
     px = null,
     py = null;
-  for (let th = 0; th <= 17.5; th += 0.04) {
-    const r = 22 + 7.4 * th;
+  for (let th = 0; th <= 26; th += 0.03) {
+    const r = 22 + 4.6 * th;
     const x = cx + r * Math.cos(th - Math.PI / 2);
     const y = cy + r * Math.sin(th - Math.PI / 2);
     if (px !== null) s += Math.hypot(x - px, y - py);
@@ -228,16 +229,17 @@ function pathPos(d) {
   };
 }
 
-/* ===== Stillanlegar tölur (fínstilltar eftir tilfinningu) ===== */
-const GAP = 30; // bil milli perla (fjarlægðareiningar)
-const START_HEAD = 340; // upphafs-fjarlægð höfuðs frá steini (utar í spíralnum)
-const STONE_D = 30; // game over þegar höfuð nær þessu
-const BASE_SPEED = 6; // px/sek í byrjun
-const RAMP = 0.22; // hröðun á sek
-const SPAWN_START = 2600; // ms milli nýrra stafa
-const SPAWN_MIN = 1500;
-const SPAWN_RAMP = 22; // ms styttra á sek
-const MAX_BEADS = 24; // yfirflæði = tap
+/* ===== Stillanlegar tölur — rólegt í byrjun, fullt borð, mild hröðun ===== */
+const GAP = 28; // bil milli perla
+const START_HEAD = 1900; // höfuðið byrjar nær ysta enda (af ~2130)
+const STONE_D = 30; // game over þegar höfuðið nær steininum
+const BASE_SPEED = 7; // px/sek í byrjun — rólegt
+const RAMP = 0.10; // mild hröðun á sek
+const SPAWN_START = 2200; // ms milli nýrra stafa
+const SPAWN_MIN = 1400;
+const SPAWN_RAMP = 18; // ms styttra á sek
+const MAX_BEADS = 55; // yfirflæði = tap (hærra þak því brautin er löng)
+const INIT_BEADS = 22; // perlur á borðinu strax í byrjun
 
 let _id = 0;
 const nid = () => 'b' + _id++;
@@ -261,10 +263,13 @@ function Game() {
     const q = [];
     refill(q);
     const init = [];
-    for (let i = 0; i < 6; i++) init.push({
-      id: nid(),
-      ch: q.shift()
-    });
+    for (let i = 0; i < INIT_BEADS; i++) {
+      if (q.length < 2) refill(q);
+      init.push({
+        id: nid(),
+        ch: q.shift()
+      });
+    }
     g.current = {
       beads: init,
       headD: START_HEAD,
