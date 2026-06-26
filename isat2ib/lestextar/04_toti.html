@@ -22,10 +22,16 @@
     .selectable-text { user-select: text; -webkit-user-select: text; cursor: text; }
     .selectable-text::selection { background: #dbeafe; }
     @keyframes popupIn {
-      from { opacity: 0; transform: translateX(-50%) translateY(6px); }
-      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+      from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+      to   { opacity: 1; transform: translate(-50%, -50%); }
     }
     .popup-anim { animation: popupIn 0.2s ease both; }
+    @keyframes taskFlash {
+      0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0);    background-color: #dbeafe; }
+      30%  { box-shadow: 0 0 0 4px rgba(59,130,246,0.45); background-color: #dbeafe; }
+      100% { box-shadow: 0 0 0 0 rgba(59,130,246,0);    background-color: #eff6ff; }
+    }
+    .task-flash { animation: taskFlash 1.1s ease-out 2; }
     @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
     .loading-dots::after { content:'...'; animation: dots 1.5s steps(4,end) infinite; }
   </style>
@@ -230,12 +236,12 @@ function ThydingarPopup({ selectedText, position, language, onClose }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
       <div className="popup-anim fixed z-50 bg-white border-2 border-blue-300 rounded-2xl shadow-xl p-5"
         style={{
-          left: position.x + 'px',
-          top:  position.y + 'px',
-          transform: 'translateX(-50%)',
+          left: '50%',
+          top:  '50%',
+          transform: 'translate(-50%, -50%)',
           width: '340px',
           maxWidth: '90vw',
           maxHeight: 'calc(100vh - 32px)',
@@ -514,14 +520,21 @@ function OrdasambondTab({ language, onDone }) {
     const newLoading = [...loading]; newLoading[i] = true; setLoading(newLoading);
     try {
       const result = await callOpenAI([
-        { role: 'system', content: `Þú ert íslenskukennari sem metur þýðingar nemenda. Vertu sveigjanlegur — smávægilegar stafsetningarvillur, sérstaklega á erlendum nöfnum, eiga ekki að draga úr stigum. Ef þýðingin er ekki fullkomlega nákvæm skaltu í endurgjöfinni útskýra hvað hefði gefið 5/5.` },
-        { role: 'user',   content: `Íslenska orðasambandið er: "${item.is}"\nRétt þýðing á ensku er: "${item.en}"\n\nNemandinn þýddi þetta á ${language || 'móðurmál sitt'}: "${ans}"\n\nMettu hvort þýðingin sé rétt (samþykktu bæði íslensku og enska þýðinguna og þýðingar á öðrum tungumálum ef þær eru réttar).\n\nSvaraðu EINUNGIS:\nSTIG: [0-5]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku]` }
-      ], 120, 0.2);
+        { role: 'system', content: `Þú ert íslenskukennari sem metur þýðingu nemanda á íslensku orðasambandi yfir á MÓÐURMÁL nemandans.
+
+MIKILVÆGT:
+- Enska þýðingin sem fylgir er AÐEINS til viðmiðunar svo þú skiljir merkinguna. Nefndu hana ALDREI í endurgjöf og biddu nemandann ALDREI um að þýða á ensku (nema móðurmál nemandans sé enska).
+- Mettu hvort þýðing nemandans nái réttri merkingu orðasambandsins á móðurmáli hans. Vertu sveigjanlegur um smávægilegar stafsetningarvillur.
+- Ef þýðingin er ekki fullkomlega rétt skaltu gefa RÉTTA þýðingu orðasambandsins á móðurmáli nemandans.` },
+        { role: 'user',   content: `Íslenska orðasambandið: "${item.is}"\nMerking (enska — aðeins til viðmiðunar, ekki nefna í endurgjöf): "${item.en}"\nMóðurmál nemandans: ${language || 'óþekkt'}\nÞýðing nemandans: "${ans}"\n\nSvaraðu EINUNGIS á þessu formi:\nSTIG: [0-5]\nRÉTT: [rétt þýðing orðasambandsins á ${language || 'móðurmáli nemandans'}]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku um þýðingu nemandans — ekki nefna ensku]` }
+      ], 150, 0.2);
       const stigMatch = result.match(/STIG:\s*(\d)/);
+      const rettMatch = result.match(/RÉTT:\s*(.+)/);
       const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/);
       const score     = stigMatch ? parseInt(stigMatch[1]) : 0;
+      const correct   = rettMatch ? rettMatch[1].trim() : '';
       const msg       = endMatch  ? endMatch[1].trim() : result.trim();
-      const newFb = [...feedback]; newFb[i] = { score, msg }; setFeedback(newFb);
+      const newFb = [...feedback]; newFb[i] = { score, msg, correct }; setFeedback(newFb);
       if (newFb.every(f => f !== null)) onDone();
     } catch(e) {
       const newFb = [...feedback]; newFb[i] = { score: 0, msg: 'Villa við mat. Reyndu aftur.' }; setFeedback(newFb);
@@ -569,6 +582,9 @@ function OrdasambondTab({ language, onDone }) {
                 <div className={`mt-3 p-3 rounded-lg border fade-in ${scoreColor}`}>
                   <p className="text-xs font-medium mb-1">Stig: {fb.score}/5</p>
                   <p className="text-sm font-light">{fb.msg}</p>
+                  {fb.score < 5 && fb.correct && (
+                    <p className="text-sm font-light mt-1.5">Rétt þýðing: <span className="font-medium">{fb.correct}</span></p>
+                  )}
                 </div>
               )}
             </div>
@@ -675,7 +691,7 @@ function SpjallbotturTab({ language, onDone }) {
           className="w-20 h-20 rounded-full object-cover border-2 border-gray-100 shadow-sm flex-shrink-0" />
         <div className="flex-1">
           {!chatDone ? (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div key={taskIndex} className="task-flash bg-blue-50 border border-blue-200 rounded-xl p-4">
               <p className="text-xs text-blue-400 uppercase tracking-wide font-medium mb-1">
                 Verkefni {taskIndex+1}/{CHAT_TASKS_EN.length}
               </p>
