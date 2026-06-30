@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kafli 12 – Marta | Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    .selectable-text { user-select: text; -webkit-user-select: text; cursor: text; }
+    .selectable-text::selection { background: #dbeafe; }
+    @keyframes popupIn {
+      from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+      to   { opacity: 1; transform: translate(-50%, -50%); }
+    }
+    .popup-anim { animation: popupIn 0.2s ease both; }
+    @keyframes taskFlash {
+      0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0);    background-color: #dbeafe; }
+      30%  { box-shadow: 0 0 0 4px rgba(59,130,246,0.45); background-color: #dbeafe; }
+      100% { box-shadow: 0 0 0 0 rgba(59,130,246,0);    background-color: #eff6ff; }
+    }
+    .task-flash { animation: taskFlash 1.1s ease-out 2; }
+    @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+    .loading-dots::after { content:'...'; animation: dots 1.5s steps(4,end) infinite; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ══════════════════════════════════════════
+   API
+══════════════════════════════════════════ */
+async function callOpenAI(messages, max_tokens = 300, temperature = 0.3) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens, temperature })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+
+/* ══════════════════════════════════════════
+   GÖGN
+══════════════════════════════════════════ */
+const TEXTI = `Marta á heima í íbúð 3D. Hún er frá Póllandi og hefur búið á Íslandi í fjögur ár. Hulda, nágranni hennar í 3C, býður henni oft í kaffi. Hulda þekkir alla í blokkinni og var grunnskólakennari í fjörutíu ár. Í dag sitja þær við eldhúsborðið hjá Huldu.
+
+„Hulda, má ég spyrja þig að einu?" segir Marta. „Þú heitir Hulda Sigurbjörnsdóttir. Af hverju ber fólk hér nafn pabba síns?"
+
+Hulda brosir. „Já, þetta er öðruvísi hér en í flestum öðrum löndum. Ég er dóttir hans Sigurbjörns, þess vegna heiti ég Sigurbjörnsdóttir. Bróðir minn, Heiðar, er Sigurbjörnsson. Við köllum þetta föðurnafn — maður er kenndur við föður sinn."
+
+„En sumir bera nafn mömmu sinnar, ekki satt?"
+
+„Jú, það er líka til. Þá ber maður móðurnafn. Ein gömul vinkona mín heitir til dæmis Liljudóttir, því hún ólst upp hjá mömmu sinni og pabbi hennar var aldrei inni í myndinni."
+
+Marta kinkar kolli. „Heima í Póllandi er þetta öðruvísi. Þar berum við ættarnafn — sama nafn og öll fjölskyldan."
+
+„Segðu mér frá fjölskyldunni þinni," segir Hulda.
+
+„Hún er pínu flókin," segir Marta og hlær. „Foreldrar mínir voru aldrei saman — pabbi var eiginlega bara fyrrverandi kærasti mömmu. Hann flutti til Þýskalands þegar ég var lítil og ég á núna yngri hálfbróður og hálfsystur þar. Ég þekki þau varla. Mamma var einstæð móðir í mörg ár, en svo kynntist hún stjúppabba mínum, og ég á litla hálfsystur í Póllandi líka."
+
+„Þú átt sem sagt hálfsystkini í tveimur löndum," segir Hulda.
+
+„Nákvæmlega. Og fullt af frændfólki heima — frænkur, frændur, ættingja út um allt. Hér á Íslandi þekki ég engan sem ég er skyld."
+
+Hulda verður hugsi. „Var ekki erfitt að flytja hingað ein?"
+
+„Jú, mjög erfitt fyrst," segir Marta. „Ég þekkti engan og var rosalega einmana. Ég fékk heimþrá og saknaði mömmu og vinkvenna minna á hverjum degi. Allt var öðruvísi — veðrið, maturinn, myrkrið. Og íslenskan! Ég skildi ekkert fyrst og þorði varla að tala. Ég var hrædd við að gera mistök."
+
+„En núna talar þú mjög vel," segir Hulda hlýlega.
+
+„Það tók tíma að venjast, en smám saman vandist ég þessu öllu," segir Marta. „Ég fór á námskeið, kynntist fólki — eins og þér — og hætti að vera hrædd við að gera mistök. Fólk hér er kannski meira út af fyrir sig en heima, en það er ekki vont. Bara öðruvísi."
+
+„Finnst þér Ísland orðið heima?" spyr Hulda.
+
+Marta hugsar sig um. „Stundum. Ég sakna Póllands alltaf pínu. En ég á heima hér líka núna. Kannski getur maður tilheyrt tveimur stöðum."
+
+Hulda kinkar kolli. „Það held ég sé alveg rétt hjá þér."`;
+
+const LYKILORD = ["föðurnafn","móðurnafn","ættarnafn","að vera kenndur við","einstæð móðir","stjúppabbi","hálfsystkini","frændfólk","heimþrá","að sakna","einmana","að venjast","að tilheyra","út af fyrir sig"];
+
+const NU_GET_EG = ["skilið þegar einhver útskýrir íslenska nafnakerfið — föðurnafn og móðurnafn.","skilið þegar einhver lýsir flókinni fjölskyldu — hálfsystkinum, stjúpforeldrum og ættingjum í fleiri en einu landi.","skilið þegar einhver segir frá því að flytja til nýs lands — heimþrá, einmanaleika og hvernig maður venst smám saman.","sagt frá eigin fjölskyldu og uppruna í nokkrum einföldum setningum.","sagt frá eigin reynslu af því að flytja eða aðlagast — hvað var erfitt og hvað hjálpaði."];
+
+const RR_ITEMS = [
+  { id: 1, text: "Marta hefur búið á Íslandi í fjögur ár.", answer: true },
+  { id: 2, text: "Hulda þekkir fáa í blokkinni.", answer: false },
+  { id: 3, text: "Í Póllandi ber öll fjölskyldan sama ættarnafn.", answer: true },
+  { id: 4, text: "Marta á bara hálfsystkini í Þýskalandi.", answer: false },
+  { id: 5, text: "Marta var einmana þegar hún flutti fyrst til Íslands.", answer: true },
+  { id: 6, text: "Marta segir að íslenskt fólk sé vont.", answer: false }
+];
+
+const EFNISSPURNINGAR = ["Hvaðan er Marta og hversu lengi hefur hún búið á Íslandi?","Hvers vegna er Hulda Sigurbjörnsdóttir?","Hvers konar nafn ber fólk í Póllandi?","Í hvaða tveimur löndum á Marta hálfsystkini?","Hvað hjálpaði Mörtu að venjast lífinu á Íslandi?"];
+
+const ORDASAMBAND_ITEMS = [
+  { is: "að vera kenndur við einhvern", en: "to be named after someone" },
+  { is: "að vera ekki inni í myndinni", en: "to not be part of someone's life" },
+  { is: "að fá heimþrá", en: "to get / feel homesick" },
+  { is: "að tilheyra tveimur stöðum", en: "to belong to two places" }
+];
+
+const CHARACTER_SYSTEM = `Þú ert Marta, kona frá Póllandi sem hefur búið á Íslandi í fjögur ár. Þú átt heima í íbúð 3D í Dúfnahólum 10. Nágranni þinn, Hulda í 3C, býður þér oft í kaffi. Fjölskyldan þín er flókin: pabbi þinn (fyrrverandi kærasti mömmu) flutti til Þýskalands þegar þú varst lítil og þar áttu yngri hálfbróður og hálfsystur sem þú þekkir varla. Mamma þín var einstæð móðir í mörg ár en kynntist svo stjúppabba þínum, og þú átt litla hálfsystur í Póllandi. Þú átt mikið frændfólk heima en engan ættingja á Íslandi. Fyrst var mjög erfitt að flytja — þú varst einmana, fékkst heimþrá og þorðir varla að tala íslensku. En smám saman vandist þú öllu, fórst á námskeið og kynntist fólki. Núna líður þér vel og finnst þú eiga heima á tveimur stöðum.
+
+Bakgrunnur sem þú mátt nota þegar spurt er:
+- Hversu lengi þú hefur búið á Íslandi: í fjögur ár núna; fyrst fannst mér það ógnarlangur tími en núna er ég farin að venjast öllu.
+- Hvort þú saknir fjölskyldunnar: já, alltaf pínu; ég sakna mömmu mest, og frændfólksins heima; en við tölum saman í símanum á hverjum degi.
+- Hvernig þér líður á Íslandi: mér líður vel hér; fólk er kannski meira út af fyrir sig en heima en það er gott fólk; mér finnst ég eiga heima á tveimur stöðum núna.
+- Hvernig það var þegar þú fluttir fyrst: mjög erfitt fyrst; ég þekkti engan og var rosalega einmana, fékk mikla heimþrá; en smám saman kynntist ég fólki og þá varð allt léttara.
+
+Svaraðu ALLTAF á einfaldri en réttri íslensku (A2 stig) — stuttar, einfaldar setningar.
+Svaraðu AÐEINS spurningum — bjóddu ekki upp á viðbótarupplýsingar.
+Segðu „Það veit ég ekki" ef spurt er um eitthvað sem er ekki hluti af sögu þinni.`;
+
+const CHAT_TASKS_EN = ["Ask Marta — in Icelandic — how long she has lived in Iceland.","Ask Marta — in Icelandic — whether she misses her family.","Ask Marta — in Icelandic — how she feels / is doing in Iceland.","Ask Marta — in Icelandic — what it was like when she first moved to Iceland."];
+
+const FEEDBACK_SYSTEM = `Þú ert íslenskukennari. Nemandinn var að spyrja Mörtu fjögurra spurninga á íslensku.
+Mettu HVERja spurningu fyrir sig með tilliti til:
+1. Rétt spurnarorð / setningagerð.
+2. Rétt orðaröð.
+3. Rétt fallastjórn — sjá athugasemdir.
+
+MIKILVÆGAR MÁLFRÆÐILEGAR ATHUGASEMDIR:
+- Þetta er UPPRIFJUNARÞREP (þrep 12) — engin ný form, heldur samantekt á fyrri þrepum. Tvö fallaviðbrögð fá sérstaka áherslu.
+- Verkefni 1 (hversu lengi hún hefur búið): rétt er „Hversu lengi hefur þú búið á Íslandi?" — nútíð sem nær yfir tíma. Einnig „Hvað hefur þú búið lengi á Íslandi?".
+- Verkefni 2 (hvort hún saknar fjölskyldunnar): rétt er „Saknar þú fjölskyldunnar þinnar?". MIKILVÆGT: sögnin SAKNA stýrir EIGNARFALLI — fjölskyldunnar (ekki fjölskyldan/fjölskylduna). Ef nemandi skrifar „Saknar þú fjölskyldan þín?" (nf.) eða „...fjölskylduna þína?" (þf.) skaltu útskýra stutt: sakna tekur eignarfall — ég sakna fjölskyldunnar minnar. Berðu saman: ég sakna mömmu, ég sakna Póllands.
+- Verkefni 3 (hvernig henni líður): rétt er „Hvernig líður þér á Íslandi?". Einnig „Finnst þér gott að búa á Íslandi?". MIKILVÆGT: líður og finnst taka FRUMLAG Í ÞÁGUFALLI — mér líður, þér finnst (ekki ég líð / þú finnst). Ef nemandi notar nefnifall (ég/þú) skaltu minna á þágufallið.
+- Verkefni 4 (hvernig það var þegar hún flutti): rétt er „Hvernig var það þegar þú fluttir fyrst til Íslands?" — þátíðarspurning. Einnig „Var það erfitt þegar þú fluttir hingað?".
+- "hefur þú"/"hefurðu", "saknar þú"/"saknarðu", "fluttir þú"/"fluttirðu" eru öll rétt.
+- Vertu sveigjanlegur — samþykktu allar réttar leiðir og horfðu fram hjá smávægilegum stafsetningarvillum.
+
+Svaraðu á þessu formi fyrir hverja spurningu:
+SPURNING 1: [spurningin sem nemandinn skrifaði]
+MAT 1: [Rétt / Rangt / Hlutrétt]
+ATHUGASEMD 1: [ein stutt setning á íslensku]
+
+SPURNING 2: ...
+MAT 2: ...
+ATHUGASEMD 2: ...
+
+SPURNING 3: ...
+MAT 3: ...
+ATHUGASEMD 3: ...
+
+SPURNING 4: ...
+MAT 4: ...
+ATHUGASEMD 4: ...
+
+HEILDARSTIG: [0-5]
+HEILDARENDURGJÖF: [ein hvetjandi setning á íslensku]`;
+
+/* ══════════════════════════════════════════
+   HJÁLPARFÖLL
+══════════════════════════════════════════ */
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+/* ══════════════════════════════════════════
+   SHARED COMPONENTS
+══════════════════════════════════════════ */
+const TabBar = ({ tabs, active, onSelect, done }) => (
+  <div className="flex border-b border-gray-200 overflow-x-auto">
+    {tabs.map(t => (
+      <button key={t.id} onClick={() => onSelect(t.id)}
+        className={`flex items-center gap-1.5 px-4 py-3.5 text-sm whitespace-nowrap transition-colors border-b-2
+          ${active === t.id
+            ? 'border-blue-600 text-blue-700 font-medium bg-blue-50/40'
+            : 'border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
+        {done.has(t.id) && <span className="text-green-500 text-xs">✓</span>}
+        {t.label}
+      </button>
+    ))}
+  </div>
+);
+
+const CheckBtn = ({ onClick, disabled, label }) => (
+  <button onClick={onClick} disabled={disabled}
+    className="mt-6 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+      disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+    {label || 'Athuga svör'}
+  </button>
+);
+
+const ScoreBadge = ({ score, total }) => {
+  const pct = score/total;
+  const cls = pct===1 ? 'bg-green-50 border-green-200 text-green-800'
+            : pct>=0.6 ? 'bg-amber-50 border-amber-200 text-amber-800'
+                       : 'bg-red-50 border-red-200 text-red-800';
+  const msg = pct===1 ? 'Frábærlega gert! 🌟'
+            : pct>=0.6 ? 'Gott starf! Skoðaðu leiðréttingarnar.'
+                       : 'Endurlestu textann og prófaðu aftur.';
+  return (
+    <div className={`mt-4 p-4 rounded-xl border fade-in ${cls}`}>
+      <p className="font-medium">{score}/{total} rétt</p>
+      <p className="text-sm font-light mt-0.5">{msg}</p>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════
+   ÞÝÐINGARPOPUP
+══════════════════════════════════════════ */
+function ThydingarPopup({ selectedText, position, language, onClose }) {
+  const [translation, setTranslation] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleTranslate = async () => {
+    setLoading(true);
+    try {
+      const result = await callOpenAI([
+        { role: 'system', content: 'You are a helpful language learning assistant for Icelandic students.' },
+        { role: 'user',   content: `A student learning Icelandic has selected this text and needs help understanding it in ${language}.\n\nSELECTED TEXT (Icelandic): "${selectedText}"\n\nProvide:\n1. Translation to ${language}\n2. Brief explanation if needed (in ${language})\n\nKeep it concise. Respond ONLY in ${language}.` }
+      ], 300, 0.3);
+      setTranslation(result);
+    } catch(e) { setTranslation('Villa kom upp. Reyndu aftur.'); }
+    finally { setLoading(false); }
+  };
+
+  return ReactDOM.createPortal(
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <div className="popup-anim fixed z-50 bg-white border-2 border-blue-300 rounded-2xl shadow-xl p-5"
+        style={{
+          left: '50%',
+          top:  '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '340px',
+          maxWidth: '90vw',
+          maxHeight: 'calc(100vh - 32px)',
+          overflowY: 'auto',
+        }}>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1">
+            <p className="text-xs text-gray-400 mb-1">Valinn texti:</p>
+            <p className="text-sm text-gray-700 italic font-light">„{selectedText}"</p>
+          </div>
+          <button onClick={onClose} className="text-gray-300 hover:text-gray-600 text-2xl leading-none ml-3">×</button>
+        </div>
+        {!translation ? (
+          <button onClick={handleTranslate} disabled={loading}
+            className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors font-light text-sm">
+            {loading ? <span className="loading-dots">Þýði</span> : `🌐 Þýða á ${language}`}
+          </button>
+        ) : (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 fade-in">
+            <p className="text-xs text-blue-400 mb-2">🌐 Þýðing:</p>
+            <p className="text-sm text-gray-800 font-light whitespace-pre-wrap">{translation}</p>
+          </div>
+        )}
+      </div>
+    </>,
+    document.body
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 1 — Lestexti
+══════════════════════════════════════════ */
+function LestextiTab({ language, setLanguage }) {
+  const [langInput, setLangInput] = useState('');
+  const [confirmed, setConfirmed] = useState(!!language);
+  const [popup, setPopup]         = useState(null);
+
+  const handleConfirm = () => {
+    if (langInput.trim()) { setLanguage(langInput.trim()); setConfirmed(true); }
+  };
+
+  const handleSelection = () => {
+    if (!confirmed) return;
+    setTimeout(() => {
+      const sel  = window.getSelection();
+      const text = sel.toString().trim();
+      if (!text || text.length < 2) return;
+      const range = sel.getRangeAt(0);
+      const rect  = range.getBoundingClientRect();
+      const popupWidth = 340;
+      const margin = 16;
+      const halfWidth = popupWidth / 2;
+      const x = Math.min(
+        Math.max(rect.left + rect.width / 2, halfWidth + margin),
+        window.innerWidth - halfWidth - margin
+      );
+      const estimatedPopupHeight = 260;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const y = spaceBelow < estimatedPopupHeight
+        ? Math.max(margin, rect.top - estimatedPopupHeight - 12)
+        : rect.bottom + 12;
+      setPopup({ text, x, y });
+    }, 80);
+  };
+
+  return (
+    <div className="fade-in space-y-5">
+      {/* Tungumálval */}
+      <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+        {!confirmed ? (
+          <div className="flex gap-2 items-center flex-wrap">
+            <span className="text-sm text-gray-500 font-light">🌐 Móðurmál:</span>
+            <input type="text" value={langInput} onChange={e => setLangInput(e.target.value)}
+              onKeyDown={e => e.key==='Enter' && handleConfirm()}
+              placeholder="t.d. English, Polski, 中文…"
+              className="flex-1 min-w-0 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            <button onClick={handleConfirm} disabled={!langInput.trim()}
+              className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+              Staðfesta
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600 font-light">
+              🌐 <span className="font-medium">{language}</span>
+              <span className="text-gray-400 ml-2">— Merktu orð í textanum til að þýða</span>
+            </p>
+            <button onClick={() => { setConfirmed(false); setLangInput(''); setPopup(null); }}
+              className="text-xs text-blue-500 hover:text-blue-700 font-light">Breyta</button>
+          </div>
+        )}
+      </div>
+
+      {/* Texti */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <img src="../media/12_marta.png" alt="Marta"
+          className="float-left mr-5 mb-3 w-48 rounded-lg border border-gray-100 shadow-sm object-cover" />
+        <div className={`selectable-text ${!confirmed ? 'opacity-60' : ''}`}
+          onMouseUp={handleSelection} onTouchEnd={handleSelection}>
+          {TEXTI.split('\n\n').map((p, i) => (
+            <p key={i} className="text-gray-700 font-light leading-relaxed mb-4 last:mb-0">{p}</p>
+          ))}
+        </div>
+        <div className="clear-both" />
+        {!confirmed && (
+          <p className="text-xs text-gray-400 font-light mt-3 text-center">
+            ⬆️ Skráðu móðurmál þitt til að geta þýtt orð
+          </p>
+        )}
+      </div>
+
+      {/* Lykilorð */}
+      <div className="bg-amber-50 rounded-xl border border-amber-100 p-5">
+        <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Lykilorðaforði</p>
+        <div className="flex flex-wrap gap-2">
+          {LYKILORD.map(w => (
+            <span key={w} className="text-sm bg-white border border-amber-200 text-amber-900 font-light px-3 py-1 rounded-full">{w}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Nú get ég */}
+      <div className="bg-blue-50 rounded-xl border border-blue-100 p-5">
+        <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-3">Nú get ég…</p>
+        <ul className="space-y-2">
+          {NU_GET_EG.map((s, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-blue-800 font-light">
+              <span className="text-blue-400 mt-0.5 flex-shrink-0">✓</span>{s}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {popup && confirmed && (
+        <ThydingarPopup selectedText={popup.text} position={{ x: popup.x, y: popup.y }}
+          language={language} onClose={() => { setPopup(null); window.getSelection().removeAllRanges(); }} />
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 2 — Rétt eða rangt
+══════════════════════════════════════════ */
+function RettRangtTab({ onDone }) {
+  const [answers, setAnswers] = useState({});
+  const [checked, setChecked] = useState(false);
+  const score = checked ? RR_ITEMS.filter(it => answers[it.id] === it.answer).length : null;
+
+  return (
+    <div className="fade-in">
+      <p className="text-sm text-gray-500 font-light mb-5">
+        Lestu textann og merktu <strong className="font-medium">R</strong> (rétt) eða <strong className="font-medium">X</strong> (rangt).
+      </p>
+      <div className="space-y-3">
+        {RR_ITEMS.map(item => {
+          const ans    = answers[item.id];
+          const isRight = checked && ans === item.answer;
+          const isWrong = checked && ans !== item.answer;
+          return (
+            <div key={item.id} className={`p-4 rounded-xl border transition-all
+              ${isRight ? 'bg-green-50 border-green-200' : isWrong ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100 shadow-sm'}`}>
+              <p className={`text-sm font-light mb-3 ${isRight ? 'text-green-800' : isWrong ? 'text-red-800' : 'text-gray-700'}`}>
+                {item.id}. {item.text}
+              </p>
+              <div className="flex gap-2 items-center">
+                {[true, false].map(val => (
+                  <button key={String(val)} onClick={() => !checked && setAnswers(a => ({ ...a, [item.id]: val }))}
+                    disabled={checked}
+                    className={`px-4 py-1.5 rounded-lg text-sm border transition-all font-light
+                      ${ans === val
+                        ? checked
+                          ? val === item.answer ? 'bg-green-600 text-white border-green-600' : 'bg-red-500 text-white border-red-500'
+                          : 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}
+                      disabled:cursor-default`}>
+                    {val ? 'R Rétt' : 'X Rangt'}
+                  </button>
+                ))}
+                {isWrong && <span className="text-xs text-gray-400 font-light ml-1">→ {item.answer ? 'Rétt' : 'Rangt'}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!checked
+        ? <CheckBtn onClick={() => { setChecked(true); onDone(); }} disabled={Object.keys(answers).length < RR_ITEMS.length} />
+        : <ScoreBadge score={score} total={RR_ITEMS.length} />}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 3 — Efnisspurningar
+══════════════════════════════════════════ */
+function EfnisspurningarTab({ onDone }) {
+  const [answers, setAnswers]   = useState(Array(EFNISSPURNINGAR.length).fill(''));
+  const [feedback, setFeedback] = useState(Array(EFNISSPURNINGAR.length).fill(null));
+  const [loading, setLoading]   = useState(Array(EFNISSPURNINGAR.length).fill(false));
+  const [allDone, setAllDone]   = useState(false);
+
+  const handleCheck = async (i) => {
+    const ans = answers[i].trim();
+    if (!ans) return;
+    const newLoading = [...loading]; newLoading[i] = true; setLoading(newLoading);
+    try {
+      const result = await callOpenAI([
+        { role: 'system', content: 'Þú ert íslenskukennari sem metur svör nemenda í lesskilningsæfingu. Vertu vingjarnlegur og hvetjandi. Vertu sveigjanlegur um málfræði og stafsetningu — það mikilvæga er að efnið sé rétt. Vertu sérstaklega sveigjanlegur um nöfn og staði (t.d. Marta, Hulda, Pólland, Þýskaland) — smávægilegar stafsetningarvillur eiga ekki að draga úr stigum.' },
+        { role: 'user',   content: `Texti: "${TEXTI}"\n\nSpurning: "${EFNISSPURNINGAR[i]}"\n\nSvar nemanda: "${ans}"\n\nMetur svarið. Sveigjanlegur um málfræði og stafsetningu — það mikilvæga er að efnið sé rétt.\n\nSvaraðu EINUNGIS:\nSTIG: [0-5]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku]` }
+      ], 120, 0.2);
+      const stigMatch = result.match(/STIG:\s*(\d)/);
+      const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/);
+      const score     = stigMatch ? parseInt(stigMatch[1]) : 0;
+      const msg       = endMatch  ? endMatch[1].trim() : result.trim();
+      const newFb = [...feedback]; newFb[i] = { score, msg }; setFeedback(newFb);
+      if (newFb.every(f => f !== null) && !allDone) { setAllDone(true); onDone(); }
+    } catch(e) {
+      const newFb = [...feedback]; newFb[i] = { score: 0, msg: 'Villa við mat. Reyndu aftur.' }; setFeedback(newFb);
+    } finally {
+      const newL = [...loading]; newL[i] = false; setLoading(newL);
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <p className="text-sm text-gray-500 font-light mb-5">
+        Svaraðu spurningunum með stuttum setningum. AI kennari metur svörin þín.
+      </p>
+      <div className="space-y-5">
+        {EFNISSPURNINGAR.map((sp, i) => {
+          const fb   = feedback[i];
+          const done = fb !== null;
+          const scoreColor = done
+            ? fb.score >= 4 ? 'bg-green-50 border-green-200 text-green-700'
+            : fb.score >= 2 ? 'bg-amber-50 border-amber-200 text-amber-700'
+                            : 'bg-red-50 border-red-200 text-red-700'
+            : '';
+          return (
+            <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <p className="text-sm font-medium text-gray-700 mb-3">{i+1}. {sp}</p>
+              <textarea value={answers[i]}
+                onChange={e => { if (done) return; const upd = [...answers]; upd[i] = e.target.value; setAnswers(upd); }}
+                onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey && !done) { e.preventDefault(); handleCheck(i); } }}
+                disabled={done} rows={2} placeholder="Skrifaðu svar hér…"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm resize-none disabled:bg-gray-50 disabled:cursor-default transition-colors" />
+              {!done ? (
+                <button onClick={() => handleCheck(i)} disabled={loading[i] || !answers[i].trim()}
+                  className="mt-3 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                  {loading[i] ? '…' : 'Athuga'}
+                </button>
+              ) : (
+                <div className={`mt-3 p-3 rounded-lg border fade-in ${scoreColor}`}>
+                  <p className="text-xs font-medium mb-1">Stig: {fb.score}/5</p>
+                  <p className="text-sm font-light">{fb.msg}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 4 — Orðasambönd (þýðing)
+══════════════════════════════════════════ */
+function OrdasambondTab({ language, onDone }) {
+  const [answers, setAnswers]   = useState(Array(ORDASAMBAND_ITEMS.length).fill(''));
+  const [feedback, setFeedback] = useState(Array(ORDASAMBAND_ITEMS.length).fill(null));
+  const [loading, setLoading]   = useState(Array(ORDASAMBAND_ITEMS.length).fill(false));
+
+  const handleCheck = async (i) => {
+    const ans = answers[i].trim();
+    if (!ans) return;
+    const item = ORDASAMBAND_ITEMS[i];
+    const newLoading = [...loading]; newLoading[i] = true; setLoading(newLoading);
+    try {
+      const result = await callOpenAI([
+        { role: 'system', content: `Þú ert íslenskukennari sem metur þýðingu nemanda á íslensku orðasambandi yfir á MÓÐURMÁL nemandans.
+
+MIKILVÆGT:
+- Enska þýðingin sem fylgir er AÐEINS til viðmiðunar svo þú skiljir merkinguna. Nefndu hana ALDREI í endurgjöf og biddu nemandann ALDREI um að þýða á ensku (nema móðurmál nemandans sé enska).
+- Mettu hvort þýðing nemandans nái réttri merkingu orðasambandsins á móðurmáli hans. Vertu sveigjanlegur um smávægilegar stafsetningarvillur.
+- Ef þýðingin er ekki fullkomlega rétt skaltu gefa RÉTTA þýðingu orðasambandsins á móðurmáli nemandans.` },
+        { role: 'user',   content: `Íslenska orðasambandið: "${item.is}"\nMerking (enska — aðeins til viðmiðunar, ekki nefna í endurgjöf): "${item.en}"\nMóðurmál nemandans: ${language || 'óþekkt'}\nÞýðing nemandans: "${ans}"\n\nSvaraðu EINUNGIS á þessu formi:\nSTIG: [0-5]\nRÉTT: [rétt þýðing orðasambandsins á ${language || 'móðurmáli nemandans'}]\nENDURGJÖF: [ein stutt vinaleg setning á íslensku um þýðingu nemandans — ekki nefna ensku]` }
+      ], 150, 0.2);
+      const stigMatch = result.match(/STIG:\s*(\d)/);
+      const rettMatch = result.match(/RÉTT:\s*(.+)/);
+      const endMatch  = result.match(/ENDURGJÖF:\s*(.+)/);
+      const score     = stigMatch ? parseInt(stigMatch[1]) : 0;
+      const correct   = rettMatch ? rettMatch[1].trim() : '';
+      const msg       = endMatch  ? endMatch[1].trim() : result.trim();
+      const newFb = [...feedback]; newFb[i] = { score, msg, correct }; setFeedback(newFb);
+      if (newFb.every(f => f !== null)) onDone();
+    } catch(e) {
+      const newFb = [...feedback]; newFb[i] = { score: 0, msg: 'Villa við mat. Reyndu aftur.' }; setFeedback(newFb);
+    } finally {
+      const newL = [...loading]; newL[i] = false; setLoading(newL);
+    }
+  };
+
+  if (!language) return (
+    <div className="fade-in">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 font-light">
+        ⬅️ Farðu fyrst í <strong className="font-medium">Lestexta</strong> flipann og skráðu móðurmál þitt.
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fade-in">
+      <p className="text-sm text-gray-500 font-light mb-5">
+        Þýddu orðasamböndin yfir á <span className="font-medium">{language}</span>. AI kennari metur svörin þín.
+      </p>
+      <div className="space-y-4">
+        {ORDASAMBAND_ITEMS.map((item, i) => {
+          const fb   = feedback[i];
+          const done = fb !== null;
+          const scoreColor = done
+            ? fb.score >= 4 ? 'bg-green-50 border-green-200 text-green-700'
+            : fb.score >= 2 ? 'bg-amber-50 border-amber-200 text-amber-700'
+                            : 'bg-red-50 border-red-200 text-red-700'
+            : '';
+          return (
+            <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <p className="text-lg font-medium text-gray-800 mb-3">{item.is}</p>
+              <input type="text" value={answers[i]}
+                onChange={e => { if (done) return; const upd = [...answers]; upd[i] = e.target.value; setAnswers(upd); }}
+                onKeyDown={e => { if (e.key==='Enter' && !done) handleCheck(i); }}
+                disabled={done} placeholder={`Þýðing á ${language}…`}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light text-sm disabled:bg-gray-50 disabled:cursor-default transition-colors" />
+              {!done ? (
+                <button onClick={() => handleCheck(i)} disabled={loading[i] || !answers[i].trim()}
+                  className="mt-3 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                  {loading[i] ? '…' : 'Athuga'}
+                </button>
+              ) : (
+                <div className={`mt-3 p-3 rounded-lg border fade-in ${scoreColor}`}>
+                  <p className="text-xs font-medium mb-1">Stig: {fb.score}/5</p>
+                  <p className="text-sm font-light">{fb.msg}</p>
+                  {fb.score < 5 && fb.correct && (
+                    <p className="text-sm font-light mt-1.5">Rétt þýðing: <span className="font-medium">{fb.correct}</span></p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FLIPI 5 — Spjallbottur (Marta)
+══════════════════════════════════════════ */
+function SpjallbotturTab({ language, onDone }) {
+  const [messages, setMessages]   = useState([]);
+  const [input, setInput]         = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [taskIndex, setTaskIndex] = useState(0);
+  const [chatDone, setChatDone]   = useState(false);
+  const [feedback, setFeedback]   = useState(null);
+  const [fetchingFeedback, setFetchingFeedback] = useState(false);
+  const [userQuestions, setUserQuestions] = useState([]);
+  const [translatedTasks, setTranslatedTasks] = useState(null);
+  const bottomRef = useRef(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, feedback]);
+
+  useEffect(() => {
+    if (!language) { setTranslatedTasks(CHAT_TASKS_EN); return; }
+    const lang = language.toLowerCase();
+    if (lang === 'english' || lang === 'enska') { setTranslatedTasks(CHAT_TASKS_EN); return; }
+    (async () => {
+      try {
+        const result = await callOpenAI([
+          { role: 'system', content: 'You are a translator. Translate the given English instructions to the requested language. Keep the structure exactly the same, just translate. Return ONLY a JSON array of strings, no markdown.' },
+          { role: 'user', content: `Translate these ${CHAT_TASKS_EN.length} instructions to ${language}. Also translate the phrase "in Icelandic" to ${language}:\n${JSON.stringify(CHAT_TASKS_EN)}` }
+        ], 300, 0.1);
+        const cleaned = result.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        setTranslatedTasks(parsed);
+      } catch(e) { setTranslatedTasks(CHAT_TASKS_EN); }
+    })();
+  }, [language]);
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || loading || chatDone) return;
+    setInput('');
+
+    const newUserQ = [...userQuestions, text];
+    setUserQuestions(newUserQ);
+
+    const newMessages = [...messages, { role: 'user', content: text }];
+    setMessages(newMessages);
+    setLoading(true);
+
+    try {
+      const apiMessages = [
+        { role: 'system', content: CHARACTER_SYSTEM },
+        ...newMessages
+      ];
+      const reply = await callOpenAI(apiMessages, 150, 0.5);
+      const withReply = [...newMessages, { role: 'assistant', content: reply }];
+      setMessages(withReply);
+
+      const newIndex = taskIndex + 1;
+      setTaskIndex(newIndex);
+
+      if (newIndex >= CHAT_TASKS_EN.length) {
+        setChatDone(true);
+        setFetchingFeedback(true);
+        try {
+          const fbResult = await callOpenAI([
+            { role: 'system', content: FEEDBACK_SYSTEM },
+            { role: 'user', content: CHAT_TASKS_EN.map((t, qi) => `Verkefni ${qi+1}: "${t}"\nSpurning nemanda: "${newUserQ[qi] || ''}"`).join('\n\n') }
+          ], 450, 0.2);
+          setFeedback(fbResult);
+          onDone();
+        } catch(e) { setFeedback('Villa við endurgjöf. Reyndu aftur.'); }
+        finally { setFetchingFeedback(false); }
+      }
+    } catch(e) {
+      setMessages(m => [...m, { role: 'assistant', content: 'Villa kom upp. Reyndu aftur.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!translatedTasks) return (
+    <div className="fade-in flex items-center justify-center py-12">
+      <p className="text-sm text-gray-400 font-light"><span className="loading-dots">Undirbý verkefni</span></p>
+    </div>
+  );
+
+  const currentTask = translatedTasks[Math.min(taskIndex, CHAT_TASKS_EN.length-1)];
+
+  return (
+    <div className="fade-in space-y-4">
+      <div className="flex gap-4 items-start">
+        <img src="../media/12_marta_haus.png" alt="Marta"
+          className="w-20 h-20 rounded-full object-cover border-2 border-gray-100 shadow-sm flex-shrink-0" />
+        <div className="flex-1">
+          {!chatDone ? (
+            <div key={taskIndex} className="task-flash bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-xs text-blue-400 uppercase tracking-wide font-medium mb-1">
+                Verkefni {taskIndex+1}/{CHAT_TASKS_EN.length}
+              </p>
+              <p className="text-sm text-blue-800 font-light">{currentTask}</p>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <p className="text-sm text-green-800 font-light">✓ Samtalinu er lokið! Endurgjöf birtist hér að neðan.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {CHAT_TASKS_EN.map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500
+            ${i < taskIndex ? 'bg-green-500' : i === taskIndex && !chatDone ? 'bg-blue-400' : 'bg-gray-200'}`} />
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-gray-50 border-b border-gray-100 px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm">👩</div>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Marta</p>
+            <p className="text-xs text-gray-400 font-light">Íbúð 3D · Dúfnahólar 10</p>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto p-4 space-y-3" style={{ minHeight: '280px', maxHeight: '380px' }}>
+          {messages.length === 0 && (
+            <p className="text-sm text-gray-400 font-light text-center mt-8">Byrjaðu samtalið hér að neðan…</p>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role==='user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm font-light leading-relaxed
+                ${m.role==='user'
+                  ? 'bg-blue-600 text-white rounded-br-sm'
+                  : 'bg-gray-100 text-gray-800 rounded-bl-sm'}`}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 text-gray-500 px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm font-light">
+                <span className="loading-dots">…</span>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {!chatDone && (
+          <div className="border-t border-gray-100 p-3 flex gap-2">
+            <input type="text" value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key==='Enter' && handleSend()}
+              disabled={loading} placeholder="Skrifaðu spurningu á íslensku…"
+              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-light focus:outline-none focus:border-blue-400 disabled:bg-gray-50 transition-colors" />
+            <button onClick={handleSend} disabled={loading || !input.trim()}
+              className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+              Senda
+            </button>
+          </div>
+        )}
+      </div>
+
+      {chatDone && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 fade-in">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4">📝 Endurgjöf á spurningamyndun</p>
+          {fetchingFeedback ? (
+            <p className="text-sm text-gray-400 font-light">
+              <span className="loading-dots">Á að meta spurningarnar</span>
+            </p>
+          ) : feedback ? (
+            <div className="space-y-3">
+              {feedback.split('\n').filter(l => l.trim()).map((line, i) => {
+                const isHeading = line.startsWith('SPURNING') || line.startsWith('HEILDARSTIG') || line.startsWith('HEILDARENDURGJÖF');
+                const isGood    = line.startsWith('MAT') && line.includes('Rétt');
+                const isBad     = line.startsWith('MAT') && (line.includes('Rangt') || line.includes('Hlutrétt'));
+                return (
+                  <p key={i} className={`text-sm font-light
+                    ${isHeading ? 'font-medium text-gray-700 mt-3' : ''}
+                    ${isGood    ? 'text-green-700' : ''}
+                    ${isBad     ? 'text-amber-700' : 'text-gray-600'}`}>
+                    {line}
+                  </p>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   AÐALFORRITIÐ
+══════════════════════════════════════════ */
+const TABS = [
+  { id: 'lestur',      label: '📖 Lestexti'        },
+  { id: 'rr',          label: '✓✗ Rétt/rangt'      },
+  { id: 'efnis',       label: '💬 Efnisspurningar'  },
+  { id: 'ordasamb',    label: '📝 Orðasambönd'      },
+  { id: 'spjall',      label: '🤖 Talaðu við Mörtu' },
+];
+
+function App() {
+  const [activeTab, setActiveTab] = useState('lestur');
+  const [done, setDone]           = useState(new Set(['lestur']));
+  const [language, setLanguage]   = useState('');
+  const markDone = id => setDone(prev => new Set([...prev, id]));
+  const allDone  = TABS.every(t => done.has(t.id));
+
+  return (
+    <div className="min-h-screen">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-7">
+          <button onClick={() => window.history.back()}
+            className="text-sm text-gray-400 hover:text-gray-600 mb-3 inline-block font-light">
+            ← Til baka
+          </button>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-medium text-blue-400 uppercase tracking-widest mb-1">Kafli 12 · A2–B1</p>
+              <h1 className="text-3xl font-light text-gray-800 mb-1">Marta</h1>
+              <p className="text-gray-500 text-sm font-light">Flókin fjölskylda, nöfn og að tilheyra tveimur stöðum</p>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-4xl mx-auto bg-white">
+          <TabBar tabs={TABS} active={activeTab} onSelect={setActiveTab} done={done} />
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-7">
+          {activeTab === 'lestur'   && <LestextiTab language={language} setLanguage={setLanguage} />}
+          {activeTab === 'rr'       && <RettRangtTab       onDone={() => markDone('rr')} />}
+          {activeTab === 'efnis'    && <EfnisspurningarTab onDone={() => markDone('efnis')} />}
+          {activeTab === 'ordasamb' && <OrdasambondTab     language={language} onDone={() => markDone('ordasamb')} />}
+          {activeTab === 'spjall'   && <SpjallbotturTab    language={language} onDone={() => markDone('spjall')} />}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-1.5">
+            {TABS.map(t => (
+              <div key={t.id} className={`h-1.5 w-10 rounded-full transition-all duration-500
+                ${done.has(t.id) ? 'bg-green-500' : activeTab === t.id ? 'bg-blue-400' : 'bg-gray-200'}`} />
+            ))}
+            <span className="text-xs text-gray-400 font-light ml-1">{done.size}/{TABS.length}</span>
+          </div>
+          {allDone && (
+            <div className="fade-in flex items-center gap-2 bg-green-50 border border-green-200
+              text-green-700 rounded-lg px-4 py-2 text-sm font-light">
+              🎉 Kafla 12 lokið!
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
