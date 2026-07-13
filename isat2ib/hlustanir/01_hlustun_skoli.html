@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="is">
 <head>
-
-
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>🎧 Æfing 1: Kynning í skólanum – Málstöðin</title>
@@ -90,6 +88,15 @@
       object-fit: cover;
       object-position: top center;
       border: 2px solid #e5e7eb;
+      transition: border-color 0.2s;
+    }
+    .portrait.speaking {
+      border-color: #16a34a;
+      animation: speakingPulse 1.1s ease-in-out infinite;
+    }
+    @keyframes speakingPulse {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(22,163,74,0.35); }
+      50%      { box-shadow: 0 0 0 8px rgba(22,163,74,0.10); }
     }
     .portrait-sm {
       width: 32px; height: 32px;
@@ -106,12 +113,8 @@
 </head>
 <body>
 <div id="root"></div>
-
-
-
 <script type="text/babel">
   const { useState, useRef, useEffect } = React;
-
   /* ── OpenAI ──────────────────────────────────────────────────────── */
   async function callOpenAI(messages, maxTokens = 120, temperature = 0.2) {
     const r = await fetch('/.netlify/functions/openai', {
@@ -123,7 +126,6 @@
     if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
     return data.content;
   }
-
   /* ── Gögn ────────────────────────────────────────────────────────── */
   const TRUE_FALSE = [
     { s: 'Lía er nítján ára gömul.',                correct: true  },
@@ -135,7 +137,6 @@
     { s: 'Mateo býr með pabba sínum.',              correct: false },
     { s: 'Lía elskar að teikna og synda.',          correct: false },
   ];
-
   const SHORT_QS = [
     { q: 'Hvað heitir stelpan og hversu gömul er hún?',
       key: ['Lía', 'Wang', 'nítján', '19'] },
@@ -152,7 +153,6 @@
     { q: 'Hvar er Mateo á námi?',
       key: ['Tækniskólanum', 'íslenskubraut'] },
   ];
-
   const TABLE_ROWS = [
     {
       col: 'Aldur',
@@ -179,32 +179,35 @@
       opts: ['teikna manga og baka', 'fótbolti og tónlist', 'synda og lesa', 'elda og hlusta'],
     },
   ];
-
   const TRANSLATIONS = [
     { word: 'sjúkraliði' },
     { word: 'vélvirki' },
   ];
-
   const SAMTALS = [
     { who: 'Kennari', text: 'Jæja, við skulum byrja á einfaldri kynningu. Lía, getur þú byrjað?' },
     { who: 'Lía',     text: 'Já. Ég heiti Lía Wang. Ég er nítján ára gömul. Ég bý í Breiðholti með mömmu minni. Ég er á íslenskubraut í Tækniskólanum. Ég ætla að verða sjúkraliði. Ég kem frá Kína. Ég kom til Íslands fyrir þremur árum. Ég elska að teikna manga og að baka kökur.' },
     { who: 'Kennari', text: 'Takk, Lía. Mateo?' },
     { who: 'Mateo',   text: 'Ég heiti Mateo Ramírez. Ég er átján ára. Ég bý í Kópavogi með mömmu minni og litla bróður mínum. Ég er líka á íslenskubraut. Ég vil verða vélvirki. Ég kem frá Kólumbíu og flutti til Íslands fyrir rúmu ári. Ég spila fótbolta með Breiðabliki og hlusta mikið á tónlist, sérstaklega reggaetón.' },
   ];
-
   const WHO = {
     Kennari: { bg: 'bg-purple-50', tag: 'bg-purple-100 text-purple-700', init: 'K' },
     Lía:     { bg: 'bg-blue-50',   tag: 'bg-blue-100 text-blue-700',     init: 'L' },
     Mateo:   { bg: 'bg-amber-50',  tag: 'bg-amber-100 text-amber-700',   init: 'M' },
   };
-
+  // TÍMAKORT — hver talar hvenær (sek). Sjálfvirkt úr 01_hlustun_skoli.mp3
+  // (ffmpeg silencedetect + DP-mátun við línuröð). Kennari hefur enga hausmynd.
+  const TIMING = [
+    { who: 'Kennari', start: 0.0,   end: 5.52 },
+    { who: 'Lía',     start: 6.36,  end: 28.73 },
+    { who: 'Kennari', start: 29.16, end: 30.46 },
+    { who: 'Mateo',   start: 31.34, end: 59.17 },
+  ];
   const TABS = [
     { id: 'tf',    label: 'Rétt/Rangt', icon: '✅' },
     { id: 'short', label: 'Spurningar', icon: '📝' },
     { id: 'table', label: 'Tafla',      icon: '📋' },
     { id: 'trans', label: 'Þýðingar',   icon: '🌍' },
   ];
-
   /* ── FeedbackBadge ───────────────────────────────────────────────── */
   const FeedbackBadge = ({ score, message, onRetry }) => {
     const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
@@ -225,7 +228,6 @@
       </div>
     );
   };
-
   /* ── App ─────────────────────────────────────────────────────────── */
   const App = () => {
     const audioRef = useRef(null);
@@ -235,35 +237,29 @@
     const [duration,     setDuration]     = useState(0);
     const [activeTab,    setActiveTab]    = useState('tf');
     const [showText,     setShowText]     = useState(false);
-
+    const [activeSpeaker, setActiveSpeaker] = useState(null);
     useEffect(() => {
       if (audioRef.current) audioRef.current.playbackRate = playbackRate;
     }, [playbackRate]);
-
     useEffect(() => {
       window.writeProgress && window.writeProgress('hlustun_01', 'opened');
     }, []);
-
     const fmt = sec => {
       if (!sec || isNaN(sec)) return '0:00';
       return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
     };
-
     const togglePlay = () => {
       if (!audioRef.current) return;
       isPlaying ? audioRef.current.pause() : audioRef.current.play();
     };
-
     /* Rétt/Rangt */
     const [tfAns, setTfAns] = useState({});
     const [tfDone, setTfDone] = useState(false);
     const tfReady = TRUE_FALSE.every((_, i) => tfAns[i] !== undefined);
-
     /* Spurningar */
     const [shortAns, setShortAns]   = useState(SHORT_QS.map(() => ''));
     const [shortFb,  setShortFb]    = useState(SHORT_QS.map(() => null));
     const [shortLd,  setShortLd]    = useState(SHORT_QS.map(() => false));
-
     const checkShort = async idx => {
       const ans = shortAns[idx].trim();
       if (!ans) return;
@@ -284,27 +280,22 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
       } catch(e) { console.error(e); }
       finally { setShortLd(p => { const n=[...p]; n[idx]=false; return n; }); }
     };
-
     const resetShort = idx => {
       setShortAns(p => { const n=[...p]; n[idx]=''; return n; });
       setShortFb(p => { const n=[...p]; n[idx]=null; return n; });
     };
-
     /* Tafla */
     const [tableAns, setTableAns] = useState(TABLE_ROWS.map(() => ({ lia: '', mateo: '' })));
     const [tableDone, setTableDone] = useState(false);
     const tableReady = TABLE_ROWS.every((_, i) => tableAns[i].lia && tableAns[i].mateo);
-
     const setCell = (ri, who, val) => {
       if (tableDone) return;
       setTableAns(p => { const n=[...p]; n[ri]={...n[ri],[who]:val}; return n; });
     };
-
     /* Þýðingar */
     const [transAns, setTransAns] = useState(TRANSLATIONS.map(() => ''));
     const [transFb,  setTransFb]  = useState(TRANSLATIONS.map(() => null));
     const [transLd,  setTransLd]  = useState(TRANSLATIONS.map(() => false));
-
     const checkTrans = async idx => {
       const ans = transAns[idx].trim();
       if (!ans) return;
@@ -324,12 +315,10 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
       } catch(e) { console.error(e); }
       finally { setTransLd(p => { const n=[...p]; n[idx]=false; return n; }); }
     };
-
     const resetTrans = idx => {
       setTransAns(p => { const n=[...p]; n[idx]=''; return n; });
       setTransFb(p => { const n=[...p]; n[idx]=null; return n; });
     };
-
     /* Framvinda */
     const tabDone = {
       tf:    tfDone,
@@ -345,11 +334,12 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
         window.writeProgress && window.writeProgress('hlustun_01', 'completed');
       }
     }, [allDone]);
-
+    /* Talandi hausar — dofna aðeins þegar Lía eða Mateo talar (ekki þegar kennari talar) */
+    const shownSpeaking = activeSpeaker === 'Lía' || activeSpeaker === 'Mateo';
+    const dimCls = name => (shownSpeaking && activeSpeaker !== name) ? 'opacity-40' : 'opacity-100';
     /* ── RENDER ──────────────────────────────────────────────────── */
     return (
       <div style={{ minHeight: '100vh' }}>
-
         {/* HEADER */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-4xl mx-auto px-6 py-8">
@@ -363,13 +353,15 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                 <h1 className="text-3xl font-light text-gray-800">🎧 Kynning í skólanum</h1>
                 <p className="text-gray-500 text-sm font-light mb-3">Hlustunarverkefni · A1–A2 · Æfing 1</p>
                 <div className="flex items-center gap-5">
-                  <div className="flex flex-col items-center gap-1.5">
-                    <img src="../media/lia_haus.jpg" alt="Lía" className="portrait" />
-                    <span className="text-xs font-light text-gray-600">Lía</span>
+                  <div className={`flex flex-col items-center gap-1.5 transition-opacity duration-300 ${dimCls('Lía')}`}>
+                    <img src="../media/lia_haus.jpg" alt="Lía"
+                      className={`portrait ${activeSpeaker==='Lía' ? 'speaking' : ''}`} />
+                    <span className={`text-xs ${activeSpeaker==='Lía' ? 'text-green-700 font-medium' : 'text-gray-600 font-light'}`}>Lía</span>
                   </div>
-                  <div className="flex flex-col items-center gap-1.5">
-                    <img src="../media/mateo_haus.png" alt="Mateo" className="portrait" />
-                    <span className="text-xs font-light text-gray-600">Mateo</span>
+                  <div className={`flex flex-col items-center gap-1.5 transition-opacity duration-300 ${dimCls('Mateo')}`}>
+                    <img src="../media/mateo_haus.png" alt="Mateo"
+                      className={`portrait ${activeSpeaker==='Mateo' ? 'speaking' : ''}`} />
+                    <span className={`text-xs ${activeSpeaker==='Mateo' ? 'text-green-700 font-medium' : 'text-gray-600 font-light'}`}>Mateo</span>
                   </div>
                 </div>
               </div>
@@ -379,7 +371,6 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
             </div>
           </div>
         </header>
-
         {/* STICKY PLAYER */}
         <div className="sticky-player">
           <div className="max-w-4xl mx-auto px-6 py-4">
@@ -413,9 +404,17 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                 </div>
                 <audio ref={audioRef} src="../media/01_hlustun_skoli.mp3" preload="metadata"
                   onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  onEnded={() => setIsPlaying(false)}
-                  onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime||0)}
+                  onPause={() => { setIsPlaying(false); setActiveSpeaker(null); }}
+                  onEnded={() => { setIsPlaying(false); setActiveSpeaker(null); }}
+                  onTimeUpdate={() => {
+                    const t = audioRef.current?.currentTime || 0;
+                    setCurrentTime(t);
+                    let who = null;
+                    for (let i = TIMING.length - 1; i >= 0; i--) {
+                      if (t >= TIMING[i].start) { who = TIMING[i].who; break; }
+                    }
+                    setActiveSpeaker(who);
+                  }}
                   onLoadedMetadata={() => setDuration(audioRef.current?.duration||0)} />
               </div>
               <div className="flex gap-1.5">
@@ -430,10 +429,8 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
             </div>
           </div>
         </div>
-
         {/* MAIN */}
         <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-24">
-
           {/* Leiðbeiningar */}
           <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
             <ul className="space-y-1 text-sm font-light text-green-900">
@@ -442,10 +439,8 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
               <li>🔓 Þegar allt er lokið opnast textinn</li>
             </ul>
           </div>
-
           {/* Flipasvæði */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-
             {/* Tab bar */}
             <div className="bg-white border-b border-gray-200 sticky top-[73px] z-40"
               style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
@@ -465,9 +460,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                 ))}
               </div>
             </div>
-
             <div className="p-6 fade-in" key={activeTab}>
-
               {/* ── RÉTT / RANGT ─────────────────────────────── */}
               {activeTab === 'tf' && (
                 <div>
@@ -515,7 +508,6 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                   </div>
                 </div>
               )}
-
               {/* ── SPURNINGAR ───────────────────────────────── */}
               {activeTab === 'short' && (
                 <div>
@@ -554,7 +546,6 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                   </div>
                 </div>
               )}
-
               {/* ── TAFLA ────────────────────────────────────── */}
               {activeTab === 'table' && (
                 <div>
@@ -649,7 +640,6 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                   </div>
                 </div>
               )}
-
               {/* ── ÞÝÐINGAR ─────────────────────────────────── */}
               {activeTab === 'trans' && (
                 <div>
@@ -693,10 +683,8 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                   </div>
                 </div>
               )}
-
             </div>
           </div>
-
           {/* Lokakassi */}
           {allDone && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center fade-in">
@@ -710,7 +698,6 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                   transition-colors font-light text-sm">
                 {showText ? '▲ Fela samtalið' : '📖 Lesa samtalið'}
               </button>
-
               {showText && (
                 <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100 fade-in">
                   <h3 className="font-light text-gray-500 mb-4 text-sm">💬 Samtalið – Kynning í skólanum</h3>
@@ -738,9 +725,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
               )}
             </div>
           )}
-
         </main>
-
         {/* Framvinduraki – neðst */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
           <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
@@ -757,11 +742,9 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
             ))}
           </div>
         </div>
-
       </div>
     );
   };
-
   ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
