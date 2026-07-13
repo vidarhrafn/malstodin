@@ -150,7 +150,7 @@
   // Persónulitir í samtalstexta
   const WHO = {
     Mateo: { bg: 'bg-amber-50',  tag: 'bg-amber-100 text-amber-700',   mynd: '../media/mateo_haus.png', init: 'M' },
-    Andri: { bg: 'bg-orange-50', tag: 'bg-orange-100 text-orange-700', mynd: '../media/andri_haus.jpg', init: 'A' },
+    Andri: { bg: 'bg-orange-50', tag: 'bg-orange-100 text-orange-700', mynd: '../media/andri_haus.png', init: 'A' },
   };
 
   // TÍMAKORT — hver talar hvenær (sekúndur). Sjálfvirkt greint úr aef03-fotbolti.mp3
@@ -211,11 +211,11 @@
     },
   ];
 
-  // 4. ÞÝÐINGARVERKEFNI
+  // 4. ÞÝÐINGARVERKEFNI — 'en' er ensk viðmiðunarmerking fyrir AI-matið
   const TRANSLATIONS = [
-    { word: 'að vona' },
-    { word: 'að ruglast' },
-    { word: 'öruggur' },
+    { word: 'að vona',    en: 'to hope' },
+    { word: 'að ruglast', en: 'to get confused, to mix things up' },
+    { word: 'öruggur',    en: 'sure, confident, secure' },
   ];
 
   // FLIPAR
@@ -327,13 +327,15 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
       if (!ans) return;
       setTransLd(p => { const n=[...p]; n[idx]=true; return n; });
       try {
-        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
-Íslenska orðið: "${TRANSLATIONS[idx].word}"
-Svar nemanda: "${ans}"
-Athugaðu hvort þýðingin sé rétt á hvaða tungumáli sem er.
+        const { word, en } = TRANSLATIONS[idx];
+        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda á íslenskum orðum.
+Íslenska orðið: "${word}"
+Merking á ensku (viðmiðun): "${en}"
+Nemandinn þýðir orðið yfir á sitt eigið móðurmál — það getur verið hvaða tungumál sem er (danska, pólska, spænska, tagalog, tælenska o.s.frv.).
+Berðu svar nemandans saman við ensku viðmiðunina hér að ofan: ef það hefur sömu merkingu (á hvaða tungumáli sem er) er svarið RÉTT. Ekki gera ráð fyrir tilteknu tungumáli og ekki hafna réttri merkingu þótt hún sé á öðru máli en þú áttir von á.
 Svaraðu EINUNGIS:
 STIG: [5 ef rétt, 1 ef rangt]
-ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
+ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef svarið er rangt]`;
         const res = await callOpenAI([{role:'system',content:sys},{role:'user',content:ans}], 80, 0.2);
         const score = parseInt((res.match(/STIG:\s*(\d)/)||[])[1]||0);
         const msg   = (res.match(/ENDURGJÖF:\s*(.+)/)||[])[1]?.trim() || res.trim();
