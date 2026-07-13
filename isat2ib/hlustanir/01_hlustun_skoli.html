@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🎧 Æfing 1: Kynning í skólanum – Málstöðin</title>
+  <title>🎧 Æfing 02: Hvað gerðir þú í gær? – Málstöðin</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -126,89 +126,120 @@
     if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
     return data.content;
   }
-  /* ── Gögn ────────────────────────────────────────────────────────── */
-  const TRUE_FALSE = [
-    { s: 'Lía er nítján ára gömul.',                correct: true  },
-    { s: 'Mateo býr í Kópavogi.',                   correct: true  },
-    { s: 'Lía ætlar að verða sjúkraliði.',          correct: true  },
-    { s: 'Mateo spilar fótbolta með Breiðabliki.',  correct: true  },
-    { s: 'Lía kom til Íslands fyrir fimm árum.',    correct: false },
-    { s: 'Mateo ætlar að verða læknir.',            correct: false },
-    { s: 'Mateo býr með pabba sínum.',              correct: false },
-    { s: 'Lía elskar að teikna og synda.',          correct: false },
+  /* Stokkun — notuð í tímaröð */
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  /* Stokkun sem er ALLTAF frábrugðin upprunalegu röðinni
+     (svo tímaröðin lendi aldrei óvart í réttri röð). */
+  function shuffleDistinct(arr) {
+    if (arr.length < 2) return [...arr];
+    let a;
+    do { a = shuffle(arr); } while (a.every((x, i) => x === arr[i]));
+    return a;
+  }
+  /* ══════════════════════════════════════════
+     GÖGN — ÆFING 2
+  ══════════════════════════════════════════ */
+  // META
+  const AEFING_NR  = "02";
+  const TITILL     = "Hvað gerðir þú í gær?";
+  const STIG       = "A1–A2";
+  const AUDIO_SRC  = "../media/aef02-i-gaer.mp3";
+  const MYND_SRC   = "../media/aef02-i-gaer.png";
+  const MYND_ALT   = "Lía og Vera á kaffistofunni";
+  // Persónur
+  const PERSONUR = [
+    { id: 'lia',  nafn: 'Lía',  mynd: '../media/lia_haus.jpg',  mynd_alt: 'Lía'  },
+    { id: 'vera', nafn: 'Vera', mynd: '../media/vera_haus.jpg', mynd_alt: 'Vera' },
   ];
-  const SHORT_QS = [
-    { q: 'Hvað heitir stelpan og hversu gömul er hún?',
-      key: ['Lía', 'Wang', 'nítján', '19'] },
-    { q: 'Hvar býr Lía og með hverjum?',
-      key: ['Breiðholti', 'mömmu', 'móður'] },
-    { q: 'Hvað ætlar Lía að verða?',
-      key: ['sjúkraliði'] },
-    { q: 'Hvaðan kemur Mateo og hvenær flutti hann til Íslands?',
-      key: ['Kólumbíu', 'Kólumbía', 'ári', 'rúmu ári'] },
-    { q: 'Hvað gerir Mateo í frítíma sínum?',
-      key: ['fótbolta', 'tónlist', 'reggaetón', 'Breiðabliki'] },
-    { q: 'Hvaða áhugamál á Lía?',
-      key: ['teikna', 'manga', 'baka', 'kökur'] },
-    { q: 'Hvar er Mateo á námi?',
-      key: ['Tækniskólanum', 'íslenskubraut'] },
-  ];
-  const TABLE_ROWS = [
-    {
-      col: 'Aldur',
-      liaCorrect: 'nítján ára',
-      mateoCorrect: 'átján ára',
-      opts: ['nítján ára', 'átján ára', 'sautján ára', 'tuttugu ára'],
-    },
-    {
-      col: 'Býr í',
-      liaCorrect: 'Breiðholti',
-      mateoCorrect: 'Kópavogi',
-      opts: ['Breiðholti', 'Kópavogi', 'Hafnarfirði', 'Garðabæ'],
-    },
-    {
-      col: 'Ætlar að verða',
-      liaCorrect: 'sjúkraliði',
-      mateoCorrect: 'vélvirki',
-      opts: ['sjúkraliði', 'vélvirki', 'læknir', 'tölvunarfræðingur'],
-    },
-    {
-      col: 'Áhugamál',
-      liaCorrect: 'teikna manga og baka',
-      mateoCorrect: 'fótbolti og tónlist',
-      opts: ['teikna manga og baka', 'fótbolti og tónlist', 'synda og lesa', 'elda og hlusta'],
-    },
-  ];
-  const TRANSLATIONS = [
-    { word: 'sjúkraliði' },
-    { word: 'vélvirki' },
-  ];
+  // Samtalstexti
   const SAMTALS = [
-    { who: 'Kennari', text: 'Jæja, við skulum byrja á einfaldri kynningu. Lía, getur þú byrjað?' },
-    { who: 'Lía',     text: 'Já. Ég heiti Lía Wang. Ég er nítján ára gömul. Ég bý í Breiðholti með mömmu minni. Ég er á íslenskubraut í Tækniskólanum. Ég ætla að verða sjúkraliði. Ég kem frá Kína. Ég kom til Íslands fyrir þremur árum. Ég elska að teikna manga og að baka kökur.' },
-    { who: 'Kennari', text: 'Takk, Lía. Mateo?' },
-    { who: 'Mateo',   text: 'Ég heiti Mateo Ramírez. Ég er átján ára. Ég bý í Kópavogi með mömmu minni og litla bróður mínum. Ég er líka á íslenskubraut. Ég vil verða vélvirki. Ég kem frá Kólumbíu og flutti til Íslands fyrir rúmu ári. Ég spila fótbolta með Breiðabliki og hlusta mikið á tónlist, sérstaklega reggaetón.' },
+    { who: 'Vera', text: 'Jæja, hvað gerðir þú í gær, Lía?' },
+    { who: 'Lía',  text: 'Ég vaknaði klukkan níu. Svo fór ég í sund með mömmu minni. Það var mjög gott.' },
+    { who: 'Vera', text: 'Í hvaða sundlaug fóruð þið?' },
+    { who: 'Lía',  text: 'Í Árbæjarlaug. Við fórum líka í pottinn.' },
+    { who: 'Vera', text: 'Næs. Gerðir þú eitthvað fleira?' },
+    { who: 'Lía',  text: 'Já, eftir sundið bakaði ég köku. Súkkulaðiköku.' },
+    { who: 'Vera', text: 'Namm! Ég elska súkkulaðikökur.' },
+    { who: 'Lía',  text: 'Ég kem með sneið næst handa þér!' },
+    { who: 'Vera', text: 'Já takk, ég þigg það. Ég fór í göngutúr með litla bróður mínum.' },
+    { who: 'Lía',  text: 'Hvað heitir hann aftur?' },
+    { who: 'Vera', text: 'Hann heitir Emil. Hann er níu ára og mjög orkumikill.' },
+    { who: 'Lía',  text: 'Hvernig þá?' },
+    { who: 'Vera', text: 'Hann gengur aldrei, hann hleypur bara. Ég var alveg þreytt eftir gönguna.' },
+    { who: 'Lía',  text: 'Ég skil þig. Ég var líka þreytt eftir sundið.' },
   ];
+  // Persónulitir í samtalstexta
   const WHO = {
-    Kennari: { bg: 'bg-purple-50', tag: 'bg-purple-100 text-purple-700', init: 'K' },
-    Lía:     { bg: 'bg-blue-50',   tag: 'bg-blue-100 text-blue-700',     init: 'L' },
-    Mateo:   { bg: 'bg-amber-50',  tag: 'bg-amber-100 text-amber-700',   init: 'M' },
+    Lía:  { bg: 'bg-blue-50',  tag: 'bg-blue-100 text-blue-700',   mynd: '../media/lia_haus.jpg',  init: 'L' },
+    Vera: { bg: 'bg-green-50', tag: 'bg-green-100 text-green-700', mynd: '../media/vera_haus.jpg', init: 'V' },
   };
-  // TÍMAKORT — hver talar hvenær (sek). Sjálfvirkt úr 01_hlustun_skoli.mp3
-  // (ffmpeg silencedetect + DP-mátun við línuröð). Kennari hefur enga hausmynd.
+  // TÍMAKORT — hver talar hvenær (sek). Sjálfvirkt úr aef02-i-gaer.mp3
+  // (ffmpeg silencedetect + DP-mátun við línuröð). Handfínstilla stök gildi ef þarf.
   const TIMING = [
-    { who: 'Kennari', start: 0.0,  end: 5.0 },
-    { who: 'Lía',     start: 5.0,  end: 30.0 },
-    { who: 'Kennari', start: 30.0, end: 34.0 },
-    { who: 'Mateo',   start: 34.0, end: 59.17 },
+    { who: 'Vera', start: 0.0,   end: 1.99 },
+    { who: 'Lía',  start: 2.83,  end: 8.21 },
+    { who: 'Vera', start: 8.57,  end: 9.85 },
+    { who: 'Lía',  start: 10.46, end: 13.28 },
+    { who: 'Vera', start: 13.65, end: 15.7 },
+    { who: 'Lía',  start: 16.41, end: 19.36 },
+    { who: 'Vera', start: 19.87, end: 22.06 },
+    { who: 'Lía',  start: 22.42, end: 24.18 },
+    { who: 'Vera', start: 24.62, end: 28.35 },
+    { who: 'Lía',  start: 29.11, end: 30.93 },
+    { who: 'Vera', start: 31.67, end: 35.58 },
+    { who: 'Lía',  start: 36.0,  end: 37.51 },
+    { who: 'Vera', start: 38.15, end: 44.08 },
+    { who: 'Lía',  start: 44.77, end: 47.88 },
   ];
+  // 1. RÉTT EÐA RANGT
+  const TRUE_FALSE = [
+    { s: 'Lía fór í sund í gær.',                        correct: true  },
+    { s: 'Vera fór með mömmu sinni í göngutúr.',         correct: false },
+    { s: 'Lía bakaði eplaköku.',                         correct: false },
+    { s: 'Emil er níu ára.',                             correct: true  },
+    { s: 'Vera var þreytt eftir göngutúrinn.',           correct: true  },
+    { s: 'Lía fór í sund ein.',                          correct: false },
+    { s: 'Þær fóru í Laugardalslaug.',                   correct: false },
+    { s: 'Emil er bróðir Veru.',                         correct: true  },
+  ];
+  // 2. SPURNINGAR
+  const SHORT_QS = [
+    { q: 'Hvenær vaknaði Lía?',                       key: ['níu', 'klukkan níu', '9', 'kl. 9'] },
+    { q: 'Með hverjum fór hún í sund?',               key: ['mömmu', 'móður', 'mömmu sinni', 'mamma'] },
+    { q: 'Hvað bakaði Lía?',                          key: ['köku', 'súkkulaðiköku', 'súkkulaði', 'kaka'] },
+    { q: 'Hvað gerði Vera með bróður sínum?',         key: ['göngutúr', 'gekk', 'ganga', 'göngu'] },
+    { q: 'Hvað heitir bróðir hennar?',                key: ['Emil'] },
+    { q: 'Hvernig leið Veru eftir göngutúrinn?',      key: ['þreytt', 'þreytt eftir', 'þreyttur'] },
+  ];
+  // 3. TÍMARÖÐ — atriði í RÉTTRI röð
+  const TIMAROD = [
+    'Lía vaknaði',
+    'Lía fór í sund',
+    'Lía bakaði köku',
+    'Vera talaði við Líu',
+  ];
+  // 4. ÞÝÐINGARVERKEFNI — 'en' er ensk viðmiðunarmerking fyrir AI-matið
+  const TRANSLATIONS = [
+    { word: 'sneið',           en: 'a slice (e.g. of cake)' },
+    { word: 'þreyttur/þreytt', en: 'tired' },
+  ];
+  // FLIPAR
   const TABS = [
     { id: 'tf',    label: 'Rétt/Rangt', icon: '✅' },
     { id: 'short', label: 'Spurningar', icon: '📝' },
-    { id: 'table', label: 'Tafla',      icon: '📋' },
+    { id: 'rod',   label: 'Tímaröð',    icon: '🔢' },
     { id: 'trans', label: 'Þýðingar',   icon: '🌍' },
   ];
-  /* ── FeedbackBadge ───────────────────────────────────────────────── */
+  /* ══════════════════════════════════════════
+     ÍHLUTIR
+  ══════════════════════════════════════════ */
   const FeedbackBadge = ({ score, message, onRetry }) => {
     const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
     const cls = {
@@ -228,7 +259,63 @@
       </div>
     );
   };
-  /* ── App ─────────────────────────────────────────────────────────── */
+  /* TÍMARÖÐ — props: items (strengir í réttri röð), onDone() */
+  const TimarodTask = ({ items, onDone }) => {
+    const [shuffled, setShuffled] = useState(() => shuffleDistinct(items));
+    const [ans, setAns]   = useState(() => items.map(() => ''));
+    const [done, setDone] = useState(false);
+    const nums = items.map((_, i) => String(i + 1));
+    const ready = ans.every(a => a !== '');
+    const check = () => { if (ready) { setDone(true); onDone && onDone(); } };
+    const reset = () => {
+      setShuffled(shuffleDistinct(items));
+      setAns(items.map(() => ''));
+      setDone(false);
+    };
+    const correctNum = item => String(items.indexOf(item) + 1);
+    return (
+      <div>
+        <h2 className="text-lg font-medium text-gray-800 mb-1">🔢 Tímaröð</h2>
+        <p className="text-sm font-light text-gray-500 mb-4">Settu atriðin í rétta röð (1 = fyrst).</p>
+        <div className="space-y-3">
+          {shuffled.map((item, idx) => {
+            const ok = ans[idx] === correctNum(item);
+            const cls = done ? `drop ${ok ? 'drop-correct' : 'drop-incorrect'}` : 'drop';
+            return (
+              <div key={idx} className="border border-gray-100 rounded-xl p-4 flex items-center gap-4">
+                <select className={cls} style={{ minWidth: '70px' }} value={ans[idx]} disabled={done}
+                  onChange={e => setAns(p => { const n=[...p]; n[idx]=e.target.value; return n; })}>
+                  <option value="">–</option>
+                  {nums.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span className="text-sm font-light text-gray-800">{item}</span>
+                {done && !ok && (
+                  <span className="text-xs text-green-700 font-light ml-auto">✓ {correctNum(item)}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-3 mt-5">
+          <button onClick={check} disabled={!ready || done}
+            className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700
+              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+            Athuga svör
+          </button>
+          {done && (
+            <button onClick={reset}
+              className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg
+                hover:bg-gray-50 transition-colors font-light text-sm">
+              Endurstilla
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+  /* ══════════════════════════════════════════
+     APP
+  ══════════════════════════════════════════ */
   const App = () => {
     const audioRef = useRef(null);
     const [isPlaying,    setIsPlaying]    = useState(false);
@@ -241,9 +328,6 @@
     useEffect(() => {
       if (audioRef.current) audioRef.current.playbackRate = playbackRate;
     }, [playbackRate]);
-    useEffect(() => {
-      window.writeProgress && window.writeProgress('hlustun_01', 'opened');
-    }, []);
     const fmt = sec => {
       if (!sec || isNaN(sec)) return '0:00';
       return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
@@ -253,13 +337,13 @@
       isPlaying ? audioRef.current.pause() : audioRef.current.play();
     };
     /* Rétt/Rangt */
-    const [tfAns, setTfAns] = useState({});
+    const [tfAns,  setTfAns]  = useState({});
     const [tfDone, setTfDone] = useState(false);
     const tfReady = TRUE_FALSE.every((_, i) => tfAns[i] !== undefined);
     /* Spurningar */
-    const [shortAns, setShortAns]   = useState(SHORT_QS.map(() => ''));
-    const [shortFb,  setShortFb]    = useState(SHORT_QS.map(() => null));
-    const [shortLd,  setShortLd]    = useState(SHORT_QS.map(() => false));
+    const [shortAns, setShortAns] = useState(SHORT_QS.map(() => ''));
+    const [shortFb,  setShortFb]  = useState(SHORT_QS.map(() => null));
+    const [shortLd,  setShortLd]  = useState(SHORT_QS.map(() => false));
     const checkShort = async idx => {
       const ans = shortAns[idx].trim();
       if (!ans) return;
@@ -282,16 +366,10 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
     };
     const resetShort = idx => {
       setShortAns(p => { const n=[...p]; n[idx]=''; return n; });
-      setShortFb(p => { const n=[...p]; n[idx]=null; return n; });
+      setShortFb(p =>  { const n=[...p]; n[idx]=null; return n; });
     };
-    /* Tafla */
-    const [tableAns, setTableAns] = useState(TABLE_ROWS.map(() => ({ lia: '', mateo: '' })));
-    const [tableDone, setTableDone] = useState(false);
-    const tableReady = TABLE_ROWS.every((_, i) => tableAns[i].lia && tableAns[i].mateo);
-    const setCell = (ri, who, val) => {
-      if (tableDone) return;
-      setTableAns(p => { const n=[...p]; n[ri]={...n[ri],[who]:val}; return n; });
-    };
+    /* Tímaröð */
+    const [rodDone, setRodDone] = useState(false);
     /* Þýðingar */
     const [transAns, setTransAns] = useState(TRANSLATIONS.map(() => ''));
     const [transFb,  setTransFb]  = useState(TRANSLATIONS.map(() => null));
@@ -301,13 +379,15 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
       if (!ans) return;
       setTransLd(p => { const n=[...p]; n[idx]=true; return n; });
       try {
-        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
-Íslenska orðið: "${TRANSLATIONS[idx].word}"
-Svar nemanda: "${ans}"
-Athugaðu hvort þýðingin sé rétt á hvaða tungumáli sem er.
+        const { word, en } = TRANSLATIONS[idx];
+        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda á íslenskum orðum.
+Íslenska orðið: "${word}"
+Merking á ensku (viðmiðun): "${en}"
+Nemandinn þýðir orðið yfir á sitt eigið móðurmál — það getur verið hvaða tungumál sem er (danska, pólska, spænska, tagalog, tælenska o.s.frv.).
+Berðu svar nemandans saman við ensku viðmiðunina hér að ofan: ef það hefur sömu merkingu (á hvaða tungumáli sem er) er svarið RÉTT. Ekki gera ráð fyrir tilteknu tungumáli og ekki hafna réttri merkingu þótt hún sé á öðru máli en þú áttir von á.
 Svaraðu EINUNGIS:
 STIG: [5 ef rétt, 1 ef rangt]
-ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
+ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef svarið er rangt]`;
         const res = await callOpenAI([{role:'system',content:sys},{role:'user',content:ans}], 80, 0.2);
         const score = parseInt((res.match(/STIG:\s*(\d)/)||[])[1]||0);
         const msg   = (res.match(/ENDURGJÖF:\s*(.+)/)||[])[1]?.trim() || res.trim();
@@ -317,26 +397,16 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
     };
     const resetTrans = idx => {
       setTransAns(p => { const n=[...p]; n[idx]=''; return n; });
-      setTransFb(p => { const n=[...p]; n[idx]=null; return n; });
+      setTransFb(p =>  { const n=[...p]; n[idx]=null; return n; });
     };
     /* Framvinda */
     const tabDone = {
       tf:    tfDone,
       short: shortFb.every(f => f !== null),
-      table: tableDone,
+      rod:   rodDone,
       trans: transFb.every(f => f !== null),
     };
-    const allDone = Object.values(tabDone).every(Boolean);
-    const progressWritten = useRef(false);
-    useEffect(() => {
-      if (allDone && !progressWritten.current) {
-        progressWritten.current = true;
-        window.writeProgress && window.writeProgress('hlustun_01', 'completed');
-      }
-    }, [allDone]);
-    /* Talandi hausar — dofna aðeins þegar Lía eða Mateo talar (ekki þegar kennari talar) */
-    const shownSpeaking = activeSpeaker === 'Lía' || activeSpeaker === 'Mateo';
-    const dimCls = name => (shownSpeaking && activeSpeaker !== name) ? 'opacity-40' : 'opacity-100';
+    const allDone = TABS.every(t => tabDone[t.id]);
     /* ── RENDER ──────────────────────────────────────────────────── */
     return (
       <div style={{ minHeight: '100vh' }}>
@@ -350,24 +420,30 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
             <div className="flex items-center gap-4">
               {/* Titill + persónumyndir */}
               <div className="flex-1">
-                <h1 className="text-3xl font-light text-gray-800">🎧 Kynning í skólanum</h1>
-                <p className="text-gray-500 text-sm font-light mb-3">Hlustunarverkefni · A1–A2 · Æfing 1</p>
+                <h1 className="text-3xl font-light text-gray-800">🎧 {TITILL}</h1>
+                <p className="text-gray-500 text-sm font-light mb-3">Hlustunarverkefni · {STIG} · Æfing {AEFING_NR}</p>
                 <div className="flex items-center gap-5">
-                  <div className={`flex flex-col items-center gap-1.5 transition-opacity duration-300 ${dimCls('Lía')}`}>
-                    <img src="../media/lia_haus.jpg" alt="Lía"
-                      className={`portrait ${activeSpeaker==='Lía' ? 'speaking' : ''}`} />
-                    <span className={`text-xs ${activeSpeaker==='Lía' ? 'text-green-700 font-medium' : 'text-gray-600 font-light'}`}>Lía</span>
-                  </div>
-                  <div className={`flex flex-col items-center gap-1.5 transition-opacity duration-300 ${dimCls('Mateo')}`}>
-                    <img src="../media/mateo_haus.png" alt="Mateo"
-                      className={`portrait ${activeSpeaker==='Mateo' ? 'speaking' : ''}`} />
-                    <span className={`text-xs ${activeSpeaker==='Mateo' ? 'text-green-700 font-medium' : 'text-gray-600 font-light'}`}>Mateo</span>
-                  </div>
+                  {PERSONUR.map(p => {
+                    const speaking = activeSpeaker === p.nafn;
+                    return (
+                      <div key={p.id}
+                        className={`flex flex-col items-center gap-1.5 transition-opacity duration-300
+                          ${activeSpeaker && !speaking ? 'opacity-40' : 'opacity-100'}`}>
+                        <img src={p.mynd} alt={p.mynd_alt}
+                          className={`portrait ${speaking ? 'speaking' : ''}`}
+                          onError={e => { e.target.style.display='none'; }} />
+                        <span className={`text-xs ${speaking ? 'text-green-700 font-medium' : 'text-gray-600 font-light'}`}>
+                          {p.nafn}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               {/* Senumynd */}
-              <img src="../media/01_hlustun_mynd.png" alt="Lía kynnir sig í skólanum"
-                className="rounded-2xl h-auto flex-shrink-0" style={{ width: '15%' }} />
+              <img src={MYND_SRC} alt={MYND_ALT}
+                className="rounded-2xl h-auto flex-shrink-0" style={{ width: '15%' }}
+                onError={e => { e.target.style.display='none'; }} />
             </div>
           </div>
         </header>
@@ -402,7 +478,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                     className="progress-bar flex-1" />
                   <span className="text-xs text-gray-400 font-light w-8">{fmt(duration)}</span>
                 </div>
-                <audio ref={audioRef} src="../media/01_hlustun_skoli.mp3" preload="metadata"
+                <audio ref={audioRef} src={AUDIO_SRC} preload="metadata"
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => { setIsPlaying(false); setActiveSpeaker(null); }}
                   onEnded={() => { setIsPlaying(false); setActiveSpeaker(null); }}
@@ -436,12 +512,11 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
             <ul className="space-y-1 text-sm font-light text-green-900">
               <li>🎧 Hlustaðu á samtalið 2–3 sinnum</li>
               <li>✏️ Svaraðu öllum flokkum spurninga</li>
-              <li>🔓 Þegar allt er lokið opnast textinn</li>
+              <li>🔓 Þegar allt er lokið opnast samtalstextinn</li>
             </ul>
           </div>
           {/* Flipasvæði */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {/* Tab bar */}
             <div className="bg-white border-b border-gray-200 sticky top-[73px] z-40"
               style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
               <div className="flex">
@@ -477,7 +552,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                             else {
                               cls += ' opt-disabled';
                               if (item.correct === val) cls += ' opt-correct';
-                              else if (sel) cls += ' opt-incorrect';
+                              else if (sel)             cls += ' opt-incorrect';
                             }
                             return (
                               <button key={String(val)}
@@ -519,19 +594,21 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                         <p className="text-sm font-medium text-gray-800 mb-3">{item.q}</p>
                         <textarea
                           value={shortAns[idx]}
-                          onChange={e => setShortAns(p => { const n=[...p]; n[idx]=e.target.value; return n; })}
+                          onChange={e => { if (!shortFb[idx]) { setShortAns(p => { const n=[...p]; n[idx]=e.target.value; return n; }); }}}
+                          onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey && !shortFb[idx]) { e.preventDefault(); checkShort(idx); }}}
                           disabled={shortFb[idx] !== null}
-                          placeholder="Skrifaðu svarið þitt hér..."
+                          placeholder="Skrifaðu svar hér…"
                           rows={2}
                           className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
-                            focus:outline-none focus:border-green-400 font-light resize-none
-                            disabled:bg-gray-50 text-sm mb-3" />
+                            focus:outline-none focus:border-green-400 font-light text-sm resize-none
+                            disabled:bg-gray-50 disabled:cursor-default transition-colors mb-3"
+                        />
                         {shortFb[idx] === null && (
                           <button onClick={() => checkShort(idx)}
                             disabled={!shortAns[idx].trim() || shortLd[idx]}
                             className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
                               disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
-                            {shortLd[idx] ? 'Athuga...' : 'Athuga svar'}
+                            {shortLd[idx] ? '…' : 'Athuga'}
                           </button>
                         )}
                         {shortFb[idx] && (
@@ -546,107 +623,15 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                   </div>
                 </div>
               )}
-              {/* ── TAFLA ────────────────────────────────────── */}
-              {activeTab === 'table' && (
-                <div>
-                  <h2 className="text-lg font-medium text-gray-800 mb-1">📋 Fylltu í töfluna</h2>
-                  <p className="text-sm font-light text-gray-500 mb-5">
-                    Veldu rétt svar fyrir Líu og Mateo í hverri röð.
-                  </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b-2 border-gray-200">
-                          <th className="text-left font-light text-gray-500 py-3 pr-6 w-36"></th>
-                          <th className="py-3 px-4 text-center">
-                            <div className="flex flex-col items-center gap-2">
-                              <img src="../media/lia_haus.jpg" alt="Lía"
-                                className="w-12 h-12 rounded-full object-cover object-top border border-gray-200" />
-                              <span className="font-medium text-gray-700">Lía</span>
-                            </div>
-                          </th>
-                          <th className="py-3 px-4 text-center">
-                            <div className="flex flex-col items-center gap-2">
-                              <img src="../media/mateo_haus.png" alt="Mateo"
-                                className="w-12 h-12 rounded-full object-cover object-top border border-gray-200" />
-                              <span className="font-medium text-gray-700">Mateo</span>
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {TABLE_ROWS.map((row, ri) => {
-                          const liaVal   = tableAns[ri].lia;
-                          const mateoVal = tableAns[ri].mateo;
-                          const liaOk    = liaVal   === row.liaCorrect;
-                          const mateoOk  = mateoVal === row.mateoCorrect;
-                          const dropCls = (ok) => tableDone
-                            ? `drop ${ok ? 'drop-correct' : 'drop-incorrect'}`
-                            : 'drop';
-                          return (
-                            <tr key={ri} className="border-b border-gray-100">
-                              <td className="py-4 pr-6 font-light text-gray-600 whitespace-nowrap">
-                                {row.col}
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <select
-                                  className={dropCls(liaOk)}
-                                  value={liaVal}
-                                  disabled={tableDone}
-                                  onChange={e => setCell(ri, 'lia', e.target.value)}>
-                                  <option value="">-- veldu --</option>
-                                  {row.opts.map(o => <option key={o} value={o}>{o}</option>)}
-                                </select>
-                                {tableDone && !liaOk && (
-                                  <div className="text-xs text-green-700 mt-1.5 font-light">✓ {row.liaCorrect}</div>
-                                )}
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <select
-                                  className={dropCls(mateoOk)}
-                                  value={mateoVal}
-                                  disabled={tableDone}
-                                  onChange={e => setCell(ri, 'mateo', e.target.value)}>
-                                  <option value="">-- veldu --</option>
-                                  {row.opts.map(o => <option key={o} value={o}>{o}</option>)}
-                                </select>
-                                {tableDone && !mateoOk && (
-                                  <div className="text-xs text-green-700 mt-1.5 font-light">✓ {row.mateoCorrect}</div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex gap-3 mt-5">
-                    <button onClick={() => { if (tableReady) setTableDone(true); }}
-                      disabled={!tableReady || tableDone}
-                      className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700
-                        disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
-                      Athuga svör
-                    </button>
-                    {tableDone && (
-                      <button onClick={() => {
-                        setTableAns(TABLE_ROWS.map(() => ({ lia: '', mateo: '' })));
-                        setTableDone(false);
-                      }}
-                        className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg
-                          hover:bg-gray-50 transition-colors font-light text-sm">
-                        Endurstilla
-                      </button>
-                    )}
-                  </div>
-                </div>
+              {/* ── TÍMARÖÐ ──────────────────────────────────── */}
+              {activeTab === 'rod' && (
+                <TimarodTask items={TIMAROD} onDone={() => setRodDone(true)} />
               )}
               {/* ── ÞÝÐINGAR ─────────────────────────────────── */}
               {activeTab === 'trans' && (
                 <div>
                   <h2 className="text-lg font-medium text-gray-800 mb-1">🌍 Þýðingar</h2>
-                  <p className="text-sm font-light text-gray-500 mb-4">
-                    Þýddu orðin á þitt eigið móðurmál.
-                  </p>
+                  <p className="text-sm font-light text-gray-500 mb-4">Þýddu orðin á þitt eigið móðurmál.</p>
                   <div className="space-y-4">
                     {TRANSLATIONS.map((item, idx) => (
                       <div key={idx} className="border border-gray-100 rounded-xl p-4">
@@ -656,13 +641,14 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
                         </p>
                         <textarea
                           value={transAns[idx]}
-                          onChange={e => setTransAns(p => { const n=[...p]; n[idx]=e.target.value; return n; })}
+                          onChange={e => { if (!transFb[idx]) { setTransAns(p => { const n=[...p]; n[idx]=e.target.value; return n; }); }}}
                           disabled={transFb[idx] !== null}
-                          placeholder="Skrifaðu þýðinguna hér..."
+                          placeholder="Skrifaðu þýðinguna hér…"
                           rows={2}
                           className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
                             focus:outline-none focus:border-green-400 font-light resize-none
-                            disabled:bg-gray-50 text-sm mb-3" />
+                            disabled:bg-gray-50 text-sm mb-3"
+                        />
                         {transFb[idx] === null && (
                           <button onClick={() => checkTrans(idx)}
                             disabled={!transAns[idx].trim() || transLd[idx]}
@@ -685,7 +671,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
               )}
             </div>
           </div>
-          {/* Lokakassi */}
+          {/* Lokakassi — opnast þegar öllu er lokið */}
           {allDone && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center fade-in">
               <div className="text-4xl mb-3">🎉</div>
@@ -700,18 +686,16 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
               </button>
               {showText && (
                 <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100 fade-in">
-                  <h3 className="font-light text-gray-500 mb-4 text-sm">💬 Samtalið – Kynning í skólanum</h3>
+                  <h3 className="font-light text-gray-500 mb-4 text-sm">💬 Samtalið – {TITILL}</h3>
                   {SAMTALS.map((line, i) => {
-                    const c = WHO[line.who];
+                    const c = WHO[line.who] || { bg: 'bg-gray-50', tag: 'bg-gray-100 text-gray-700', mynd: null, init: line.who[0] };
                     return (
                       <div key={i} className="flex gap-3 mb-4">
                         <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center
                           justify-center text-xs font-medium overflow-hidden ${c.tag}`}>
-                          {line.who === 'Lía'
-                            ? <img src="../media/lia_haus.jpg" alt="Lía" className="portrait-sm" />
-                            : line.who === 'Mateo'
-                              ? <img src="../media/mateo_haus.png" alt="Mateo" className="portrait-sm" />
-                              : c.init
+                          {c.mynd
+                            ? <img src={c.mynd} alt={line.who} className="portrait-sm" />
+                            : c.init
                           }
                         </div>
                         <div className={`max-w-lg px-4 py-3 rounded-xl text-sm font-light ${c.bg} text-gray-800`}>
@@ -726,7 +710,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
             </div>
           )}
         </main>
-        {/* Framvinduraki – neðst */}
+        {/* Framvinduraki — föst taka neðst */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
           <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
             {TABS.map(tab => (
