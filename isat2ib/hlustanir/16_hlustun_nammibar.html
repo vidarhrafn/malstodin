@@ -67,6 +67,21 @@
     .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; color: #15803d; }
     .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
     .answer-option.opt-disabled  { cursor: default; }
+    select.drop {
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.875rem;
+      font-weight: 300;
+      background: white;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 150px;
+    }
+    select.drop:focus { border-color: #60a5fa; }
+    select.drop.drop-correct   { border-color: #22c55e; background: #f0fdf4; color: #15803d; }
+    select.drop.drop-incorrect { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
     .portrait {
       width: 56px; height: 56px;
       border-radius: 50%;
@@ -110,6 +125,21 @@
     const data = await r.json();
     if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
     return data.content;
+  }
+  /* Stokkun */
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function shuffleDistinct(arr) {
+    if (arr.length < 2) return [...arr];
+    let a;
+    do { a = shuffle(arr); } while (a.every((x, i) => x === arr[i]));
+    return a;
   }
   /* ══════════════════════════════════════════
      GÖGN — ÆFING 16
@@ -180,7 +210,7 @@
   const TRUE_FALSE = [
     { s: 'Vera er ekki hrifin af saltlakkrís.',                                  correct: false },
     { s: 'Lía vill bara sætt hlaup.',                                            correct: true  },
-    { s: 'Beiskur brjóstsykur er notaður þegar manni er illt í hálsinum.',       correct: false },
+    { s: 'Brjóstsykur er bara notaður þegar manni er illt í hálsinum.',           correct: false },
     { s: 'Vera útskýrir að beiskur og bitur þýði það sama.',                     correct: true  },
     { s: 'Lía kaupir ekkert súkkulaði.',                                         correct: false },
   ];
@@ -188,7 +218,7 @@
   const SHORT_QS = [
     { q: 'Hvar eru Vera og Lía?',                                key: ['á nammibar', 'við nammibarinn', 'í Hagkaupum', 'á nammibar í Hagkaupum'] },
     { q: 'Hvað finnst Veru best á nammibarnum?',                 key: ['saltlakkrís', 'henni finnst saltlakkrís geggjaður', 'saltlakkrís er bestur'] },
-    { q: 'Af hverju er Lía hissa á nafninu „brjóstsykur"?',      key: ['hún heldur að það sé notað þegar manni er illt í hálsinum', 'hún tengir það við hálsbólgu', 'hún hélt að það væri lyf'] },
+    { q: 'Hvers konar hlaup vill Lía fá?',                       key: ['sætt hlaup', 'bara sætt hlaup', 'hún vill sætt en ekki súrt', 'sætt, ekki súrt'] },
     { q: 'Hvernig lýsir Vera bragðinu af beiskum brjóstsykri?',  key: ['eins og bragðið af kaffi', 'eins og kaffi', 'beiskt eins og kaffi'] },
     { q: 'Hvað kaupa þær að lokum?',                             key: ['hlaup, súkkulaði og popp', 'sætt hlaup, súkkulaði, popp og gos', 'nammi og gos fyrir bíókvöld', 'sælgæti og gos'] },
   ];
@@ -205,7 +235,14 @@
       correct: 2,
     },
   ];
-  // 4. ÞÝÐINGARVERKEFNI — 'en' er ensk viðmiðunarmerking fyrir AI-matið
+  // 4. BRAGÐORÐ — pörun { vinstri: bragðlýsing, haegri: dæmi }
+  const PORUN = [
+    { vinstri: 'sætur',   haegri: 'sykur'    },
+    { vinstri: 'súr',     haegri: 'sítróna'  },
+    { vinstri: 'beiskur', haegri: 'kaffi'    },
+    { vinstri: 'saltur',  haegri: 'sjór'     },
+  ];
+  // 5. ÞÝÐINGARVERKEFNI — 'en' er ensk viðmiðunarmerking fyrir AI-matið
   const TRANSLATIONS = [
     { word: 'beiskur',                 en: 'bitter (taste, e.g. like coffee)' },
     { word: 'að vera sjúkur í eitthvað', en: 'to be crazy about something, to really love/crave something' },
@@ -215,6 +252,7 @@
     { id: 'tf',    label: 'Rétt/Rangt',  icon: '✅' },
     { id: 'short', label: 'Spurningar',  icon: '📝' },
     { id: 'ordas', label: 'Orðasambönd', icon: '💬' },
+    { id: 'porun', label: 'Pörun',       icon: '🔗' },
     { id: 'trans', label: 'Þýðingar',    icon: '🌍' },
   ];
   /* ══════════════════════════════════════════
@@ -236,6 +274,55 @@
             Reyna aftur
           </button>
         )}
+      </div>
+    );
+  };
+  /* PÖRUN — vinstri fastur, hægri valinn úr stokkuðum fellilista */
+  const PorunTask = ({ items, onDone }) => {
+    const haegriRett = items.map(it => it.haegri);
+    const [valkostir] = useState(() => shuffleDistinct(haegriRett));
+    const [ans, setAns]   = useState(() => items.map(() => ''));
+    const [done, setDone] = useState(false);
+    const ready = ans.every(a => a !== '');
+    const check = () => { if (ready) { setDone(true); onDone && onDone(); } };
+    const reset = () => { setAns(items.map(() => '')); setDone(false); };
+    return (
+      <div>
+        <h2 className="text-lg font-medium text-gray-800 mb-1">🔗 Pörun — bragðorð</h2>
+        <p className="text-sm font-light text-gray-500 mb-4">Veldu rétt dæmi við hverja bragðlýsingu.</p>
+        <div className="space-y-3">
+          {items.map((it, idx) => {
+            const ok = ans[idx] === it.haegri;
+            const cls = done ? `drop ${ok ? 'drop-correct' : 'drop-incorrect'}` : 'drop';
+            return (
+              <div key={idx} className="border border-gray-100 rounded-xl p-4 flex items-center gap-4">
+                <span className="text-sm font-medium text-gray-800 w-24">{it.vinstri}</span>
+                <select className={cls} value={ans[idx]} disabled={done}
+                  onChange={e => setAns(p => { const n=[...p]; n[idx]=e.target.value; return n; })}>
+                  <option value="">– veldu –</option>
+                  {valkostir.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                {done && !ok && (
+                  <span className="text-xs text-green-700 font-light ml-auto">✓ {it.haegri}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-3 mt-5">
+          <button onClick={check} disabled={!ready || done}
+            className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700
+              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+            Athuga svör
+          </button>
+          {done && (
+            <button onClick={reset}
+              className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg
+                hover:bg-gray-50 transition-colors font-light text-sm">
+              Endurstilla
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -299,6 +386,8 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
     const [ordasDone, setOrdasDone] = useState(false);
     const ordasReady = ORDATAK.every((_, i) => ordasAns[i] !== null);
     const setOrdas = (qi, oi) => { if (!ordasDone) setOrdasAns(p => { const n=[...p]; n[qi]=oi; return n; }); };
+    /* Pörun */
+    const [porunDone, setPorunDone] = useState(false);
     /* Þýðingar */
     const [transAns, setTransAns] = useState(TRANSLATIONS.map(() => ''));
     const [transFb,  setTransFb]  = useState(TRANSLATIONS.map(() => null));
@@ -333,6 +422,7 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef sva
       tf:    tfDone,
       short: shortFb.every(f => f !== null),
       ordas: ordasDone,
+      porun: porunDone,
       trans: transFb.every(f => f !== null),
     };
     const allDone = TABS.every(t => tabDone[t.id]);
@@ -595,6 +685,10 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef sva
                     )}
                   </div>
                 </div>
+              )}
+              {/* ── PÖRUN ────────────────────────────────────── */}
+              {activeTab === 'porun' && (
+                <PorunTask items={PORUN} onDone={() => setPorunDone(true)} />
               )}
               {/* ── ÞÝÐINGAR ─────────────────────────────────── */}
               {activeTab === 'trans' && (
