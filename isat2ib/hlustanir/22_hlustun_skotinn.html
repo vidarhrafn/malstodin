@@ -336,17 +336,39 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
     const [transAns, setTransAns] = useState(TRANSLATIONS.map(() => ''));
     const [transFb,  setTransFb]  = useState(TRANSLATIONS.map(() => null));
     const [transLd,  setTransLd]  = useState(TRANSLATIONS.map(() => false));
+    // Staðbundið samþykki: ef svarið passar við ensku viðmiðunina (eða hluta
+    // hennar) er það rétt — sleppum þá AI-kalli (áreiðanlegra fyrir ensk svör).
+    const matchesRef = (ans, en) => {
+      const norm = s => s.toLowerCase()
+        .replace(/[.,!?;:"'`()\/]/g, ' ')
+        .replace(/\b(to|a|an|the|of|be|is|are|being|som|að|the)\b/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+      const a = norm(ans);
+      if (!a) return false;
+      return en.split('/').map(norm).some(v =>
+        v && (a === v || (a.length >= 4 && (a.includes(v) || v.includes(a)))));
+    };
     const checkTrans = async idx => {
       const ans = transAns[idx].trim();
       if (!ans) return;
+      const { word, en } = TRANSLATIONS[idx];
+      // 1) Staðbundið samþykki fyrir ensk/viðmiðunar-svör
+      if (matchesRef(ans, en)) {
+        setTransFb(p => { const n=[...p]; n[idx]={score:5,msg:'Rétt! Það passar við merkinguna.'}; return n; });
+        return;
+      }
+      // 2) Annars AI-mat (tungumála-óháð)
       setTransLd(p => { const n=[...p]; n[idx]=true; return n; });
       try {
-        const { word, en } = TRANSLATIONS[idx];
-        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda á íslenskum orðum.
+        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda á íslenskum orðum. Vertu ÖRLÁTUR — markmiðið er að nemandinn skilji orðið, ekki að þýðingin sé fullkomin.
 Íslenska orðið: "${word}"
-Merking á ensku (viðmiðun): "${en}"
-Nemandinn þýðir orðið yfir á sitt eigið móðurmál — það getur verið hvaða tungumál sem er (danska, pólska, spænska, tagalog, tælenska o.s.frv.).
-Berðu svar nemandans saman við ensku viðmiðunina hér að ofan: ef það hefur sömu merkingu (á hvaða tungumáli sem er) er svarið RÉTT. Ekki gera ráð fyrir tilteknu tungumáli og ekki hafna réttri merkingu þótt hún sé á öðru máli en þú áttir von á.
+Rétt merking (enska viðmiðun): "${en}"
+Nemandinn þýðir orðið yfir á sitt eigið móðurmál — það getur verið HVAÐA tungumál sem er (enska, danska, pólska, spænska, tagalog, tælenska o.s.frv.).
+Reglur:
+- Ef svarið er á ENSKU og samsvarar ensku viðmiðuninni að ofan (eða hluta hennar, t.d. "to have a crush on someone", "crush", "to fancy someone") þá er það RÉTT (STIG 5).
+- Ef svarið er á öðru tungumáli og hefur sömu merkingu og viðmiðunin þá er það RÉTT (STIG 5).
+- Samheiti, óformlegt orðalag og smávægileg frávik teljast RÉTT.
+- Aðeins ef merkingin er röng eða óskyld gefðu STIG 1.
 Svaraðu EINUNGIS:
 STIG: [5 ef rétt, 1 ef rangt]
 ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef svarið er rangt]`;
@@ -446,8 +468,8 @@ ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef sva
                     const t = audioRef.current?.currentTime || 0;
                     setCurrentTime(t);
                     let who = null;
-                    for (let i = TIMING.length - 1; i >= 0; i--) {
-                      if (t >= TIMING[i].start) { who = TIMING[i].who; break; }
+                    for (let i = 0; i < TIMING.length; i++) {
+                      if (t < TIMING[i].end) { who = TIMING[i].who; break; }
                     }
                     setActiveSpeaker(who);
                   }}
