@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎧 Æfing 21: Fjölskyldan – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    .sticky-player {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: white;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08);
+    }
+    .progress-bar {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #d1d5db;
+      outline: none;
+      cursor: pointer;
+    }
+    .progress-bar::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #16a34a;
+      cursor: pointer;
+    }
+    .progress-bar::-moz-range-thumb {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #16a34a;
+      cursor: pointer;
+      border: none;
+    }
+    .tab-btn { transition: all 0.2s; position: relative; }
+    .tab-btn:not(.tab-active):hover { background: #f3f4f6; }
+    .tab-btn.tab-active { background: white; color: #2563eb; font-weight: 500; }
+    .tab-btn.tab-active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 3px;
+      background: #2563eb;
+      border-radius: 2px 2px 0 0;
+    }
+    .answer-option {
+      border: 2px solid #e5e7eb;
+      transition: all 0.2s;
+      cursor: pointer;
+      text-align: center;
+    }
+    .answer-option:hover:not(.opt-disabled) { border-color: #93c5fd; background: #eff6ff; }
+    .answer-option.opt-selected  { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; color: #15803d; }
+    .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
+    .answer-option.opt-disabled  { cursor: default; }
+    .portrait {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+      object-position: top center;
+      border: 2px solid #e5e7eb;
+    }
+    .portrait-sm {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      object-position: top center;
+    }
+    .line-btn { transition: all 0.2s; cursor: pointer; }
+    .line-active { box-shadow: 0 0 0 2px #22c55e; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useRef, useEffect } = React;
+
+  /* ── OpenAI ──────────────────────────────────────────────────────── */
+  async function callOpenAI(messages, maxTokens = 120, temperature = 0.2) {
+    const r = await fetch('/.netlify/functions/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, max_tokens: maxTokens, model: 'gpt-4o-mini', temperature }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+    return data.content;
+  }
+
+  const hideImg = e => { e.target.style.display = 'none'; };
+
+  /* ── Gögn ────────────────────────────────────────────────────────── */
+  const TRUE_FALSE = [
+    { s: 'Vera ber föðurnafn pabba síns.',                              correct: false },
+    { s: 'Foreldrar Veru voru aldrei saman.',                          correct: true  },
+    { s: 'Mateo ólst upp hjá mömmu sinni í Kólumbíu.',                 correct: false },
+    { s: 'Carlitos er hálfbróðir Mateos.',                             correct: true  },
+    { s: 'Vera veit hvar pabbi hennar er.',                            correct: false },
+    { s: 'Mamma Veru er líka forvitin um frændfólkið í Svíþjóð.',      correct: true  },
+  ];
+
+  const SHORT_QS = [
+    { q: 'Hvar kynntust foreldrar Veru?',
+      key: ['Svíþjóð', 'úti', 'útlöndum', 'erlendis'] },
+    { q: 'Hjá hverjum ólst Vera upp?',
+      key: ['mömmu', 'móður', 'mamma', 'einstæð móðir'] },
+    { q: 'Hvar ólst Mateo upp og hjá hverjum?',
+      key: ['Kólumbíu', 'Kólumbía', 'pabba', 'föður', 'stjúpmömmu'] },
+    { q: 'Hvar bjó pabbi Veru?',
+      key: ['Gautaborg', 'Svíþjóð'] },
+  ];
+
+  /* Orðasambönd — rétt svar dreift (a, c, b) */
+  const ORDASAMBOND = [
+    {
+      phrase: 'að vera ekki inni í myndinni',
+      opts: [
+        'Að eiga ekki samband við einhvern / vera ekki hluti af lífi einhvers',
+        'Að mála myndir',
+        'Að vita ekki hvað er að gerast',
+      ],
+      correct: 0,
+    },
+    {
+      phrase: 'einstæð móðir',
+      opts: [
+        'Móðir sem á eitt barn',
+        'Móðir sem er frá öðru landi',
+        'Móðir sem er ekki með maka',
+      ],
+      correct: 2,
+    },
+    {
+      phrase: 'að bera nafn einhvers',
+      opts: [
+        'Að þekkja nafn einhvers',
+        'Að vera kenndur við einhvern og vera með nafn hans/hennar',
+        'Að heita nákvæmlega sama fullu nafni og einhver annar',
+      ],
+      correct: 1,
+    },
+  ];
+
+  const TRANSLATIONS = [
+    { word: 'hálfbróðir' },
+    { word: 'frændfólk' },
+    { word: 'að alast upp' },
+  ];
+
+  const NU_GET_EG = [
+    'Skilið hvernig íslenskt nafnakerfi virkar.',
+    'Skilið þegar einhver lýsir flóknu fjölskyldumynstri sínu.',
+    'Notað einföld orð til að lýsa fjölskyldu minni, t.d. hálfsystkini eða stjúpforeldrar.',
+  ];
+
+  const SAMTALS = [
+    { who: 'Mateo', text: 'Vera. Ég er að pæla í einu. Vera Liljudóttir — Hvað heitir pabbi þinn þá eiginlega?' },
+    { who: 'Vera',  text: 'Sko. Ég veit það eiginlega ekki. Þetta er pínu flókið.' },
+    { who: 'Mateo', text: 'Ó. Viltu kannski ekki tala um það?' },
+    { who: 'Vera',  text: 'Jú jú. Ekkert mál. Pabbi er bara ekki inni í myndinni. Foreldrar mínir voru aldrei saman. Mamma var að vinna í Svíþjóð og kom heim ólétt.' },
+    { who: 'Mateo', text: 'Svo þú ólst upp bara hjá mömmu þinni?' },
+    { who: 'Vera',  text: 'Já. Hún var einstæð móðir. Og ég ber nafnið hennar.' },
+    { who: 'Mateo', text: 'Ok ég skil. Fjölskyldan mín er líka pínu flókin.' },
+    { who: 'Vera',  text: 'Já er það?' },
+    { who: 'Mateo', text: 'Já. Ég ólst upp hjá pabba mínum í Kólumbíu. Hann átti nýja konu — stjúpmömmu mína. Mamma mín flutti til Íslands og ég kom til hennar síðar.' },
+    { who: 'Vera',  text: 'Og Carlitos?' },
+    { who: 'Mateo', text: 'Hann er hálfbróðir minn. Mamma mín á hann með öðrum manni hér.' },
+    { who: 'Vera',  text: 'Já fjölskyldur eru mjög mismunandi.' },
+    { who: 'Mateo', text: 'Veistu eitthvað um pabba þinn — hvar hann er eða svona?' },
+    { who: 'Vera',  text: 'Eiginlega ekki. Mamma hitti hann úti. Þau voru ekkert par eða neitt. Hún vissi ekki af mér fyrr en hún kom heim. Og hann veit ekki af mér.' },
+    { who: 'Mateo', text: 'Hefurðu aldrei viljað finna hann?' },
+    { who: 'Vera',  text: 'Ég veit að ég á frændfólk þar. Ættingja sem ég þekki ekki. Mamma er líka forvitin en við höfum bara ekki látið verða af því.' },
+    { who: 'Mateo', text: 'Áhugavert!' },
+    { who: 'Vera',  text: 'Nákvæmlega. Kannski reyni ég að finna þau seinna. Ég veit bara að hann bjó í Gautaborg og heitir Lars. Ég veit ekki meira.' },
+  ];
+
+  /* Tímasetning fyrir samstilltan texta (index-samstillt við SAMTALS) */
+  const TIMING = [
+    { who: 'Mateo', start: 7.95,   end: 13.53 },
+    { who: 'Vera',  start: 13.58,  end: 17.60 },
+    { who: 'Mateo', start: 17.65,  end: 29.49 },
+    { who: 'Vera',  start: 29.54,  end: 32.17 },
+    { who: 'Mateo', start: 32.22,  end: 37.53 },
+    { who: 'Vera',  start: 37.58,  end: 42.74 },
+    { who: 'Mateo', start: 42.79,  end: 44.33 },
+    { who: 'Vera',  start: 44.38,  end: 55.88 },
+    { who: 'Mateo', start: 55.93,  end: 57.97 },
+    { who: 'Vera',  start: 58.02,  end: 63.17 },
+    { who: 'Mateo', start: 63.22,  end: 66.75 },
+    { who: 'Vera',  start: 66.80,  end: 71.16 },
+    { who: 'Mateo', start: 71.21,  end: 82.61 },
+    { who: 'Vera',  start: 82.66,  end: 85.05 },
+    { who: 'Mateo', start: 85.10,  end: 95.23 },
+    { who: 'Vera',  start: 95.28,  end: 96.72 },
+    { who: 'Mateo', start: 96.77,  end: 106.40 },
+    { who: 'Vera',  start: 106.45, end: 106.45 },
+  ];
+
+  const WHO = {
+    Mateo: { bg: 'bg-amber-50', tag: 'bg-amber-100 text-amber-700', init: 'M', img: '../media/mateo_haus.png' },
+    Vera:  { bg: 'bg-rose-50',  tag: 'bg-rose-100 text-rose-700',   init: 'V', img: '../media/vera_haus.jpg' },
+  };
+
+  const TABS = [
+    { id: 'tf',    label: 'Rétt/Rangt',  icon: '✅' },
+    { id: 'short', label: 'Spurningar',  icon: '📝' },
+    { id: 'ord',   label: 'Orðasambönd', icon: '💬' },
+    { id: 'trans', label: 'Þýðingar',    icon: '🌍' },
+  ];
+
+  /* ── FeedbackBadge ───────────────────────────────────────────────── */
+  const FeedbackBadge = ({ score, message, onRetry }) => {
+    const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+    const cls = {
+      green: 'bg-green-50 border-green-200 text-green-700',
+      amber: 'bg-amber-50 border-amber-200 text-amber-700',
+      red:   'bg-red-50 border-red-200 text-red-700',
+    }[color];
+    return (
+      <div className={`mt-3 p-3 rounded-lg border fade-in ${cls}`}>
+        <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+        <p className="text-sm font-light">{message}</p>
+        {onRetry && (
+          <button onClick={onRetry} className="text-xs underline mt-2 opacity-70 block">
+            Reyna aftur
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  /* ── App ─────────────────────────────────────────────────────────── */
+  const App = () => {
+    const audioRef = useRef(null);
+    const [isPlaying,    setIsPlaying]    = useState(false);
+    const [playbackRate, setPlaybackRate] = useState(1);
+    const [currentTime,  setCurrentTime]  = useState(0);
+    const [duration,     setDuration]     = useState(0);
+    const [activeTab,    setActiveTab]    = useState('tf');
+    const [showText,     setShowText]     = useState(false);
+
+    useEffect(() => {
+      if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+    }, [playbackRate]);
+
+    const fmt = sec => {
+      if (!sec || isNaN(sec)) return '0:00';
+      return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
+    };
+
+    const togglePlay = () => {
+      if (!audioRef.current) return;
+      isPlaying ? audioRef.current.pause() : audioRef.current.play();
+    };
+
+    const seekTo = t => {
+      if (!audioRef.current) return;
+      audioRef.current.currentTime = t;
+      setCurrentTime(t);
+      audioRef.current.play();
+    };
+
+    const activeLine = TIMING.findIndex(t => currentTime >= t.start && currentTime < t.end);
+
+    /* Rétt/Rangt */
+    const [tfAns, setTfAns] = useState({});
+    const [tfDone, setTfDone] = useState(false);
+    const tfReady = TRUE_FALSE.every((_, i) => tfAns[i] !== undefined);
+
+    /* Spurningar */
+    const [shortAns, setShortAns] = useState(SHORT_QS.map(() => ''));
+    const [shortFb,  setShortFb]  = useState(SHORT_QS.map(() => null));
+    const [shortLd,  setShortLd]  = useState(SHORT_QS.map(() => false));
+
+    const checkShort = async idx => {
+      const ans = shortAns[idx].trim();
+      if (!ans) return;
+      setShortLd(p => { const n=[...p]; n[idx]=true; return n; });
+      try {
+        const { q, key } = SHORT_QS[idx];
+        const sys = `Þú ert íslenskukennari. Nemandinn svarar A2–B1 stigs hlustunarspurningu.
+Spurning: "${q}"
+Lykilatriði í réttu svari: ${key.join(', ')}
+Gefðu stig 0–5. Hunsa smávægilegar málfræðivillur og stafsetningu.
+Svaraðu EINUNGIS:
+STIG: [0-5]
+ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
+        const res = await callOpenAI([{role:'system',content:sys},{role:'user',content:ans}], 80, 0.2);
+        const score = parseInt((res.match(/STIG:\s*(\d)/)||[])[1]||0);
+        const msg   = (res.match(/ENDURGJÖF:\s*(.+)/)||[])[1]?.trim() || res.trim();
+        setShortFb(p => { const n=[...p]; n[idx]={score,msg}; return n; });
+      } catch(e) { console.error(e); }
+      finally { setShortLd(p => { const n=[...p]; n[idx]=false; return n; }); }
+    };
+
+    const resetShort = idx => {
+      setShortAns(p => { const n=[...p]; n[idx]=''; return n; });
+      setShortFb(p => { const n=[...p]; n[idx]=null; return n; });
+    };
+
+    /* Orðasambönd */
+    const [ordAns, setOrdAns] = useState(ORDASAMBOND.map(() => null));
+    const [ordDone, setOrdDone] = useState(false);
+    const ordReady = ORDASAMBOND.every((_, i) => ordAns[i] !== null);
+
+    /* Þýðingar */
+    const [transAns, setTransAns] = useState(TRANSLATIONS.map(() => ''));
+    const [transFb,  setTransFb]  = useState(TRANSLATIONS.map(() => null));
+    const [transLd,  setTransLd]  = useState(TRANSLATIONS.map(() => false));
+
+    const checkTrans = async idx => {
+      const ans = transAns[idx].trim();
+      if (!ans) return;
+      setTransLd(p => { const n=[...p]; n[idx]=true; return n; });
+      try {
+        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda.
+Íslenska orðið: "${TRANSLATIONS[idx].word}"
+Svar nemanda: "${ans}"
+Athugaðu hvort þýðingin sé rétt á hvaða tungumáli sem er.
+Svaraðu EINUNGIS:
+STIG: [5 ef rétt, 1 ef rangt]
+ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
+        const res = await callOpenAI([{role:'system',content:sys},{role:'user',content:ans}], 80, 0.2);
+        const score = parseInt((res.match(/STIG:\s*(\d)/)||[])[1]||0);
+        const msg   = (res.match(/ENDURGJÖF:\s*(.+)/)||[])[1]?.trim() || res.trim();
+        setTransFb(p => { const n=[...p]; n[idx]={score,msg}; return n; });
+      } catch(e) { console.error(e); }
+      finally { setTransLd(p => { const n=[...p]; n[idx]=false; return n; }); }
+    };
+
+    const resetTrans = idx => {
+      setTransAns(p => { const n=[...p]; n[idx]=''; return n; });
+      setTransFb(p => { const n=[...p]; n[idx]=null; return n; });
+    };
+
+    /* Framvinda */
+    const tabDone = {
+      tf:    tfDone,
+      short: shortFb.every(f => f !== null),
+      ord:   ordDone,
+      trans: transFb.every(f => f !== null),
+    };
+    const allDone = Object.values(tabDone).every(Boolean);
+
+    /* ── RENDER ──────────────────────────────────────────────────── */
+    return (
+      <div style={{ minHeight: '100vh' }}>
+
+        {/* HEADER */}
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-6 py-8">
+            <button onClick={() => window.history.back()}
+              className="text-sm text-gray-500 hover:text-gray-700 mb-3 inline-block font-light">
+              ← Til baka
+            </button>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <h1 className="text-3xl font-light text-gray-800">🎧 Fjölskyldan</h1>
+                <p className="text-gray-500 text-sm font-light mb-3">Hlustunarverkefni · A2–B1 · Æfing 21</p>
+                <div className="flex items-center gap-5">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <img src="../media/mateo_haus.png" alt="Mateo" className="portrait" onError={hideImg} />
+                    <span className="text-xs font-light text-gray-600">Mateo</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1.5">
+                    <img src="../media/vera_haus.jpg" alt="Vera" className="portrait" onError={hideImg} />
+                    <span className="text-xs font-light text-gray-600">Vera</span>
+                  </div>
+                </div>
+              </div>
+              <img src="../media/aef21-fjolskyldan.png" alt="Mateo og Vera á leið heim úr skóla"
+                className="rounded-2xl h-auto flex-shrink-0" style={{ width: '15%' }} onError={hideImg} />
+            </div>
+          </div>
+        </header>
+
+        {/* STICKY PLAYER */}
+        <div className="sticky-player">
+          <div className="max-w-4xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button onClick={togglePlay}
+                className="bg-green-600 text-white w-11 h-11 rounded-full flex items-center
+                  justify-center hover:bg-green-700 transition-colors flex-shrink-0 shadow-sm">
+                {isPlaying
+                  ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="4" width="4" height="16"/>
+                      <rect x="14" y="4" width="4" height="16"/>
+                    </svg>
+                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                }
+              </button>
+              <div className="flex-1">
+                <p className="text-xs font-light text-gray-500 mb-1.5">
+                  Hlustaðu á samtalið – má hlusta margsinnis
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 font-light w-8 text-right">{fmt(currentTime)}</span>
+                  <input type="range" min="0" max={duration||0} value={currentTime} step="0.1"
+                    onChange={e => {
+                      const t = parseFloat(e.target.value);
+                      if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t); }
+                    }}
+                    className="progress-bar flex-1" />
+                  <span className="text-xs text-gray-400 font-light w-8">{fmt(duration)}</span>
+                </div>
+                <audio ref={audioRef} src="../media/aef21-fjolskyldan.mp3" preload="metadata"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                  onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime||0)}
+                  onLoadedMetadata={() => setDuration(audioRef.current?.duration||0)} />
+              </div>
+              <div className="flex gap-1.5">
+                {[0.75, 1, 1.25].map(r => (
+                  <button key={r} onClick={() => setPlaybackRate(r)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-light transition-colors
+                      ${playbackRate===r ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}>
+                    {r}×
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* MAIN */}
+        <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-24">
+
+          {/* Leiðbeiningar */}
+          <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+            <ul className="space-y-1 text-sm font-light text-green-900">
+              <li>🎧 Hlustaðu á samtalið 2–3 sinnum</li>
+              <li>✏️ Svaraðu öllum flokkum spurninga</li>
+              <li>🔓 Þegar allt er lokið opnast textinn</li>
+            </ul>
+          </div>
+
+          {/* Flipasvæði */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+
+            {/* Tab bar */}
+            <div className="bg-white border-b border-gray-200 sticky top-[73px] z-40"
+              style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
+              <div className="flex">
+                {TABS.map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                    className={`tab-btn flex items-center gap-1.5 px-4 py-3.5 text-sm font-light
+                      text-gray-500 whitespace-nowrap border-b-2 border-transparent
+                      ${activeTab===tab.id ? 'tab-active' : ''}`}>
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                    {tabDone[tab.id] && (
+                      <span className="w-4 h-4 rounded-full bg-green-500 text-white text-xs
+                        flex items-center justify-center ml-0.5">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 fade-in" key={activeTab}>
+
+              {/* ── RÉTT / RANGT ─────────────────────────────── */}
+              {activeTab === 'tf' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-4">✅ Rétt eða rangt?</h2>
+                  <div className="space-y-3">
+                    {TRUE_FALSE.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-light text-gray-800 mb-3">{item.s}</p>
+                        <div className="flex gap-2">
+                          {[true, false].map(val => {
+                            const sel = tfAns[idx] === val;
+                            let cls = 'answer-option flex-1 py-2 rounded-lg text-sm font-light';
+                            if (!tfDone) { if (sel) cls += ' opt-selected'; }
+                            else {
+                              cls += ' opt-disabled';
+                              if (item.correct === val) cls += ' opt-correct';
+                              else if (sel) cls += ' opt-incorrect';
+                            }
+                            return (
+                              <button key={String(val)}
+                                onClick={() => { if (!tfDone) setTfAns(p => ({...p,[idx]:val})); }}
+                                className={cls}>
+                                {val ? 'Rétt ✓' : 'Rangt ✗'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={() => { if (tfReady) setTfDone(true); }}
+                      disabled={!tfReady || tfDone}
+                      className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700
+                        disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                      Athuga svör
+                    </button>
+                    {tfDone && (
+                      <button onClick={() => { setTfAns({}); setTfDone(false); }}
+                        className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg
+                          hover:bg-gray-50 transition-colors font-light text-sm">
+                        Endurstilla
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── SPURNINGAR ───────────────────────────────── */}
+              {activeTab === 'short' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-1">📝 Spurningar</h2>
+                  <p className="text-sm font-light text-gray-500 mb-4">Svaraðu með einni setningu.</p>
+                  <div className="space-y-4">
+                    {SHORT_QS.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-medium text-gray-800 mb-3">{item.q}</p>
+                        <textarea
+                          value={shortAns[idx]}
+                          onChange={e => setShortAns(p => { const n=[...p]; n[idx]=e.target.value; return n; })}
+                          disabled={shortFb[idx] !== null}
+                          placeholder="Skrifaðu svarið þitt hér..."
+                          rows={2}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+                            focus:outline-none focus:border-green-400 font-light resize-none
+                            disabled:bg-gray-50 text-sm mb-3" />
+                        {shortFb[idx] === null && (
+                          <button onClick={() => checkShort(idx)}
+                            disabled={!shortAns[idx].trim() || shortLd[idx]}
+                            className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                            {shortLd[idx] ? 'Athuga...' : 'Athuga svar'}
+                          </button>
+                        )}
+                        {shortFb[idx] && (
+                          <FeedbackBadge
+                            score={shortFb[idx].score}
+                            message={shortFb[idx].msg}
+                            onRetry={shortFb[idx].score < 4 ? () => resetShort(idx) : null}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ORÐASAMBÖND ──────────────────────────────── */}
+              {activeTab === 'ord' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-1">💬 Orðasambönd</h2>
+                  <p className="text-sm font-light text-gray-500 mb-4">Hvað þýða orðasamböndin?</p>
+                  <div className="space-y-4">
+                    {ORDASAMBOND.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-medium text-gray-800 mb-3">
+                          Hvað þýðir „{item.phrase}“?
+                        </p>
+                        <div className="space-y-2">
+                          {item.opts.map((opt, oi) => {
+                            const sel = ordAns[idx] === oi;
+                            let cls = 'answer-option w-full py-2.5 px-4 rounded-lg text-sm font-light block';
+                            cls = cls.replace('text-center', '');
+                            if (!ordDone) { if (sel) cls += ' opt-selected'; }
+                            else {
+                              cls += ' opt-disabled';
+                              if (item.correct === oi) cls += ' opt-correct';
+                              else if (sel) cls += ' opt-incorrect';
+                            }
+                            return (
+                              <button key={oi}
+                                onClick={() => { if (!ordDone) setOrdAns(p => { const n=[...p]; n[idx]=oi; return n; }); }}
+                                className={cls} style={{ textAlign: 'left' }}>
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={() => { if (ordReady) setOrdDone(true); }}
+                      disabled={!ordReady || ordDone}
+                      className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700
+                        disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                      Athuga svör
+                    </button>
+                    {ordDone && (
+                      <button onClick={() => { setOrdAns(ORDASAMBOND.map(() => null)); setOrdDone(false); }}
+                        className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg
+                          hover:bg-gray-50 transition-colors font-light text-sm">
+                        Endurstilla
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ÞÝÐINGAR ─────────────────────────────────── */}
+              {activeTab === 'trans' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-1">🌍 Þýðingar</h2>
+                  <p className="text-sm font-light text-gray-500 mb-4">
+                    Þýddu orðin á þitt eigið móðurmál.
+                  </p>
+                  <div className="space-y-4">
+                    {TRANSLATIONS.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm text-gray-700 mb-3">
+                          Þýddu á þitt móðurmál:{' '}
+                          <strong className="text-gray-900 font-medium">{item.word}</strong>
+                        </p>
+                        <textarea
+                          value={transAns[idx]}
+                          onChange={e => setTransAns(p => { const n=[...p]; n[idx]=e.target.value; return n; })}
+                          disabled={transFb[idx] !== null}
+                          placeholder="Skrifaðu þýðinguna hér..."
+                          rows={2}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+                            focus:outline-none focus:border-green-400 font-light resize-none
+                            disabled:bg-gray-50 text-sm mb-3" />
+                        {transFb[idx] === null && (
+                          <button onClick={() => checkTrans(idx)}
+                            disabled={!transAns[idx].trim() || transLd[idx]}
+                            className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                              disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
+                            {transLd[idx] ? 'Athuga...' : 'Athuga þýðingu'}
+                          </button>
+                        )}
+                        {transFb[idx] && (
+                          <FeedbackBadge
+                            score={transFb[idx].score}
+                            message={transFb[idx].msg}
+                            onRetry={transFb[idx].score < 4 ? () => resetTrans(idx) : null}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* Lokakassi */}
+          {allDone && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center fade-in">
+              <div className="text-4xl mb-3">🎉</div>
+              <h3 className="text-xl font-light text-green-800 mb-2">Vel gert!</h3>
+              <p className="text-green-700 font-light text-sm mb-4">
+                Þú hefur lokið öllum verkefnum. Nú getur þú lesið samtalið.
+              </p>
+              <button onClick={() => setShowText(v => !v)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
+                  transition-colors font-light text-sm">
+                {showText ? '▲ Fela samtalið' : '📖 Lesa samtalið'}
+              </button>
+
+              {showText && (
+                <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100 fade-in">
+                  <h3 className="font-light text-gray-500 mb-1 text-sm">💬 Samtalið – Fjölskyldan</h3>
+                  <p className="text-xs font-light text-gray-400 mb-4">
+                    Spilaðu hljóðið og línan sem er lesin lýsist upp. Smelltu á línu til að hlusta á hana.
+                  </p>
+                  {SAMTALS.map((line, i) => {
+                    const c = WHO[line.who];
+                    const isActive = activeLine === i;
+                    return (
+                      <div key={i}
+                        onClick={() => seekTo(TIMING[i].start)}
+                        className={`line-btn flex gap-3 mb-4 rounded-xl p-1 ${isActive ? 'line-active' : ''}`}>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center
+                          justify-center text-xs font-medium overflow-hidden ${c.tag}`}>
+                          <img src={c.img} alt={line.who} className="portrait-sm" onError={hideImg} />
+                        </div>
+                        <div className={`max-w-lg px-4 py-3 rounded-xl text-sm font-light ${c.bg} text-gray-800`}>
+                          <span className="block text-xs text-gray-400 mb-1">{line.who}</span>
+                          {line.text}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Nú get ég */}
+              <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100">
+                <h3 className="font-light text-gray-500 mb-3 text-sm">🌟 Nú get ég…</h3>
+                <ul className="space-y-2">
+                  {NU_GET_EG.map((g, i) => (
+                    <li key={i} className="flex gap-2 text-sm font-light text-gray-700">
+                      <span className="text-green-600">✓</span>{g}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+        </main>
+
+        {/* Framvinduraki – neðst */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+          <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
+            {TABS.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-2 rounded-lg text-xs font-light transition-colors
+                  ${tabDone[tab.id]
+                    ? 'bg-green-600 text-white'
+                    : activeTab===tab.id
+                      ? 'bg-gray-200 text-gray-700'
+                      : 'bg-gray-100 text-gray-500'}`}>
+                {tabDone[tab.id] ? '✓ ' : ''}{tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
