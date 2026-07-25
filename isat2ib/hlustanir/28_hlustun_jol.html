@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎧 Æfing 28: Jól – Málstöðin</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%); min-height: 100vh; }
+    .sticky-player { position: sticky; top: 0; z-index: 50; background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08); }
+    .progress-bar { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px; background: #d1d5db; outline: none; cursor: pointer; }
+    .progress-bar::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #16a34a; cursor: pointer; }
+    .progress-bar::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #16a34a; cursor: pointer; border: none; }
+    .tab-btn { transition: all 0.2s; position: relative; }
+    .tab-btn:not(.tab-active):hover { background: #f3f4f6; }
+    .tab-btn.tab-active { background: white; color: #2563eb; font-weight: 500; }
+    .tab-btn.tab-active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: #2563eb; border-radius: 2px 2px 0 0; }
+    .answer-option { border: 2px solid #e5e7eb; transition: all 0.2s; cursor: pointer; text-align: center; }
+    .answer-option:hover:not(.opt-disabled) { border-color: #93c5fd; background: #eff6ff; }
+    .answer-option.opt-selected  { border-color: #3b82f6; background: #eff6ff; }
+    .answer-option.opt-correct   { border-color: #22c55e; background: #f0fdf4; color: #15803d; }
+    .answer-option.opt-incorrect { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
+    .answer-option.opt-disabled  { cursor: default; }
+    .portrait { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: top center; border: 2px solid #e5e7eb; transition: border-color 0.2s; }
+    .portrait.speaking { border-color: #16a34a; animation: speakingPulse 1.1s ease-in-out infinite; }
+    @keyframes speakingPulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(22,163,74,0.35); } 50% { box-shadow: 0 0 0 8px rgba(22,163,74,0.10); } }
+    .portrait-sm { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; object-position: top center; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useRef, useEffect } = React;
+  async function callOpenAI(messages, maxTokens = 120, temperature = 0.2) {
+    const r = await fetch('/.netlify/functions/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, max_tokens: maxTokens, model: 'gpt-4o-mini', temperature }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+    return data.content;
+  }
+  /* ══════════ GÖGN — ÆFING 28 ══════════ */
+  const AEFING_NR = "28";
+  const TITILL    = "Jól";
+  const STIG      = "A2–B1";
+  const AUDIO_SRC = "../media/aef28-jol.mp3";
+  const MYND_SRC  = "../media/aef28-jol.png";
+  const MYND_ALT  = "Vera, Lía og Mateo spjalla um jólahefðir í skólanum";
+  const PERSONUR = [
+    { id:'vera',  nafn:'Vera',  mynd:'../media/vera_haus.jpg',  mynd_alt:'Vera'  },
+    { id:'lia',   nafn:'Lía',   mynd:'../media/lia_haus.jpg',   mynd_alt:'Lía'   },
+    { id:'mateo', nafn:'Mateo', mynd:'../media/mateo_haus.png', mynd_alt:'Mateo' },
+  ];
+  const SAMTALS = [
+    { who:'Vera',  text:'Hæ! Eruð þið spennt fyrir jólunum?' },
+    { who:'Lía',   text:'Jólunum? Það eru enn þá þrjár vikur í jólin.' },
+    { who:'Vera',  text:'Já en ég hlakka svo mikið til. Hvað gerið þið eiginlega um jólin? Þið eruð ekki frá Íslandi — er þetta öðruvísi hjá ykkur?' },
+    { who:'Mateo', text:'Mjög ólíkt! Í Kólumbíu eru jólin… ég veit ekki hvernig á að útskýra þetta. Það er hlýrra veður og hressari hátíð. Fjölskyldan kemur öll saman — amma, afi, frændfólk, allir. Það er tónlist og dans og sérstakur matur.' },
+    { who:'Vera',  text:'Hvað borðið þið?' },
+    { who:'Mateo', text:'Natilla og buñuelos — natilla er sætur jólaeftirréttur og buñuelos eru steiktar ostakúlur. Og stundum borðum við arepas. Og það er hlýtt úti svo við getum sest út á veröndina eða út í garð.' },
+    { who:'Lía',   text:'Það hljómar vel.' },
+    { who:'Mateo', text:'Já. Ég sakna þess. Hér er bæði dimmt og kalt um jólin. Það er alveg öfugt við Kólumbíu.' },
+    { who:'Vera',  text:'Já en við reynum að bæta upp fyrir það með jólaljósum!' },
+    { who:'Mateo', text:'Já, þau eru líka falleg. Bara öðru vísi.' },
+    { who:'Vera',  text:'En hvað með þig Lía? Haldið þið jól í Kína?' },
+    { who:'Lía',   text:'Það fer mjög eftir fjölskyldum. Hjá okkur héldum við ekki mikið upp á jól.' },
+    { who:'Vera',  text:'Í alvöru?' },
+    { who:'Lía',   text:'Já. Jólin eru ekki eins stór hátíð í Kína og hér. Það er skraut í búðum og svona, en hjá okkur í fjölskyldunni var þetta ekki nein sérstök hátíð. Við fögnum kínverska nýárinu miklu meira hjá okkur.' },
+    { who:'Mateo', text:'Hvað er kínverskt nýár?' },
+    { who:'Lía',   text:'Það er stærsta hátíð ársins hjá mörgum Kínverjum. Fjölskyldan kemur saman, við fáum rauð umslög með peningum, við borðum sérstakan mat. Það er í janúar eða febrúar — fer eftir tunglinu.' },
+    { who:'Vera',  text:'Áhugavert! Þetta vissi ég ekki.' },
+    { who:'Lía',   text:'Já, það er mun meira fjör en jólin hjá okkur. En hér á Íslandi er jólastemningin svo mikil að maður smitast af henni.' },
+    { who:'Vera',  text:'Haha já! Við Íslendingar elskum jólin. Við opnum gjafir á aðfangadagskvöld — það er 24. desember.' },
+    { who:'Mateo', text:'Alveg eins og í Kólumbíu.' },
+    { who:'Vera',  text:'Já, aðfangadagur er stærsti dagurinn. Við borðum saman — hangikjöt eða hamborgarhrygg — og svo opnum við pakka um kvöldið.' },
+    { who:'Lía',   text:'Og jólasveinar — hverjir eru þeir? Ég hef séð myndir.' },
+    { who:'Vera',  text:'Haha já, við höfum þrettán jólasveina — ekki einn eins og Santa Claus. Þeir koma einn í einu dagana fyrir jólin og gefa börnum gjafir í skó úti í glugga — eða kartöflur ef þau eru óþekk.' },
+    { who:'Mateo', text:'Þrettán! Og kartöflur — haha. Og hvað er laufabrauð? Ég hef heyrt eitthvað um það.' },
+    { who:'Vera',  text:'Laufabrauð! Það er þunnt brauð sem við skreytum með mynstrum og steikjum. Það er gömul íslensk hefð — fjölskyldan situr saman og gerir þetta.' },
+    { who:'Lía',   text:'Það hljómar vel.' },
+    { who:'Vera',  text:'Já! Og það gefur mér hugmynd. Við ættum að halda lítil jól saman — ég og Andri getum boðið ykkur. Við getum gert laufabrauð og borðað saman.' },
+    { who:'Lía',   text:'Já! Ég er til í það.' },
+    { who:'Mateo', text:'Já, getið þið líka boðið Söru?' },
+    { who:'Vera',  text:'Söru. Hahahaha já auðvitað getum við boðið henni ef þú vilt. Eigum við að segja á miðvikudagskvöldið? Getið þið kannski komið með eitthvað frá ykkar landi?' },
+    { who:'Lía',   text:'Ég gæti komið með dumplings. Það er ekki sérstaklega jólaréttur en vinsælt að koma með í svona pálínuboð.' },
+    { who:'Mateo', text:'Já ég skal gera arepas — kannski ekki jólalegt en mjög gott.' },
+    { who:'Vera',  text:'Frábært. Ég bý til hópspjall á messenger svo við getum klárað að skipuleggja þetta.' },
+  ];
+  const WHO = {
+    Vera:  { bg:'bg-rose-50',   tag:'bg-rose-100 text-rose-700',     mynd:'../media/vera_haus.jpg',  init:'V' },
+    Lía:   { bg:'bg-purple-50', tag:'bg-purple-100 text-purple-700', mynd:'../media/lia_haus.jpg',   init:'L' },
+    Mateo: { bg:'bg-amber-50',  tag:'bg-amber-100 text-amber-700',   mynd:'../media/mateo_haus.png', init:'M' },
+  };
+  // TÍMAKORT — sjálfvirkt úr aef28-jol.mp3 (leiðrétt)
+  const TIMING = [
+    { who: 'Vera', start: 0.00, end: 2.14 },
+    { who: 'Lía', start: 2.19, end: 6.17 },
+    { who: 'Vera', start: 6.22, end: 14.59 },
+    { who: 'Mateo', start: 14.64, end: 33.24 },
+    { who: 'Vera', start: 33.29, end: 35.01 },
+    { who: 'Mateo', start: 35.06, end: 51.47 },
+    { who: 'Lía', start: 51.52, end: 52.99 },
+    { who: 'Mateo', start: 53.04, end: 60.86 },
+    { who: 'Vera', start: 60.91, end: 64.67 },
+    { who: 'Mateo', start: 64.72, end: 68.69 },
+    { who: 'Vera', start: 68.74, end: 72.68 },
+    { who: 'Lía', start: 72.73, end: 78.32 },
+    { who: 'Vera', start: 78.37, end: 79.70 },
+    { who: 'Lía', start: 79.75, end: 94.95 },
+    { who: 'Mateo', start: 95.00, end: 97.56 },
+    { who: 'Lía', start: 97.61, end: 113.11 },
+    { who: 'Vera', start: 113.16, end: 116.09 },
+    { who: 'Lía', start: 116.14, end: 126.57 },
+    { who: 'Vera', start: 126.62, end: 135.46 },
+    { who: 'Mateo', start: 135.51, end: 137.57 },
+    { who: 'Vera', start: 137.62, end: 147.21 },
+    { who: 'Lía', start: 147.26, end: 152.28 },
+    { who: 'Vera', start: 152.33, end: 166.74 },
+    { who: 'Mateo', start: 166.79, end: 174.40 },
+    { who: 'Vera', start: 174.45, end: 185.41 },
+    { who: 'Lía', start: 185.46, end: 187.23 },
+    { who: 'Vera', start: 187.28, end: 198.48 },
+    { who: 'Lía', start: 198.53, end: 201.12 },
+    { who: 'Mateo', start: 201.17, end: 204.24 },
+    { who: 'Vera', start: 204.29, end: 216.40 },
+    { who: 'Lía', start: 216.45, end: 224.68 },
+    { who: 'Mateo', start: 224.73, end: 230.33 },
+    { who: 'Vera', start: 230.38, end: 236.38 },
+  ];
+  // 1. RÉTT EÐA RANGT
+  const TRUE_FALSE = [
+    { s:'Lía segist hlakka mjög mikið til jólanna þegar samtalið byrjar.',  correct:false },
+    { s:'Í Kólumbíu kemur fjölskylda Mateos saman um jólin.',              correct:true  },
+    { s:'Kínverskt nýár er stærri hátíð en jólin hjá fjölskyldu Líu.',     correct:true  },
+    { s:'Á Íslandi eru gjafir opnaðar á jóladag.',                         correct:false },
+    { s:'Jólasveinar gefa börnum kartöflur í skóinn ef þau eru óþekk.',    correct:true  },
+    { s:'Mateo og Lía koma með íslenskan mat á jólakvöldið.',             correct:false },
+  ];
+  // 2. SPURNINGAR (opnar, AI-mat)
+  const SHORT_QS = [
+    { q:'Hvernig lýsir Mateo jólum í Kólumbíu?',
+      key:['hlýrra veður','fjölskyldan kemur saman','tónlist og dans','sérstakur matur','hressari hátíð'] },
+    { q:'Hvað segir Lía um jólin í Kína?',
+      key:['ekki eins stór hátíð','fer eftir fjölskyldum','ekki sérstök hátíð hjá fjölskyldu Líu','kínverskt nýár mikilvægara'] },
+    { q:'Hvað er laufabrauð?',
+      key:['þunnt brauð','skreytt með mynstrum','steikt','gömul íslensk hefð'] },
+    { q:'Hvernig enda þau á að skipuleggja jólakvöldið?',
+      key:['halda lítil jól saman','hjá Veru og Andra','hver kemur með mat frá sínu landi','hópspjall á messenger','miðvikudagskvöld'] },
+  ];
+  // 3. ORÐASAMBÖND — fjölval (rétt svör dreift: c, b, a)
+  const ORDATAK = [
+    { q:'Hvað þýðir „aðfangadagur“?',
+      opts:['Dagurinn eftir jóladag','Kvöldið þegar jólasveinar koma','Dagurinn fyrir jóladag — 24. desember'], correct:2 },
+    { q:'Hvað þýðir „að smitast af stemningu“?',
+      opts:['Að verða veikur af jólum','Að upplifa gleði eða stemningu frá öðrum','Að vera alltaf glaður um jólin'], correct:1 },
+    { q:'Hvað þýðir „það fer eftir fjölskyldum“?',
+      opts:['Þetta er mismunandi eftir því hvaða fjölskylda á í hlut','Fjölskyldurnar fara saman í ferð','Fjölskyldan ákveður þetta alltaf'], correct:0 },
+  ];
+  // 4. ÞÝÐINGARVERKEFNI — 'en' er ensk viðmiðunarmerking fyrir AI-matið
+  const TRANSLATIONS = [
+    { word:'að halda upp á',  en:'to celebrate / to observe (a holiday)' },
+    { word:'hefð',            en:'tradition / custom' },
+    { word:'að skipuleggja',  en:'to plan / to organize' },
+  ];
+  const NU_GET_EG = [
+    'Skilið þegar einhver lýsir jólahefðum úr eigin menningu.',
+    'Skilið þegar hefðir landa eru bornar saman.',
+    'Skilið þegar einhver útskýrir óþekkta hefð eða siðvenju.',
+    'Lýst eigin hátíðarhefðum og spurt um hefðir annarra.',
+  ];
+  const TABS = [
+    { id:'tf',    label:'Rétt/Rangt',  icon:'✅' },
+    { id:'short', label:'Spurningar',  icon:'📝' },
+    { id:'ordas', label:'Orðasambönd', icon:'💬' },
+    { id:'trans', label:'Þýðingar',    icon:'🌍' },
+  ];
+  const FeedbackBadge = ({ score, message, onRetry }) => {
+    const color = score >= 4 ? 'green' : score >= 2 ? 'amber' : 'red';
+    const cls = { green:'bg-green-50 border-green-200 text-green-700', amber:'bg-amber-50 border-amber-200 text-amber-700', red:'bg-red-50 border-red-200 text-red-700' }[color];
+    return (
+      <div className={`mt-3 p-3 rounded-lg border fade-in ${cls}`}>
+        <div className="font-medium text-sm mb-1">Stig: {score}/5</div>
+        <p className="text-sm font-light">{message}</p>
+        {onRetry && (<button onClick={onRetry} className="text-xs underline mt-2 opacity-70 block">Reyna aftur</button>)}
+      </div>
+    );
+  };
+  const App = () => {
+    const audioRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playbackRate, setPlaybackRate] = useState(1);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [activeTab, setActiveTab] = useState('tf');
+    const [showText, setShowText] = useState(false);
+    const [activeSpeaker, setActiveSpeaker] = useState(null);
+    useEffect(() => { if (audioRef.current) audioRef.current.playbackRate = playbackRate; }, [playbackRate]);
+    const fmt = sec => { if (!sec || isNaN(sec)) return '0:00'; return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`; };
+    const togglePlay = () => { if (!audioRef.current) return; isPlaying ? audioRef.current.pause() : audioRef.current.play(); };
+    /* Rétt/Rangt */
+    const [tfAns, setTfAns] = useState({});
+    const [tfDone, setTfDone] = useState(false);
+    const tfReady = TRUE_FALSE.every((_, i) => tfAns[i] !== undefined);
+    /* Spurningar */
+    const [shortAns, setShortAns] = useState(SHORT_QS.map(() => ''));
+    const [shortFb, setShortFb] = useState(SHORT_QS.map(() => null));
+    const [shortLd, setShortLd] = useState(SHORT_QS.map(() => false));
+    const checkShort = async idx => {
+      const ans = shortAns[idx].trim(); if (!ans) return;
+      setShortLd(p => { const n=[...p]; n[idx]=true; return n; });
+      try {
+        const { q, key } = SHORT_QS[idx];
+        const sys = `Þú ert íslenskukennari. Nemandinn svarar A2–B1 stigs hlustunarspurningu.
+Spurning: "${q}"
+Lykilatriði í réttu svari: ${key.join(', ')}
+Gefðu stig 0–5. Hunsa smávægilegar málfræðivillur og stafsetningu.
+Svaraðu EINUNGIS:
+STIG: [0-5]
+ENDURGJÖF: [ein setning á íslensku, vinaleg]`;
+        const res = await callOpenAI([{role:'system',content:sys},{role:'user',content:ans}], 80, 0.2);
+        const score = parseInt((res.match(/STIG:\s*(\d)/)||[])[1]||0);
+        const msg   = (res.match(/ENDURGJÖF:\s*(.+)/)||[])[1]?.trim() || res.trim();
+        setShortFb(p => { const n=[...p]; n[idx]={score,msg}; return n; });
+      } catch(e) { console.error(e); }
+      finally { setShortLd(p => { const n=[...p]; n[idx]=false; return n; }); }
+    };
+    const resetShort = idx => { setShortAns(p => { const n=[...p]; n[idx]=''; return n; }); setShortFb(p => { const n=[...p]; n[idx]=null; return n; }); };
+    /* Orðasambönd */
+    const [ordasAns, setOrdasAns] = useState(ORDATAK.map(() => null));
+    const [ordasDone, setOrdasDone] = useState(false);
+    const ordasReady = ORDATAK.every((_, i) => ordasAns[i] !== null);
+    const setOrdas = (qi, oi) => { if (!ordasDone) setOrdasAns(p => { const n=[...p]; n[qi]=oi; return n; }); };
+    /* Þýðingar */
+    const [transAns, setTransAns] = useState(TRANSLATIONS.map(() => ''));
+    const [transFb, setTransFb] = useState(TRANSLATIONS.map(() => null));
+    const [transLd, setTransLd] = useState(TRANSLATIONS.map(() => false));
+    const matchesRef = (ans, en) => {
+      const norm = s => s.toLowerCase().replace(/[.,!?;:"'`()\/]/g,' ').replace(/\b(to|a|an|the|of|be|is|are|being|som|að)\b/g,' ').replace(/\s+/g,' ').trim();
+      const a = norm(ans); if (!a) return false;
+      return en.split('/').map(norm).some(v => v && (a === v || (a.length >= 4 && (a.includes(v) || v.includes(a)))));
+    };
+    const checkTrans = async idx => {
+      const ans = transAns[idx].trim(); if (!ans) return;
+      const { word, en } = TRANSLATIONS[idx];
+      if (matchesRef(ans, en)) { setTransFb(p => { const n=[...p]; n[idx]={score:5,msg:'Rétt! Það passar við merkinguna.'}; return n; }); return; }
+      setTransLd(p => { const n=[...p]; n[idx]=true; return n; });
+      try {
+        const sys = `Þú ert íslenskukennari sem metur þýðingar nemenda á íslenskum orðum. Vertu ÖRLÁTUR — markmiðið er að nemandinn skilji orðið, ekki að þýðingin sé fullkomin.
+Íslenska orðið: "${word}"
+Rétt merking (enska viðmiðun): "${en}"
+Nemandinn þýðir orðið yfir á sitt eigið móðurmál — það getur verið HVAÐA tungumál sem er (enska, danska, pólska, spænska, tagalog, tælenska o.s.frv.).
+Reglur:
+- Ef svarið er á ENSKU og samsvarar ensku viðmiðuninni að ofan (eða hluta hennar) þá er það RÉTT (STIG 5).
+- Ef svarið er á öðru tungumáli og hefur sömu merkingu og viðmiðunin þá er það RÉTT (STIG 5).
+- Samheiti, óformlegt orðalag og smávægileg frávik teljast RÉTT.
+- Aðeins ef merkingin er röng eða óskyld gefðu STIG 1.
+Svaraðu EINUNGIS:
+STIG: [5 ef rétt, 1 ef rangt]
+ENDURGJÖF: [ein setning á íslensku, vinaleg — nefndu rétta merkingu ef svarið er rangt]`;
+        const res = await callOpenAI([{role:'system',content:sys},{role:'user',content:ans}], 80, 0.2);
+        const score = parseInt((res.match(/STIG:\s*(\d)/)||[])[1]||0);
+        const msg   = (res.match(/ENDURGJÖF:\s*(.+)/)||[])[1]?.trim() || res.trim();
+        setTransFb(p => { const n=[...p]; n[idx]={score,msg}; return n; });
+      } catch(e) { console.error(e); }
+      finally { setTransLd(p => { const n=[...p]; n[idx]=false; return n; }); }
+    };
+    const resetTrans = idx => { setTransAns(p => { const n=[...p]; n[idx]=''; return n; }); setTransFb(p => { const n=[...p]; n[idx]=null; return n; }); };
+    /* Framvinda */
+    const tabDone = { tf:tfDone, short:shortFb.every(f => f !== null), ordas:ordasDone, trans:transFb.every(f => f !== null) };
+    const allDone = TABS.every(t => tabDone[t.id]);
+    return (
+      <div style={{ minHeight: '100vh' }}>
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-6 py-8">
+            <button onClick={() => window.history.back()} className="text-sm text-gray-500 hover:text-gray-700 mb-3 inline-block font-light">← Til baka</button>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <h1 className="text-3xl font-light text-gray-800">🎧 {TITILL}</h1>
+                <p className="text-gray-500 text-sm font-light mb-3">Hlustunarverkefni · {STIG} · Æfing {AEFING_NR}</p>
+                <div className="flex items-center gap-5">
+                  {PERSONUR.map(p => {
+                    const speaking = activeSpeaker === p.nafn;
+                    return (
+                      <div key={p.id} className={`flex flex-col items-center gap-1.5 transition-opacity duration-300 ${activeSpeaker && !speaking ? 'opacity-40' : 'opacity-100'}`}>
+                        <img src={p.mynd} alt={p.mynd_alt} className={`portrait ${speaking ? 'speaking' : ''}`} onError={e => { e.target.style.display='none'; }} />
+                        <span className={`text-xs ${speaking ? 'text-green-700 font-medium' : 'text-gray-600 font-light'}`}>{p.nafn}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <img src={MYND_SRC} alt={MYND_ALT} className="rounded-2xl h-auto flex-shrink-0" style={{ width: '15%' }} onError={e => { e.target.style.display='none'; }} />
+            </div>
+          </div>
+        </header>
+        <div className="sticky-player">
+          <div className="max-w-4xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button onClick={togglePlay} className="bg-green-600 text-white w-11 h-11 rounded-full flex items-center justify-center hover:bg-green-700 transition-colors flex-shrink-0 shadow-sm">
+                {isPlaying
+                  ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>}
+              </button>
+              <div className="flex-1">
+                <p className="text-xs font-light text-gray-500 mb-1.5">Hlustaðu á samtalið – má hlusta margsinnis</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 font-light w-8 text-right">{fmt(currentTime)}</span>
+                  <input type="range" min="0" max={duration||0} value={currentTime} step="0.1"
+                    onChange={e => { const t = parseFloat(e.target.value); if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t); } }}
+                    className="progress-bar flex-1" />
+                  <span className="text-xs text-gray-400 font-light w-8">{fmt(duration)}</span>
+                </div>
+                <audio ref={audioRef} src={AUDIO_SRC} preload="metadata"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => { setIsPlaying(false); setActiveSpeaker(null); }}
+                  onEnded={() => { setIsPlaying(false); setActiveSpeaker(null); }}
+                  onTimeUpdate={() => {
+                    const t = audioRef.current?.currentTime || 0;
+                    setCurrentTime(t);
+                    let who = null;
+                    for (let i = 0; i < TIMING.length; i++) { if (t < TIMING[i].end) { who = TIMING[i].who; break; } }
+                    setActiveSpeaker(who);
+                  }}
+                  onLoadedMetadata={() => setDuration(audioRef.current?.duration||0)} />
+              </div>
+              <div className="flex gap-1.5">
+                {[0.75, 1, 1.25].map(r => (
+                  <button key={r} onClick={() => setPlaybackRate(r)} className={`px-2.5 py-1 rounded-md text-xs font-light transition-colors ${playbackRate===r ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}`}>{r}×</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <main className="max-w-4xl mx-auto px-6 mt-6 space-y-4 pb-24">
+          <div className="bg-green-50 border border-green-200 border-l-4 border-l-green-500 rounded-lg p-4">
+            <ul className="space-y-1 text-sm font-light text-green-900">
+              <li>🎧 Hlustaðu á samtalið 2–3 sinnum</li>
+              <li>✏️ Svaraðu öllum flokkum spurninga</li>
+              <li>🔓 Þegar allt er lokið opnast samtalstextinn</li>
+            </ul>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white border-b border-gray-200 sticky top-[73px] z-40" style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
+              <div className="flex">
+                {TABS.map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`tab-btn flex items-center gap-1.5 px-4 py-3.5 text-sm font-light text-gray-500 whitespace-nowrap border-b-2 border-transparent ${activeTab===tab.id ? 'tab-active' : ''}`}>
+                    <span>{tab.icon}</span><span>{tab.label}</span>
+                    {tabDone[tab.id] && (<span className="w-4 h-4 rounded-full bg-green-500 text-white text-xs flex items-center justify-center ml-0.5">✓</span>)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-6 fade-in" key={activeTab}>
+              {/* RÉTT / RANGT */}
+              {activeTab === 'tf' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-4">✅ Rétt eða rangt?</h2>
+                  <div className="space-y-3">
+                    {TRUE_FALSE.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-light text-gray-800 mb-3">{item.s}</p>
+                        <div className="flex gap-2">
+                          {[true, false].map(val => {
+                            const sel = tfAns[idx] === val;
+                            let cls = 'answer-option flex-1 py-2 rounded-lg text-sm font-light';
+                            if (!tfDone) { if (sel) cls += ' opt-selected'; }
+                            else { cls += ' opt-disabled'; if (item.correct === val) cls += ' opt-correct'; else if (sel) cls += ' opt-incorrect'; }
+                            return (<button key={String(val)} onClick={() => { if (!tfDone) setTfAns(p => ({...p,[idx]:val})); }} className={cls}>{val ? 'Rétt ✓' : 'Rangt ✗'}</button>);
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={() => { if (tfReady) setTfDone(true); }} disabled={!tfReady || tfDone} className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">Athuga svör</button>
+                    {tfDone && (<button onClick={() => { setTfAns({}); setTfDone(false); }} className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Endurstilla</button>)}
+                  </div>
+                </div>
+              )}
+              {/* SPURNINGAR */}
+              {activeTab === 'short' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-1">📝 Spurningar</h2>
+                  <p className="text-sm font-light text-gray-500 mb-4">Svaraðu með einni setningu.</p>
+                  <div className="space-y-4">
+                    {SHORT_QS.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-medium text-gray-800 mb-3">{item.q}</p>
+                        <textarea value={shortAns[idx]}
+                          onChange={e => { if (!shortFb[idx]) { setShortAns(p => { const n=[...p]; n[idx]=e.target.value; return n; }); }}}
+                          onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey && !shortFb[idx]) { e.preventDefault(); checkShort(idx); }}}
+                          disabled={shortFb[idx] !== null} placeholder="Skrifaðu svar hér…" rows={2}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-400 font-light text-sm resize-none disabled:bg-gray-50 disabled:cursor-default transition-colors mb-3" />
+                        {shortFb[idx] === null && (
+                          <button onClick={() => checkShort(idx)} disabled={!shortAns[idx].trim() || shortLd[idx]} className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">{shortLd[idx] ? '…' : 'Athuga'}</button>
+                        )}
+                        {shortFb[idx] && (<FeedbackBadge score={shortFb[idx].score} message={shortFb[idx].msg} onRetry={shortFb[idx].score < 4 ? () => resetShort(idx) : null} />)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* ORÐASAMBÖND */}
+              {activeTab === 'ordas' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-1">💬 Orðasambönd</h2>
+                  <p className="text-sm font-light text-gray-500 mb-4">Veldu réttu merkinguna.</p>
+                  <div className="space-y-4">
+                    {ORDATAK.map((item, qi) => (
+                      <div key={qi} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-medium text-gray-800 mb-3">{item.q}</p>
+                        <div className="space-y-2">
+                          {item.opts.map((opt, oi) => {
+                            const sel = ordasAns[qi] === oi;
+                            let cls = 'answer-option w-full py-2.5 px-4 rounded-lg text-sm font-light text-left';
+                            if (!ordasDone) { if (sel) cls += ' opt-selected'; }
+                            else { cls += ' opt-disabled'; if (item.correct === oi) cls += ' opt-correct'; else if (sel) cls += ' opt-incorrect'; }
+                            return (<button key={oi} onClick={() => setOrdas(qi, oi)} className={cls}>{opt}</button>);
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={() => { if (ordasReady) setOrdasDone(true); }} disabled={!ordasReady || ordasDone} className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">Athuga svör</button>
+                    {ordasDone && (<button onClick={() => { setOrdasAns(ORDATAK.map(() => null)); setOrdasDone(false); }} className="px-6 py-2.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Endurstilla</button>)}
+                  </div>
+                </div>
+              )}
+              {/* ÞÝÐINGAR */}
+              {activeTab === 'trans' && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-800 mb-1">🌍 Þýðingar</h2>
+                  <p className="text-sm font-light text-gray-500 mb-4">Þýddu orðin á þitt eigið móðurmál.</p>
+                  <div className="space-y-4">
+                    {TRANSLATIONS.map((item, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm text-gray-700 mb-3">Þýddu á þitt móðurmál:{' '}<strong className="text-gray-900 font-medium">{item.word}</strong></p>
+                        <textarea value={transAns[idx]}
+                          onChange={e => { if (!transFb[idx]) { setTransAns(p => { const n=[...p]; n[idx]=e.target.value; return n; }); }}}
+                          disabled={transFb[idx] !== null} placeholder="Skrifaðu þýðinguna hér…" rows={2}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-400 font-light resize-none disabled:bg-gray-50 text-sm mb-3" />
+                        {transFb[idx] === null && (
+                          <button onClick={() => checkTrans(idx)} disabled={!transAns[idx].trim() || transLd[idx]} className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">{transLd[idx] ? 'Athuga...' : 'Athuga þýðingu'}</button>
+                        )}
+                        {transFb[idx] && (<FeedbackBadge score={transFb[idx].score} message={transFb[idx].msg} onRetry={transFb[idx].score < 4 ? () => resetTrans(idx) : null} />)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          {allDone && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center fade-in">
+              <div className="text-4xl mb-3">🎉</div>
+              <h3 className="text-xl font-light text-green-800 mb-2">Vel gert!</h3>
+              <p className="text-green-700 font-light text-sm mb-4">Þú hefur lokið öllum verkefnum. Nú getur þú lesið samtalið.</p>
+              <button onClick={() => setShowText(v => !v)} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light text-sm">{showText ? '▲ Fela samtalið' : '📖 Lesa samtalið'}</button>
+              {showText && (
+                <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100 fade-in">
+                  <h3 className="font-light text-gray-500 mb-4 text-sm">💬 Samtalið – {TITILL}</h3>
+                  {SAMTALS.map((line, i) => {
+                    const c = WHO[line.who] || { bg:'bg-gray-50', tag:'bg-gray-100 text-gray-700', mynd:null, init:line.who[0] };
+                    return (
+                      <div key={i} className="flex gap-3 mb-4">
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium overflow-hidden ${c.tag}`}>
+                          {c.mynd ? <img src={c.mynd} alt={line.who} className="portrait-sm" onError={e => { e.target.style.display='none'; }} /> : c.init}
+                        </div>
+                        <div className={`max-w-lg px-4 py-3 rounded-xl text-sm font-light ${c.bg} text-gray-800`}>
+                          <span className="block text-xs text-gray-400 mb-1">{line.who}</span>{line.text}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-5 text-left bg-white rounded-xl p-5 border border-green-100">
+                <h3 className="font-light text-gray-500 mb-3 text-sm">🌟 Nú get ég…</h3>
+                <ul className="space-y-2">
+                  {NU_GET_EG.map((g, i) => (<li key={i} className="flex gap-2 text-sm font-light text-gray-700"><span className="text-green-600">✓</span>{g}</li>))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </main>
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+          <div className="max-w-4xl mx-auto px-6 py-3 flex gap-2">
+            {TABS.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 py-2 rounded-lg text-xs font-light transition-colors ${tabDone[tab.id] ? 'bg-green-600 text-white' : activeTab===tab.id ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}`}>{tabDone[tab.id] ? '✓ ' : ''}{tab.label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
