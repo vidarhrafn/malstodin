@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🃏 Flasskort — Áfangastöð</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="gogn.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+    min-height: 100vh; margin: 0;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(12px);} to {opacity:1; transform:none;} }
+  .fade-in { animation: fadeIn .4s ease both; }
+  .flip-scene { perspective: 1200px; }
+  .flip-inner {
+    position: relative; width: 100%; height: 280px;
+    transition: transform .6s cubic-bezier(.4,.2,.2,1); transform-style: preserve-3d;
+  }
+  .flip-inner.flipped { transform: rotateY(180deg); }
+  .flip-face {
+    position: absolute; inset: 0; backface-visibility: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .flip-back { transform: rotateY(180deg); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ---------- API ---------- */
+async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.3) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens, model, temperature })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+async function playAudio(text, onEnd) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    await audio.play().catch(() => onEnd && onEnd());
+    return audio;
+  } catch (e) { console.error(e); onEnd && onEnd(); }
+}
+
+/* ---------- Íhlutir ---------- */
+const ListenPill = ({ onClick, speaking, label }) => (
+  <button onClick={onClick}
+    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all ${speaking
+      ? 'bg-green-50 text-green-700 border-green-200'
+      : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+    <span className="opacity-70">🎧</span>
+    <span className="font-light">{label || 'Hlustaðu'}</span>
+    <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+  </button>
+);
+
+const MalVal = ({ onSet }) => {
+  const [val, setVal] = useState('');
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 max-w-lg mx-auto fade-in">
+      <h2 className="text-xl font-medium text-gray-800 mb-2">Hvaða tungumál talar þú?</h2>
+      <p className="text-sm text-gray-500 font-light mb-5">
+        Flasskortin sýna þýðingu á þínu móðurmáli. Skrifaðu tungumálið á því tungumáli,
+        t.d. <span className="font-medium">English</span>, <span className="font-medium">Polski</span>,
+        {' '}<span className="font-medium">Dansk</span> eða <span className="font-medium">中文</span>.
+      </p>
+      <input value={val} onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && val.trim()) onSet(val.trim()); }}
+        placeholder="English"
+        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light mb-4" />
+      <button onClick={() => val.trim() && onSet(val.trim())} disabled={!val.trim()}
+        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+        Byrja
+      </button>
+    </div>
+  );
+};
+
+/* ---------- Aðalforrit ---------- */
+const App = () => {
+  const lotaNr = parseInt(new URLSearchParams(location.search).get('lota')) || 1;
+  const lota = window.AFANGASTODVAR[lotaNr];
+
+  const [mal, setMal] = useState('');
+  const [idx, setIdx] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [kann, setKann] = useState([]);          // orð sem nemandi merkti "Kann ég"
+  const [thyding, setThyding] = useState({});    // { is: þýðing }
+  const [saekir, setSaekir] = useState(false);
+  const [bunid, setBunid] = useState(false);
+
+  if (!lota) return (
+    <div className="max-w-2xl mx-auto px-6 py-20 text-center">
+      <p className="text-gray-600 font-light">Áfangastöð {lotaNr} er ekki tilbúin enn.</p>
+    </div>
+  );
+
+  const spjold = lota.ord;
+  const kort = spjold[idx];
+
+  /* Sækja þýðingu þegar kort er flett við */
+  useEffect(() => {
+    if (!flipped || !kort || thyding[kort.is] || !mal) return;
+    let haetta = false;
+    setSaekir(true);
+    callOpenAI([
+      { role: 'system', content:
+        `Þú ert þýðingarvél fyrir íslenskt tungumálanám. Þýddu íslenska orðið yfir á ${mal}. ` +
+        `Enska merkingin er gefin til viðmiðunar svo þú þýðir rétta merkingu. ` +
+        `Svaraðu AÐEINS með þýðingunni sjálfri — engar skýringar, engin greinarmerki í lokin.` },
+      { role: 'user', content: `Íslenska: ${kort.is}\nEnsk viðmiðun: ${kort.en}\nÞýðing á ${mal}:` }
+    ], 60, 'gpt-4o-mini', 0.2)
+      .then(txt => { if (!haetta) setThyding(p => ({ ...p, [kort.is]: txt.trim() })); })
+      .catch(() => { if (!haetta) setThyding(p => ({ ...p, [kort.is]: kort.en })); })
+      .finally(() => { if (!haetta) setSaekir(false); });
+    return () => { haetta = true; };
+  }, [flipped, idx, mal]);
+
+  const segja = () => {
+    if (speaking) return;
+    setSpeaking(true);
+    playAudio(kort.is, () => setSpeaking(false));
+  };
+
+  const naest = (merkjaKann) => {
+    if (merkjaKann && !kann.includes(kort.is)) setKann([...kann, kort.is]);
+    setFlipped(false);
+    setTimeout(() => {
+      if (idx + 1 >= spjold.length) setBunid(true);
+      else setIdx(idx + 1);
+    }, 200);
+  };
+
+  const byrjaAftur = (badeindaEndurtaka) => {
+    setBunid(false); setIdx(0); setFlipped(false);
+    if (!badeindaEndurtaka) setKann([]);
+  };
+
+  if (!mal) return (
+    <Skel lota={lota} lotaNr={lotaNr}>
+      <MalVal onSet={setMal} />
+    </Skel>
+  );
+
+  if (bunid) {
+    const oklarad = spjold.filter(o => !kann.includes(o.is));
+    return (
+      <Skel lota={lota} lotaNr={lotaNr}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 fade-in">
+          <h2 className="text-2xl font-light text-gray-800 mb-2">Þú fórst í gegnum öll {spjold.length} kortin</h2>
+          <p className="text-gray-500 font-light mb-6">
+            Þú merktir <span className="font-medium text-green-700">{kann.length}</span> orð sem þú kannt.
+          </p>
+          {oklarad.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Orð sem þú vilt æfa betur:</h3>
+              <div className="flex flex-wrap gap-2">
+                {oklarad.map(o => (
+                  <span key={o.is} className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-sm font-light">{o.is}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button onClick={() => byrjaAftur(false)}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+              Byrja upp á nýtt
+            </button>
+            <button onClick={() => window.history.back()}
+              className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+              Til baka á áfangastöðina
+            </button>
+          </div>
+        </div>
+      </Skel>
+    );
+  }
+
+  return (
+    <Skel lota={lota} lotaNr={lotaNr}>
+      {/* framvinda */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-full bg-green-500 transition-all duration-500"
+            style={{ width: `${(idx / spjold.length) * 100}%` }} />
+        </div>
+        <span className="text-xs text-gray-400 font-light whitespace-nowrap">{idx + 1}/{spjold.length}</span>
+      </div>
+
+      {/* kortið */}
+      <div className="flip-scene mb-6 fade-in" key={idx}>
+        <div className={`flip-inner ${flipped ? 'flipped' : ''}`}>
+          {/* framhlið */}
+          <div className="flip-face bg-white rounded-xl shadow-sm border border-gray-100 px-6">
+            <span className="text-xs text-gray-400 font-light mb-4">kafli {kort.kafli} · {kort.persona}</span>
+            <p className="text-4xl font-light text-gray-800 text-center mb-6">{kort.is}</p>
+            <ListenPill onClick={segja} speaking={speaking} />
+          </div>
+          {/* bakhlið */}
+          <div className="flip-face flip-back bg-white rounded-xl shadow-sm border border-gray-100 px-6">
+            <span className="text-xs text-gray-400 font-light mb-4">{mal}</span>
+            {saekir
+              ? <p className="text-gray-400 font-light animate-pulse">Þýði…</p>
+              : <p className="text-3xl font-light text-blue-700 text-center">{thyding[kort.is] || '—'}</p>}
+            <p className="text-sm text-gray-400 font-light mt-6">{kort.is}</p>
+          </div>
+        </div>
+      </div>
+
+      {!flipped ? (
+        <button onClick={() => setFlipped(true)}
+          className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+          Sýna þýðingu
+        </button>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => naest(false)}
+            className="px-6 py-3 border-2 border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 transition-colors font-light">
+            Æfa meira
+          </button>
+          <button onClick={() => naest(true)}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-light">
+            Kann ég
+          </button>
+        </div>
+      )}
+    </Skel>
+  );
+};
+
+/* ---------- Umgjörð ---------- */
+const Skel = ({ lota, lotaNr, children }) => (
+  <div className="min-h-screen pb-16">
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        <button onClick={() => window.history.back()}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+        <h1 className="text-3xl font-light text-gray-800 mb-2">🃏 Flasskort</h1>
+        <p className="text-gray-500 text-sm font-light">Áfangastöð {lotaNr} · {lota.titill} · {lota.kaflar}</p>
+      </div>
+    </header>
+    <main className="max-w-2xl mx-auto px-6 mt-8">{children}</main>
+  </div>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
