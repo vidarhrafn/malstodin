@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>✅ Sjálfspróf — Áfangastöð</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="gogn.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+    min-height: 100vh; margin: 0;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(12px);} to {opacity:1; transform:none;} }
+  .fade-in { animation: fadeIn .4s ease both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+/* ================= API ================= */
+async function callOpenAI(messages, max_tokens = 300, model = 'gpt-4o-mini', temperature = 0.2) {
+  const r = await fetch('/.netlify/functions/openai', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, max_tokens, model, temperature })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.content;
+}
+async function playAudio(text, onEnd) {
+  try {
+    const r = await fetch('/.netlify/functions/speak', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text_to_speak: text })
+    });
+    const data = await r.json();
+    if (!r.ok || data.error || !data.audio_base64) { onEnd && onEnd(); return; }
+    const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    await audio.play().catch(() => onEnd && onEnd());
+    return audio;
+  } catch (e) { console.error(e); onEnd && onEnd(); }
+}
+function lesaMat(txt) {
+  const s = txt.match(/STIG:\s*(\d)/);
+  const e = txt.match(/ENDURGJÖF:\s*(.+)/);
+  return {
+    stig: s ? parseInt(s[1]) : 0,
+    msg: e ? e[1].trim() : txt.trim()
+  };
+}
+
+/* ================= Íhlutir ================= */
+const ProgressBar = ({ current, total }) => (
+  <div className="flex items-center gap-3 mb-6">
+    {Array.from({ length: total }).map((_, i) => (
+      <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+        i < current ? 'bg-green-500' : i === current ? 'bg-blue-400' : 'bg-gray-200'}`} />
+    ))}
+    <span className="text-xs text-gray-400 font-light whitespace-nowrap">{current}/{total}</span>
+  </div>
+);
+
+const SectionHeader = ({ number, title, subtitle }) => (
+  <div className="mb-6">
+    <div className="flex items-center gap-3 mb-1">
+      <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">{number}</span>
+      <h2 className="text-lg font-medium text-gray-800">{title}</h2>
+    </div>
+    {subtitle && <p className="text-sm text-gray-500 font-light ml-10">{subtitle}</p>}
+  </div>
+);
+
+const FeedbackBadge = ({ correct, score, message }) => {
+  const color = correct === null ? 'blue' : correct ? 'green' : 'amber';
+  const colors = {
+    blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    green: 'bg-green-50 border-green-200 text-green-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700'
+  };
+  return (
+    <div className={`mt-3 p-3 rounded-lg border fade-in ${colors[color]}`}>
+      {score !== undefined && <div className="font-medium text-sm mb-1">Stig: {score}/5</div>}
+      <p className="text-sm font-light">{message}</p>
+    </div>
+  );
+};
+
+const ListenPill = ({ onClick, speaking, label }) => (
+  <button onClick={onClick}
+    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all ${speaking
+      ? 'bg-green-50 text-green-700 border-green-200'
+      : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+    <span className="opacity-70">🎧</span>
+    <span className="font-light">{label || 'Hlustaðu'}</span>
+    <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+  </button>
+);
+
+const Naest = ({ onClick, sidasti }) => (
+  <button onClick={onClick}
+    className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+    {sidasti ? 'Sjá niðurstöðu →' : 'Næsti liður →'}
+  </button>
+);
+
+/* ================= Liður 1 — orðaforði ================= */
+const norm = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+const deacc = s => norm(s)
+  .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o')
+  .replace(/ú/g,'u').replace(/ý/g,'y').replace(/ö/g,'o').replace(/æ/g,'ae')
+  .replace(/ð/g,'d').replace(/þ/g,'th');
+const passar = (svar, rett) => norm(svar) === norm(rett) || deacc(svar) === deacc(rett);
+
+const Ordafordi = ({ gogn, onComplete }) => {
+  const [svor, setSvor] = useState(gogn.map(() => ''));
+  const [lokid, setLokid] = useState(false);
+
+  const athuga = () => {
+    const rett = gogn.filter((g, i) => passar(svor[i], g.svar)).length;
+    setLokid(true);
+    onComplete(rett, svor.join(' · '));
+  };
+  const rettFjoldi = gogn.filter((g, i) => passar(svor[i], g.svar)).length;
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="1" title="Orðaforði" subtitle="Lestu lýsinguna og skrifaðu orðið." />
+      <div className="space-y-4">
+        {gogn.map((g, i) => {
+          const rettSvar = lokid && passar(svor[i], g.svar);
+          return (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <p className="text-gray-700 font-light mb-3">{g.visbending}</p>
+              <input value={svor[i]} disabled={lokid}
+                onChange={e => { const n = [...svor]; n[i] = e.target.value; setSvor(n); }}
+                placeholder="Skrifaðu orðið"
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light disabled:bg-gray-50 ${
+                  lokid ? (rettSvar ? 'border-green-200' : 'border-amber-200') : 'border-gray-200'}`} />
+              {lokid && !rettSvar && (
+                <p className="text-sm text-amber-700 font-light mt-2">Rétt svar: <span className="font-medium">{g.svar}</span></p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {!lokid
+        ? <button onClick={athuga} disabled={svor.some(s => !s.trim())}
+            className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            Athuga svör
+          </button>
+        : <FeedbackBadge correct={rettFjoldi >= 4} score={rettFjoldi}
+            message={rettFjoldi === 5 ? 'Frábært — öll rétt!' : `Þú fékkst ${rettFjoldi} af 5 réttum.`} />}
+    </div>
+  );
+};
+
+/* ================= Liður 2 — hlustun ================= */
+const Hlustun = ({ gogn, onComplete }) => {
+  const [idx, setIdx] = useState(0);
+  const [val, setVal] = useState([]);
+  const [speaking, setSpeaking] = useState(false);
+  const [lokid, setLokid] = useState(false);
+  const g = gogn[idx];
+
+  const segja = () => { if (speaking) return; setSpeaking(true); playAudio(g.texti, () => setSpeaking(false)); };
+  useEffect(() => { segja(); }, [idx]);
+
+  const velja = (i) => {
+    const nyVal = [...val, i];
+    setVal(nyVal);
+    setTimeout(() => {
+      if (idx + 1 >= gogn.length) {
+        const rett = nyVal.filter((v, k) => v === gogn[k].rett).length;
+        setLokid(true);
+        onComplete(Math.round(rett / gogn.length * 5), `${rett}/${gogn.length}`);
+      } else setIdx(idx + 1);
+    }, 900);
+  };
+
+  const rettFjoldi = val.filter((v, k) => v === gogn[k].rett).length;
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="2" title="Hlustun" subtitle="Hlustaðu og veldu rétta svarið." />
+      {!lokid ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6" key={idx}>
+          <div className="text-center mb-6">
+            <ListenPill onClick={segja} speaking={speaking} label="Hlustaðu aftur" />
+          </div>
+          <p className="text-gray-800 font-medium mb-4">{g.spurning}</p>
+          <div className="grid gap-3">
+            {g.valkostir.map((v, i) => {
+              const buid = val.length > idx;
+              let cls = 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50';
+              if (buid) {
+                if (i === g.rett) cls = 'bg-green-50 border-green-200 text-green-700';
+                else if (i === val[idx]) cls = 'bg-red-50 border-red-200 text-red-700';
+                else cls = 'bg-white border-gray-100 text-gray-400';
+              }
+              return (
+                <button key={i} onClick={() => velja(i)} disabled={buid}
+                  className={`px-5 py-3 rounded-lg border-2 text-left font-light transition-colors ${cls}`}>
+                  {v}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-400 font-light mt-4 text-center">{idx + 1} af {gogn.length}</p>
+        </div>
+      ) : (
+        <FeedbackBadge correct={rettFjoldi >= gogn.length - 1} score={Math.round(rettFjoldi / gogn.length * 5)}
+          message={`Þú fékkst ${rettFjoldi} af ${gogn.length} réttum í hlustuninni.`} />
+      )}
+    </div>
+  );
+};
+
+/* ================= Liður 3 — lesskilningur ================= */
+const Lesskilningur = ({ gogn, onComplete }) => {
+  const [val, setVal] = useState(gogn.spurningar.map(() => null));
+  const [lokid, setLokid] = useState(false);
+
+  const athuga = () => {
+    const rett = val.filter((v, i) => v === gogn.spurningar[i].rett).length;
+    setLokid(true);
+    onComplete(Math.round(rett / gogn.spurningar.length * 5), `${rett}/${gogn.spurningar.length}`);
+  };
+  const rettFjoldi = val.filter((v, i) => v === gogn.spurningar[i].rett).length;
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="3" title="Lesskilningur" subtitle="Lestu textann og svaraðu." />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-5">
+        <p className="text-gray-700 font-light leading-relaxed">{gogn.texti}</p>
+      </div>
+      <div className="space-y-4">
+        {gogn.spurningar.map((s, i) => (
+          <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <p className="text-gray-800 font-medium mb-3 text-sm">{s.spurning}</p>
+            <div className="grid gap-2">
+              {s.valkostir.map((v, k) => {
+                let cls = 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50';
+                if (lokid) {
+                  if (k === s.rett) cls = 'bg-green-50 border-green-200 text-green-700';
+                  else if (k === val[i]) cls = 'bg-red-50 border-red-200 text-red-700';
+                  else cls = 'bg-white border-gray-100 text-gray-400';
+                } else if (val[i] === k) cls = 'bg-blue-50 border-blue-300 text-blue-800';
+                return (
+                  <button key={k} disabled={lokid}
+                    onClick={() => { const n = [...val]; n[i] = k; setVal(n); }}
+                    className={`px-4 py-2.5 rounded-lg border-2 text-left font-light text-sm transition-colors ${cls}`}>
+                    {v}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!lokid
+        ? <button onClick={athuga} disabled={val.some(v => v === null)}
+            className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            Athuga svör
+          </button>
+        : <FeedbackBadge correct={rettFjoldi >= gogn.spurningar.length - 1}
+            score={Math.round(rettFjoldi / gogn.spurningar.length * 5)}
+            message={`Þú fékkst ${rettFjoldi} af ${gogn.spurningar.length} réttum.`} />}
+    </div>
+  );
+};
+
+/* ================= Liður 4 — spurningamyndun ================= */
+const Spurningamyndun = ({ gogn, onComplete }) => {
+  const [svor, setSvor] = useState(gogn.map(() => ''));
+  const [mat, setMat] = useState(null);
+  const [bidur, setBidur] = useState(false);
+
+  const senda = async () => {
+    setBidur(true);
+    const listi = gogn.map((g, i) => `${i + 1}. Verkefni: ${g.verkefni}\n   Svar nemanda: ${svor[i]}`).join('\n');
+    try {
+      const txt = await callOpenAI([
+        { role: 'system', content:
+          'Þú metur spurningamyndun hjá nemanda í íslensku sem öðru máli á A2-stigi. ' +
+          'Nemandinn á að mynda RÉTTAR spurningar. Meginatriðið er (a) rétt spurnarfornafn og (b) rétt orðaröð — ' +
+          'sögn á undan frumlagi: „Hvað heitir þú?" en ekki „Hvað þú heitir?". ' +
+          'Vertu sveigjanlegur: „hvaðan kemur þú?" og „hvaðan ert þú?" eru bæði rétt; þéring/þúun skiptir ekki máli; ' +
+          'lítill stafur í upphafi og vantandi spurningarmerki eru ekki villur. ' +
+          'Gefðu heildarstig fyrir allar þrjár spurningarnar saman.\n' +
+          'Svaraðu EINUNGIS á þessu formi:\nSTIG: [tala 0-5]\nENDURGJÖF: [ein setning á íslensku, vinaleg og hvetjandi]' },
+        { role: 'user', content: listi }
+      ], 150, 'gpt-4o-mini', 0.2);
+      const m = lesaMat(txt);
+      setMat(m);
+      onComplete(m.stig, svor.join(' · '));
+    } catch (e) {
+      setMat({ stig: 0, msg: 'Ekki tókst að meta svörin. Athugaðu nettenginguna.' });
+      onComplete(0, svor.join(' · '));
+    } finally { setBidur(false); }
+  };
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="4" title="Spurningamyndun" subtitle="Myndaðu rétta spurningu á íslensku." />
+      <div className="space-y-4">
+        {gogn.map((g, i) => (
+          <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <p className="text-gray-700 font-light mb-3">{g.verkefni}</p>
+            <input value={svor[i]} disabled={!!mat}
+              onChange={e => { const n = [...svor]; n[i] = e.target.value; setSvor(n); }}
+              placeholder="Skrifaðu spurninguna"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light disabled:bg-gray-50" />
+            {mat && <p className="text-xs text-gray-400 font-light mt-2">Dæmi um rétt svar: {g.daemi}</p>}
+          </div>
+        ))}
+      </div>
+      {!mat
+        ? <button onClick={senda} disabled={bidur || svor.some(s => !s.trim())}
+            className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            {bidur ? 'Met svörin…' : 'Senda svör'}
+          </button>
+        : <FeedbackBadge correct={mat.stig >= 4} score={mat.stig} message={mat.msg} />}
+    </div>
+  );
+};
+
+/* ================= Liður 5 — orðasambönd ================= */
+const Thyding = ({ gogn, onComplete }) => {
+  const [mal, setMal] = useState('');
+  const [malSett, setMalSett] = useState(false);
+  const [svor, setSvor] = useState(gogn.map(() => ''));
+  const [mat, setMat] = useState(null);
+  const [bidur, setBidur] = useState(false);
+
+  const senda = async () => {
+    setBidur(true);
+    const listi = gogn.map((g, i) =>
+      `${i + 1}. Íslenska: ${g.is}\n   Ensk viðmiðun: ${g.en}\n   Þýðing nemanda á ${mal}: ${svor[i]}`).join('\n');
+    try {
+      const txt = await callOpenAI([
+        { role: 'system', content:
+          `Þú metur hvort nemandi hafi skilið merkingu íslenskra orðasambanda. Nemandinn þýðir á ${mal}. ` +
+          'Enska viðmiðunin sýnir rétta merkingu. Samþykktu ALLAR þýðingar sem koma merkingunni rétt til skila, ' +
+          'á hvaða tungumáli sem er, líka óformlegt orðalag og samheiti. Vertu sveigjanlegur um stafsetningu. ' +
+          'Hafnaðu aðeins því sem er efnislega rangt. Gefðu heildarstig fyrir öll orðasamböndin saman.\n' +
+          'Svaraðu EINUNGIS á þessu formi:\nSTIG: [tala 0-5]\nENDURGJÖF: [ein setning á íslensku, vinaleg og hvetjandi]' },
+        { role: 'user', content: listi }
+      ], 150, 'gpt-4o-mini', 0.2);
+      const m = lesaMat(txt);
+      setMat(m);
+      onComplete(m.stig, svor.join(' · '));
+    } catch (e) {
+      setMat({ stig: 0, msg: 'Ekki tókst að meta svörin. Athugaðu nettenginguna.' });
+      onComplete(0, svor.join(' · '));
+    } finally { setBidur(false); }
+  };
+
+  if (!malSett) return (
+    <div className="fade-in">
+      <SectionHeader number="5" title="Orðasambönd" subtitle="Þýddu orðasamböndin á þitt móðurmál." />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <p className="text-gray-700 font-light mb-4">Hvaða tungumál talar þú? Skrifaðu það á því tungumáli — t.d. English, Polski, Dansk, 中文.</p>
+        <input value={mal} onChange={e => setMal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && mal.trim()) setMalSett(true); }}
+          placeholder="English"
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light mb-4" />
+        <button onClick={() => mal.trim() && setMalSett(true)} disabled={!mal.trim()}
+          className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+          Áfram
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="5" title="Orðasambönd" subtitle={`Þýddu á ${mal}.`} />
+      <div className="space-y-4">
+        {gogn.map((g, i) => (
+          <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <p className="text-xl font-light text-gray-800 mb-3">{g.is}</p>
+            <input value={svor[i]} disabled={!!mat}
+              onChange={e => { const n = [...svor]; n[i] = e.target.value; setSvor(n); }}
+              placeholder={`Þýðing á ${mal}`}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light disabled:bg-gray-50" />
+          </div>
+        ))}
+      </div>
+      {!mat
+        ? <button onClick={senda} disabled={bidur || svor.some(s => !s.trim())}
+            className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            {bidur ? 'Met svörin…' : 'Senda svör'}
+          </button>
+        : <FeedbackBadge correct={mat.stig >= 4} score={mat.stig} message={mat.msg} />}
+    </div>
+  );
+};
+
+/* ================= Liður 6 — opin spurning ================= */
+const Opin = ({ gogn, onComplete }) => {
+  const [svar, setSvar] = useState('');
+  const [mat, setMat] = useState(null);
+  const [bidur, setBidur] = useState(false);
+
+  const senda = async () => {
+    setBidur(true);
+    try {
+      const txt = await callOpenAI([
+        { role: 'system', content:
+          'Þú metur stutt skriflegt svar nemanda í íslensku sem öðru máli á A2-stigi. ' +
+          'Meta á hvort nemandinn svari spurningunni með 3-4 setningum og noti orðaforða úr efninu. ' +
+          'Vertu sveigjanlegur um málfræði og stafsetningu — innihaldið og viljinn til að tjá sig skiptir mestu. ' +
+          'Endurgjöfin á að vera hvetjandi og nefna eitt sem nemandinn gerði vel.\n' +
+          'Svaraðu EINUNGIS á þessu formi:\nSTIG: [tala 0-5]\nENDURGJÖF: [ein setning á íslensku]' },
+        { role: 'user', content: `Spurning: ${gogn.spurning}\n\nSvar nemanda:\n${svar}` }
+      ], 150, 'gpt-4o-mini', 0.3);
+      const m = lesaMat(txt);
+      setMat(m);
+      onComplete(m.stig, svar);
+    } catch (e) {
+      setMat({ stig: 0, msg: 'Ekki tókst að meta svarið. Athugaðu nettenginguna.' });
+      onComplete(0, svar);
+    } finally { setBidur(false); }
+  };
+
+  return (
+    <div className="fade-in">
+      <SectionHeader number="6" title="Skrifaðu sjálf/ur" subtitle={gogn.leidbeining} />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <p className="text-gray-800 font-medium mb-4">{gogn.spurning}</p>
+        <textarea value={svar} disabled={!!mat} rows={6}
+          onChange={e => setSvar(e.target.value)}
+          placeholder="Skrifaðu 3-4 setningar…"
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none disabled:bg-gray-50" />
+      </div>
+      {!mat
+        ? <button onClick={senda} disabled={bidur || svar.trim().length < 10}
+            className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">
+            {bidur ? 'Met svarið…' : 'Senda svar'}
+          </button>
+        : <FeedbackBadge correct={mat.stig >= 4} score={mat.stig} message={mat.msg} />}
+    </div>
+  );
+};
+
+/* ================= Aðalforrit ================= */
+const App = () => {
+  const lotaNr = parseInt(new URLSearchParams(location.search).get('lota')) || 1;
+  const lota = window.AFANGASTODVAR[lotaNr];
+
+  const [lidur, setLidur] = useState(0);
+  const [stig, setStig] = useState([]);
+  const [svor, setSvor] = useState([]);
+  const [lidurLokid, setLidurLokid] = useState(false);
+  const [bunid, setBunid] = useState(false);
+
+  if (!lota) return (
+    <Skel lotaNr={lotaNr} titill="—">
+      <p className="text-gray-600 font-light text-center py-16">Áfangastöð {lotaNr} er ekki tilbúin enn.</p>
+    </Skel>
+  );
+
+  const sp = lota.sjalfsprof;
+  const HEITI = ['Orðaforði', 'Hlustun', 'Lesskilningur', 'Spurningamyndun', 'Orðasambönd', 'Skrifað svar'];
+  const TOTAL = 6;
+
+  const onComplete = (score, answer) => {
+    const nyStig = [...stig]; nyStig[lidur] = score; setStig(nyStig);
+    const nySvor = [...svor]; nySvor[lidur] = answer; setSvor(nySvor);
+    setLidurLokid(true);
+  };
+
+  const naest = () => {
+    setLidurLokid(false);
+    if (lidur + 1 >= TOTAL) setBunid(true);
+    else setLidur(lidur + 1);
+  };
+
+  if (bunid) {
+    const samtals = stig.reduce((a, b) => a + (b || 0), 0);
+    const hamark = TOTAL * 5;
+    const hlutfall = Math.round(samtals / hamark * 100);
+    return (
+      <Skel lotaNr={lotaNr} titill={lota.titill}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 fade-in">
+          <h2 className="text-2xl font-light text-gray-800 mb-1">Sjálfsprófi lokið</h2>
+          <p className="text-gray-500 font-light mb-6">
+            Samtals <span className="font-medium text-gray-800">{samtals}</span> af {hamark} stigum ({hlutfall}%)
+          </p>
+
+          <div className="space-y-4 mb-8">
+            {HEITI.map((h, i) => (
+              <div key={i}>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-sm font-light text-gray-700">{i + 1}. {h}</span>
+                  <span className="text-xs text-gray-400 font-light">{stig[i] || 0}/5</span>
+                </div>
+                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className={`h-full transition-all duration-700 ${
+                    (stig[i] || 0) >= 4 ? 'bg-green-500' : (stig[i] || 0) >= 3 ? 'bg-amber-400' : 'bg-red-400'}`}
+                    style={{ width: `${((stig[i] || 0) / 5) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className={`p-4 rounded-lg border mb-6 ${
+            hlutfall >= 75 ? 'bg-green-50 border-green-200 text-green-700'
+            : hlutfall >= 50 ? 'bg-amber-50 border-amber-200 text-amber-700'
+            : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+            <p className="text-sm font-light">
+              {hlutfall >= 75
+                ? 'Þú ert tilbúin/n í næstu lotu. Vel gert!'
+                : hlutfall >= 50
+                ? 'Þú ert á góðri leið. Farðu aftur yfir liðina sem fengu fá stig áður en þú heldur áfram.'
+                : 'Taktu aðra umferð í flasskortunum og orðagátunni og prófaðu svo aftur.'}
+            </p>
+          </div>
+
+          <details className="mb-6">
+            <summary className="text-sm font-light text-gray-500 cursor-pointer hover:text-gray-700">Sjá svörin mín</summary>
+            <div className="mt-3 space-y-3">
+              {HEITI.map((h, i) => (
+                <div key={i} className="text-sm">
+                  <span className="font-medium text-gray-700">{h}: </span>
+                  <span className="font-light text-gray-600">{svor[i] || '—'}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          <button onClick={() => window.history.back()}
+            className="w-full px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">
+            Til baka á áfangastöðina
+          </button>
+        </div>
+      </Skel>
+    );
+  }
+
+  const lidir = [
+    <Ordafordi gogn={sp.ordaforði} onComplete={onComplete} />,
+    <Hlustun gogn={sp.hlustun} onComplete={onComplete} />,
+    <Lesskilningur gogn={sp.lesskilningur} onComplete={onComplete} />,
+    <Spurningamyndun gogn={sp.spurningamyndun} onComplete={onComplete} />,
+    <Thyding gogn={sp.thyding} onComplete={onComplete} />,
+    <Opin gogn={sp.opin} onComplete={onComplete} />
+  ];
+
+  return (
+    <Skel lotaNr={lotaNr} titill={lota.titill}>
+      <ProgressBar current={lidur} total={TOTAL} />
+      {lidir[lidur]}
+      {lidurLokid && <Naest onClick={naest} sidasti={lidur + 1 >= TOTAL} />}
+    </Skel>
+  );
+};
+
+const Skel = ({ lotaNr, titill, children }) => (
+  <div className="min-h-screen pb-16">
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        <button onClick={() => window.history.back()}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+        <h1 className="text-3xl font-light text-gray-800 mb-2">✅ Sjálfspróf</h1>
+        <p className="text-gray-500 text-sm font-light">Áfangastöð {lotaNr} · {titill}</p>
+      </div>
+    </header>
+    <main className="max-w-2xl mx-auto px-6 mt-8">{children}</main>
+  </div>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
