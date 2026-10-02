@@ -94,10 +94,17 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 **Prófun eftir birtingu:** kennari býr til bekk → opnar hlekkinn í huliðsglugga →
 skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir 👥 Nemendur.
 
-### ⬜ Áfangi 4 – Stjórnborð: framvinda eftir bekkjum
-- `netlify/functions/teacher-data.js` – aðeins eigin nemendur + framvinda
-- `stjornbord.html` – framvindutafla eftir bekk (í stað `user_access.class`), ↻ uppfæra + sjálfvirk 30 sek.
-- `redeem-code.js` – hætta að afrita `class`/`semester` í `user_access`
+### ✅ Áfangi 4 – Stjórnborð: framvinda eftir bekkjum
+- `netlify/functions/teacher-data.js` – bekkir kennarans í áfanganum + nemendur þeirra,
+  framvinda og staða bókaraðgangs. Aðeins eigin nemendur.
+- `stjornbord.html` – framvindutafla eftir bekk („Allir mínir bekkir“ eða einn bekkur),
+  ↻ Uppfæra + sjálfvirk uppfærsla á 30 sek. fresti; Önn-sía og harðkóðaðir hópar fjarlægð;
+  nemandi án virks bókaraðgangs merktur undir netfanginu.
+- Stjórnborðið les ekki lengur `progress` annarra beint úr Firestore. Kóðaflipinn les enn
+  `user_access` og `access_codes` beint (áfangi 5).
+- `redeem-code.js` – hætt að afrita `class`/`semester` í `user_access`.
+- Prófað með gervi-Firebase (eigin bekkir eingöngu, nemandi í tveimur bekkjum, bekkur
+  í geymslu, framvinda aðeins úr réttum áfanga).
 
 ### ⬜ Áfangi 5 – Bókarkóðar í gegnum fall
 - `netlify/functions/teacher-codes.js` – búa til (með `created_by`) / lista (með persónuverndarsíu)

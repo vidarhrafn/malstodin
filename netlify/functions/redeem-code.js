@@ -45,9 +45,6 @@ exports.handler = handler(async (event, body) => {
         activated_at: now,
         code_used:    codeSnap.id,
         expires_at:   c.expires_at || null,
-        // Eldri hópasvið – stjórnborðið notar þau þar til bekkir taka við (áfangi 4)
-        class:        c.class    || null,
-        semester:     c.semester || null,
       },
     }, { merge: true });
 

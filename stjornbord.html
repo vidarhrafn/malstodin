@@ -276,19 +276,16 @@
             </select>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-sm font-light text-gray-500">Hópur:</span>
+            <span class="text-sm font-light text-gray-500">Bekkur:</span>
             <select id="filter-class" onchange="setClassFilter(this.value)"
               class="text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
             </select>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-light text-gray-500">Önn:</span>
-            <select id="filter-semester" onchange="setSemesterFilter(this.value)"
-              class="text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="all">Allar annir</option>
-              <option value="V26">V26</option>
-            </select>
-          </div>
+          <button onclick="loadProgress()"
+            class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50 transition-colors">
+            ↻ Uppfæra
+          </button>
+          <span id="progress-updated" class="text-xs font-light text-gray-400"></span>
           <span id="student-count" class="text-sm font-light text-gray-400 ml-auto"></span>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
@@ -559,11 +556,6 @@
     const COURSES = {
       isat1ic: {
         label: 'ÍSAT1ÍC',
-        classes: [
-          { value: 'all', label: 'Allir hópar' },
-          { value: 'h1', label: 'ÍSAT1ÍC – Hópur 1' },
-          { value: 'h2', label: 'ÍSAT1ÍC – Hópur 2' },
-        ],
         groups: [
           { id: 'lestextar', label: '📖 Lestextar', exercises: [
             {id:'lestextar_01',label:'L1'},{id:'lestextar_02',label:'L2'},{id:'lestextar_03',label:'L3'},
@@ -587,10 +579,6 @@
       },
       isat1ia: {
         label: 'ÍSAT1ÍA',
-        classes: [
-          { value: 'all', label: 'Allir hópar' },
-          { value: 'ÍSAT1ÍA-1', label: 'ÍSAT1ÍA – Hópur 1' },
-        ],
         groups: [
           { id: 'lestextar', label: '📖 Lestextar', exercises: [
             {id:'lestextar_01',label:'L1'},{id:'lestextar_02',label:'L2'},{id:'lestextar_03',label:'L3'},
@@ -631,10 +619,11 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    let allProgress = {}, allUserData = [], allCodes = [];
+    let allCodes = [];
+    let progressData = { classes: [], students: [] }, progressLoading = false;
     let activeCourse = 'isat1ic', activeGroup = 'lestextar', activeMainTab = 'progress';
-    let filterClass = 'all', filterSemester = 'all';
-    let progressUnsubscribers = {}, lastCreatedCodes = [], previewStudents = [];
+    let filterClass = 'all';
+    let lastCreatedCodes = [], previewStudents = [];
 
     function randomSuffix() {
       const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -705,8 +694,9 @@
       document.getElementById('app').style.display = 'block';
       document.getElementById('btn-logout').onclick = () => signOut(auth);
       setDefaultExpiry();
-      updateClassDropdown();
       renderTabs();
+      loadProgress();
+      startProgressRefresh();
       startListening();
       setupCreateCodes();
       setupCards();
@@ -926,33 +916,11 @@ function setDefaultExpiry() {
   document.getElementById('new-expires').value = '2027-01-01';
 }
 
+    // Kóðaflipinn les enn beint úr Firestore – færist í Netlify-fall í áfanga 5
     function startListening() {
       onSnapshot(collection(db, 'user_access'), (snap) => {
-        allUserData = []; window._rawUserData = [];
-        const newUids = new Set();
-        snap.forEach(d => {
-          const data = d.data();
-          window._rawUserData.push({ uid: d.id, data });
-          const courses = {};
-          Object.keys(COURSES).forEach(c => {
-            if (data[c] && data[c].activated_at) courses[c] = { class: data[c].class || null, semester: data[c].semester || null };
-          });
-          if (Object.keys(courses).length > 0) { allUserData.push({ uid: d.id, email: data.email || d.id, courses }); newUids.add(d.id); }
-        });
-        newUids.forEach(uid => {
-          Object.keys(COURSES).forEach(course => {
-            const key = uid + '_' + course;
-            if (progressUnsubscribers[key]) return;
-            if (!allProgress[uid]) allProgress[uid] = {};
-            progressUnsubscribers[key] = onSnapshot(collection(db, 'progress', uid, course), (progSnap) => {
-              if (!allProgress[uid]) allProgress[uid] = {};
-              allProgress[uid][course] = {};
-              progSnap.forEach(d => { allProgress[uid][course][d.id] = d.data().status || 'opened'; });
-              renderTable();
-            });
-          });
-        });
-        renderTable();
+        window._rawUserData = [];
+        snap.forEach(d => { window._rawUserData.push({ uid: d.id, data: d.data() }); });
         if (activeMainTab === 'codes') renderCodesTable();
       });
       onSnapshot(collection(db, 'access_codes'), (snap) => {
@@ -1139,24 +1107,61 @@ function setDefaultExpiry() {
       window.print();
     }
 
-    window.setCourseFilter = (val) => { activeCourse = val; activeGroup = COURSES[val].groups[0].id; filterClass = 'all'; filterSemester = 'all'; document.getElementById('filter-class').value = 'all'; document.getElementById('filter-semester').value = 'all'; updateClassDropdown(); renderTabs(); renderTable(); };
+    window.setCourseFilter = (val) => {
+      activeCourse = val; activeGroup = COURSES[val].groups[0].id; filterClass = 'all';
+      progressData = { classes: [], students: [] };
+      renderTabs();
+      document.getElementById('table-container').innerHTML = '<p class="text-gray-400 font-light text-center py-8">Sæki gögn...</p>';
+      loadProgress();
+    };
     window.setClassFilter = (val) => { filterClass = val; renderTable(); };
-    window.setSemesterFilter = (val) => { filterSemester = val; renderTable(); };
+
+    // ── Framvinda (aðeins eigin nemendur, sótt í gegnum Netlify-fall) ──
+    window.loadProgress = async function loadProgress() {
+      if (progressLoading) return;
+      progressLoading = true;
+      const course = activeCourse;
+      try {
+        const data = await api('teacher-data', { course });
+        if (course !== activeCourse) return; // skipt um áfanga á meðan
+        progressData = data;
+        updateClassDropdown();
+        renderTable();
+        document.getElementById('progress-updated').textContent =
+          'Uppfært ' + new Date(data.fetchedAt).toLocaleTimeString('is-IS', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } catch (e) {
+        document.getElementById('progress-updated').textContent = 'Villa: ' + e.message;
+      } finally {
+        progressLoading = false;
+      }
+    };
+
+    // Sjálfvirk uppfærsla á 30 sek. fresti meðan framvinduflipinn er sýnilegur
+    function startProgressRefresh() {
+      setInterval(() => {
+        if (activeMainTab === 'progress' && document.visibilityState === 'visible') loadProgress();
+      }, 30000);
+    }
 
     function updateClassDropdown() {
       const sel = document.getElementById('filter-class');
+      const classes = progressData.classes;
+      if (filterClass !== 'all' && !classes.some(c => c.id === filterClass)) filterClass = 'all';
       sel.innerHTML = '';
-      COURSES[activeCourse].classes.forEach(c => { const opt = document.createElement('option'); opt.value = c.value; opt.textContent = c.label; sel.appendChild(opt); });
+      const add = (value, label) => { const opt = document.createElement('option'); opt.value = value; opt.textContent = label; sel.appendChild(opt); };
+      add('all', 'Allir mínir bekkir');
+      classes.forEach(c => add(c.id, c.name + (c.semester ? ' · ' + c.semester : '') + (c.archived ? ' (í geymslu)' : '')));
+      sel.value = filterClass;
     }
 
     function filteredStudents() {
-      return allUserData.filter(u => {
-        const cd = u.courses[activeCourse];
-        if (!cd) return false;
-        if (filterSemester !== 'all' && cd.semester !== filterSemester) return false;
-        if (filterClass !== 'all' && cd.class !== filterClass) return false;
-        return true;
-      });
+      return progressData.students.filter(s => filterClass === 'all' || s.classIds.includes(filterClass));
+    }
+
+    function classNames(student) {
+      return student.classIds
+        .map(id => (progressData.classes.find(c => c.id === id) || {}).name)
+        .filter(Boolean).join(', ');
     }
 
     function renderTabs() {
@@ -1178,22 +1183,23 @@ function setDefaultExpiry() {
       const students = filteredStudents();
       const countEl = document.getElementById('student-count');
       if (countEl) countEl.textContent = students.length + ' nemendur';
-      if (students.length === 0) { container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Engir nemendur passa við síurnar.</p>'; return; }
+      if (!progressData.classes.length) {
+        container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Þú ert ekki með neinn bekk í þessum áfanga. Búðu til bekk í flipanum 🏫 Bekkir.</p>';
+        return;
+      }
+      if (students.length === 0) { container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Enginn nemandi hefur gengið í bekkinn ennþá.</p>'; return; }
       let html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-100">';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500 whitespace-nowrap">Nemandi</th>';
-      html += '<th class="py-3 pr-4 font-light text-gray-400 text-xs text-left whitespace-nowrap">Hópur</th>';
+      html += '<th class="py-3 pr-4 font-light text-gray-400 text-xs text-left whitespace-nowrap">Bekkur</th>';
       group.exercises.forEach(ex => { html += `<th class="py-3 px-1 font-light text-gray-400 text-xs text-center">${ex.label}</th>`; });
       html += '<th class="py-3 pl-4 font-light text-gray-400 text-xs text-center">Lokið</th></tr></thead><tbody>';
-      students.sort((a,b) => {
-        const ca = a.courses[activeCourse], cb = b.courses[activeCourse];
-        const classA = ca ? ca.class||'' : '', classB = cb ? cb.class||'' : '';
-        if (classA !== classB) return classA.localeCompare(classB);
-        return (a.email||'').localeCompare(b.email||'');
-      }).forEach(student => {
-        const courseProgress = (allProgress[student.uid]||{})[activeCourse]||{};
-        const studentClass = (student.courses[activeCourse]||{}).class||'–';
+      students.forEach(student => {
+        const courseProgress = student.progress || {};
         let completedCount = 0;
-        html += `<tr class="border-b border-gray-50 hover:bg-gray-50"><td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">${student.email}</td><td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">${studentClass}</td>`;
+        const noAccess = student.access.status !== 'active'
+          ? `<div class="text-xs font-light ${student.access.status === 'expired' ? 'text-red-500' : 'text-gray-400'}">${student.access.status === 'expired' ? 'Bókaraðgangur útrunninn' : 'Enginn bókaraðgangur'}</div>`
+          : '';
+        html += `<tr class="border-b border-gray-50 hover:bg-gray-50"><td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">${esc(student.email)}${noAccess}</td><td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">${esc(classNames(student)) || '–'}</td>`;
         group.exercises.forEach(ex => {
           const status = courseProgress[ex.id];
           let cls = 'cell-none', title = 'Ekki byrjað';
