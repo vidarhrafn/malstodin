@@ -58,8 +58,19 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
   tooltip „Lokið – 8/10 rétt“, skýringar efst og í ❓ Leiðbeiningum, „Lokið“ telur bæði grænu stigin.
 - Prófað: allar samsetningar gagna (eldri, nýjar, ógildar tölur) gefa réttan lit.
 
-### ⬜ Áfangi 3 – Hljóðritun ÍC og ÍA
-- „completed“ þegar lokið (líka með villum), með `correct`/`total` (fyrsta tilraun, besta niðurstaða).
+### ✅ Áfangi 3 – Hljóðritun ÍC og ÍA
+- „Spurning“ = setning. `correct` = setningar sem voru alveg réttar í fyrstu tilraun,
+  `total` = fjöldi setninga. „Lokið“ skráist þegar allar setningar eru búnar (líka með villum).
+- **ÍC (12 skrár) – villa löguð:** „completed“ var skráð þegar eyður *einnar* setningar voru allar
+  réttar (og aldrei ef nemandi skrifaði allt rétt í fyrstu tilraun). Nú tilkynnir hver setning
+  `App` einu sinni og „completed“ skráist þegar þær eru allar búnar. „opened“ skráist einu sinni
+  (áður einu sinni fyrir hverja setningu).
+- **ÍA (13 skrár):** skráði þegar „completed“ rétt; nú líka `correct`/`total`.
+- `writeProgress(..., score)` les fyrst eigið skjal og skrifar tölur aðeins ef `correct` er hærra
+  (besta niðurstaða). Ef lestur mistekst eru tölur ekki skrifaðar (frekar en að lækka).
+- Nemandi sér í lokin: „🏁 Verkefninu er lokið! 3 af 5 setningum rétt í fyrstu tilraun.“
+- Prófað í Chromium með gervi-Firebase, allar 25 skrár: 1 rétt + 4 röng → `completed`, 1/5;
+  endurtekning með verri niðurstöðu lækkar ekki; betri niðurstaða hækkar.
 
 ### ⬜ Áfangi 4 – Hlustun
 ### ⬜ Áfangi 5 – Lestextar

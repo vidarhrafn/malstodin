@@ -60,7 +60,8 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  async function writeProgress(status) {
+  // score = { correct, total } – rétt í fyrstu tilraun
+  async function writeProgress(status, score) {
     try {
       const user = auth.currentUser;
       if (!user) return;
@@ -68,6 +69,16 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      if (score) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || score.correct > prev.correct) {
+            data.correct = score.correct;
+            data.total = score.total;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) { console.error('Progress write failed:', e); }
   }
@@ -210,7 +221,7 @@ const SentenceCard = ({ sentence, index, total, onDone }) => {
     const wrong = computeWrongIndices(p1Input, tokens, alternates);
     setWrongIdx(wrong);
     setP1Done(true);
-    if (wrong.every(w => !w)) onDone && onDone();
+    if (wrong.every(w => !w)) onDone && onDone(true);
   };
 
   const handleCheck2 = () => {
@@ -224,7 +235,7 @@ const SentenceCard = ({ sentence, index, total, onDone }) => {
     setGapResults(results);
     setAllOk2(ok);
     setP2Done(true);
-    onDone && onDone();
+    onDone && onDone(false);
   };
 
   const ListenBtn = () => (
@@ -370,12 +381,13 @@ const SentenceCard = ({ sentence, index, total, onDone }) => {
 };
 
 const App = () => {
-  const [doneCount, setDoneCount] = useState(0);
+  const [results, setResults] = useState([]); // true = setning rétt í fyrstu tilraun
   useEffect(() => {
-    if (doneCount === SENTENCES.length) {
-      window.writeProgress && window.writeProgress('completed');
+    if (results.length === SENTENCES.length) {
+      const correct = results.filter(Boolean).length;
+      window.writeProgress && window.writeProgress('completed', { correct, total: SENTENCES.length });
     }
-  }, [doneCount]);
+  }, [results]);
 
   return (
   <div>
@@ -401,8 +413,17 @@ const App = () => {
       </div>
 
       {SENTENCES.map((s, i) => (
-        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} onDone={() => setDoneCount(c => c + 1)} />
+        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} onDone={(ok) => setResults(r => [...r, ok])} />
       ))}
+      {results.length === SENTENCES.length && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <p className="text-2xl mb-1">🏁</p>
+          <p className="text-gray-800 font-light">Verkefninu er lokið!</p>
+          <p className="text-gray-500 font-light text-sm mt-1">
+            {results.filter(Boolean).length} af {SENTENCES.length} setningum rétt í fyrstu tilraun.
+          </p>
+        </div>
+      )}
     </main>
   </div>
   );
