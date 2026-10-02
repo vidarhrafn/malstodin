@@ -72,6 +72,15 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 - Prófað í Chromium með gervi-Firebase, allar 25 skrár: 1 rétt + 4 röng → `completed`, 1/5;
   endurtekning með verri niðurstöðu lækkar ekki; betri niðurstaða hækkar.
 
+**Prófun áfanga 1–3 eftir birtingu (Viðar):**
+1. Stjórnborð → Framvinda → ÍSAT1ÍC: flipar 💬 Spjall, 🎮 Leikir, 📝 Sjálfspróf sjást; A1–A6 í Hlustun, A1–A2 í Lestextum.
+   Músin yfir dálkhaus (t.d. S2) sýnir heiti æfingar. ÍSAT1ÍA: F1–F4 í Leikjum og 📝 Sjálfspróf.
+2. Huliðsgluggi, prufunemandi (`vidarhrafn+nemandiN@gmail.com`) í bekknum „prufa“ → ÍC → Hljóðritun 1.
+   Skrifa eina setningu rétt, hinar vitlaust og fylla í eyður. Í lokin: „🏁 Verkefninu er lokið! 1 af 5 …“.
+3. Stjórnborð → ↻ Uppfæra → R1 ljósgrænn með ramma, tooltip „Lokið – 1/5 rétt“, „Lokið“-dálkur telur hann.
+4. Nemandi endurtekur R1 með allt rétt → R1 heilgrænn „Lokið – 5/5 rétt“. Endurtaka aftur með villum → helst heilgrænn.
+5. Opna R1 aftur (án þess að klára) → helst grænn (féll áður í gult).
+
 ### ⬜ Áfangi 4 – Hlustun
 ### ⬜ Áfangi 5 – Lestextar
 ### ⬜ Áfangi 6 – Sjálfspróf
