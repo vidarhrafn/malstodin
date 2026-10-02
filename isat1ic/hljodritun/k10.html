@@ -74,7 +74,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -97,7 +97,8 @@
     });
   });
 
-  async function writeProgress(exerciseId, status) {
+  // score = { correct, total } – rétt í fyrstu tilraun
+  async function writeProgress(exerciseId, status, score) {
     try {
       const user = await authReady;
       if (!user) return;
@@ -105,6 +106,16 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      if (score) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || score.correct > prev.correct) {
+            data.correct = score.correct;
+            data.total = score.total;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -221,7 +232,7 @@ Svaraðu EINUNGIS: RÉTT eða RANGT`;
   }
 }
 
-const SentenceCard = ({ sentence, index, total }) => {
+const SentenceCard = ({ sentence, index, total, onDone }) => {
   const tokens = tokenize(sentence.text);
   const alternates = sentence.alternates || {};
 
@@ -235,16 +246,12 @@ const SentenceCard = ({ sentence, index, total }) => {
   const [gapResults, setGapResults] = useState({});
   const [allOk2, setAllOk2]         = useState(false);
   const [aiChecking, setAiChecking] = useState(false);
-      const progressWritten = React.useRef(false);
-      useEffect(() => {
-        window.writeProgress && window.writeProgress('hljodritun_k10', 'opened');
-      }, []);
-      useEffect(() => {
-        if (p2Done && allOk2 && !progressWritten.current) {
-          progressWritten.current = true;
-          window.writeProgress && window.writeProgress('hljodritun_k10', 'completed');
-        }
-      }, [p2Done, allOk2]);
+  const reported = React.useRef(false);
+  useEffect(() => {
+    if (reported.current || !p1Done) return;
+    if (wrongIdx.every(w => !w)) { reported.current = true; onDone && onDone(true); }
+    else if (p2Done) { reported.current = true; onDone && onDone(false); }
+  }, [p1Done, p2Done]);
 
   const wrongTokenIdx = tokens.map((_, i) => i).filter(i => wrongIdx[i]);
   const allOk1 = p1Done && wrongIdx.every(w => !w);
@@ -432,7 +439,19 @@ const SentenceCard = ({ sentence, index, total }) => {
   );
 };
 
-const App = () => (
+const App = () => {
+  const [results, setResults] = useState([]); // true = setning rétt í fyrstu tilraun
+  useEffect(() => {
+    window.writeProgress && window.writeProgress('hljodritun_k10', 'opened');
+  }, []);
+  useEffect(() => {
+    if (results.length === SENTENCES.length) {
+      const correct = results.filter(Boolean).length;
+      window.writeProgress && window.writeProgress('hljodritun_k10', 'completed', { correct, total: SENTENCES.length });
+    }
+  }, [results]);
+
+  return (
   <div>
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -456,11 +475,21 @@ const App = () => (
       </div>
 
       {SENTENCES.map((s, i) => (
-        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} />
+        <SentenceCard key={s.id} sentence={s} index={i} total={SENTENCES.length} onDone={(ok) => setResults(r => [...r, ok])} />
       ))}
+      {results.length === SENTENCES.length && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <p className="text-2xl mb-1">🏁</p>
+          <p className="text-gray-800 font-light">Verkefninu er lokið!</p>
+          <p className="text-gray-500 font-light text-sm mt-1">
+            {results.filter(Boolean).length} af {SENTENCES.length} setningum rétt í fyrstu tilraun.
+          </p>
+        </div>
+      )}
     </main>
   </div>
-);
+  );
+};
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
