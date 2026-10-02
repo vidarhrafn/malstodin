@@ -142,9 +142,25 @@ skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir �
 - `stjornbord.html` – íslenskt dagsetningasnið óháð tungumáli vafrans (var „10/2/2026“);
   nemendafjöldi á bekkjarkorti uppfærist þegar nemendalisti er opnaður; „1 nemandi“ í eintölu.
 
-### ⬜ Áfangi 7 – Nýjar Firestore-reglur
-- `firestore.rules` í repó + leiðbeiningar skref fyrir skref (Rules Playground, Publish, afturköllun)
-- Prófunarlisti fyrir og eftir
+### 🟨 Áfangi 7 – Nýjar Firestore-reglur (tilbúnar, bíða birtingar)
+- `firestore.rules` – vafrinn má aðeins lesa eigið `user_access` og lesa/skrifa eigið `progress`.
+  Allt annað lokað (fer í gegnum Netlify-föll).
+- `tests/firestore-rules.test.mjs` – 23 prófanir í Firestore-hermi: allar standast með nýju
+  reglunum; 15 þeirra falla með gömlu reglunum (götin sem lokast).
+- Farið yfir allan kóða: síðurnar nota aðeins `user_access/{eigið uid}` og `progress/{eigið uid}/…`.
+
+**Birting (Viðar eða Sigurþór, ~10 mín., helst utan kennslutíma):**
+1. console.firebase.google.com → verkefnið **malstodin-90f85** → **Build → Firestore Database** → flipinn **Rules**.
+2. Afrita núverandi reglur í textaskjal til öryggis (Firebase geymir líka eldri útgáfur).
+3. Velja allt í ritlinum (Ctrl+A), eyða, líma inn allt innihald `firestore.rules`.
+4. **Publish**. Tekur gildi innan einnar mínútu.
+5. Prófa strax:
+   - Huliðsgluggi, prufunemandi (vidarhrafn+nemandi1@gmail.com) → opna ÍSAT1ÍC → opna æfingu → hún hleðst.
+   - Stjórnborð → Framvinda → nemandinn sýnir opnaða æfingu.
+   - Nýr prufunemandi (+nemandi2) virkjar bókarkóða → kemst inn á námskeiðið.
+   - Stjórnborð: Bekkir, Kóðar, Aðgangskort, Kennarar hlaðast.
+6. **Ef eitthvað bilar:** Rules-flipinn → listinn yfir eldri útgáfur vinstra megin → velja
+   útgáfuna á undan → endurheimta (eða líma gömlu reglurnar inn aftur) → Publish.
 
 ## Opnar spurningar
 
