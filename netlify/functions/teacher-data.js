@@ -12,6 +12,18 @@ function accessStatus(userAccess, course) {
   return { status: exp && exp < new Date() ? 'expired' : 'active', expiresAt: exp ? exp.toISOString() : null };
 }
 
+// Staða einnar æfingar: { status, correct?, total? }.
+// Æfing sem einhvern tíma var lokið telst lokið (completed_at helst þó nemandi opni hana
+// aftur og 'opened' skrifist yfir status). correct/total aðeins ef bæði eru gild.
+function progressEntry(p) {
+  const entry = { status: (p.status === 'completed' || p.completed_at) ? 'completed' : (p.status || 'opened') };
+  if (Number.isInteger(p.correct) && Number.isInteger(p.total) && p.total > 0 && p.correct >= 0) {
+    entry.correct = Math.min(p.correct, p.total);
+    entry.total = p.total;
+  }
+  return entry;
+}
+
 exports.handler = handler(async (event, body) => {
   const me = await requireTeacher(event);
   const course = String(body.course || '');
@@ -39,7 +51,7 @@ exports.handler = handler(async (event, body) => {
       db.collection('progress').doc(s.uid).collection(course).get(),
     ]);
     const progress = {};
-    progressSnap.docs.forEach(d => { progress[d.id] = d.data().status || 'opened'; });
+    progressSnap.docs.forEach(d => { progress[d.id] = progressEntry(d.data()); });
     return { ...s, access: accessStatus(accessSnap.exists ? accessSnap.data() : null, course), progress };
   }));
 

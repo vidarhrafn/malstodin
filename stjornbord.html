@@ -15,7 +15,8 @@
     .cell { width: 32px; height: 32px; border-radius: 6px; display: inline-block; }
     .cell-none      { background: #e5e7eb; }
     .cell-opened    { background: #fbbf24; }
-    .cell-completed { background: #22c55e; }
+    .cell-partial   { background: #bbf7d0; box-shadow: inset 0 0 0 2px #16a34a; }
+    .cell-completed { background: #16a34a; }
     .tab-btn { transition: all 0.2s; }
     .tab-btn.active { background: #2563eb; color: white; }
     .tab-btn:not(.active):hover { background: #f3f4f6; }
@@ -128,6 +129,7 @@
         <div>
           <h3 class="font-medium text-gray-800 mb-1">📈 Fylgjast með framvindu</h3>
           <p class="text-sm font-light text-gray-600 mb-2">Í flipanum <strong>Framvinda nemenda</strong> velurðu áfanga og bekk. Taflan uppfærist sjálfkrafa á 30 sek. fresti (eða með ↻ Uppfæra). Þú sérð aðeins nemendur í þínum bekkjum. Nemandi án virks bókaraðgangs er merktur undir netfanginu.</p>
+          <p class="text-sm font-light text-gray-600 mb-2">Litir: <strong>grár</strong> = ekki byrjað, <strong>gulur</strong> = byrjað, <strong>ljósgrænn með ramma</strong> = lokið en ekki allt rétt í fyrstu tilraun, <strong>heilgrænn</strong> = lokið, allt rétt. Haltu músinni yfir reit til að sjá t.d. „Lokið – 8/10 rétt“. Spjall og leikir eru aðeins gulir eða heilgrænir.</p>
         </div>
       </div>
 
@@ -234,10 +236,11 @@
         </div>
         <div class="text-right">
           <div class="flex items-center gap-4 mb-2 justify-end">
-            <div class="flex items-center gap-2 text-sm font-light text-gray-500">
+            <div class="flex flex-wrap items-center justify-end gap-2 text-sm font-light text-gray-500">
               <span class="cell cell-none"></span> Ekki byrjað
-              <span class="cell cell-opened ml-2"></span> Opnað
-              <span class="cell cell-completed ml-2"></span> Lokið
+              <span class="cell cell-opened ml-2"></span> Byrjað
+              <span class="cell cell-partial ml-2"></span> Lokið, ekki allt rétt
+              <span class="cell cell-completed ml-2"></span> Lokið, allt rétt
             </div>
           </div>
           <div class="flex items-center gap-4 justify-end">
@@ -1308,6 +1311,17 @@ function setDefaultExpiry() {
       });
     }
 
+    // Fjögur stig: ekki byrjað / byrjað / lokið, ekki allt rétt / lokið, allt rétt.
+    // Lokið án talna (eldri gögn, spjall, leikir) telst „allt rétt“.
+    function cellState(p) {
+      if (!p) return { cls: 'cell-none', title: 'Ekki byrjað', done: false };
+      if (typeof p === 'string') p = { status: p };
+      if (p.status !== 'completed') return { cls: 'cell-opened', title: 'Byrjað', done: false };
+      if (!(p.total > 0)) return { cls: 'cell-completed', title: 'Lokið', done: true };
+      const title = `Lokið – ${p.correct}/${p.total} rétt`;
+      return { cls: p.correct >= p.total ? 'cell-completed' : 'cell-partial', title, done: true };
+    }
+
     function renderTable() {
       const groups = COURSES[activeCourse].groups;
       const group = groups.find(g => g.id === activeGroup) || groups[0];
@@ -1333,11 +1347,9 @@ function setDefaultExpiry() {
           : '';
         html += `<tr class="border-b border-gray-50 hover:bg-gray-50"><td class="py-3 pr-6 font-light text-gray-700 whitespace-nowrap">${esc(student.email)}${noAccess}</td><td class="py-3 pr-4 font-light text-gray-400 text-xs whitespace-nowrap">${esc(classNames(student)) || '–'}</td>`;
         group.exercises.forEach(ex => {
-          const status = courseProgress[ex.id];
-          let cls = 'cell-none', title = 'Ekki byrjað';
-          if (status === 'opened') { cls = 'cell-opened'; title = 'Opnað'; }
-          if (status === 'completed') { cls = 'cell-completed'; title = 'Lokið'; completedCount++; }
-          html += `<td class="py-3 px-1 text-center"><span class="cell ${cls}" title="${title}"></span></td>`;
+          const { cls, title, done } = cellState(courseProgress[ex.id]);
+          if (done) completedCount++;
+          html += `<td class="py-3 px-1 text-center"><span class="cell ${cls}" title="${esc(title)}"></span></td>`;
         });
         const total = group.exercises.length;
         const color = completedCount === total ? 'text-green-600' : completedCount > 0 ? 'text-amber-600' : 'text-gray-400';

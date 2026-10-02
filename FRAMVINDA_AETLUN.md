@@ -49,9 +49,14 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 - ÍSAT1ÍA: flash-leikir F1–F4 í 🎮 Leikir; nýr flipi 📝 Sjálfspróf (P1–P4).
 - Heiti æfingar birtist þegar músin er yfir dálkhaus.
 
-### ⬜ Áfangi 2 – Fjögurra stiga litir
-- `teacher-data.js` skilar `correct`/`total` með stöðunni.
-- `stjornbord.html`: fjórir litir, tooltip, skýringar efst, „Lokið“ telur bæði grænu stigin.
+### ✅ Áfangi 2 – Fjögurra stiga litir
+- `teacher-data.js` skilar `{ status, correct?, total? }` fyrir hverja æfingu.
+- **Lagfæring:** æfingarnar skrifa `status: 'opened'` í hvert sinn sem þær eru opnaðar – líka eftir að
+  þeim er lokið – svo nemandi sem opnaði æfingu aftur „féll“ í gult. Nú telst æfing lokið ef
+  `completed_at` er til (helst við `merge`). Lagar líka eldri gögn.
+- `stjornbord.html`: fjórir litir (`cell-none`, `cell-opened`, `cell-partial`, `cell-completed`),
+  tooltip „Lokið – 8/10 rétt“, skýringar efst og í ❓ Leiðbeiningum, „Lokið“ telur bæði grænu stigin.
+- Prófað: allar samsetningar gagna (eldri, nýjar, ógildar tölur) gefa réttan lit.
 
 ### ⬜ Áfangi 3 – Hljóðritun ÍC og ÍA
 - „completed“ þegar lokið (líka með villum), með `correct`/`total` (fyrsta tilraun, besta niðurstaða).
