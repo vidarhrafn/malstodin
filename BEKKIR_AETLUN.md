@@ -142,7 +142,10 @@ skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir �
 - `stjornbord.html` – íslenskt dagsetningasnið óháð tungumáli vafrans (var „10/2/2026“);
   nemendafjöldi á bekkjarkorti uppfærist þegar nemendalisti er opnaður; „1 nemandi“ í eintölu.
 
-### 🟨 Áfangi 7 – Nýjar Firestore-reglur (tilbúnar, bíða birtingar)
+### ✅ Áfangi 7 – Nýjar Firestore-reglur
+
+> **Birtar í Firebase console 2.10.2026 og prófaðar á vefnum:** æfingar skrifa framvindu,
+> stjórnborð virkar, bókarkóði → bekkur og bekkur → bókarkóði virka báðar leiðir.
 - `firestore.rules` – vafrinn má aðeins lesa eigið `user_access` og lesa/skrifa eigið `progress`.
   Allt annað lokað (fer í gegnum Netlify-föll).
 - `tests/firestore-rules.test.mjs` – 23 prófanir í Firestore-hermi: allar standast með nýju
