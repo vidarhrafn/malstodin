@@ -132,8 +132,15 @@ skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir �
 - „❓ Leiðbeiningar“ endurskrifaðar: bókarkóði vs. bekkjarkóði, 6 skref (innskráning, búa til
   bekk, Canvas/skjávarpi, framvinda, meðkennarar, bókarkóðar og kort) og algengar spurningar.
 
-### ⬜ Áfangi 6 – Admin-gátt
-- `admin/index.html`, `admin-data.js` – bæta við ÍSAT1ÍA, laga talningu notaðra kóða, sýna bekki
+> **Áfangar 1–5c sameinaðir `main` í PR #63 og prófaðir á vefnum (2.10.2026):** bekkur búinn til,
+> prufunemandi gekk í hann, virkjaði bókarkóða, framvinda (opnað) birtist. Jóhanna komin inn sem kennari.
+> Sér lota: hljóðritun skráist ekki „lokið“ (aðeins þegar allar eyður eru réttar).
+
+### ✅ Áfangi 6 – Admin-gátt + smálagfæringar
+- `admin/index.html` – ÍSAT1ÍA bætt við; bekkir nemanda sýndir undir netfangi; íslenskt dagsetningasnið.
+- `admin-data.js` – kóðar ÍA/ÍC teljast notaðir ef `activated`; bekkir hvers nemanda; þolir `email`-svið.
+- `stjornbord.html` – íslenskt dagsetningasnið óháð tungumáli vafrans (var „10/2/2026“);
+  nemendafjöldi á bekkjarkorti uppfærist þegar nemendalisti er opnaður; „1 nemandi“ í eintölu.
 
 ### ⬜ Áfangi 7 – Nýjar Firestore-reglur
 - `firestore.rules` í repó + leiðbeiningar skref fyrir skref (Rules Playground, Publish, afturköllun)
