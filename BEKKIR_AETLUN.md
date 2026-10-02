@@ -67,9 +67,18 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
    `vhs@tskoli.is` (Viðar, Kerfisstjóri) ef sá reikningur á að virka líka.
 4. Jóhanna prófar að skrá sig inn.
 
-### ⬜ Áfangi 2 – Innlausn bókarkóða á þjóni
+### ✅ Áfangi 2 – Innlausn bókarkóða á þjóni
 - `netlify/functions/redeem-code.js` – sama hegðun og nú (einnota, gildistími úr kóða)
 - `isat1ia/login.html`, `isat1ic/login.html` – kalla á fallið; **útlit óbreytt**
+- Nýtt: innlausn í færslu (transaction) svo tveir geti ekki notað sama kóða samtímis;
+  `activated_at` og `activated_by` á kóðanum fyllast nú út (voru alltaf `null`).
+- `class`/`semester` er enn afritað í `user_access` þar til áfangi 4 tekur við.
+- Prófað með gervi-Firebase: tómur, óþekktur, rangur áfangi, útrunninn, há-/lágstafir,
+  endurnotkun, og að aðgangur að hinum áfanganum haldist.
+
+**Prófun eftir birtingu:** nýr nemandi skráir sig inn á `/isat1ia/login.html`, virkjar
+ónotaðan kóða og lendir á námskeiðssíðunni. Reyna sama kóða aftur með öðrum reikningi →
+„Þessi kóði hefur þegar verið notaður.“
 
 ### ⬜ Áfangi 3 – Bekkir og skráning
 - `netlify/functions/teacher-classes.js` – búa til / lista / geymsla / fjarlægja nemanda

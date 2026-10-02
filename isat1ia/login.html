@@ -35,7 +35,7 @@
       signInWithPopup, GoogleAuthProvider, signOut
     } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
     import {
-      getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp
+      getFirestore, doc, getDoc
     } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const firebaseConfig = {
@@ -69,44 +69,21 @@
       } catch { return false; }
     }
 
-    async function findCodeDoc(code) {
-      let ref = doc(db, 'access_codes', code);
-      let snap = await getDoc(ref);
-      if (snap.exists()) return { ref, snap };
-      ref = doc(db, 'access_codes', code.toLowerCase());
-      snap = await getDoc(ref);
-      if (snap.exists()) return { ref, snap };
-      ref = doc(db, 'access_codes', code.toUpperCase());
-      snap = await getDoc(ref);
-      if (snap.exists()) return { ref, snap };
-      return null;
-    }
-
+    // Innlausn fer fram á þjóni (netlify/functions/redeem-code.js)
     async function redeemCode(code, user) {
-      const found = await findCodeDoc(code.trim());
-      if (!found) throw new Error('Kóðinn er ekki til.');
-      const { ref: codeRef, snap: codeSnap } = found;
-      const codeData = codeSnap.data();
-      if (codeData.activated)         throw new Error('Þessi kóði hefur þegar verið notaður.');
-      if (codeData.course !== COURSE) throw new Error('Þessi kóði gildir ekki fyrir þetta námskeið.');
-      if (codeData.expires_at && codeData.expires_at.toDate() < new Date()) throw new Error('Þessi kóði er útrunninn.');
-
-      await updateDoc(codeRef, { activated: true });
-
-      const userRef  = doc(db, 'user_access', user.uid);
-      const userSnap = await getDoc(userRef);
-      const existing = userSnap.exists() ? userSnap.data() : {};
-      await setDoc(userRef, {
-        ...existing,
-        email: user.email,
-        [COURSE]: {
-          activated_at: serverTimestamp(),
-          code_used:    codeSnap.id,
-          expires_at:   codeData.expires_at || null,
-          class:        codeData.class      || null,
-          semester:     codeData.semester   || null
-        }
-      });
+      const idToken = await user.getIdToken();
+      let res;
+      try {
+        res = await fetch('/.netlify/functions/redeem-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+          body: JSON.stringify({ code: code.trim(), course: COURSE })
+        });
+      } catch {
+        throw new Error('Tenging mistókst. Reyndu aftur.');
+      }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Villa kom upp. Reyndu aftur.');
     }
 
     // ── Birting ───────────────────────────────────────────────────
