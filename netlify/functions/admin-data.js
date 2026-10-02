@@ -23,6 +23,22 @@ exports.handler = async (event) => {
       return { statusCode: 401, body: JSON.stringify({ error: 'Rangt lykilorð' }) };
     }
 
+    // Bekkir hvers nemanda (uid → áfangi → [heiti bekkja])
+    const [classesSnap, membersSnap] = await Promise.all([
+      db.collection('classes').get(),
+      db.collection('class_members').get(),
+    ]);
+    const classById = {};
+    classesSnap.docs.forEach(d => { classById[d.id] = d.data(); });
+    const classesByUid = {};
+    membersSnap.docs.forEach(d => {
+      const m = d.data();
+      const cls = classById[m.class_id];
+      if (!cls) return;
+      classesByUid[m.uid] = classesByUid[m.uid] || {};
+      (classesByUid[m.uid][cls.course] = classesByUid[m.uid][cls.course] || []).push(cls.name);
+    });
+
     // Sækja alla notendur með aðgang
     const accessSnapshot = await db.collection('user_access').get();
     const users = [];
@@ -49,7 +65,7 @@ exports.handler = async (event) => {
 
       // Fara í gegnum alla áfanga sem notandinn hefur aðgang að
       for (const [courseId, courseData] of Object.entries(data)) {
-        if (!courseData.expires_at) continue;
+        if (!courseData || typeof courseData !== 'object' || !courseData.expires_at) continue;
 
         // Sía eftir áfanga ef tilgreint
         if (course && courseId !== course) continue;
@@ -69,6 +85,7 @@ exports.handler = async (event) => {
           expiresAt: expiresAt.toISOString(),
           activatedAt: activatedAt ? activatedAt.toISOString() : null,
           codeUsed: courseData.code_used || 'Óþekkt',
+          classes: (classesByUid[uid] || {})[courseId] || [],
           isExpired,
           daysLeft: isExpired ? 0 : Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24)),
         });
@@ -87,7 +104,8 @@ exports.handler = async (event) => {
         code: doc.id,
         course: data.course,
         expiresAt: data.expires_at ? data.expires_at.toDate().toISOString() : null,
-        useCount: data.use_count || 0,
+        // ÍSAN1ÍB telur use_count; ÍSAT1ÍA/ÍC merkja einnota kóða með activated
+        useCount: data.use_count || (data.activated ? 1 : 0),
         lastUsedAt: data.last_used_at ? data.last_used_at.toDate().toISOString() : null,
       });
     }

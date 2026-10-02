@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Firestore-reglur Málstöðvarinnar.
+//
+// Þessi skrá er EKKI birt sjálfkrafa. Hún er límd inn í Firebase console:
+//   Firestore Database → Rules → líma → Publish
+// (sjá leiðbeiningar í BEKKIR_AETLUN.md, áfangi 7)
+//
+// Meginregla: vafrinn snertir aðeins gögn innskráða notandans sjálfs.
+// Allt annað – bókarkóðar, kennarar, bekkir, framvinda annarra – fer í gegnum
+// Netlify-föll (netlify/functions/*) sem nota admin-lykil og fara framhjá þessum reglum.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isMe(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Aðgangur að áföngum. Nemandi les sinn eigin (æfingasíður og login.html athuga hann).
+    // Enginn skrifar úr vafra – innlausn bókarkóða fer í gegnum redeem-code.
+    match /user_access/{uid} {
+      allow read: if isMe(uid);
+      allow write: if false;
+    }
+
+    // Framvinda. Nemandi les og skrifar sína eigin framvindu í æfingum.
+    match /progress/{uid}/{rest=**} {
+      allow read, write: if isMe(uid);
+    }
+
+    // access_codes, teachers, classes, class_members og allt annað:
+    // engin regla = enginn aðgangur úr vafra.
+  }
+}

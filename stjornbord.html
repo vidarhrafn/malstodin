@@ -709,9 +709,16 @@
       setupClasses();
     });
 
+    // ── Íslenskt dagsetningasnið (óháð tungumáli vafrans) ─────────
+    const IS_MONTHS = ['jan.','feb.','mars','apríl','maí','júní','júlí','ágúst','sept.','okt.','nóv.','des.'];
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const isDateLong  = (iso) => { if (!iso) return ''; const d = new Date(iso); return `${d.getDate()}. ${IS_MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+    const isDateShort = (iso) => { if (!iso) return ''; const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`; };
+    const isTime      = (iso) => { const d = new Date(iso); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
+
     // ── Bekkir ─────────────────────────────────────────────────
     const ACCESS_BADGE = {
-      active:  (m) => `<span class="text-xs font-light text-green-700 bg-green-50 px-2 py-1 rounded-full">Bókaraðgangur til ${new Date(m.access.expiresAt).toLocaleDateString('is-IS', {day:'numeric',month:'short',year:'numeric'})}</span>`,
+      active:  (m) => `<span class="text-xs font-light text-green-700 bg-green-50 px-2 py-1 rounded-full">Bókaraðgangur til ${isDateLong(m.access.expiresAt)}</span>`,
       expired: ()  => `<span class="text-xs font-light text-red-700 bg-red-50 px-2 py-1 rounded-full">Bókaraðgangur útrunninn</span>`,
       none:    ()  => `<span class="text-xs font-light text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Enginn bókaraðgangur</span>`,
     };
@@ -770,7 +777,7 @@
                 ${c.archived ? '<span class="text-xs font-light text-gray-500 bg-gray-100 px-2 py-1 rounded">Í geymslu</span>' : ''}
               </div>
               <h3 class="text-lg font-light text-gray-800">${esc(c.name)}</h3>
-              <p class="text-sm font-light text-gray-500">${c.memberCount} ${c.memberCount === 1 ? 'nemandi' : 'nemendur'}</p>
+              <p id="count-${c.id}" class="text-sm font-light text-gray-500">${memberCountText(c.memberCount)}</p>
               <p class="text-xs font-light text-gray-400 mt-1">Kennarar: ${teacherNames(c)}</p>
             </div>
             <div class="text-right">
@@ -837,6 +844,7 @@
       }
     }
 
+    const memberCountText = (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'nemandi' : 'nemendur'}`;
     const teacherLabel = (t) => esc(t.name || t.email || 'Óþekktur kennari');
     const teacherNames = (c) => c.teachers.map(t => teacherLabel(t) + (t.uid === c.ownerUid ? ' (eigandi)' : '')).join(', ');
 
@@ -919,6 +927,8 @@
       let members;
       try { ({ members } = await api('teacher-classes', { action: 'members', classId: c.id })); }
       catch (e) { box.innerHTML = `<p class="text-sm text-red-600 font-light">${esc(e.message)}</p>`; return; }
+      const countEl = document.getElementById('count-' + c.id);
+      if (countEl) countEl.textContent = memberCountText(members.length);
       if (!members.length) {
         box.innerHTML = '<p class="text-sm text-gray-400 font-light">Enginn nemandi hefur gengið í bekkinn ennþá.</p>';
         return;
@@ -927,7 +937,7 @@
         <tr class="border-b border-gray-50">
           <td class="py-2 pr-4 font-light text-gray-700">${esc(m.email)}</td>
           <td class="py-2 pr-4">${ACCESS_BADGE[m.access.status](m)}</td>
-          <td class="py-2 pr-4 font-light text-gray-400 text-xs">${m.joinedAt ? 'Gekk í bekk ' + new Date(m.joinedAt).toLocaleDateString('is-IS') : ''}</td>
+          <td class="py-2 pr-4 font-light text-gray-400 text-xs">${m.joinedAt ? 'Gekk í bekk ' + isDateShort(m.joinedAt) : ''}</td>
           <td class="py-2 text-right"><button data-uid="${esc(m.uid)}" data-email="${esc(m.email)}" class="member-remove text-xs font-light text-red-600 hover:text-red-800">Fjarlægja</button></td>
         </tr>`).join('')}</tbody></table>`;
       box.querySelectorAll('.member-remove').forEach(btn => {
@@ -1078,7 +1088,7 @@ function setDefaultExpiry() {
 
     // Persónuvernd: netfang innleysanda sést aðeins hjá þeim sem bjó kóðann til eða kennara nemandans
     const redeemerText = (c) => !c.activated ? '–' : (c.redeemer ?? '(nemandi annars kennara)');
-    const fmtDate = (iso, opts) => iso ? new Date(iso).toLocaleDateString('is-IS', opts) : '';
+    const fmtDate = (iso, long = false) => long ? isDateLong(iso) : isDateShort(iso);
 
     function filteredCodes() {
       const statusFilter = document.getElementById('codes-filter-status').value;
@@ -1130,7 +1140,7 @@ function setDefaultExpiry() {
           <td class="py-3 pr-4 font-light text-gray-500 text-xs">${esc(c.batch) || '–'}</td>
           <td class="py-3 pr-6">${status}</td>
           <td class="py-3 pr-6 font-light ${c.activated && c.redeemer == null ? 'text-gray-400 text-xs' : 'text-gray-600'}">${esc(redeemerText(c))}</td>
-          <td class="py-3 pr-6 font-light text-gray-400 text-sm">${fmtDate(c.activatedAt, {year:'numeric',month:'short',day:'numeric'}) || '–'}</td>
+          <td class="py-3 pr-6 font-light text-gray-400 text-sm">${fmtDate(c.activatedAt, true) || '–'}</td>
           <td class="py-3 font-light text-gray-400 text-xs">${esc(c.createdBy) || '–'}</td>
         </tr>`;
       });
@@ -1215,7 +1225,7 @@ function setDefaultExpiry() {
         updateClassDropdown();
         renderTable();
         document.getElementById('progress-updated').textContent =
-          'Uppfært ' + new Date(data.fetchedAt).toLocaleTimeString('is-IS', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          'Uppfært ' + isTime(data.fetchedAt);
       } catch (e) {
         document.getElementById('progress-updated').textContent = 'Villa: ' + e.message;
       } finally {
@@ -1269,7 +1279,7 @@ function setDefaultExpiry() {
       const container = document.getElementById('table-container');
       const students = filteredStudents();
       const countEl = document.getElementById('student-count');
-      if (countEl) countEl.textContent = students.length + ' nemendur';
+      if (countEl) countEl.textContent = memberCountText(students.length);
       if (!progressData.classes.length) {
         container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Þú ert ekki með neinn bekk í þessum áfanga. Búðu til bekk í flipanum 🏫 Bekkir.</p>';
         return;
