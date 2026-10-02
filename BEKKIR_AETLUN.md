@@ -50,13 +50,22 @@ Bekkjarkóði: 6 stafir, hástafir, án bandstriks (t.d. `K7QM4P`). Bókarkóða
 
 Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 
-### ⬜ Áfangi 1 – Kennaralisti í Firestore
+### ✅ Áfangi 1 – Kennaralisti í Firestore
 - `netlify/functions/_shared/` – sameiginleg Firebase-frumstilling og `requireTeacher()`
 - `netlify/functions/teacher-me.js` – „er ég kennari/kerfisstjóri?“
 - `netlify/functions/teachers.js` – kerfisstjóri: lista / bæta við (eftir netfangi) / fjarlægja
 - Uppsetning fyrstu kerfisstjóra: fallið les umhverfisbreytu `BOOTSTRAP_ADMIN_EMAILS` ef
   `teachers` er tómt (svo enginn þurfi að skrifa beint í gagnagrunninn)
 - `stjornbord.html` – nota `teacher-me` í stað `ADMIN_UIDS`; nýr flipi „Kennarar“ (aðeins kerfisstjórar)
+- Prófað með gervi-Firebase (bootstrap, óstaðfest netfang hafnað, bæta við/fjarlægja, vernd á eigin aðgangi og bootstrap-stjórum).
+
+**Gangsetning áfanga 1** (gera ÁÐUR en greinin er sameinuð `main`):
+1. Netlify → Site configuration → Environment variables → Add a variable:
+   `BOOTSTRAP_ADMIN_EMAILS` = `vidarhrafn@gmail.com,sibbbi@gmail.com`
+2. Sameina / birta. Viðar skráir sig inn á `stjornbord.html` með Google (vidarhrafn@gmail.com).
+3. Flipinn 👥 Kennarar → bæta við `borghildurrr@gmail.com` (Jóhanna, Kennari) og
+   `vhs@tskoli.is` (Viðar, Kerfisstjóri) ef sá reikningur á að virka líka.
+4. Jóhanna prófar að skrá sig inn.
 
 ### ⬜ Áfangi 2 – Innlausn bókarkóða á þjóni
 - `netlify/functions/redeem-code.js` – sama hegðun og nú (einnota, gildistími úr kóða)
@@ -84,19 +93,22 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 
 ## Opnar spurningar
 
-- [ ] Netföng við UID-in í núverandi `ADMIN_UIDS` (sjá hér að neðan) – hver á að halda aðgangi?
-- [ ] Netfang Sigurþórs Einarssonar (hann þarf að hafa skráð sig inn einu sinni)
+- [x] Netföng við UID-in – sjá töflu hér að neðan
+- [x] Sigurþór Einarsson = sibbbi@gmail.com (kerfisstjóri)
 - [ ] Eyða gögnum eldri hópa? (síðar)
 
-Núverandi `ADMIN_UIDS` í `stjornbord.html`:
-```
-AQ5xRpv41caDHy8p6KEQ            ← 20 stafir, lítur ekki út eins og Firebase Auth UID
-T08EOXfVZxQO13BJyCXDElR6apD2
-MM8vUelStVSl8eNlBSSVrgq0GW52
-8YUmu5gsTxTG8XnFkWFY            ← 20 stafir, lítur ekki út eins og Firebase Auth UID
-dfWBTm0O5daqXESYH6WvN5zvz7x2
-00hPDLPXQnVFwGMBTH4drNUdj822
-```
+Fyrrum `ADMIN_UIDS` (fjarlægt úr `stjornbord.html` í áfanga 1):
+
+| UID | Netfang | Hlutverk í nýju kerfi |
+|---|---|---|
+| `T08EOXfVZxQO13BJyCXDElR6apD2` | vhs@tskoli.is (Viðar) | Kerfisstjóri – bætt við í stjórnborði |
+| `MM8vUelStVSl8eNlBSSVrgq0GW52` | vidarhrafn@gmail.com (Viðar, aðal) | Kerfisstjóri – `BOOTSTRAP_ADMIN_EMAILS` |
+| `dfWBTm0O5daqXESYH6WvN5zvz7x2` | sibbbi@gmail.com (Sigurþór) | Kerfisstjóri – `BOOTSTRAP_ADMIN_EMAILS` |
+| `00hPDLPXQnVFwGMBTH4drNUdj822` | borghildurrr@gmail.com (Jóhanna) | Kennari – bætt við í stjórnborði |
+| `AQ5xRpv41caDHy8p6KEQ`, `8YUmu5gsTxTG8XnFkWFY` | – (ekki Auth-notendur) | Fellt niður |
+
+⚠️ Meðan gömlu Firestore-reglurnar gilda (fram að áfanga 7) getur tæknikunnugur innskráður
+notandi skrifað sig sjálfur í `teachers`. Það lagast með nýju reglunum.
 
 ## Atriði sem fundust í könnun (til minnis)
 

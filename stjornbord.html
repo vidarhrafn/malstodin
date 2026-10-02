@@ -242,6 +242,10 @@
             class="main-tab-btn px-6 py-4 text-sm font-light text-gray-700">
             🖨️ Aðgangskort
           </button>
+          <button onclick="setMainTab('teachers')" id="main-tab-teachers" style="display:none"
+            class="main-tab-btn px-6 py-4 text-sm font-light text-gray-700">
+            👥 Kennarar
+          </button>
         </div>
       </div>
 
@@ -420,6 +424,47 @@
     </div>
   </div>
 
+  <!-- ── KENNARAR (aðeins kerfisstjórar) ──────────────────── -->
+  <template id="tpl-teachers">
+      <div id="section-teachers" style="display:none">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 class="text-lg font-light text-gray-800 mb-2">➕ Bæta við kennara</h2>
+          <p class="text-sm font-light text-gray-500 mb-5">Kennarinn þarf að hafa skráð sig inn á Málstöðina einu sinni (t.d. hér á stjórnborðinu með Google) áður en hægt er að bæta honum við.</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Netfang</label>
+              <input id="teacher-email" type="email" placeholder="nafn@tskoli.is"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Nafn</label>
+              <input id="teacher-name" type="text" placeholder="Jóna Jónsdóttir"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Hlutverk</label>
+              <select id="teacher-role"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="teacher">Kennari</option>
+                <option value="admin">Kerfisstjóri</option>
+              </select>
+            </div>
+          </div>
+          <div id="teacher-err" class="text-red-600 text-sm font-light mb-3"></div>
+          <div id="teacher-ok" class="text-green-600 text-sm font-light mb-3"></div>
+          <button id="btn-add-teacher"
+            class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+            Bæta við
+          </button>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div id="teachers-container" class="overflow-x-auto p-6">
+            <p class="text-gray-400 font-light text-center py-8">Sæki kennara...</p>
+          </div>
+        </div>
+      </div>
+  </template>
+
   <script>
     function closeHelp(e) {
       if (e.target === document.getElementById('help-modal')) {
@@ -442,11 +487,20 @@
       appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
     };
 
-    const ADMIN_UIDS = [
-      'AQ5xRpv41caDHy8p6KEQ','T08EOXfVZxQO13BJyCXDElR6apD2',
-      'MM8vUelStVSl8eNlBSSVrgq0GW52','8YUmu5gsTxTG8XnFkWFY',
-      'dfWBTm0O5daqXESYH6WvN5zvz7x2','00hPDLPXQnVFwGMBTH4drNUdj822'
-    ];
+    // Kennarar eru ekki lengur harðkóðaðir – sjá teachers-safnið og /.netlify/functions/teacher-me
+    let ME = null;
+
+    async function api(name, body = {}) {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/.netlify/functions/' + name, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Villa kom upp');
+      return json;
+    }
     const COURSE_PREFIX = { isat1ic: 'uogs', isat1ia: 'fih' };
     const COURSE_LABEL  = { isat1ic: 'ÍSAT1ÍC – Út og suður', isat1ia: 'ÍSAT1ÍA – Fólkið í hverfinu' };
     const LOGIN_URL     = { isat1ic: 'https://malstodin.org/isat1ic/login.html', isat1ia: 'https://malstodin.org/isat1ia/login.html' };
@@ -541,11 +595,14 @@
 
     window.setMainTab = (tab) => {
       activeMainTab = tab;
-      ['progress','codes','cards'].forEach(t => {
-        document.getElementById('section-' + t).style.display = t === tab ? 'block' : 'none';
+      ['progress','codes','cards','teachers'].forEach(t => {
+        const section = document.getElementById('section-' + t);
+        if (!section) return;
+        section.style.display = t === tab ? 'block' : 'none';
         document.getElementById('main-tab-' + t).classList.toggle('active', t === tab);
       });
       if (tab === 'codes') renderCodesTable();
+      if (tab === 'teachers') loadTeachers();
     };
 
     function showLogin() {
@@ -566,13 +623,30 @@
       };
     }
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) { showLogin(); return; }
-      if (!ADMIN_UIDS.includes(user.uid)) {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('login').style.display = 'flex';
-        document.getElementById('login-err').textContent = 'Þú hefur ekki aðgang að stjórnborðinu.';
+    function denyAccess(msg) {
+      showLogin();
+      document.getElementById('login-err').innerHTML = msg +
+        ' <button id="btn-deny-logout" class="underline text-gray-500">Skrá út</button>';
+      document.getElementById('btn-deny-logout').onclick = () => signOut(auth);
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { showLogin(); document.getElementById('login-err').textContent = ''; return; }
+      try {
+        ME = await api('teacher-me');
+      } catch (e) {
+        denyAccess('Gat ekki staðfest aðgang: ' + e.message);
         return;
+      }
+      if (!ME.teacher) {
+        denyAccess(`Þú (${esc(ME.email || user.email)}) hefur ekki aðgang að stjórnborðinu. Biddu kerfisstjóra að bæta þér við.`);
+        return;
+      }
+      if (ME.role === 'admin') {
+        const tpl = document.getElementById('tpl-teachers');
+        document.getElementById('section-cards').after(tpl.content.cloneNode(true));
+        document.getElementById('main-tab-teachers').style.display = '';
+        setupTeachers();
       }
       document.getElementById('loading').style.display = 'none';
       document.getElementById('login').style.display = 'none';
@@ -585,6 +659,82 @@
       setupCreateCodes();
       setupCards();
     });
+
+    // ── Kennarar ───────────────────────────────────────────────
+    const ROLE_LABEL = { teacher: 'Kennari', admin: 'Kerfisstjóri' };
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+    function setupTeachers() {
+      document.getElementById('btn-add-teacher').onclick = async () => {
+        const errEl = document.getElementById('teacher-err'), okEl = document.getElementById('teacher-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+        const email = document.getElementById('teacher-email').value.trim();
+        const name = document.getElementById('teacher-name').value.trim();
+        const role = document.getElementById('teacher-role').value;
+        if (!email) { errEl.textContent = 'Sláðu inn netfang.'; return; }
+        const btn = document.getElementById('btn-add-teacher');
+        btn.disabled = true; btn.textContent = 'Augnablik...';
+        try {
+          await api('teachers', { action: 'add', email, name, role });
+          okEl.textContent = `✓ ${email} bætt við sem ${ROLE_LABEL[role].toLowerCase()}.`;
+          document.getElementById('teacher-email').value = '';
+          document.getElementById('teacher-name').value = '';
+          loadTeachers();
+        } catch (e) { errEl.textContent = e.message; }
+        btn.disabled = false; btn.textContent = 'Bæta við';
+      };
+    }
+
+    async function loadTeachers() {
+      const container = document.getElementById('teachers-container');
+      if (!container) return;
+      try {
+        const { teachers } = await api('teachers', { action: 'list' });
+        let html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-100">';
+        html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Kennari</th>';
+        html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Hlutverk</th>';
+        html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Bætt við af</th>';
+        html += '<th class="py-3"></th></tr></thead><tbody>';
+        teachers.forEach(t => {
+          const isMe = t.uid === ME.uid;
+          const locked = isMe || t.bootstrap;
+          const roleCell = locked
+            ? `<span class="text-xs font-light px-2 py-1 rounded-full ${t.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}">${ROLE_LABEL[t.role] || t.role}</span>`
+            : `<select data-uid="${esc(t.uid)}" class="teacher-role-select text-sm font-light border border-gray-200 rounded-lg px-2 py-1">
+                 ${Object.keys(ROLE_LABEL).map(r => `<option value="${r}" ${r === t.role ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
+               </select>`;
+          const note = isMe ? 'Þú' : (t.bootstrap ? 'Skilgreindur í Netlify' : '');
+          html += `<tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="py-3 pr-6"><div class="font-light text-gray-700">${esc(t.name) || esc(t.email)}</div>${t.name ? `<div class="text-xs font-light text-gray-400">${esc(t.email)}</div>` : ''}</td>
+            <td class="py-3 pr-6">${roleCell}</td>
+            <td class="py-3 pr-6 font-light text-gray-400 text-xs">${esc(t.addedBy) || '–'}</td>
+            <td class="py-3 text-right">${locked
+              ? `<span class="text-xs font-light text-gray-400">${note}</span>`
+              : `<button data-uid="${esc(t.uid)}" data-email="${esc(t.email)}" class="teacher-remove text-xs font-light text-red-600 hover:text-red-800">Fjarlægja</button>`}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.teacher-role-select').forEach(sel => {
+          sel.onchange = async () => {
+            try { await api('teachers', { action: 'setRole', uid: sel.dataset.uid, role: sel.value }); }
+            catch (e) { alert(e.message); }
+            loadTeachers();
+          };
+        });
+        container.querySelectorAll('.teacher-remove').forEach(btn => {
+          btn.onclick = async () => {
+            if (!confirm(`Fjarlægja ${btn.dataset.email} úr kennarahópnum?`)) return;
+            try { await api('teachers', { action: 'remove', uid: btn.dataset.uid }); }
+            catch (e) { alert(e.message); }
+            loadTeachers();
+          };
+        });
+      } catch (e) {
+        container.innerHTML = `<p class="text-red-600 font-light text-center py-8">${esc(e.message)}</p>`;
+      }
+    }
 
 function setDefaultExpiry() {
   document.getElementById('new-expires').value = '2027-01-01';
