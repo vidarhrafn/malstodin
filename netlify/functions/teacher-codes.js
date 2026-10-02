@@ -3,7 +3,7 @@
 // kóðann til eða nemandinn er í bekk kennarans.
 // action: 'list' | 'create'
 const crypto = require('crypto');
-const { admin, db, handler, HttpError, requireTeacher } = require('./_shared/firebase');
+const { admin, db, handler, HttpError, requireTeacher, classesForTeacher } = require('./_shared/firebase');
 
 const COURSE_PREFIX = { isat1ic: 'uogs', isat1ia: 'fih' };
 const SUFFIX_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -16,11 +16,10 @@ function randomCodeId(course) {
   return COURSE_PREFIX[course] + '-' + s;
 }
 
-// Nemendur í bekkjum kennarans
+// Nemendur í bekkjum kennarans (eigin bekkir og bekkir þar sem hann er meðkennari)
 async function myStudentUids(me) {
-  const classes = await db.collection('classes').where('teacher_uid', '==', me.uid).get();
   const uids = new Set();
-  for (const c of classes.docs) {
+  for (const c of await classesForTeacher(me.uid)) {
     const members = await db.collection('class_members').where('class_id', '==', c.id).get();
     members.docs.forEach(d => uids.add(d.data().uid));
   }

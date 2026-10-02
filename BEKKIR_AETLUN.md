@@ -116,11 +116,17 @@ skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir �
 - Prófað með gervi-Firebase (persónuverndarsía fyrir eldri og nýja kóða, staðfesting á fjölda
   og gildistíma, gerð kóða).
 
-### ⬜ Áfangi 5b – Meðkennarar
+### ✅ Áfangi 5b – Meðkennarar
 - Bekkur getur haft fleiri en einn kennara (`teacher_uids` fylki; `teacher_uid` = eigandi).
-- Eigandi bætir við / fjarlægir meðkennara (eftir netfangi, verður að vera í `teachers`).
-- Kerfisstjóri getur fært bekk til annars kennara (t.d. ef kennari hættir).
-- `teacher-classes`, `teacher-data`, `teacher-codes` nota „er kennari í bekknum“ í stað „á bekkinn“.
+- Eigandi eða kerfisstjóri bætir við / fjarlægir meðkennara (eftir netfangi, verður að vera í `teachers`);
+  meðkennari getur sjálfur hætt að kenna bekk.
+- „Gera að eiganda“: eigandi eða kerfisstjóri færir bekk; fyrri eigandi verður meðkennari.
+- Kerfisstjóri sér „Allir bekkir“ neðst í Bekkir-flipanum (án nemendagagna) til að færa bekki
+  kennara sem hættir.
+- `_shared/firebase.js`: `isTeacherOf()` og `classesForTeacher()`; notað í `teacher-classes`,
+  `teacher-data`, `teacher-codes`.
+- Prófað með gervi-Firebase (réttindi eiganda/meðkennara/kerfisstjóra, flutningur, bekkur úr
+  áfanga 3 án `teacher_uids`).
 
 ### ⬜ Áfangi 5c – Leiðbeiningar í stjórnborði
 - Endurskrifa „❓ Leiðbeiningar“ fyrir nýja ferlið: bekkir, hlekkur í Canvas / skjávarpi,

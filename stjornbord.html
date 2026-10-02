@@ -332,6 +332,11 @@
         <div id="classes-container">
           <p class="text-gray-400 font-light text-center py-8">Sæki bekki...</p>
         </div>
+        <div id="all-classes-section" style="display:none" class="mt-8">
+          <button id="btn-all-classes"
+            class="text-sm font-light text-gray-500 hover:text-gray-700">▸ Allir bekkir (kerfisstjóri) – flytja bekki milli kennara</button>
+          <div id="all-classes-container" class="mt-4" style="display:none"></div>
+        </div>
       </div>
 
       <!-- ── KÓÐAR ──────────────────────────────────────────── -->
@@ -702,6 +707,17 @@
     let myClasses = [];
 
     function setupClasses() {
+      if (ME.role === 'admin') {
+        document.getElementById('all-classes-section').style.display = 'block';
+        document.getElementById('btn-all-classes').onclick = () => {
+          const box = document.getElementById('all-classes-container');
+          const open = box.style.display === 'none';
+          box.style.display = open ? 'block' : 'none';
+          document.getElementById('btn-all-classes').textContent =
+            (open ? '▾' : '▸') + ' Allir bekkir (kerfisstjóri) – flytja bekki milli kennara';
+          if (open) loadAllClasses();
+        };
+      }
       document.getElementById('btn-create-class').onclick = async () => {
         const errEl = document.getElementById('class-err');
         errEl.textContent = '';
@@ -743,6 +759,7 @@
               </div>
               <h3 class="text-lg font-light text-gray-800">${esc(c.name)}</h3>
               <p class="text-sm font-light text-gray-500">${c.memberCount} ${c.memberCount === 1 ? 'nemandi' : 'nemendur'}</p>
+              <p class="text-xs font-light text-gray-400 mt-1">Kennarar: ${teacherNames(c)}</p>
             </div>
             <div class="text-right">
               <p class="text-xs font-light text-gray-400 mb-1">Bekkjarkóði</p>
@@ -754,10 +771,12 @@
             <button data-act="copy" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">🔗 Afrita hlekk</button>
             <button data-act="show" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">📽️ Sýna á skjávarpa</button>`}
             <button data-act="members" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">👥 Nemendur</button>
+            <button data-act="teachers" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">👩‍🏫 Kennarar</button>
             <button data-act="archive" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-500 hover:bg-gray-50 ml-auto">${c.archived ? 'Opna aftur' : 'Setja í geymslu'}</button>
           </div>
           <p class="text-xs font-light text-gray-400 mt-2 break-all">${esc(joinUrl(c.joinCode))}</p>
           <div id="members-${c.id}" class="mt-4" style="display:none"></div>
+          <div id="teachers-${c.id}" class="mt-4" style="display:none"></div>
         </div>
       `).join('');
 
@@ -791,6 +810,12 @@
         catch (e) { alert(e.message); }
         loadClasses();
       }
+      if (act === 'teachers') {
+        const box = document.getElementById('teachers-' + c.id);
+        if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        renderClassTeachers(c, box, loadClasses);
+      }
       if (act === 'members') {
         const box = document.getElementById('members-' + c.id);
         if (box.style.display !== 'none') { box.style.display = 'none'; return; }
@@ -798,6 +823,84 @@
         box.innerHTML = '<p class="text-sm text-gray-400 font-light">Sæki nemendur...</p>';
         await renderMembers(c, box);
       }
+    }
+
+    const teacherLabel = (t) => esc(t.name || t.email || 'Óþekktur kennari');
+    const teacherNames = (c) => c.teachers.map(t => teacherLabel(t) + (t.uid === c.ownerUid ? ' (eigandi)' : '')).join(', ');
+
+    // Kennarar bekkjar: meðkennarar og flutningur. reload() endurnýjar listann sem kallaði.
+    function renderClassTeachers(c, box, reload) {
+      const canManage = c.ownerUid === ME.uid || ME.role === 'admin';
+      const rows = c.teachers.map(t => {
+        const isOwner = t.uid === c.ownerUid;
+        let action = '';
+        if (isOwner) action = '<span class="text-xs font-light text-gray-400">Eigandi</span>';
+        else if (canManage) action = `<button data-uid="${esc(t.uid)}" data-label="${teacherLabel(t)}" class="ct-remove text-xs font-light text-red-600 hover:text-red-800">Fjarlægja</button>`;
+        else if (t.uid === ME.uid) action = `<button data-uid="${esc(t.uid)}" data-self="1" class="ct-remove text-xs font-light text-red-600 hover:text-red-800">Hætta að kenna bekkinn</button>`;
+        return `<tr class="border-b border-gray-50">
+          <td class="py-2 pr-4 font-light text-gray-700">${teacherLabel(t)}${t.name && t.email ? `<span class="text-xs text-gray-400"> · ${esc(t.email)}</span>` : ''}</td>
+          <td class="py-2 text-right">${action}</td></tr>`;
+      }).join('');
+      box.innerHTML = `
+        <table class="w-full text-sm border-t border-gray-100"><tbody>${rows}</tbody></table>
+        ${canManage ? `
+        <div class="flex flex-wrap gap-2 mt-3 items-center">
+          <input type="email" placeholder="netfang kennara" class="ct-email flex-1 min-w-[12rem] text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button class="ct-add px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700">Bæta við meðkennara</button>
+          <button class="ct-transfer px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">Gera að eiganda</button>
+        </div>
+        <p class="text-xs font-light text-gray-400 mt-2">Meðkennari sér nemendur og framvindu bekkjarins. Kennarinn þarf að vera skráður kennari í Málstöðinni.</p>` : ''}
+        <p class="ct-err text-sm font-light text-red-600 mt-2"></p>`;
+
+      const err = (msg) => { box.querySelector('.ct-err').textContent = msg; };
+      const run = async (body, confirmMsg) => {
+        if (confirmMsg && !confirm(confirmMsg)) return;
+        try { await api('teacher-classes', { classId: c.id, ...body }); await reload(); }
+        catch (e) { err(e.message); }
+      };
+      box.querySelectorAll('.ct-remove').forEach(btn => {
+        btn.onclick = () => run({ action: 'removeTeacher', uid: btn.dataset.uid },
+          btn.dataset.self ? `Hætta að kenna „${c.name}“? Þú sérð þá ekki lengur nemendur bekkjarins.`
+                           : `Fjarlægja ${btn.dataset.label} sem kennara „${c.name}“?`);
+      });
+      if (canManage) {
+        const email = () => box.querySelector('.ct-email').value.trim();
+        box.querySelector('.ct-add').onclick = () => email() ? run({ action: 'addTeacher', email: email() }) : err('Sláðu inn netfang.');
+        box.querySelector('.ct-transfer').onclick = () => email()
+          ? run({ action: 'transfer', email: email() }, `Gera ${email()} að eiganda „${c.name}“? Núverandi eigandi verður meðkennari.`)
+          : err('Sláðu inn netfang.');
+      }
+    }
+
+    async function loadAllClasses() {
+      const box = document.getElementById('all-classes-container');
+      box.innerHTML = '<p class="text-sm text-gray-400 font-light">Sæki bekki...</p>';
+      let classes;
+      try { ({ classes } = await api('teacher-classes', { action: 'listAll' })); }
+      catch (e) { box.innerHTML = `<p class="text-sm text-red-600 font-light">${esc(e.message)}</p>`; return; }
+      if (!classes.length) { box.innerHTML = '<p class="text-sm text-gray-400 font-light">Engir bekkir til.</p>'; return; }
+      box.innerHTML = classes.map(c => `
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3 ${c.archived ? 'opacity-60' : ''}">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span class="text-xs font-light text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 mr-2">${esc(COURSES[c.course]?.label || c.course)}</span>
+              <span class="font-light text-gray-800">${esc(c.name)}</span>
+              <span class="text-xs font-light text-gray-400 ml-2">${esc(c.semester)} · ${c.memberCount} nem.${c.archived ? ' · í geymslu' : ''}</span>
+              <p class="text-xs font-light text-gray-400 mt-1">Kennarar: ${teacherNames(c)}</p>
+            </div>
+            <button data-id="${c.id}" class="all-manage px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">👩‍🏫 Stjórna kennurum</button>
+          </div>
+          <div id="all-teachers-${c.id}" class="mt-3" style="display:none"></div>
+        </div>`).join('');
+      box.querySelectorAll('.all-manage').forEach(btn => {
+        btn.onclick = () => {
+          const c = classes.find(x => x.id === btn.dataset.id);
+          const tbox = document.getElementById('all-teachers-' + c.id);
+          if (tbox.style.display !== 'none') { tbox.style.display = 'none'; return; }
+          tbox.style.display = 'block';
+          renderClassTeachers(c, tbox, async () => { await loadAllClasses(); loadClasses(); });
+        };
+      });
     }
 
     async function renderMembers(c, box) {

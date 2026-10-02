@@ -1,7 +1,7 @@
 // Framvinda nemenda í bekkjum kennarans – aðeins eigin nemendur.
 // Inntak: { course }. Skilar bekkjum kennarans í áfanganum og nemendum þeirra
 // ásamt framvindu og stöðu bókaraðgangs.
-const { db, handler, HttpError, requireTeacher } = require('./_shared/firebase');
+const { db, handler, HttpError, requireTeacher, classesForTeacher } = require('./_shared/firebase');
 
 const COURSES = ['isat1ia', 'isat1ic'];
 
@@ -17,8 +17,7 @@ exports.handler = handler(async (event, body) => {
   const course = String(body.course || '');
   if (!COURSES.includes(course)) throw new HttpError(400, 'Óþekktur áfangi');
 
-  const classSnap = await db.collection('classes').where('teacher_uid', '==', me.uid).get();
-  const classes = classSnap.docs
+  const classes = (await classesForTeacher(me.uid))
     .filter(d => d.data().course === course)
     .map(d => ({ id: d.id, name: d.data().name, semester: d.data().semester || '', archived: !!d.data().archived }))
     .sort((a, b) => (a.archived - b.archived) || a.name.localeCompare(b.name, 'is'));

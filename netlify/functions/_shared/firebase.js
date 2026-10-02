@@ -94,6 +94,24 @@ async function requireAdmin(event) {
   return teacher;
 }
 
+// ── Bekkir ───────────────────────────────────────────────────
+// Bekkur á einn eiganda (teacher_uid) og getur haft meðkennara.
+// teacher_uids inniheldur alla kennara bekkjarins, eiganda meðtalinn.
+function isTeacherOf(cls, uid) {
+  return cls.teacher_uid === uid || (cls.teacher_uids || []).includes(uid);
+}
+
+// Allir bekkir þar sem kennarinn er eigandi eða meðkennari
+async function classesForTeacher(uid) {
+  const [shared, owned] = await Promise.all([
+    db.collection('classes').where('teacher_uids', 'array-contains', uid).get(),
+    db.collection('classes').where('teacher_uid', '==', uid).get(),
+  ]);
+  const byId = new Map();
+  [...shared.docs, ...owned.docs].forEach(d => byId.set(d.id, d));
+  return [...byId.values()];
+}
+
 // Vefur utan um handler: les JSON, grípur villur og skilar íslenskum villuboðum.
 function handler(fn) {
   return async (event) => {
@@ -114,4 +132,5 @@ function handler(fn) {
 module.exports = {
   admin, db, HttpError, handler,
   requireUser, requireTeacher, requireAdmin, getTeacher, bootstrapAdminEmails,
+  isTeacherOf, classesForTeacher,
 };
