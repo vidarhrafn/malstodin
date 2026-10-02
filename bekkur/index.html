@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Innskráning – Málstöðin</title>
+  <title>Ganga í bekk – Málstöðin</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -21,7 +22,7 @@
 <body class="flex items-center justify-center min-h-screen px-4">
 
   <div id="loading" class="text-center">
-    <div class="text-4xl mb-4">🎓</div>
+    <div class="text-4xl mb-4">🏫</div>
     <p class="text-gray-500 font-light">Hleður...</p>
   </div>
 
@@ -34,9 +35,6 @@
       signInWithEmailAndPassword, createUserWithEmailAndPassword,
       signInWithPopup, GoogleAuthProvider, signOut
     } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import {
-      getFirestore, doc, getDoc
-    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -47,46 +45,34 @@
       appId: "1:190485777754:web:070d4a35eaa9d65e8b3763"
     };
 
-    const COURSE   = 'isat1ia';
-    const REDIRECT = '/isat1ia/';
+    const COURSE_LABEL = {
+      isat1ia: 'ÍSAT1ÍA – Fólkið í hverfinu',
+      isat1ic: 'ÍSAT1ÍC – Út og suður',
+    };
 
-    const app  = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db   = getFirestore(app);
-
-    const urlCode = new URLSearchParams(window.location.search).get('code') || '';
+    const auth = getAuth(initializeApp(firebaseConfig));
+    let joinCode = (new URLSearchParams(window.location.search).get('kodi') || '')
+      .toUpperCase().replace(/[^A-Z0-9]/g, '');
 
     // ── Hjálparföll ───────────────────────────────────────────────
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
-    async function hasAccess(uid) {
-      try {
-        const snap = await getDoc(doc(db, 'user_access', uid));
-        if (!snap.exists()) return false;
-        const courseData = snap.data()[COURSE];
-        if (!courseData || !courseData.activated_at) return false;
-        if (courseData.expires_at && courseData.expires_at.toDate() < new Date()) return false;
-        return true;
-      } catch { return false; }
-    }
-
-    // Innlausn fer fram á þjóni (netlify/functions/redeem-code.js)
-    async function redeemCode(code, user) {
+    async function joinApi(action, user) {
       const idToken = await user.getIdToken();
       let res;
       try {
-        res = await fetch('/.netlify/functions/redeem-code', {
+        res = await fetch('/.netlify/functions/join-class', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-          body: JSON.stringify({ code: code.trim(), course: COURSE })
+          body: JSON.stringify({ action, code: joinCode })
         });
       } catch {
         throw new Error('Tenging mistókst. Reyndu aftur.');
       }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Villa kom upp. Reyndu aftur.');
+      return json;
     }
-
-    // ── Birting ───────────────────────────────────────────────────
 
     function show(html) {
       document.getElementById('loading').style.display = 'none';
@@ -100,35 +86,39 @@
       if (el) el.textContent = msg;
     }
 
-    // ── Skref 1: Innskráning ──────────────────────────────────────
+    const header = (emoji) => `
+      <div class="text-center mb-6">
+        <div class="text-5xl mb-3">${emoji}</div>
+        <h1 class="text-2xl font-light text-gray-800">Málstöðin</h1>
+        <p class="text-gray-500 text-sm font-light mt-1">Ganga í bekk</p>
+      </div>`;
 
+    const whoAmI = (user) => `
+      <div class="bg-gray-50 rounded-lg px-4 py-2 mb-5 text-center">
+        <p class="text-xs text-gray-400 font-light">Innskráð/ur sem</p>
+        <p class="text-sm text-gray-700 font-light">${esc(user.email)}</p>
+      </div>`;
+
+    const logoutBtn = `
+      <button id="btn-logout"
+        class="w-full text-center text-sm text-gray-400 hover:text-gray-600 font-light transition-colors">
+        Skrá út
+      </button>`;
+
+    function bindLogout() {
+      const btn = document.getElementById('btn-logout');
+      if (btn) btn.onclick = () => signOut(auth);
+    }
+
+    // ── Innskráning ───────────────────────────────────────────────
     function renderLogin(errorMsg = '') {
       show(`
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 fade-in">
-
-          <div class="text-center mb-6">
-            <div class="text-5xl mb-3">🎓</div>
-            <h1 class="text-2xl font-light text-gray-800">Málstöðin</h1>
-            <p class="text-gray-500 text-sm font-light mt-1">Íslenska · A1–A2</p>
-          </div>
-
-          <div class="flex items-center gap-2 mb-6">
-            <div class="flex items-center gap-2 flex-1">
-              <div class="w-7 h-7 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-light flex-shrink-0">1</div>
-              <span class="text-xs font-light text-blue-600">Skráðu þig inn</span>
-            </div>
-            <div class="w-6 h-px bg-gray-200 flex-shrink-0"></div>
-            <div class="flex items-center gap-2 flex-1">
-              <div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 text-xs flex items-center justify-center font-light flex-shrink-0">2</div>
-              <span class="text-xs font-light text-gray-400">Nota aðgangskóða</span>
-            </div>
-          </div>
-
+          ${header('🏫')}
           <p class="text-sm font-light text-gray-500 mb-5 text-center">
-            Skráðu þig inn með netfangi til að halda utan um framvindu þína.
+            Skráðu þig inn til að ganga í bekkinn hjá kennaranum þínum.
           </p>
-
-          <div id="err" class="mb-4 text-red-600 text-sm font-light text-center">${errorMsg}</div>
+          <div id="err" class="mb-4 text-red-600 text-sm font-light text-center">${esc(errorMsg)}</div>
 
           <button id="btn-google"
             class="w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-gray-200
@@ -155,7 +145,6 @@
           <input id="pw" type="password" placeholder="Lykilorð"
             class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none
                    focus:ring-2 focus:ring-blue-500 font-light mb-4 text-sm" />
-
           <button id="btn-login"
             class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
                    transition-colors font-light">
@@ -202,108 +191,117 @@
       };
     }
 
-    // ── Skref 2: Kóði ────────────────────────────────────────────
-
-    function renderRedeem(user) {
+    // ── Slá inn kóða (ef hann fylgdi ekki hlekknum) ───────────────
+    function renderEnterCode(user, errorMsg = '') {
       show(`
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 fade-in">
-
-          <div class="text-center mb-6">
-            <div class="text-5xl mb-3">🔑</div>
-            <h1 class="text-2xl font-light text-gray-800">Málstöðin</h1>
-            <p class="text-gray-500 text-sm font-light mt-1">Íslenska · A1–A2</p>
-          </div>
-
-          <div class="flex items-center gap-2 mb-6">
-            <div class="flex items-center gap-2 flex-1">
-              <div class="w-7 h-7 rounded-full bg-green-100 text-green-600 text-xs flex items-center justify-center flex-shrink-0">✓</div>
-              <span class="text-xs font-light text-gray-400">Innskráning lokið</span>
-            </div>
-            <div class="w-6 h-px bg-gray-200 flex-shrink-0"></div>
-            <div class="flex items-center gap-2 flex-1">
-              <div class="w-7 h-7 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-light flex-shrink-0">2</div>
-              <span class="text-xs font-light text-blue-600">Nota aðgangskóða</span>
-            </div>
-          </div>
-
+          ${header('🏫')}
           <p class="text-sm font-light text-gray-500 mb-5 text-center">
-            Sláðu inn kóðann af aðgangskortinu þínu.
+            Sláðu inn bekkjarkóðann frá kennaranum þínum.
           </p>
-
-          <div class="bg-gray-50 rounded-lg px-4 py-2 mb-5 text-center">
-            <p class="text-xs text-gray-400 font-light">Innskráð/ur sem</p>
-            <p class="text-sm text-gray-700 font-light">${user.email}</p>
-          </div>
-
-          <div id="err" class="mb-3 text-red-600 text-sm font-light text-center"></div>
-
-          <input id="code" type="text" placeholder="T.d. isat1ia-h1-abc"
-            value="${urlCode}"
+          ${whoAmI(user)}
+          <div id="err" class="mb-3 text-red-600 text-sm font-light text-center">${esc(errorMsg)}</div>
+          <input id="code" type="text" placeholder="T.d. K7QM4P" maxlength="8" value="${esc(joinCode)}"
             class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none
-                   focus:ring-2 focus:ring-blue-500 font-light mb-4 text-center text-lg tracking-wider" />
-
-          <button id="btn-redeem"
+                   focus:ring-2 focus:ring-blue-500 font-light mb-4 text-center text-lg tracking-widest uppercase" />
+          <button id="btn-next"
             class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
                    transition-colors font-light mb-3">
-            Virkja aðgang →
+            Áfram →
           </button>
-          <button id="btn-logout"
-            class="w-full text-center text-sm text-gray-400 hover:text-gray-600 font-light transition-colors">
-            Skrá út
-          </button>
+          ${logoutBtn}
         </div>
       `);
+      bindLogout();
+      document.getElementById('btn-next').onclick = () => {
+        joinCode = document.getElementById('code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!joinCode) { showError('err', 'Sláðu inn kóða.'); return; }
+        peek(user);
+      };
+    }
 
-      document.getElementById('btn-redeem').onclick = async () => {
-        const code = document.getElementById('code').value.trim();
-        showError('err', '');
-        if (!code) { showError('err', 'Sláðu inn kóða.'); return; }
-        const btn = document.getElementById('btn-redeem');
-        btn.textContent = 'Athuga kóða...';
+    // ── Staðfesta bekk ────────────────────────────────────────────
+    async function peek(user) {
+      show(`<div class="text-center"><p class="text-gray-500 font-light">Sæki bekk...</p></div>`);
+      let info;
+      try { info = await joinApi('peek', user); }
+      catch (e) { renderEnterCode(user, e.message); return; }
+      if (info.alreadyMember) { renderDone(info, true); return; }
+
+      show(`
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 fade-in">
+          ${header('🏫')}
+          ${whoAmI(user)}
+          <div class="border border-blue-100 bg-blue-50 rounded-xl px-5 py-4 mb-5 text-center">
+            <p class="text-xs text-blue-600 font-light mb-1">${esc(COURSE_LABEL[info.course] || info.course)}</p>
+            <p class="text-lg text-gray-800 font-light">${esc(info.className)}</p>
+            ${info.teacherName ? `<p class="text-sm text-gray-500 font-light mt-1">Kennari: ${esc(info.teacherName)}</p>` : ''}
+          </div>
+          <p class="text-sm font-light text-gray-500 mb-5 text-center">
+            Kennarinn sér framvindu þína í æfingunum þegar þú gengur í bekkinn.
+          </p>
+          <div id="err" class="mb-3 text-red-600 text-sm font-light text-center"></div>
+          <button id="btn-join"
+            class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                   transition-colors font-light mb-3">
+            Ganga í bekkinn →
+          </button>
+          ${logoutBtn}
+        </div>
+      `);
+      bindLogout();
+      document.getElementById('btn-join').onclick = async () => {
+        const btn = document.getElementById('btn-join');
+        btn.textContent = 'Augnablik...';
         btn.disabled = true;
         try {
-          await redeemCode(code, user);
-          renderSuccess();
+          renderDone(await joinApi('join', user), false);
         } catch (e) {
           showError('err', e.message);
-          btn.textContent = 'Virkja aðgang →';
+          btn.textContent = 'Ganga í bekkinn →';
           btn.disabled = false;
         }
       };
-
-      document.getElementById('btn-logout').onclick = () => signOut(auth);
     }
 
-    // ── Árangur ───────────────────────────────────────────────────
+    // ── Lokið ─────────────────────────────────────────────────────
+    function renderDone(info, already) {
+      const course = info.course;
+      const next = info.hasAccess
+        ? `<button onclick="window.location.href='/${course}/'"
+             class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                    transition-colors font-light">
+             Fara á námskeiðið →
+           </button>`
+        : `<div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 text-left">
+             <p class="text-sm text-gray-700 font-light"><strong class="font-medium">Næsta skref:</strong>
+               virkjaðu aðgangskóðann sem fylgir bókinni.</p>
+           </div>
+           <button onclick="window.location.href='/${course}/login.html'"
+             class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                    transition-colors font-light">
+             Virkja kóða úr bók →
+           </button>`;
 
-    function renderSuccess() {
       show(`
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center fade-in">
-          <div class="text-5xl mb-4">🎉</div>
-          <h1 class="text-xl font-light text-gray-800 mb-2">Velkomin/n!</h1>
+          <div class="text-5xl mb-4">${already ? '👋' : '🎉'}</div>
+          <h1 class="text-xl font-light text-gray-800 mb-2">
+            ${already ? 'Þú ert nú þegar í bekknum' : 'Þú ert komin/n í bekkinn!'}
+          </h1>
           <p class="text-gray-500 text-sm font-light mb-6">
-            Aðgangur virkjaður. Þú ert tilbúin/n að byrja.
+            ${esc(info.className)} · ${esc(COURSE_LABEL[course] || course)}
           </p>
-          <button onclick="window.location.href='${REDIRECT}'"
-            class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700
-                   transition-colors font-light">
-            Fara á námskeiðið →
-          </button>
+          ${next}
         </div>
       `);
-      setTimeout(() => { window.location.href = REDIRECT; }, 2500);
     }
 
     // ── Auth ástand ───────────────────────────────────────────────
-
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, (user) => {
       if (!user) { renderLogin(); return; }
-      const access = await hasAccess(user.uid);
-      if (access) {
-        window.location.href = REDIRECT;
-      } else {
-        renderRedeem(user);
-      }
+      if (joinCode) peek(user);
+      else renderEnterCode(user);
     });
   </script>
 </body>
