@@ -66,6 +66,17 @@
 </head>
 <body>
 
+  <!-- ── Bekkjarkóði á skjávarpa ───────────────────────────── -->
+  <div id="join-overlay" style="display:none" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-8 text-center">
+    <button onclick="document.getElementById('join-overlay').style.display='none'"
+      class="absolute top-6 right-8 text-gray-400 hover:text-gray-600 text-4xl font-light leading-none">×</button>
+    <p id="join-overlay-name" class="text-2xl font-light text-gray-500 mb-6"></p>
+    <div id="join-overlay-qr" class="mb-8"></div>
+    <p class="text-xl font-light text-gray-500 mb-2">Farðu á <span id="join-overlay-url" class="text-gray-800"></span></p>
+    <p class="text-xl font-light text-gray-500">og sláðu inn kóðann</p>
+    <p id="join-overlay-code" class="text-7xl font-mono tracking-widest text-blue-600 mt-4"></p>
+  </div>
+
   <!-- ── Leiðbeiningamodal ──────────────────────────────────── -->
   <div id="help-modal" onclick="closeHelp(event)">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8 relative my-4">
@@ -234,6 +245,10 @@
             class="main-tab-btn active px-6 py-4 text-sm font-light text-gray-700">
             📈 Framvinda nemenda
           </button>
+          <button onclick="setMainTab('classes')" id="main-tab-classes"
+            class="main-tab-btn px-6 py-4 text-sm font-light text-gray-700">
+            🏫 Bekkir
+          </button>
           <button onclick="setMainTab('codes')" id="main-tab-codes"
             class="main-tab-btn px-6 py-4 text-sm font-light text-gray-700">
             🔑 Kóðar
@@ -283,6 +298,42 @@
           <div id="table-container" class="overflow-x-auto p-6">
             <p class="text-gray-400 font-light text-center py-8">Sæki gögn...</p>
           </div>
+        </div>
+      </div>
+
+      <!-- ── BEKKIR ─────────────────────────────────────────── -->
+      <div id="section-classes" style="display:none">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 class="text-lg font-light text-gray-800 mb-2">➕ Nýr bekkur</h2>
+          <p class="text-sm font-light text-gray-500 mb-5">Bekkurinn fær einn bekkjarkóða og hlekk. Settu hlekkinn í Canvas eða sýndu QR-kóðann í tíma – nemendur sem ganga í bekkinn birtast hjá þér. Bekkjaraðild er óháð aðgangskóða úr bók.</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Áfangi</label>
+              <select id="class-course"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="isat1ic">ÍSAT1ÍC – Út og suður</option>
+                <option value="isat1ia">ÍSAT1ÍA – Fólkið í hverfinu</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Heiti bekkjar</label>
+              <input id="class-name" type="text" placeholder="ÍSAT1ÍC hópur 2"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Önn</label>
+              <input id="class-semester" type="text" placeholder="H26"
+                class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div id="class-err" class="text-red-600 text-sm font-light mb-3"></div>
+          <button id="btn-create-class"
+            class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-sm">
+            Búa til bekk
+          </button>
+        </div>
+        <div id="classes-container">
+          <p class="text-gray-400 font-light text-center py-8">Sæki bekki...</p>
         </div>
       </div>
 
@@ -595,7 +646,7 @@
 
     window.setMainTab = (tab) => {
       activeMainTab = tab;
-      ['progress','codes','cards','teachers'].forEach(t => {
+      ['progress','classes','codes','cards','teachers'].forEach(t => {
         const section = document.getElementById('section-' + t);
         if (!section) return;
         section.style.display = t === tab ? 'block' : 'none';
@@ -603,6 +654,7 @@
       });
       if (tab === 'codes') renderCodesTable();
       if (tab === 'teachers') loadTeachers();
+      if (tab === 'classes') loadClasses();
     };
 
     function showLogin() {
@@ -658,7 +710,141 @@
       startListening();
       setupCreateCodes();
       setupCards();
+      setupClasses();
     });
+
+    // ── Bekkir ─────────────────────────────────────────────────
+    const ACCESS_BADGE = {
+      active:  (m) => `<span class="text-xs font-light text-green-700 bg-green-50 px-2 py-1 rounded-full">Bókaraðgangur til ${new Date(m.access.expiresAt).toLocaleDateString('is-IS', {day:'numeric',month:'short',year:'numeric'})}</span>`,
+      expired: ()  => `<span class="text-xs font-light text-red-700 bg-red-50 px-2 py-1 rounded-full">Bókaraðgangur útrunninn</span>`,
+      none:    ()  => `<span class="text-xs font-light text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Enginn bókaraðgangur</span>`,
+    };
+    const joinUrl = (code) => `${window.location.origin}/bekkur?kodi=${code}`;
+    let myClasses = [];
+
+    function setupClasses() {
+      document.getElementById('btn-create-class').onclick = async () => {
+        const errEl = document.getElementById('class-err');
+        errEl.textContent = '';
+        const name = document.getElementById('class-name').value.trim();
+        const course = document.getElementById('class-course').value;
+        const semester = document.getElementById('class-semester').value.trim();
+        if (!name) { errEl.textContent = 'Gefðu bekknum heiti.'; return; }
+        const btn = document.getElementById('btn-create-class');
+        btn.disabled = true; btn.textContent = 'Bý til...';
+        try {
+          await api('teacher-classes', { action: 'create', name, course, semester });
+          document.getElementById('class-name').value = '';
+          await loadClasses();
+        } catch (e) { errEl.textContent = e.message; }
+        btn.disabled = false; btn.textContent = 'Búa til bekk';
+      };
+    }
+
+    async function loadClasses() {
+      const container = document.getElementById('classes-container');
+      try {
+        ({ classes: myClasses } = await api('teacher-classes', { action: 'list' }));
+      } catch (e) {
+        container.innerHTML = `<p class="text-red-600 font-light text-center py-8">${esc(e.message)}</p>`;
+        return;
+      }
+      if (!myClasses.length) {
+        container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Þú hefur ekki búið til neinn bekk ennþá.</p>';
+        return;
+      }
+      container.innerHTML = myClasses.map(c => `
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4 ${c.archived ? 'opacity-60' : ''}">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-light text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">${esc(COURSES[c.course]?.label || c.course)}</span>
+                ${c.semester ? `<span class="text-xs font-light text-gray-500">${esc(c.semester)}</span>` : ''}
+                ${c.archived ? '<span class="text-xs font-light text-gray-500 bg-gray-100 px-2 py-1 rounded">Í geymslu</span>' : ''}
+              </div>
+              <h3 class="text-lg font-light text-gray-800">${esc(c.name)}</h3>
+              <p class="text-sm font-light text-gray-500">${c.memberCount} ${c.memberCount === 1 ? 'nemandi' : 'nemendur'}</p>
+            </div>
+            <div class="text-right">
+              <p class="text-xs font-light text-gray-400 mb-1">Bekkjarkóði</p>
+              <p class="text-2xl font-mono tracking-widest text-blue-600">${esc(c.joinCode)}</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-4">
+            ${c.archived ? '' : `
+            <button data-act="copy" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">🔗 Afrita hlekk</button>
+            <button data-act="show" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">📽️ Sýna á skjávarpa</button>`}
+            <button data-act="members" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-600 hover:bg-gray-50">👥 Nemendur</button>
+            <button data-act="archive" data-id="${c.id}" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-light text-gray-500 hover:bg-gray-50 ml-auto">${c.archived ? 'Opna aftur' : 'Setja í geymslu'}</button>
+          </div>
+          <p class="text-xs font-light text-gray-400 mt-2 break-all">${esc(joinUrl(c.joinCode))}</p>
+          <div id="members-${c.id}" class="mt-4" style="display:none"></div>
+        </div>
+      `).join('');
+
+      container.querySelectorAll('button[data-act]').forEach(btn => {
+        const c = myClasses.find(x => x.id === btn.dataset.id);
+        btn.onclick = () => classAction(btn.dataset.act, c, btn);
+      });
+    }
+
+    async function classAction(act, c, btn) {
+      if (act === 'copy') {
+        try { await navigator.clipboard.writeText(joinUrl(c.joinCode)); btn.textContent = '✓ Afritað'; }
+        catch { prompt('Afritaðu hlekkinn:', joinUrl(c.joinCode)); }
+        setTimeout(() => { btn.textContent = '🔗 Afrita hlekk'; }, 2000);
+      }
+      if (act === 'show') {
+        document.getElementById('join-overlay-name').textContent = c.name;
+        document.getElementById('join-overlay-url').textContent = window.location.host + '/bekkur';
+        document.getElementById('join-overlay-code').textContent = c.joinCode;
+        const qr = document.getElementById('join-overlay-qr');
+        qr.innerHTML = '';
+        new QRCode(qr, { text: joinUrl(c.joinCode), width: 320, height: 320 });
+        document.getElementById('join-overlay').style.display = 'flex';
+      }
+      if (act === 'archive') {
+        const msg = c.archived
+          ? `Opna „${c.name}“ aftur? Nemendur geta þá gengið í hann.`
+          : `Setja „${c.name}“ í geymslu? Nýir nemendur geta þá ekki gengið í hann. Núverandi nemendur haldast.`;
+        if (!confirm(msg)) return;
+        try { await api('teacher-classes', { action: 'archive', classId: c.id, archived: !c.archived }); }
+        catch (e) { alert(e.message); }
+        loadClasses();
+      }
+      if (act === 'members') {
+        const box = document.getElementById('members-' + c.id);
+        if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        box.innerHTML = '<p class="text-sm text-gray-400 font-light">Sæki nemendur...</p>';
+        await renderMembers(c, box);
+      }
+    }
+
+    async function renderMembers(c, box) {
+      let members;
+      try { ({ members } = await api('teacher-classes', { action: 'members', classId: c.id })); }
+      catch (e) { box.innerHTML = `<p class="text-sm text-red-600 font-light">${esc(e.message)}</p>`; return; }
+      if (!members.length) {
+        box.innerHTML = '<p class="text-sm text-gray-400 font-light">Enginn nemandi hefur gengið í bekkinn ennþá.</p>';
+        return;
+      }
+      box.innerHTML = `<table class="w-full text-sm border-t border-gray-100"><tbody>${members.map(m => `
+        <tr class="border-b border-gray-50">
+          <td class="py-2 pr-4 font-light text-gray-700">${esc(m.email)}</td>
+          <td class="py-2 pr-4">${ACCESS_BADGE[m.access.status](m)}</td>
+          <td class="py-2 pr-4 font-light text-gray-400 text-xs">${m.joinedAt ? 'Gekk í bekk ' + new Date(m.joinedAt).toLocaleDateString('is-IS') : ''}</td>
+          <td class="py-2 text-right"><button data-uid="${esc(m.uid)}" data-email="${esc(m.email)}" class="member-remove text-xs font-light text-red-600 hover:text-red-800">Fjarlægja</button></td>
+        </tr>`).join('')}</tbody></table>`;
+      box.querySelectorAll('.member-remove').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm(`Fjarlægja ${btn.dataset.email} úr bekknum? Bókaraðgangur nemandans breytist ekki.`)) return;
+          try { await api('teacher-classes', { action: 'removeMember', classId: c.id, uid: btn.dataset.uid }); }
+          catch (e) { alert(e.message); return; }
+          renderMembers(c, box);
+        };
+      });
+    }
 
     // ── Kennarar ───────────────────────────────────────────────
     const ROLE_LABEL = { teacher: 'Kennari', admin: 'Kerfisstjóri' };

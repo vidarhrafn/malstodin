@@ -80,14 +80,24 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 ónotaðan kóða og lendir á námskeiðssíðunni. Reyna sama kóða aftur með öðrum reikningi →
 „Þessi kóði hefur þegar verið notaður.“
 
-### ⬜ Áfangi 3 – Bekkir og skráning
-- `netlify/functions/teacher-classes.js` – búa til / lista / geymsla / fjarlægja nemanda
-- `netlify/functions/join-class.js` – nemandi gengur í bekk
-- `bekkur/index.html` – síða fyrir hlekkinn úr Canvas
+### ✅ Áfangi 3 – Bekkir og skráning
+- `netlify/functions/teacher-classes.js` – list / create / archive / members / removeMember (aðeins eigin bekkir)
+- `netlify/functions/join-class.js` – peek / join; óháð bókaraðgangi
+- `bekkur/index.html` – síða fyrir hlekkinn úr Canvas (`/bekkur?kodi=XXXXXX`), sama útlit og login;
+  innskráning → staðfesta bekk → ganga í hann → „Fara á námskeiðið“ eða „Virkja kóða úr bók“
+- `stjornbord.html` – flipi 🏫 Bekkir: búa til bekk, afrita hlekk, sýna QR á skjávarpa,
+  nemendalisti með stöðu bókaraðgangs, fjarlægja nemanda, setja í geymslu
+- Prófað með gervi-Firebase (eigin bekkir eingöngu, há-/lágstafir og bandstrik í kóða,
+  endurtekin skráning, bekkur í geymslu, staða bókaraðgangs: virkur/útrunninn/enginn).
+- Ekki prófað í vafra – gera eftir birtingu.
+
+**Prófun eftir birtingu:** kennari býr til bekk → opnar hlekkinn í huliðsglugga →
+skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir 👥 Nemendur.
 
 ### ⬜ Áfangi 4 – Stjórnborð: framvinda eftir bekkjum
-- `netlify/functions/teacher-data.js` – aðeins eigin nemendur + framvinda + staða bókaraðgangs
-- `stjornbord.html` – flipi „Bekkir“, framvindutafla eftir bekk, ↻ uppfæra + sjálfvirk 30 sek.
+- `netlify/functions/teacher-data.js` – aðeins eigin nemendur + framvinda
+- `stjornbord.html` – framvindutafla eftir bekk (í stað `user_access.class`), ↻ uppfæra + sjálfvirk 30 sek.
+- `redeem-code.js` – hætta að afrita `class`/`semester` í `user_access`
 
 ### ⬜ Áfangi 5 – Bókarkóðar í gegnum fall
 - `netlify/functions/teacher-codes.js` – búa til (með `created_by`) / lista (með persónuverndarsíu)
