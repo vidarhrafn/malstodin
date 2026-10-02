@@ -348,8 +348,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-xs font-light text-gray-500 mb-1.5">Hópur <span class="text-gray-400">(t.d. h1, h2)</span></label>
-              <input id="new-class" type="text" placeholder="h1"
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Lota <span class="text-gray-400">(valfrjálst)</span></label>
+              <input id="new-class" type="text" placeholder="t.d. bækur haust 2026"
                 class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -391,7 +391,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap gap-4 items-center">
           <div class="flex items-center gap-2">
             <span class="text-sm font-light text-gray-500">Áfangi:</span>
-            <select id="codes-filter-course" onchange="renderCodesTable()"
+            <select id="codes-filter-course" onchange="loadCodes()"
               class="text-sm font-light border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="isat1ic">ÍSAT1ÍC</option>
               <option value="isat1ia">ÍSAT1ÍA</option>
@@ -434,8 +434,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-xs font-light text-gray-500 mb-1.5">Hópur <span class="text-gray-400">(síar lausar kóðar)</span></label>
-              <input id="cards-class" type="text" placeholder="h1 (skildu eftir tómt = allir)"
+              <label class="block text-xs font-light text-gray-500 mb-1.5">Lota <span class="text-gray-400">(síar lausa kóða)</span></label>
+              <input id="cards-class" type="text" placeholder="skildu eftir tómt = allar lotur"
                 class="w-full text-sm font-light border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -524,7 +524,6 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut, signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, collection, onSnapshot, doc, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -549,7 +548,6 @@
       if (!res.ok) throw new Error(json.error || 'Villa kom upp');
       return json;
     }
-    const COURSE_PREFIX = { isat1ic: 'uogs', isat1ia: 'fih' };
     const COURSE_LABEL  = { isat1ic: 'ÍSAT1ÍC – Út og suður', isat1ia: 'ÍSAT1ÍA – Fólkið í hverfinu' };
     const LOGIN_URL     = { isat1ic: 'https://malstodin.org/isat1ic/login.html', isat1ia: 'https://malstodin.org/isat1ia/login.html' };
 
@@ -617,7 +615,6 @@
 
     const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db   = getFirestore(app);
 
     let allCodes = [];
     let progressData = { classes: [], students: [] }, progressLoading = false;
@@ -625,13 +622,6 @@
     let filterClass = 'all';
     let lastCreatedCodes = [], previewStudents = [];
 
-    function randomSuffix() {
-      const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-      let s = '';
-      for (let i = 0; i < 3; i++) s += chars[Math.floor(Math.random() * chars.length)];
-      return s;
-    }
-    function generateCodeId(course) { return COURSE_PREFIX[course] + '-' + randomSuffix(); }
 
     window.setMainTab = (tab) => {
       activeMainTab = tab;
@@ -641,7 +631,7 @@
         section.style.display = t === tab ? 'block' : 'none';
         document.getElementById('main-tab-' + t).classList.toggle('active', t === tab);
       });
-      if (tab === 'codes') renderCodesTable();
+      if (tab === 'codes') loadCodes();
       if (tab === 'teachers') loadTeachers();
       if (tab === 'classes') loadClasses();
     };
@@ -697,7 +687,6 @@
       renderTabs();
       loadProgress();
       startProgressRefresh();
-      startListening();
       setupCreateCodes();
       setupCards();
       setupClasses();
@@ -916,56 +905,48 @@ function setDefaultExpiry() {
   document.getElementById('new-expires').value = '2027-01-01';
 }
 
-    // Kóðaflipinn les enn beint úr Firestore – færist í Netlify-fall í áfanga 5
-    function startListening() {
-      onSnapshot(collection(db, 'user_access'), (snap) => {
-        window._rawUserData = [];
-        snap.forEach(d => { window._rawUserData.push({ uid: d.id, data: d.data() }); });
-        if (activeMainTab === 'codes') renderCodesTable();
-      });
-      onSnapshot(collection(db, 'access_codes'), (snap) => {
-        allCodes = [];
-        snap.forEach(d => { allCodes.push({ id: d.id, ...d.data() }); });
-        if (activeMainTab === 'codes') renderCodesTable();
-      });
-    }
-
     function setupCreateCodes() {
       document.getElementById('btn-create-codes').onclick = createCodes;
       document.getElementById('btn-download-new').onclick = downloadNewCodes;
       document.getElementById('btn-download-csv').onclick = downloadFilteredCsv;
     }
 
+    // ── Bókarkóðar (sótt og búnir til í gegnum Netlify-fall) ──────
+    let codesCourse = null;
+
+    window.loadCodes = async function loadCodes(course = document.getElementById('codes-filter-course').value) {
+      const container = document.getElementById('codes-container');
+      if (course !== codesCourse) container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Sæki kóða...</p>';
+      try {
+        ({ codes: allCodes } = await api('teacher-codes', { action: 'list', course }));
+        codesCourse = course;
+        renderCodesTable();
+      } catch (e) {
+        container.innerHTML = `<p class="text-red-600 font-light text-center py-8">${esc(e.message)}</p>`;
+      }
+    };
+
     async function createCodes() {
       const course = document.getElementById('new-course').value;
-      const cls = document.getElementById('new-class').value.trim();
+      const batch = document.getElementById('new-class').value.trim();
       const count = parseInt(document.getElementById('new-count').value);
       const semester = document.getElementById('new-semester').value.trim();
-      const expVal = document.getElementById('new-expires').value;
+      const expiresAt = document.getElementById('new-expires').value;
       document.getElementById('create-err').textContent = '';
       document.getElementById('create-ok').textContent = '';
-      if (!cls) { document.getElementById('create-err').textContent = 'Sláðu inn hóp.'; return; }
       if (!count || count < 1 || count > 50) { document.getElementById('create-err').textContent = 'Fjöldi verður að vera 1–50.'; return; }
-      if (!expVal) { document.getElementById('create-err').textContent = 'Veldu gildistíma.'; return; }
-      const expiresAt = Timestamp.fromDate(new Date(expVal + 'T23:59:59'));
+      if (!expiresAt) { document.getElementById('create-err').textContent = 'Veldu gildistíma.'; return; }
       const btn = document.getElementById('btn-create-codes');
       btn.textContent = 'Bý til...'; btn.disabled = true;
       try {
-        const existingIds = new Set(allCodes.map(c => c.id));
-        lastCreatedCodes = [];
-        for (let i = 0; i < count; i++) {
-          let codeId, attempts = 0;
-          do { codeId = generateCodeId(course); attempts++; if (attempts > 100) throw new Error('Gat ekki búið til einstakan kóða.'); } while (existingIds.has(codeId));
-          existingIds.add(codeId);
-          await setDoc(doc(db, 'access_codes', codeId), { course, class: cls, semester: semester || '', expires_at: expiresAt, activated: false, activated_at: null, activated_by: null });
-          lastCreatedCodes.push(codeId);
-        }
-        document.getElementById('create-ok').textContent = `✓ ${count} kóðar búnir til!`;
+        ({ codes: lastCreatedCodes } = await api('teacher-codes', { action: 'create', course, batch, semester, count, expiresAt }));
+        document.getElementById('create-ok').textContent = `✓ ${lastCreatedCodes.length} kóðar búnir til!`;
         document.getElementById('btn-download-new').style.display = 'inline-block';
         const preview = document.getElementById('new-codes-preview');
         const list = document.getElementById('new-codes-list');
         preview.style.display = 'block';
-        list.innerHTML = lastCreatedCodes.map(c => `<div class="font-mono text-xs bg-gray-50 rounded px-3 py-2 text-blue-700 border border-gray-100">${c}</div>`).join('');
+        list.innerHTML = lastCreatedCodes.map(c => `<div class="font-mono text-xs bg-gray-50 rounded px-3 py-2 text-blue-700 border border-gray-100">${esc(c)}</div>`).join('');
+        if (document.getElementById('codes-filter-course').value === course) loadCodes(course);
       } catch (e) { document.getElementById('create-err').textContent = 'Villa: ' + e.message; }
       btn.textContent = 'Búa til kóða'; btn.disabled = false;
     }
@@ -973,82 +954,69 @@ function setDefaultExpiry() {
     function downloadNewCodes() {
       if (!lastCreatedCodes.length) return;
       const course = document.getElementById('new-course').value;
-      const cls = document.getElementById('new-class').value.trim();
+      const batch = document.getElementById('new-class').value.trim();
       const semester = document.getElementById('new-semester').value.trim();
-      const rows = [['Kóði','Námskeið','Hópur','Önn']];
-      lastCreatedCodes.forEach(c => rows.push([c, course, cls, semester]));
-      downloadCsv(rows, `kodar-${course}-${cls}-${Date.now()}.csv`);
+      const rows = [['Kóði','Námskeið','Lota','Önn']];
+      lastCreatedCodes.forEach(c => rows.push([c, course, batch, semester]));
+      downloadCsv(rows, `kodar-${course}-${Date.now()}.csv`);
+    }
+
+    // Persónuvernd: netfang innleysanda sést aðeins hjá þeim sem bjó kóðann til eða kennara nemandans
+    const redeemerText = (c) => !c.activated ? '–' : (c.redeemer ?? '(nemandi annars kennara)');
+    const fmtDate = (iso, opts) => iso ? new Date(iso).toLocaleDateString('is-IS', opts) : '';
+
+    function filteredCodes() {
+      const statusFilter = document.getElementById('codes-filter-status').value;
+      let codes = allCodes;
+      if (statusFilter === 'used') codes = codes.filter(c => c.activated);
+      if (statusFilter === 'unused') codes = codes.filter(c => !c.activated);
+      return codes;
     }
 
     function downloadFilteredCsv() {
-      const courseFilter = document.getElementById('codes-filter-course').value;
-      const statusFilter = document.getElementById('codes-filter-status').value;
-      let codes = allCodes.filter(c => c.course === courseFilter);
-      if (statusFilter === 'used') codes = codes.filter(c => c.activated);
-      if (statusFilter === 'unused') codes = codes.filter(c => !c.activated);
-      const userByCode = buildUserByCode();
-      const rows = [['Kóði','Námskeið','Hópur','Önn','Staða','Notandi','Virkjað']];
-      codes.sort((a,b) => a.id.localeCompare(b.id)).forEach(code => {
-        const user = userByCode[code.id];
-        let dateStr = '';
-        if (user && user.activated_at && user.activated_at.toDate) dateStr = user.activated_at.toDate().toLocaleDateString('is-IS');
-        rows.push([code.id, code.course||'', code.class||'', code.semester||'', code.activated ? 'Notaður' : 'Ónotaður', user ? user.email : '', dateStr]);
+      const course = document.getElementById('codes-filter-course').value;
+      const rows = [['Kóði','Námskeið','Lota','Önn','Staða','Notandi','Virkjað','Búið til af']];
+      filteredCodes().forEach(c => {
+        rows.push([c.id, course, c.batch, c.semester, c.activated ? 'Notaður' : 'Ónotaður',
+          c.activated ? redeemerText(c) : '', fmtDate(c.activatedAt), c.createdBy]);
       });
-      downloadCsv(rows, `kodar-${courseFilter}-${Date.now()}.csv`);
+      downloadCsv(rows, `kodar-${course}-${Date.now()}.csv`);
     }
 
     function downloadCsv(rows, filename) {
-      const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = filename;
       a.click();
     }
 
-    function buildUserByCode() {
-      const userByCode = {};
-      if (window._rawUserData) {
-        window._rawUserData.forEach(u => {
-          Object.keys(COURSES).forEach(c => {
-            if (u.data[c] && u.data[c].code_used) userByCode[u.data[c].code_used] = { email: u.data.email || u.uid, activated_at: u.data[c].activated_at };
-          });
-        });
-      }
-      return userByCode;
-    }
-
     window.renderCodesTable = () => {
-      const courseFilter = document.getElementById('codes-filter-course').value;
-      const statusFilter = document.getElementById('codes-filter-status').value;
-      let codes = allCodes.filter(c => c.course === courseFilter);
-      if (statusFilter === 'used') codes = codes.filter(c => c.activated);
-      if (statusFilter === 'unused') codes = codes.filter(c => !c.activated);
-      const userByCode = buildUserByCode();
+      const codes = filteredCodes();
       const countEl = document.getElementById('codes-count');
       if (countEl) countEl.textContent = codes.length + ' kóðar';
       const container = document.getElementById('codes-container');
       if (codes.length === 0) { container.innerHTML = '<p class="text-gray-400 font-light text-center py-8">Engir kóðar fundust.</p>'; return; }
       let html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-100">';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Kóði</th>';
-      html += '<th class="text-left py-3 pr-4 font-light text-gray-500">Hópur</th>';
+      html += '<th class="text-left py-3 pr-4 font-light text-gray-500">Lota</th>';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Staða</th>';
       html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Notandi</th>';
-      html += '<th class="text-left py-3 font-light text-gray-500">Virkjað</th>';
+      html += '<th class="text-left py-3 pr-6 font-light text-gray-500">Virkjað</th>';
+      html += '<th class="text-left py-3 font-light text-gray-500">Búið til af</th>';
       html += '</tr></thead><tbody>';
-      codes.sort((a,b) => a.id.localeCompare(b.id)).forEach(code => {
-        const user = userByCode[code.id];
-        const status = code.activated
+      codes.forEach(c => {
+        const status = c.activated
           ? '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-light">Notaður</span>'
           : '<span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-light">Ónotaður</span>';
-        let dateStr = '–';
-        if (user && user.activated_at && user.activated_at.toDate) dateStr = user.activated_at.toDate().toLocaleDateString('is-IS', {year:'numeric',month:'short',day:'numeric'});
         html += `<tr class="border-b border-gray-50 hover:bg-gray-50">
-          <td class="py-3 pr-6 font-mono text-gray-800 text-sm">${code.id}</td>
-          <td class="py-3 pr-4 font-light text-gray-500 text-xs">${code.class || '–'}</td>
+          <td class="py-3 pr-6 font-mono text-gray-800 text-sm">${esc(c.id)}</td>
+          <td class="py-3 pr-4 font-light text-gray-500 text-xs">${esc(c.batch) || '–'}</td>
           <td class="py-3 pr-6">${status}</td>
-          <td class="py-3 pr-6 font-light text-gray-600">${user ? user.email : '–'}</td>
-          <td class="py-3 font-light text-gray-400 text-sm">${dateStr}</td>
+          <td class="py-3 pr-6 font-light ${c.activated && c.redeemer == null ? 'text-gray-400 text-xs' : 'text-gray-600'}">${esc(redeemerText(c))}</td>
+          <td class="py-3 pr-6 font-light text-gray-400 text-sm">${fmtDate(c.activatedAt, {year:'numeric',month:'short',day:'numeric'}) || '–'}</td>
+          <td class="py-3 font-light text-gray-400 text-xs">${esc(c.createdBy) || '–'}</td>
         </tr>`;
       });
       html += '</tbody></table>';
@@ -1067,7 +1035,11 @@ function setDefaultExpiry() {
       document.getElementById('cards-err').textContent = '';
       document.getElementById('cards-info').textContent = '';
       if (names.length === 0) { document.getElementById('cards-err').textContent = 'Settu inn nafnalista.'; return; }
-      let available = allCodes.filter(c => c.course === course && !c.activated && (cls === '' || c.class === cls));
+      let available;
+      try {
+        ({ codes: available } = await api('teacher-codes', { action: 'list', course }));
+      } catch (e) { document.getElementById('cards-err').textContent = e.message; return; }
+      available = available.filter(c => !c.activated && (cls === '' || c.batch === cls));
       if (available.length < names.length) { document.getElementById('cards-err').textContent = `Ekki nóg af lausum kóðum! Þú þarft ${names.length} en ${available.length} eru til.`; return; }
       previewStudents = names.map((name, i) => ({ name, code: available[i].id }));
       document.getElementById('cards-info').textContent = `✓ ${names.length} nemendur paraðir við kóða`;
@@ -1075,7 +1047,7 @@ function setDefaultExpiry() {
       const listDiv = document.getElementById('cards-preview-list');
       document.getElementById('cards-preview-count').textContent = names.length + ' nemendur';
       let html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-100"><th class="text-left py-2 pr-6 font-light text-gray-500">Nafn</th><th class="text-left py-2 font-light text-gray-500">Kóði</th></tr></thead><tbody>';
-      previewStudents.forEach(s => { html += `<tr class="border-b border-gray-50"><td class="py-2 pr-6 font-light text-gray-700">${s.name}</td><td class="py-2 font-mono text-blue-700 text-xs">${s.code}</td></tr>`; });
+      previewStudents.forEach(s => { html += `<tr class="border-b border-gray-50"><td class="py-2 pr-6 font-light text-gray-700">${esc(s.name)}</td><td class="py-2 font-mono text-blue-700 text-xs">${s.code}</td></tr>`; });
       html += '</tbody></table>';
       listDiv.innerHTML = html;
       tableDiv.style.display = 'block';
@@ -1097,7 +1069,7 @@ function setDefaultExpiry() {
           const qrWrap = document.createElement('div'); qrWrap.className = 'qr-wrap';
           const divider = document.createElement('div'); divider.className = 'card-divider';
           const info = document.createElement('div'); info.className = 'card-info';
-          info.innerHTML = `<div class="card-course-tag">${COURSE_LABEL[course]} · ${school}</div><div class="card-student-name">${student.name}</div><div class="card-code-label">Aðgangskóði</div><div class="card-code">${student.code}</div><div class="card-url">malstodin.org</div>`;
+          info.innerHTML = `<div class="card-course-tag">${COURSE_LABEL[course]} · ${esc(school)}</div><div class="card-student-name">${esc(student.name)}</div><div class="card-code-label">Aðgangskóði</div><div class="card-code">${student.code}</div><div class="card-url">malstodin.org</div>`;
           card.appendChild(qrWrap); card.appendChild(divider); card.appendChild(info);
           page.appendChild(card);
           new QRCode(qrWrap, { text: `${LOGIN_URL[course]}?code=${student.code}`, width: 166, height: 166, colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });

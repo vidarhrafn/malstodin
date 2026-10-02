@@ -106,9 +106,25 @@ skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir �
 - Prófað með gervi-Firebase (eigin bekkir eingöngu, nemandi í tveimur bekkjum, bekkur
   í geymslu, framvinda aðeins úr réttum áfanga).
 
-### ⬜ Áfangi 5 – Bókarkóðar í gegnum fall
-- `netlify/functions/teacher-codes.js` – búa til (með `created_by`) / lista (með persónuverndarsíu)
-- `stjornbord.html` – kóðaflipi og kortaprentun nota fallið
+### ✅ Áfangi 5 – Bókarkóðar í gegnum fall
+- `netlify/functions/teacher-codes.js` – list (með persónuverndarsíu) / create (með `created_by`,
+  `created_by_email`, `created_at`); sama kóðasnið og áður (`fih-xxx`, `uogs-xxx`).
+- „Hópur“ á kóðum heitir nú **Lota** (valfrjálst, svið `batch`; eldri kóðar lesnir úr `class`).
+- `stjornbord.html` – kóðaflipi og kortaprentun nota fallið; dálkur „Búið til af“;
+  netfang innleysanda sýnt sem „(nemandi annars kennara)“ ef kennarinn má ekki sjá það.
+- **Stjórnborðið les nú ekkert beint úr Firestore** – allt fer í gegnum Netlify-föll.
+- Prófað með gervi-Firebase (persónuverndarsía fyrir eldri og nýja kóða, staðfesting á fjölda
+  og gildistíma, gerð kóða).
+
+### ⬜ Áfangi 5b – Meðkennarar
+- Bekkur getur haft fleiri en einn kennara (`teacher_uids` fylki; `teacher_uid` = eigandi).
+- Eigandi bætir við / fjarlægir meðkennara (eftir netfangi, verður að vera í `teachers`).
+- Kerfisstjóri getur fært bekk til annars kennara (t.d. ef kennari hættir).
+- `teacher-classes`, `teacher-data`, `teacher-codes` nota „er kennari í bekknum“ í stað „á bekkinn“.
+
+### ⬜ Áfangi 5c – Leiðbeiningar í stjórnborði
+- Endurskrifa „❓ Leiðbeiningar“ fyrir nýja ferlið: bekkir, hlekkur í Canvas / skjávarpi,
+  framvinda, bókarkóðar og aðgangskort, meðkennarar, kennarar (kerfisstjórar).
 
 ### ⬜ Áfangi 6 – Admin-gátt
 - `admin/index.html`, `admin-data.js` – bæta við ÍSAT1ÍA, laga talningu notaðra kóða, sýna bekki
