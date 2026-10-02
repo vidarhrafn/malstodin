@@ -128,9 +128,9 @@ skráir sig inn sem nemandi → gengur í bekkinn → nemandinn birtist undir �
 - Prófað með gervi-Firebase (réttindi eiganda/meðkennara/kerfisstjóra, flutningur, bekkur úr
   áfanga 3 án `teacher_uids`).
 
-### ⬜ Áfangi 5c – Leiðbeiningar í stjórnborði
-- Endurskrifa „❓ Leiðbeiningar“ fyrir nýja ferlið: bekkir, hlekkur í Canvas / skjávarpi,
-  framvinda, bókarkóðar og aðgangskort, meðkennarar, kennarar (kerfisstjórar).
+### ✅ Áfangi 5c – Leiðbeiningar í stjórnborði
+- „❓ Leiðbeiningar“ endurskrifaðar: bókarkóði vs. bekkjarkóði, 6 skref (innskráning, búa til
+  bekk, Canvas/skjávarpi, framvinda, meðkennarar, bókarkóðar og kort) og algengar spurningar.
 
 ### ⬜ Áfangi 6 – Admin-gátt
 - `admin/index.html`, `admin-data.js` – bæta við ÍSAT1ÍA, laga talningu notaðra kóða, sýna bekki
