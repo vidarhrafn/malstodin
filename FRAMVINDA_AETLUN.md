@@ -85,7 +85,13 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 > með ramma; endurtók allt rétt → heilgrænn. Nýju fliparnir sjást. Google-innskráning á prufusíðu krafðist
 > þess að bæta léninu við í Firebase → Authentication → Settings → Authorized domains.
 
-### ⬜ Áfangi 4 – Hlustun
+### 🟨 Áfangi 4 – Hlustun
+- **Mín ákvörðun (Viðar má breyta):** spurning sem OpenAI metur 0–5 (stuttar spurningar, þýðingar
+  með STIG) telst rétt ef **STIG ≥ 4** (sama mörk og grænt FeedbackBadge). Þýðing með JSON-svari:
+  `correct: true`. Ef OpenAI-kall mistekst er það ekki talið sem tilraun.
+- Sameiginlegt í öllum 30 skrám: `window.skraFyrstu(lykill, rétt?)` skráir aðeins fyrstu tilraun;
+  `writeProgress('completed')` bætir `correct`/`total` við (besta niðurstaða gildir).
+- Staða: ✅ ÍA (12 skrár, ein gerð), ✅ ÍC hlustun 1–3. ⬜ ÍC hlustun 4–12 og aukahlustanir (hver sín gerð).
 ### ⬜ Áfangi 5 – Lestextar
 ### ⬜ Áfangi 6 – Sjálfspróf
 ### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
