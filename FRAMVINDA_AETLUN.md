@@ -102,15 +102,24 @@ Endurtaka með allt rétt → heilgrænn.
 
 > **Prófað á prufusíðu PR #66 (6.10.2026) af Viðari: virkar.**
 
-### 🟨 Áfangi 5 – Lestextar
+### ✅ Áfangi 5 – Lestextar
 - Allar 27 skrár (ÍA 13, ÍC 14) skrá fyrstu tilraun í krossum/Rétt-Rangt og stuttum spurningum
   með STIG (≥ 4 = rétt). **Samtöl og umræðuspurningar eru ekki taldar** (ekkert rétt/rangt).
   Í `likamsraekt` og `sumarvinna_alex` gefur OpenAI aðeins texta (engin stig) → aðeins krossar taldir.
-- Prófun í vafra í gangi.
-### 🟨 Áfangi 6 – Sjálfspróf
+- Prófað: allar 27 skrá `completed` með tölum; krossar/Rétt-Rangt passa við „Þú fékkst X af Y“.
+  (Í ÍC áhugamál/jól/páskar núllstillast krossar þegar skipt er um flipa – þá gildir fyrsta tilraun.)
+### ✅ Áfangi 6 – Sjálfspróf
 - Öll 8 (ÍA 4, ÍC 4) eins byggð: lokaskjárinn skráir `correct` = heildarstig, `total` = hámarksstig
-  (t.d. 110/145). Besta niðurstaða gildir. Prófun í vafra eftir.
-### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
+  (ÍC 145, ÍA 110). Tooltip t.d. „Lokið – 110/145 rétt“. Besta niðurstaða gildir.
+- Prófað: öll 8 skrá `completed` með stigum.
+### ✅ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
+- Spjall (ÍA 12, ÍC 5) og leikir ÍA (10) og ÍC orðagáta (4) skráðu þegar „lokið“ – óbreytt.
+- **Lagað: 10 leikir í ÍC skráðu aldrei „lokið“:** flasskort ×4 (síðasta spjald), teiknileikur ×4
+  (öll orð búin – eins og í ÍA), mahjong (sigur), orðaleikur (einni umferð lokið, unnin eða töpuð).
+- Prófað: allir 10 hlaðast villulaust; flasskort skrá „lokið“ í lok bunkans.
+
+**Prófun áfanga 5–7 (Viðar):** prufunemandi → einn lestexti (L1), Sjálfspróf 1 og Flasskort 1–3
+→ stjórnborð ↻ → L1 og P1 ljós-/heilgrænir með tölum, F1 heilgrænn.
 
 **Prófun eftir hverja tegund:** prufunemandi (`vidarhrafn+nemandiN@gmail.com`, huliðsgluggi)
 í bekknum „prufa“ (ÍSAT1ÍC, bekkjarkóði V2NNXN).
