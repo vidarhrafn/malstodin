@@ -103,7 +103,13 @@ Endurtaka með allt rétt → heilgrænn.
 > **Prófað á prufusíðu PR #66 (6.10.2026) af Viðari: virkar.**
 
 ### 🟨 Áfangi 5 – Lestextar
-### ⬜ Áfangi 6 – Sjálfspróf
+- Allar 27 skrár (ÍA 13, ÍC 14) skrá fyrstu tilraun í krossum/Rétt-Rangt og stuttum spurningum
+  með STIG (≥ 4 = rétt). **Samtöl og umræðuspurningar eru ekki taldar** (ekkert rétt/rangt).
+  Í `likamsraekt` og `sumarvinna_alex` gefur OpenAI aðeins texta (engin stig) → aðeins krossar taldir.
+- Prófun í vafra í gangi.
+### 🟨 Áfangi 6 – Sjálfspróf
+- Öll 8 (ÍA 4, ÍC 4) eins byggð: lokaskjárinn skráir `correct` = heildarstig, `total` = hámarksstig
+  (t.d. 110/145). Besta niðurstaða gildir. Prófun í vafra eftir.
 ### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
 
 **Prófun eftir hverja tegund:** prufunemandi (`vidarhrafn+nemandiN@gmail.com`, huliðsgluggi)
