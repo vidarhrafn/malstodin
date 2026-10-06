@@ -81,6 +81,10 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 4. Nemandi endurtekur R1 með allt rétt → R1 heilgrænn „Lokið – 5/5 rétt“. Endurtaka aftur með villum → helst heilgrænn.
 5. Opna R1 aftur (án þess að klára) → helst grænn (féll áður í gult).
 
+> **Prófað á prufusíðu PR #65 (6.10.2026):** prufunemandi kláraði Hljóðritun 2 með 1/5 → ljósgrænn
+> með ramma; endurtók allt rétt → heilgrænn. Nýju fliparnir sjást. Google-innskráning á prufusíðu krafðist
+> þess að bæta léninu við í Firebase → Authentication → Settings → Authorized domains.
+
 ### ⬜ Áfangi 4 – Hlustun
 ### ⬜ Áfangi 5 – Lestextar
 ### ⬜ Áfangi 6 – Sjálfspróf
