@@ -100,7 +100,7 @@
   <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -123,6 +123,12 @@
     });
   });
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
       const user = await authReady;
@@ -131,6 +137,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently
@@ -273,6 +291,7 @@ Björgunarsveitirnar nota tæki eins og jeppa, vélsleða og stundum þyrlur. Bj
 
       const check = () => {
         setShowFeedback(true);
+        selected.forEach((sel, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, sel === shuffledOptions[i].correctIndex));
         const score = selected.reduce((sum, sel, i) =>
           sum + (sel === shuffledOptions[i].correctIndex ? 1 : 0), 0);
         onComplete(score === MULTIPLE_CHOICE.length);
@@ -375,6 +394,7 @@ Vertu sveigjanleg/ur með stafsetningu og málfræði. Ef efnislega rétt, gefð
           const newFeedback = [...feedback];
           newFeedback[i] = { score, msg };
           setFeedback(newFeedback);
+          if (stigMatch) window.skraFyrstu && window.skraFyrstu('short' + i, score >= 4);
         } catch (e) {
           console.error(e);
         }

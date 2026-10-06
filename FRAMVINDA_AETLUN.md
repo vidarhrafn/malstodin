@@ -99,7 +99,10 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 **Prófun áfanga 4 (Viðar):** prufunemandi → ÍC → einhver hlustun, t.d. Hlustun 1. Klára alla flipa,
 viljandi nokkrar villur → stjórnborð ↻ → H1 ljósgrænn, tooltip t.d. „Lokið – 9/14 rétt“.
 Endurtaka með allt rétt → heilgrænn.
-### ⬜ Áfangi 5 – Lestextar
+
+> **Prófað á prufusíðu PR #66 (6.10.2026) af Viðari: virkar.**
+
+### 🟨 Áfangi 5 – Lestextar
 ### ⬜ Áfangi 6 – Sjálfspróf
 ### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
 
