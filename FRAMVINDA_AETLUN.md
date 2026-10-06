@@ -91,7 +91,7 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
   `correct: true`. Ef OpenAI-kall mistekst er það ekki talið sem tilraun.
 - Sameiginlegt í öllum 30 skrám: `window.skraFyrstu(lykill, rétt?)` skráir aðeins fyrstu tilraun;
   `writeProgress('completed')` bætir `correct`/`total` við (besta niðurstaða gildir).
-- Staða: ✅ ÍA (12 skrár, ein gerð), ✅ ÍC hlustun 1–3. ⬜ ÍC hlustun 4–12 og aukahlustanir (hver sín gerð).
+- Staða: ✅ ÍA (12 skrár, ein gerð), ✅ ÍC hlustun 1–12. ⬜ ÍC aukahlustanir (6, hver sín gerð).
 ### ⬜ Áfangi 5 – Lestextar
 ### ⬜ Áfangi 6 – Sjálfspróf
 ### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
