@@ -85,13 +85,20 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 > með ramma; endurtók allt rétt → heilgrænn. Nýju fliparnir sjást. Google-innskráning á prufusíðu krafðist
 > þess að bæta léninu við í Firebase → Authentication → Settings → Authorized domains.
 
-### 🟨 Áfangi 4 – Hlustun
+### ✅ Áfangi 4 – Hlustun
 - **Mín ákvörðun (Viðar má breyta):** spurning sem OpenAI metur 0–5 (stuttar spurningar, þýðingar
   með STIG) telst rétt ef **STIG ≥ 4** (sama mörk og grænt FeedbackBadge). Þýðing með JSON-svari:
   `correct: true`. Ef OpenAI-kall mistekst er það ekki talið sem tilraun.
 - Sameiginlegt í öllum 30 skrám: `window.skraFyrstu(lykill, rétt?)` skráir aðeins fyrstu tilraun;
   `writeProgress('completed')` bætir `correct`/`total` við (besta niðurstaða gildir).
-- Staða: ✅ ÍA (12 skrár), ✅ ÍC hlustun 1–12, ✅ ÍC aukahlustanir (6). Prófun í vafra (gervi-Firebase) á öllum 30 í gangi.
+- Allar 30 skrár: ÍA (12), ÍC hlustun 1–12, ÍC aukahlustanir (6). „Spurning“ = hver liður í
+  Rétt/Rangt, krossum, pörun, stuttum spurningum og þýðingum (t.d. 14–21 á æfingu).
+- Prófað í Chromium með gervi-Firebase og gervi-OpenAI: allar 30 skrá `completed` með `correct`/`total`;
+  í 23 skrám sem sýna „Þú fékkst X af Y rétt“ passa skráðar tölur fyrir Rétt/Rangt og krossa nákvæmlega.
+
+**Prófun áfanga 4 (Viðar):** prufunemandi → ÍC → einhver hlustun, t.d. Hlustun 1. Klára alla flipa,
+viljandi nokkrar villur → stjórnborð ↻ → H1 ljósgrænn, tooltip t.d. „Lokið – 9/14 rétt“.
+Endurtaka með allt rétt → heilgrænn.
 ### ⬜ Áfangi 5 – Lestextar
 ### ⬜ Áfangi 6 – Sjálfspróf
 ### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
