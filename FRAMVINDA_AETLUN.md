@@ -136,8 +136,14 @@ Endurtaka með allt rétt → heilgrænn.
   stendur þar ekki). Notuð í 15 skrám: Lestexti 1 ÍC, allir 13 lestextar ÍA, myndlýsing Elsu ÍA.
   Prófað: rökfræðin í kóðanum (6 tilvik) og að síðurnar hlaðist. Raunveruleg svör gpt-4o óprófuð hér.
   Ekki breytt: Páskar ÍC (önnur aðferð, aðeins „grófar villur“).
+
+> **Prófað á prufusíðu PR #66 (7.10.2026) af Viðari: allt lítur rétt út.** Tilbúið til birtingar.
+
+**Opin atriði (ekki hluti af þessu verki):**
 - ❓ **Fannst:** `isat1ia/myndalysing/elsa.html` skráir sig sem `lestextar_01` (gömul villa; síðan er
   ekki tengd af forsíðu ÍA). Opni nemandi hana litast L1. Spyrja Viðar.
+- ❓ `isat1ic/leikir/visbendingaleikurB1-3.html` – ekki tengd af forsíðu ÍC, ekki í stjórnborði.
+- ❓ Páskar ÍC – málfarsábendingar með eldri aðferð (aðeins „grófar villur“); færa í `malfar.js` ef þarf.
 
 **Prófun eftir hverja tegund:** prufunemandi (`vidarhrafn+nemandiN@gmail.com`, huliðsgluggi)
 í bekknum „prufa“ (ÍSAT1ÍC, bekkjarkóði V2NNXN).
