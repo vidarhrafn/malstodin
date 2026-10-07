@@ -121,14 +121,23 @@ Endurtaka með allt rétt → heilgrænn.
 **Prófun áfanga 5–7 (Viðar):** prufunemandi → einn lestexti (L1), Sjálfspróf 1 og Flasskort 1–3
 → stjórnborð ↻ → L1 og P1 ljós-/heilgrænir með tölum, F1 heilgrænn.
 
-### 🟨 Áfangi 8 – Lagfæringar eftir prófun Viðars (7.10.2026)
+### ✅ Áfangi 8 – Lagfæringar eftir prófun Viðars (7.10.2026)
 - ✅ **„Opnað“ (gulur) skráðist ekki í 28 ÍC-æfingum** (allir leikir, spjall, aukahlustanir,
   aukalestextar): `writeProgress` notaði `auth.currentUser` sem er `null` fyrst eftir að síða opnast –
   „opnað“ týndist en „lokið“ skilaði sér. Nú bíður fallið eftir Firebase. Prófað með „seinu“
   gervi-Firebase: gamla útgáfan skráir ekkert, nýja skráir „opnað“ í öllum 28.
 - ✅ Sjálfspróf 1 ÍC: „alla árið“ → „allt árið“.
-- ⬜ Rangar leiðréttingar í spjalli (Spjall 1 ÍC): „Mér finnst mjög gaman“ og „með risarækjum“
-  „leiðrétt“ í sjálft sig; „spila á nýtt hljóðfæri“ ranglega leiðrétt í „á nýju hljóðfæri“.
+- ✅ **Rangar málfarsábendingar („📌 Mundu að …“)** í samtölum – kom úr samtalshluta Lestexta 1 ÍC
+  (ekki Spjalli 1). „Mér finnst mjög gaman“ og „með risarækjum“ „leiðrétt“ í sjálft sig; „spila á nýtt
+  hljóðfæri“ ranglega leiðrétt í „á nýju hljóðfæri“. Orsök: gpt-4o-mini + dæmið „'gaman' er hvorugkyn“
+  í fyrirmælunum, sem líkanið hermdi eftir.
+  Lausn: ný sameiginleg skrá `malfar.js` (`window.malfarsAbending`) – gpt-4o, hitastig 0, strangari
+  fyrirmæli, JSON-svar og athugun í kóða (ábending aðeins ef „rangt“ stendur í setningunni og „rétt“
+  stendur þar ekki). Notuð í 15 skrám: Lestexti 1 ÍC, allir 13 lestextar ÍA, myndlýsing Elsu ÍA.
+  Prófað: rökfræðin í kóðanum (6 tilvik) og að síðurnar hlaðist. Raunveruleg svör gpt-4o óprófuð hér.
+  Ekki breytt: Páskar ÍC (önnur aðferð, aðeins „grófar villur“).
+- ❓ **Fannst:** `isat1ia/myndalysing/elsa.html` skráir sig sem `lestextar_01` (gömul villa; síðan er
+  ekki tengd af forsíðu ÍA). Opni nemandi hana litast L1. Spyrja Viðar.
 
 **Prófun eftir hverja tegund:** prufunemandi (`vidarhrafn+nemandiN@gmail.com`, huliðsgluggi)
 í bekknum „prufa“ (ÍSAT1ÍC, bekkjarkóði V2NNXN).
