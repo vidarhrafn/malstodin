@@ -85,10 +85,65 @@ Staða: ⬜ ekki byrjað · 🟨 í vinnslu · ✅ lokið
 > með ramma; endurtók allt rétt → heilgrænn. Nýju fliparnir sjást. Google-innskráning á prufusíðu krafðist
 > þess að bæta léninu við í Firebase → Authentication → Settings → Authorized domains.
 
-### ⬜ Áfangi 4 – Hlustun
-### ⬜ Áfangi 5 – Lestextar
-### ⬜ Áfangi 6 – Sjálfspróf
-### ⬜ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
+### ✅ Áfangi 4 – Hlustun
+- **Mín ákvörðun (Viðar má breyta):** spurning sem OpenAI metur 0–5 (stuttar spurningar, þýðingar
+  með STIG) telst rétt ef **STIG ≥ 4** (sama mörk og grænt FeedbackBadge). Þýðing með JSON-svari:
+  `correct: true`. Ef OpenAI-kall mistekst er það ekki talið sem tilraun.
+- Sameiginlegt í öllum 30 skrám: `window.skraFyrstu(lykill, rétt?)` skráir aðeins fyrstu tilraun;
+  `writeProgress('completed')` bætir `correct`/`total` við (besta niðurstaða gildir).
+- Allar 30 skrár: ÍA (12), ÍC hlustun 1–12, ÍC aukahlustanir (6). „Spurning“ = hver liður í
+  Rétt/Rangt, krossum, pörun, stuttum spurningum og þýðingum (t.d. 14–21 á æfingu).
+- Prófað í Chromium með gervi-Firebase og gervi-OpenAI: allar 30 skrá `completed` með `correct`/`total`;
+  í 23 skrám sem sýna „Þú fékkst X af Y rétt“ passa skráðar tölur fyrir Rétt/Rangt og krossa nákvæmlega.
+
+**Prófun áfanga 4 (Viðar):** prufunemandi → ÍC → einhver hlustun, t.d. Hlustun 1. Klára alla flipa,
+viljandi nokkrar villur → stjórnborð ↻ → H1 ljósgrænn, tooltip t.d. „Lokið – 9/14 rétt“.
+Endurtaka með allt rétt → heilgrænn.
+
+> **Prófað á prufusíðu PR #66 (6.10.2026) af Viðari: virkar.**
+
+### ✅ Áfangi 5 – Lestextar
+- Allar 27 skrár (ÍA 13, ÍC 14) skrá fyrstu tilraun í krossum/Rétt-Rangt og stuttum spurningum
+  með STIG (≥ 4 = rétt). **Samtöl og umræðuspurningar eru ekki taldar** (ekkert rétt/rangt).
+  Í `likamsraekt` og `sumarvinna_alex` gefur OpenAI aðeins texta (engin stig) → aðeins krossar taldir.
+- Prófað: allar 27 skrá `completed` með tölum; krossar/Rétt-Rangt passa við „Þú fékkst X af Y“.
+  (Í ÍC áhugamál/jól/páskar núllstillast krossar þegar skipt er um flipa – þá gildir fyrsta tilraun.)
+### ✅ Áfangi 6 – Sjálfspróf
+- Öll 8 (ÍA 4, ÍC 4) eins byggð: lokaskjárinn skráir `correct` = heildarstig, `total` = hámarksstig
+  (ÍC 145, ÍA 110). Tooltip t.d. „Lokið – 110/145 rétt“. Besta niðurstaða gildir.
+- Prófað: öll 8 skrá `completed` með stigum.
+### ✅ Áfangi 7 – Spjall og leikir (aðeins tryggja að „completed“ skráist)
+- Spjall (ÍA 12, ÍC 5) og leikir ÍA (10) og ÍC orðagáta (4) skráðu þegar „lokið“ – óbreytt.
+- **Lagað: 10 leikir í ÍC skráðu aldrei „lokið“:** flasskort ×4 (síðasta spjald), teiknileikur ×4
+  (öll orð búin – eins og í ÍA), mahjong (sigur), orðaleikur (einni umferð lokið, unnin eða töpuð).
+- Prófað: allir 10 hlaðast villulaust; flasskort skrá „lokið“ í lok bunkans.
+
+**Prófun áfanga 5–7 (Viðar):** prufunemandi → einn lestexti (L1), Sjálfspróf 1 og Flasskort 1–3
+→ stjórnborð ↻ → L1 og P1 ljós-/heilgrænir með tölum, F1 heilgrænn.
+
+### ✅ Áfangi 8 – Lagfæringar eftir prófun Viðars (7.10.2026)
+- ✅ **„Opnað“ (gulur) skráðist ekki í 28 ÍC-æfingum** (allir leikir, spjall, aukahlustanir,
+  aukalestextar): `writeProgress` notaði `auth.currentUser` sem er `null` fyrst eftir að síða opnast –
+  „opnað“ týndist en „lokið“ skilaði sér. Nú bíður fallið eftir Firebase. Prófað með „seinu“
+  gervi-Firebase: gamla útgáfan skráir ekkert, nýja skráir „opnað“ í öllum 28.
+- ✅ Sjálfspróf 1 ÍC: „alla árið“ → „allt árið“.
+- ✅ **Rangar málfarsábendingar („📌 Mundu að …“)** í samtölum – kom úr samtalshluta Lestexta 1 ÍC
+  (ekki Spjalli 1). „Mér finnst mjög gaman“ og „með risarækjum“ „leiðrétt“ í sjálft sig; „spila á nýtt
+  hljóðfæri“ ranglega leiðrétt í „á nýju hljóðfæri“. Orsök: gpt-4o-mini + dæmið „'gaman' er hvorugkyn“
+  í fyrirmælunum, sem líkanið hermdi eftir.
+  Lausn: ný sameiginleg skrá `malfar.js` (`window.malfarsAbending`) – gpt-4o, hitastig 0, strangari
+  fyrirmæli, JSON-svar og athugun í kóða (ábending aðeins ef „rangt“ stendur í setningunni og „rétt“
+  stendur þar ekki). Notuð í 15 skrám: Lestexti 1 ÍC, allir 13 lestextar ÍA, myndlýsing Elsu ÍA.
+  Prófað: rökfræðin í kóðanum (6 tilvik) og að síðurnar hlaðist. Raunveruleg svör gpt-4o óprófuð hér.
+  Ekki breytt: Páskar ÍC (önnur aðferð, aðeins „grófar villur“).
+
+> **Prófað á prufusíðu PR #66 (7.10.2026) af Viðari: allt lítur rétt út.** Tilbúið til birtingar.
+
+**Opin atriði (ekki hluti af þessu verki):**
+- ❓ **Fannst:** `isat1ia/myndalysing/elsa.html` skráir sig sem `lestextar_01` (gömul villa; síðan er
+  ekki tengd af forsíðu ÍA). Opni nemandi hana litast L1. Spyrja Viðar.
+- ❓ `isat1ic/leikir/visbendingaleikurB1-3.html` – ekki tengd af forsíðu ÍC, ekki í stjórnborði.
+- ❓ Páskar ÍC – málfarsábendingar með eldri aðferð (aðeins „grófar villur“); færa í `malfar.js` ef þarf.
 
 **Prófun eftir hverja tegund:** prufunemandi (`vidarhrafn+nemandiN@gmail.com`, huliðsgluggi)
 í bekknum „prufa“ (ÍSAT1ÍC, bekkjarkóði V2NNXN).

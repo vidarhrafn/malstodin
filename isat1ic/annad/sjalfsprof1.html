@@ -116,7 +116,8 @@
     });
   });
 
-  async function writeProgress(status) {
+  // score = { correct, total } – stig úr prófinu (t.d. 110 af 145)
+  async function writeProgress(status, score) {
     try {
       await authReadyPromise;
       const user = auth.currentUser;
@@ -125,6 +126,16 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened')    data.opened_at    = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      if (score) {
+        // Besta niðurstaða gildir: stig aðeins skrifuð ef betri en það sem fyrir er
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || score.correct > prev.correct) {
+            data.correct = score.correct;
+            data.total = score.total;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa stigum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) { console.error('Progress write failed:', e); }
   }
@@ -209,7 +220,7 @@ const FJOLVAL = [
   {
     id: 1, kafli: 2,
     spur: 'Hvað þýðir „árskort" þegar við tölum um líkamsræktarstöð?',
-    val: ['Kort til að keyra bíl', 'Aðgangskort sem gildir alla árið', 'Skólakort', 'Ferðakort'],
+    val: ['Kort til að keyra bíl', 'Aðgangskort sem gildir allt árið', 'Skólakort', 'Ferðakort'],
     rett: 1,
   },
   {
@@ -869,7 +880,7 @@ const FinalScreen = ({ tabScores, tabMaxes }) => {
   const TAB_NAMES = ['Þýðingar', 'Pörun', 'Fjölval', 'Setningafylling', 'Lesskilningur', 'Hljóðritun'];
 
   useEffect(() => {
-    window.writeProgress && window.writeProgress('completed');
+    window.writeProgress && window.writeProgress('completed', { correct: total, total: maxTotal });
     const fetchReview = async () => {
       try {
         const details = TAB_NAMES.map((n, i) =>

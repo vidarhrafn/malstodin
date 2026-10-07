@@ -131,7 +131,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -154,6 +154,12 @@
     });
   });
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
       const user = await authReady;
@@ -162,6 +168,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -457,6 +475,7 @@ CORRECT: [rétt þýðing á tungumáli nemanda ef rangt, annars tómt]`;
         try {
           const res = await evalOpen(OPEN_QUESTIONS[i].q, openAnswers[i], OPEN_QUESTIONS[i].ctx);
           setOpenFeedback(p => ({...p, [i]: res}));
+          window.skraFyrstu && window.skraFyrstu('open' + i, res.score >= 4);
         } catch {
           setOpenFeedback(p => ({...p, [i]: { score: 0, feedback_is: 'Villa kom upp. Reyndu aftur.', feedback_native: '', suggested: '' }}));
         }
@@ -474,6 +493,7 @@ CORRECT: [rétt þýðing á tungumáli nemanda ef rangt, annars tómt]`;
         try {
           const res = await evalTranslation(TRANSLATION_WORDS[i], transAnswers[i]);
           setTransFeedback(p => ({...p, [i]: res}));
+          window.skraFyrstu && window.skraFyrstu('trans' + i, res.score >= 4);
         } catch {
           setTransFeedback(p => ({...p, [i]: { score: 0, feedback_is: 'Villa kom upp.', feedback_native: '', correct_translation: '' }}));
         }
@@ -608,7 +628,7 @@ CORRECT: [rétt þýðing á tungumáli nemanda ef rangt, annars tómt]`;
                     ))}
                   </div>
                   {!tfChecked && (
-                    <button onClick={() => setTfChecked(true)}
+                    <button onClick={() => { setTfChecked(true); TRUE_FALSE.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, tfAnswers[i] === q.correct)); }}
                       disabled={Object.keys(tfAnswers).length < TRUE_FALSE.length}
                       className="mt-6 w-full bg-green-600 text-white py-3 rounded-lg font-light hover:bg-green-700 transition-colors disabled:opacity-40">
                       Athuga svör
@@ -656,7 +676,7 @@ CORRECT: [rétt þýðing á tungumáli nemanda ef rangt, annars tómt]`;
                     ))}
                   </div>
                   {!mcChecked && (
-                    <button onClick={() => setMcChecked(true)}
+                    <button onClick={() => { setMcChecked(true); shuffledMC.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, mcAnswers[i] !== undefined && q.shuffled[mcAnswers[i]].orig === q.correct)); }}
                       disabled={Object.keys(mcAnswers).length < MULTIPLE_CHOICE.length}
                       className="mt-6 w-full bg-green-600 text-white py-3 rounded-lg font-light hover:bg-green-700 transition-colors disabled:opacity-40">
                       Athuga svör

@@ -121,7 +121,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -144,6 +144,12 @@
     });
   });
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
       const user = await authReady;
@@ -152,6 +158,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -458,8 +476,8 @@ Um kvöldið fara svo Hólmfríður, Alex og Klara saman á tónleikana á Arnar
         if (allDone && !showModal) setShowModal(true);
       }, [allDone]);
 
-      const checkTF = () => setTfChecked(true);
-      const checkMC = () => setMcChecked(true);
+      const checkTF = () => { setTfChecked(true); TRUE_FALSE.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, tfAnswers[i] === q.correct)); };
+      const checkMC = () => { setMcChecked(true); MULTIPLE_CHOICE.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, mcAnswers[i] !== undefined && shuffledMC[i].options[mcAnswers[i]].originalIndex === q.correct)); };
 
       const submitOpen = async (index) => {
         if (!openAnswers[index]?.trim()) return;
@@ -467,6 +485,7 @@ Um kvöldið fara svo Hólmfríður, Alex og Klara saman á tónleikana á Arnar
         try {
           const result = await evaluateOpenAnswer(OPEN_QUESTIONS[index].question, openAnswers[index], LISTENING_TEXT);
           setOpenFeedback(p => ({ ...p, [index]: result }));
+          window.skraFyrstu && window.skraFyrstu('open' + index, result.correct === true || (result.correct === undefined && result.score >= 4));
         } catch (e) {
           setOpenFeedback(p => ({ ...p, [index]: { feedback_is: 'Villa kom upp. Reyndu aftur.', feedback_native: 'An error occurred. Please try again.', score: 0 } }));
         }
@@ -479,6 +498,7 @@ Um kvöldið fara svo Hólmfríður, Alex og Klara saman á tónleikana á Arnar
         try {
           const result = await evaluateTranslation(TRANSLATION_WORDS[index].word, transAnswers[index]);
           setTransFeedback(p => ({ ...p, [index]: result }));
+          window.skraFyrstu && window.skraFyrstu('trans' + index, result.correct === true || (result.correct === undefined && result.score >= 4));
         } catch (e) {
           setTransFeedback(p => ({ ...p, [index]: { feedback_is: 'Villa kom upp.', feedback_native: 'An error occurred.', correct: false, score: 0 } }));
         }

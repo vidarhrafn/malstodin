@@ -108,7 +108,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -131,6 +131,12 @@
     });
   });
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
       const user = await authReady;
@@ -139,6 +145,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -354,12 +372,12 @@
 
       // TF
       const handleTfAnswer = (i, val) => { if (tfChecked) return; const a = [...tfAnswers]; a[i] = val; setTfAnswers(a); };
-      const checkTF = () => setTfChecked(true);
+      const checkTF = () => { setTfChecked(true); TRUE_FALSE.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, tfAnswers[i] === q.correct)); };
       const resetTF = () => { setTfAnswers([]); setTfChecked(false); };
 
       // MC
       const handleMcAnswer = (qi, oi) => { if (mcChecked) return; const a = [...mcAnswers]; a[qi] = oi; setMcAnswers(a); };
-      const checkMC = () => setMcChecked(true);
+      const checkMC = () => { setMcChecked(true); shuffledMC.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, mcAnswers[i] === q.correctShuffled)); };
       const resetMC = () => { setMcAnswers([]); setMcChecked(false); };
 
       // Open
@@ -386,6 +404,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]`
           const score = stigMatch ? parseInt(stigMatch[1]) : 0;
           const msg = endMatch ? endMatch[1].trim() : result.trim();
           const nf = [...openFeedback]; nf[i] = { score, msg }; setOpenFeedback(nf);
+          if (stigMatch) window.skraFyrstu && window.skraFyrstu('open' + i, score >= 4);
         } catch {
           const nf = [...openFeedback]; nf[i] = { score: 0, msg: 'Villa kom upp. Reyndu aftur.' }; setOpenFeedback(nf);
         }
@@ -427,6 +446,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           } catch {}
           if (parsed) {
             setTransFeedback(p => ({ ...p, [i]: parsed }));
+            window.skraFyrstu && window.skraFyrstu('trans' + i, parsed.correct === true);
           } else {
             setTransFeedback(p => ({ ...p, [i]: { correct: true, feedback_is: 'Frábært! Þetta lítur vel út.', feedback_native: '' } }));
           }

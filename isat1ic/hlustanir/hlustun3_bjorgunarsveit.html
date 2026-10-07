@@ -114,7 +114,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -137,6 +137,12 @@
     });
   });
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
       const user = await authReady;
@@ -145,6 +151,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -448,6 +466,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
             parsed = JSON.parse(clean);
           } catch {}
           if (parsed) {
+            window.skraFyrstu && window.skraFyrstu('trans' + i, parsed.correct === true);
             setTransFeedback(prev => ({ ...prev, [i]: {
               score: parsed.correct ? 5 : 1,
               message: parsed.feedback_is,
@@ -457,6 +476,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           } else {
             const sm = result.match(/STIG:\s*(\d)/);
             const em = result.match(/ENDURGJÖF:\s*(.+)/);
+            if (sm) window.skraFyrstu && window.skraFyrstu('trans' + i, parseInt(sm[1]) >= 4);
             setTransFeedback(prev => ({ ...prev, [i]: {
               score: sm ? parseInt(sm[1]) : 3,
               message: em ? em[1].trim() : result.trim(),
@@ -486,6 +506,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           const em = result.match(/ENDURGJÖF:\s*(.+)/);
           const newFb = [...shortFeedback];
           newFb[i] = { score: sm ? parseInt(sm[1]) : 3, message: em ? em[1].trim() : result.trim() };
+          if (sm) window.skraFyrstu && window.skraFyrstu('short' + i, parseInt(sm[1]) >= 4);
           setShortFeedback(newFb);
         } catch {
           const newFb = [...shortFeedback];
@@ -684,7 +705,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                   </div>
                   {!tfChecked ? (
                     <div className="mt-5 flex gap-3">
-                      <button onClick={() => setTfChecked(true)}
+                      <button onClick={() => { setTfChecked(true); TRUE_FALSE.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, tfAnswers[i] === q.correct)); }}
                         disabled={tfAnswers.length < TRUE_FALSE.length}
                         className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
                         Athuga svör
@@ -753,7 +774,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
                   </div>
                   {!mcChecked ? (
                     <div className="mt-5 flex gap-3">
-                      <button onClick={() => setMcChecked(true)}
+                      <button onClick={() => { setMcChecked(true); shuffledMC.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, mcAnswers[i] === q.correct)); }}
                         disabled={mcAnswers.length < shuffledMC.length}
                         className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light text-sm">
                         Athuga svör

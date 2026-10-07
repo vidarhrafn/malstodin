@@ -72,6 +72,12 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(status) {
     try {
       const user = auth.currentUser;
@@ -80,6 +86,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) { console.error('Progress write failed:', e); }
   }
@@ -297,6 +315,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           const clean = r.replace(new RegExp('```json\n?', 'g'), '').replace(new RegExp('```\n?', 'g'), '').trim();
           const data = JSON.parse(clean);
           setTransFeedback(data);
+          window.skraFyrstu && window.skraFyrstu('trans', data.correct === true);
           markDone(4);
         } catch(e) {
           alert('Villa. Reyndu aftur.');
@@ -312,6 +331,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
       const checkTf = () => {
         if (tfAnswers.some(a => a === null)) { alert('Vinsamlegast svaraðu öllum!'); return; }
         setTfSubmitted(true);
+        TRUE_FALSE_RAW.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, tfAnswers[i] === q.correct));
         markDone(0);
       };
 
@@ -327,6 +347,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
       const checkMc = () => {
         if (mcAnswers.some(a => a === null)) { alert('Vinsamlegast svaraðu öllum!'); return; }
         setMcSubmitted(true);
+        shuffledMC.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, !!(q.options[mcAnswers[i]] || {}).isCorrect));
         markDone(1);
       };
 
@@ -355,6 +376,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
           const score = stigMatch ? parseInt(stigMatch[1]) : 0;
           const msg = endMatch ? endMatch[1].trim() : result.trim();
           setShortFeedback(prev => { const a = [...prev]; a[i] = { score, msg }; return a; });
+          if (stigMatch) window.skraFyrstu && window.skraFyrstu('short' + i, score >= 4);
         } catch(e) {
           alert('Villa. Reyndu aftur.');
         } finally {
@@ -374,6 +396,7 @@ ENDURGJÖF: [ein setning, vinaleg og hvetjandi á íslensku]` },
       const checkMatch = () => {
         if (matchAnswers.some(a => !a)) { alert('Vinsamlegast svaraðu öllum!'); return; }
         setMatchSubmitted(true);
+        MATCHING_RAW.forEach((m, i) => window.skraFyrstu && window.skraFyrstu('match' + i, matchAnswers[i] === m.right));
         markDone(3);
       };
 

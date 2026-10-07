@@ -110,7 +110,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -133,6 +133,12 @@
     });
   });
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
       const user = await authReady;
@@ -141,6 +147,18 @@
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -276,7 +294,7 @@ const TFTab = ({ onDone, done }) => {
   const allAnswered = TF_QUESTIONS.every((_, i) => answers[i] !== undefined);
   const score = checked ? TF_QUESTIONS.filter((q, i) => answers[i] === q.svar).length : 0;
 
-  const handleCheck = () => { if (!allAnswered) return; setChecked(true); onDone(); };
+  const handleCheck = () => { if (!allAnswered) return; setChecked(true); TF_QUESTIONS.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, answers[i] === q.svar)); onDone(); };
 
   return (
     <div className="fade-in space-y-4">
@@ -334,7 +352,7 @@ const MCTab = ({ onDone, done }) => {
   const allAnswered = questions.every((_, i) => answers[i] !== undefined);
   const score = checked ? questions.filter((q, i) => answers[i] === q.rett).length : 0;
 
-  const handleCheck = () => { if (!allAnswered) return; setChecked(true); onDone(); };
+  const handleCheck = () => { if (!allAnswered) return; setChecked(true); questions.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, answers[i] === q.rett)); onDone(); };
 
   return (
     <div className="fade-in space-y-5">
@@ -409,6 +427,7 @@ ENDURGJÖF: [ein setning]` }]);
       const score = parseInt((result.match(/STIG:\s*(\d)/) || [])[1] ?? '0');
       const msg   = ((result.match(/ENDURGJÖF:\s*(.+)/) || [])[1] ?? result).trim();
       const nf = [...feedbacks]; nf[i] = { score, message: msg }; setFeedbacks(nf);
+      window.skraFyrstu && window.skraFyrstu('short' + i, score >= 4);
       const nc = [...checked];   nc[i] = true;                    setChecked(nc);
     } catch {
       const nf = [...feedbacks]; nf[i] = { score: 0, message: 'Villa kom upp. Reyndu aftur.' }; setFeedbacks(nf);
@@ -496,6 +515,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
         fb = { score, message: msg };
       }
       const nf = [...feedbacks]; nf[i] = fb;   setFeedbacks(nf);
+      window.skraFyrstu && window.skraFyrstu('trans' + i, parsed ? parsed.correct === true : fb.score >= 4);
       const nc = [...checked];   nc[i] = true;  setChecked(nc);
     } catch {
       const nf = [...feedbacks]; nf[i] = { score: 0, message: 'Villa kom upp. Reyndu aftur.' }; setFeedbacks(nf);

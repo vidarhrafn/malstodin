@@ -89,8 +89,8 @@
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyDhmWC3YG-eJqTQgTj3otO7tLdo1Zjzh-4",
@@ -106,14 +106,35 @@
   const db = getFirestore(app);
   const COURSE = 'isat1ic';
 
+  // Rétt/rangt í FYRSTU tilraun við hverja spurningu (seinni tilraunir hunsaðar).
+  // Æfingin kallar á skraFyrstu(lykill, rétt?) þegar svar er metið; writeProgress('completed')
+  // tekur tölurnar með.
+  window.fyrstaTilraun = {};
+  window.skraFyrstu = (key, ok) => { if (!(key in window.fyrstaTilraun)) window.fyrstaTilraun[key] = !!ok; };
+
   async function writeProgress(exerciseId, status) {
     try {
-      const user = auth.currentUser;
+      // Bíða eftir að Firebase muni hver er innskráður (síðan skráir „opnað“ strax við opnun)
+      const user = auth.currentUser || await new Promise(resolve => {
+        const unsub = onAuthStateChanged(auth, u => { unsub(); resolve(u); });
+      });
       if (!user) return;
       const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
       const data = { status, updated_at: serverTimestamp() };
       if (status === 'opened') data.opened_at = serverTimestamp();
       if (status === 'completed') data.completed_at = serverTimestamp();
+      const fyrsta = Object.values(window.fyrstaTilraun || {});
+      if (status === 'completed' && fyrsta.length) {
+        // Besta niðurstaða gildir: tölur aðeins skrifaðar ef betri en það sem fyrir er
+        const correct = fyrsta.filter(Boolean).length;
+        try {
+          const prev = (await getDoc(ref)).data() || {};
+          if (!Number.isInteger(prev.correct) || correct > prev.correct) {
+            data.correct = correct;
+            data.total = fyrsta.length;
+          }
+        } catch(e) { /* gat ekki lesið – sleppa tölum frekar en að lækka */ }
+      }
       await setDoc(ref, data, { merge: true });
     } catch(e) {
       // Fail silently — never interrupt exercise
@@ -295,6 +316,7 @@ Núna fer hann stundum í ræktina eða í sund um helgar. Hann segir: „Ég þ
       const checkTF = () => {
         if (Object.keys(tfAns).length < TF_ITEMS.length) { alert('Vinsamlegast svaraðu öllum setningum!'); return; }
         setTfChecked(true);
+        TF_ITEMS.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('tf' + i, tfAns[i] === q.correct));
         setTabDone(prev => ({ ...prev, tf: true }));
       };
       const resetTF = () => { setTfAns({}); setTfChecked(false); setTabDone(prev => ({ ...prev, tf: false })); };
@@ -311,6 +333,7 @@ Núna fer hann stundum í ræktina eða í sund um helgar. Hann segir: „Ég þ
       const checkMC = () => {
         if (Object.keys(mcAns).length < mcQ.length) { alert('Vinsamlegast svaraðu öllum spurningum!'); return; }
         setMcChecked(true);
+        mcQ.forEach((q, i) => window.skraFyrstu && window.skraFyrstu('mc' + i, mcAns[i] === q.correct));
         setTabDone(prev => ({ ...prev, mc: true }));
       };
       const resetMC = () => { setMcAns({}); setMcChecked(false); setTabDone(prev => ({ ...prev, mc: false })); };
@@ -344,6 +367,7 @@ Spurningin: "${SHORT_QS[i]}"`,
           const msg   = endurgjofMatch ? endurgjofMatch[1].trim() : result.trim();
 
           setShortFb(prev => { const a=[...prev]; a[i]={ score, msg }; return a; });
+          if (stigMatch) window.skraFyrstu && window.skraFyrstu('short' + i, score >= 4);
         } catch (e) {
           alert('Villa kom upp. Reyndu aftur.');
           console.error(e);
@@ -370,6 +394,7 @@ Spurningin: "${SHORT_QS[i]}"`,
       const checkMatch = () => {
         if (matchAns.some(a => !a)) { alert('Vinsamlegast svaraðu öllum línum!'); return; }
         setMatchChecked(true);
+        MATCHING.forEach((m, i) => window.skraFyrstu && window.skraFyrstu('match' + i, matchAns[i] === m.right));
         setTabDone(prev => ({ ...prev, match: true }));
       };
       const resetMatch = () => {
@@ -425,6 +450,7 @@ SKILAÐU JSON (BARA JSON, EKKERT ANNAÐ):
           }
 
           setTranslFb(prev => { const a=[...prev]; a[i]={ score, msg }; return a; });
+          window.skraFyrstu && window.skraFyrstu('transl' + i, score >= 4);
         } catch (e) {
           alert('Villa kom upp. Reyndu aftur.');
           console.error(e);
