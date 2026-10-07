@@ -54,7 +54,7 @@
   <div id="root"></div>
   <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getFirestore, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -73,7 +73,10 @@
 
   async function writeProgress(exerciseId, status) {
     try {
-      const user = auth.currentUser;
+      // Bíða eftir að Firebase muni hver er innskráður (síðan skráir „opnað“ strax við opnun)
+      const user = auth.currentUser || await new Promise(resolve => {
+        const unsub = onAuthStateChanged(auth, u => { unsub(); resolve(u); });
+      });
       if (!user) return;
       const ref = doc(db, 'progress', user.uid, COURSE, exerciseId);
       const data = { status, updated_at: serverTimestamp() };

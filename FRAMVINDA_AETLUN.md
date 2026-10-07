@@ -121,6 +121,15 @@ Endurtaka með allt rétt → heilgrænn.
 **Prófun áfanga 5–7 (Viðar):** prufunemandi → einn lestexti (L1), Sjálfspróf 1 og Flasskort 1–3
 → stjórnborð ↻ → L1 og P1 ljós-/heilgrænir með tölum, F1 heilgrænn.
 
+### 🟨 Áfangi 8 – Lagfæringar eftir prófun Viðars (7.10.2026)
+- ✅ **„Opnað“ (gulur) skráðist ekki í 28 ÍC-æfingum** (allir leikir, spjall, aukahlustanir,
+  aukalestextar): `writeProgress` notaði `auth.currentUser` sem er `null` fyrst eftir að síða opnast –
+  „opnað“ týndist en „lokið“ skilaði sér. Nú bíður fallið eftir Firebase. Prófað með „seinu“
+  gervi-Firebase: gamla útgáfan skráir ekkert, nýja skráir „opnað“ í öllum 28.
+- ✅ Sjálfspróf 1 ÍC: „alla árið“ → „allt árið“.
+- ⬜ Rangar leiðréttingar í spjalli (Spjall 1 ÍC): „Mér finnst mjög gaman“ og „með risarækjum“
+  „leiðrétt“ í sjálft sig; „spila á nýtt hljóðfæri“ ranglega leiðrétt í „á nýju hljóðfæri“.
+
 **Prófun eftir hverja tegund:** prufunemandi (`vidarhrafn+nemandiN@gmail.com`, huliðsgluggi)
 í bekknum „prufa“ (ÍSAT1ÍC, bekkjarkóði V2NNXN).
 
