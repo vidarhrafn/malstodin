@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="is" style="color-scheme:light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Í Bónus – frumgerð</title>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* VOICE: Málstöðin – róleg kennsluæfing fyrir A1–A2
+       IDEA: búðarferð sem samtal, lína fyrir línu, eins og í ImmerseMe
+       PICTURE: teikning af búðinni efst, spjallgluggi undir
+       COLOUR and TYPE: Málstöðvarþemað – blue-600 spjall, green-600 hljóð, font-light
+       LAYOUT: max-w-4xl, einn dálkur, staflast á síma */
+    * { box-sizing: border-box; min-width: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh; margin: 0; color: #1f2937; overflow-x: clip;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn .4s ease both; }
+    @keyframes pulseDot { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: .55; } }
+    .pulse-dot { animation: pulseDot 1s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .fade-in, .pulse-dot { animation: none; } }
+    button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ================= Senan (gögn) =================
+const KYN = {
+  kk: { label: 'búinn', lysing: 'karlkyn' },
+  kvk: { label: 'búin', lysing: 'kvenkyn' },
+  hk: { label: 'búið', lysing: 'hvorugkyn' },
+};
+const VIDM = {
+  gunnar: { nafn: 'Gunnar', hlutverk: 'starfsmaður', lit: 'bg-amber-100 text-amber-800 border-amber-200' },
+  gudrun: { nafn: 'Guðrún', hlutverk: 'við kassann', lit: 'bg-rose-100 text-rose-800 border-rose-200' },
+};
+const SENUR = { 1: 'Í búðinni', 2: 'Verðið', 3: 'Við kassann' };
+const LINUR = [
+  { sena: 1, vidm: 'gunnar', segir: 'Góðan daginn! Get ég aðstoðað?', svar: 'Já, takk. Hvar er skyrið?', samthykkt: ['Hvar finn ég skyr?', 'Hvar er skyr?', 'Hvar er skyrið?'], mynd: '🥣', enska: 'Yes, please. Where is the skyr?' },
+  { sena: 1, vidm: 'gunnar', segir: 'Skyrið er í kælinum, aftast í búðinni.', svar: 'Takk fyrir.', samthykkt: ['Takk.', 'Takk kærlega.', 'Takk kærlega fyrir.'], mynd: '🙏', enska: 'Thank you.' },
+  { sena: 2, vidm: 'gunnar', segir: 'Var það eitthvað fleira?', svar: 'Já. Hvað kostar mjólkin?', samthykkt: ['Hvað kostar mjólkin?', 'Hvað kostar mjólk?', 'Já, hvað kostar mjólkin?'], mynd: '🥛', enska: 'Yes. How much is the milk?' },
+  { sena: 2, vidm: 'gunnar', segir: 'Hún kostar tvö hundruð og níutíu krónur.', svar: 'Allt í lagi, takk.', samthykkt: ['Ágætt, takk.', 'Takk.', 'Allt í lagi.'], mynd: '👍', enska: 'OK, thanks.' },
+  { sena: 3, vidm: 'gudrun', segir: { kk: 'Ertu búinn að finna allt?', kvk: 'Ertu búin að finna allt?', hk: 'Ertu búið að finna allt?' }, svar: { kk: 'Já, ég er búinn.', kvk: 'Já, ég er búin.', hk: 'Já, ég er búið.' }, samthykkt: ['Já, takk.', 'Já.'], mynd: '✅', enska: "Yes, I'm done." },
+  { sena: 3, vidm: 'gudrun', segir: 'Viltu poka?', svar: 'Já, einn poka, takk.', samthykkt: ['Nei, takk.', 'Já, takk.', 'Já, einn poka.'], mynd: '🛍️', enska: 'Yes, one bag, please.' },
+  { sena: 3, vidm: 'gudrun', segir: 'Það gera þrjú þúsund og fimm hundruð krónur.', svar: 'Get ég borgað með korti?', samthykkt: ['Má ég borga með korti?', 'Get ég borgað með kortinu?'], mynd: '💳', enska: 'Can I pay by card?' },
+  { sena: 3, vidm: 'gudrun', segir: 'Já, gjörðu svo vel. Viltu kvittun?', svar: 'Nei, takk.', samthykkt: ['Já, takk.', 'Nei takk.'], mynd: '🧾', enska: 'No, thanks.' },
+  { sena: 3, vidm: 'gudrun', segir: 'Takk fyrir og eigðu góðan dag!', svar: 'Takk, sömuleiðis!', samthykkt: ['Sömuleiðis.', 'Takk, bless.', 'Takk sömuleiðis.'], mynd: '👋', enska: 'Thanks, you too!' },
+];
+const HAMIR = [
+  { id: 1, heiti: 'Hlusta og herma', lysing: 'Svarið sést. Hlustaðu á það og segðu það.' },
+  { id: 2, heiti: 'Hlusta og skrifa', lysing: 'Skrifaðu það sem viðmælandinn segir. Svo svararðu.' },
+  { id: 3, heiti: 'Segja sjálf/ur', lysing: 'Mynd og vísbending koma í stað svarsins.' },
+  { id: 4, heiti: 'Á staðnum', lysing: 'Ekkert á skjánum. Hjálp ef þú þarft.' },
+];
+const STIG = [
+  { id: 'rumt', heiti: 'Rúmt', gildi: 0.6 },
+  { id: 'midlungs', heiti: 'Miðlungs', gildi: 0.75 },
+  { id: 'strangt', heiti: 'Strangt', gildi: 0.9 },
+];
+const texti = (v, kyn) => (typeof v === 'string' ? v : v[kyn]);
+const SR_TIL = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+const I_RAMMA = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+// ================= Mat =================
+const stadla = s => (s || '').toLowerCase().replace(/[.,!?;:„“"'()…–-]/g, ' ').replace(/\s+/g, ' ').trim();
+function levenshtein(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+const likindi = (a, b) => { const x = stadla(a), y = stadla(b); return 1 - levenshtein(x, y) / Math.max(x.length, y.length, 1); };
+const litFra = (s, thr) => (s >= thr ? 'green' : s >= thr - 0.15 ? 'amber' : 'red');
+
+function meta(heyrt, samth, thr, kynMyndir = null) {
+  let best = { s: -1, h: heyrt[0] || '', v: samth[0] };
+  for (const h of heyrt) for (const v of samth) { const s = likindi(h, v); if (s > best.s) best = { s, h, v }; }
+  let kynAbending = null;
+  if (kynMyndir) {
+    for (const v of kynMyndir.adrar) for (const h of heyrt) {
+      const s = likindi(h, v);
+      if (s >= thr && s > best.s) { best = { s, h, v: samth[0] }; kynAbending = `Þú valdir „${kynMyndir.label}“, svo hér segirðu „${samth[0]}“.`; }
+    }
+  }
+  const mark = new Set(stadla(best.v).split(' '));
+  const heyrdOrd = stadla(best.h).split(' ').filter(Boolean);
+  const heyrdSet = new Set(heyrdOrd);
+  return {
+    s: Math.max(0, best.s), heyrt: best.h, svar: best.v, kynAbending,
+    litur: kynAbending ? 'amber' : litFra(best.s, thr),
+    ord: best.h.split(/\s+/).filter(Boolean).map(w => ({ w, ok: mark.has(stadla(w)) })),
+    vantar: [...mark].filter(w => w && !heyrdSet.has(w)),
+  };
+}
+
+// ================= Hljóð =================
+const hljod = { netlify: null, cache: new Map() };
+function biddRadda() {
+  return new Promise(res => {
+    if (!('speechSynthesis' in window) || speechSynthesis.getVoices().length) return res();
+    const t = setTimeout(res, 800);
+    speechSynthesis.addEventListener('voiceschanged', () => { clearTimeout(t); res(); }, { once: true });
+  });
+}
+const islenskRodd = () => ('speechSynthesis' in window ? speechSynthesis.getVoices().find(v => /^is([-_]|$)/i.test(v.lang)) || null : null);
+
+function spila(text, hradi = 1) {
+  return new Promise(async resolve => {
+    let buid = false;
+    const klara = r => { if (!buid) { buid = true; resolve(r); } };
+    if (hljod.netlify !== false) {
+      try {
+        let b64 = hljod.cache.get(text);
+        if (!b64) {
+          const r = await fetch('/.netlify/functions/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text_to_speak: text }) });
+          const data = await r.json();
+          if (!r.ok || !data.audio_base64) throw new Error('ekkert hljóð');
+          b64 = data.audio_base64; hljod.cache.set(text, b64);
+        }
+        hljod.netlify = true;
+        const a = new Audio(`data:audio/mp3;base64,${b64}`);
+        a.playbackRate = hradi;
+        a.onended = () => klara('azure'); a.onerror = () => klara('azure');
+        await a.play().catch(() => klara('azure'));
+        return;
+      } catch (e) { hljod.netlify = false; }
+    }
+    await biddRadda();
+    const v = islenskRodd();
+    if (v) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.voice = v; u.lang = v.lang; u.rate = hradi;
+      u.onend = () => klara('vafri'); u.onerror = () => klara('vafri');
+      speechSynthesis.cancel(); speechSynthesis.speak(u);
+      setTimeout(() => klara('vafri'), text.length * 140 / hradi + 2000);
+      return;
+    }
+    klara('ekkert');
+  });
+}
+
+function pling() {
+  try {
+    const C = window.AudioContext || window.webkitAudioContext; const ctx = new C();
+    const o = ctx.createOscillator(), g = ctx.createGain(), n = ctx.currentTime;
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(0.25, n + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.18);
+    o.connect(g).connect(ctx.destination); o.start(n); o.stop(n + 0.2); setTimeout(() => ctx.close(), 400);
+  } catch (e) {}
+}
+
+function hlusta({ onNidurstada, onVilla }) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { onVilla('ekki-studd'); return null; }
+  let lokid = false, byrjad = false;
+  const einu = fn => (...x) => { if (!lokid) { lokid = true; fn(...x); } };
+  const nidurstada = einu(onNidurstada), villa = einu(onVilla);
+  const rec = new SR();
+  rec.lang = 'is-IS'; rec.interimResults = false; rec.maxAlternatives = 5; rec.continuous = false;
+  rec.onaudiostart = () => { byrjad = true; };
+  rec.onresult = e => nidurstada(Array.from(e.results[0]).map(a => a.transcript));
+  rec.onerror = e => villa(e.error);
+  rec.onend = () => villa('no-speech');
+  const vakt = setTimeout(() => { if (!byrjad) { villa('timeout'); try { rec.abort(); } catch (e) {} } }, 4000);
+  rec.addEventListener('end', () => clearTimeout(vakt));
+  try { rec.start(); } catch (e) { clearTimeout(vakt); villa('not-allowed'); }
+  return rec;
+}
+const VILLUR = {
+  'not-allowed': 'Hljóðneminn er lokaður hér, t.d. inni í Claude-glugganum. Skrifaðu svarið í staðinn. Í Málstöðinni kemur hljóðneminn hér.',
+  'service-not-allowed': 'Talgreiningin er lokuð í þessum vafra. Skrifaðu svarið í staðinn.',
+  'audio-capture': 'Enginn hljóðnemi fannst. Skrifaðu svarið í staðinn.',
+  timeout: 'Hljóðneminn fór ekki í gang, líklega vegna þess að hann er lokaður hér. Skrifaðu svarið í staðinn.',
+  network: 'Talgreiningin náði ekki sambandi. Skrifaðu svarið í staðinn.',
+  'language-not-supported': 'Vafrinn styður ekki íslenska talgreiningu. Skrifaðu svarið í staðinn.',
+  'ekki-studd': 'Þessi vafri styður ekki talgreiningu (t.d. Firefox). Skrifaðu svarið í staðinn.',
+};
+
+// ================= Íhlutir =================
+const ListenPill = ({ onClick, speaking, label }) => (
+  <button onClick={onClick}
+    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border transition-all ${speaking ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}>
+    <span className="opacity-70">🎧</span>
+    <span className="font-light">{label || 'Hlustaðu'}</span>
+    <span className={`text-green-600 ${speaking ? 'animate-pulse' : ''}`}>🔊</span>
+  </button>
+);
+
+const ProgressBar = ({ current, total }) => (
+  <div className="flex items-center gap-2 mb-4">
+    {Array.from({ length: total }).map((_, i) => (
+      <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i < current ? 'bg-green-500' : i === current ? 'bg-blue-400' : 'bg-gray-200'}`} />
+    ))}
+    <span className="text-xs text-gray-400 font-light whitespace-nowrap">{current}/{total}</span>
+  </div>
+);
+
+const LITIR = {
+  green: { box: 'bg-green-50 border-green-200 text-green-700', chip: 'bg-green-100 text-green-800', heiti: 'Rétt!' },
+  amber: { box: 'bg-amber-50 border-amber-200 text-amber-700', chip: 'bg-amber-100 text-amber-800', heiti: 'Nærri lagi' },
+  red: { box: 'bg-red-50 border-red-200 text-red-700', chip: 'bg-red-100 text-red-800', heiti: 'Ekki alveg' },
+};
+
+const FeedbackBadge = ({ fb, merki, rettMerki = 'Vænt svar' }) => {
+  const c = LITIR[fb.litur];
+  return (
+    <div className={`mt-3 p-4 rounded-lg border ${c.box} fade-in`} role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="font-medium text-sm">{c.heiti}</span>
+        <span className="text-xs font-light">Líkindi {Math.round(fb.s * 100)}%</span>
+      </div>
+      <p className="text-sm font-light">
+        <span className="opacity-80">{merki}: </span>
+        {fb.ord.length ? fb.ord.map((o, i) => (
+          <span key={i} className={o.ok ? '' : 'underline decoration-red-400 decoration-2 underline-offset-4'}>{o.w} </span>
+        )) : <em>(ekkert)</em>}
+      </p>
+      {fb.litur !== 'green' && <p className="text-sm font-light mt-1"><span className="opacity-80">{rettMerki}: </span>{fb.svar}</p>}
+      {fb.vantar.length > 0 && fb.litur !== 'green' && <p className="text-xs font-light mt-1 opacity-80">Vantar: {fb.vantar.join(', ')}</p>}
+      {fb.kynAbending && <p className="text-sm font-light mt-2">{fb.kynAbending}</p>}
+    </div>
+  );
+};
+
+const SERSTAFIR = ['á', 'ð', 'é', 'í', 'ó', 'ú', 'ý', 'þ', 'æ', 'ö'];
+function Innslattur({ value, onChange, onSubmit, placeholder, takki = 'Senda' }) {
+  const ref = useRef(null);
+  const setja = c => {
+    const el = ref.current; const a = el ? el.selectionStart : value.length, b = el ? el.selectionEnd : value.length;
+    onChange(value.slice(0, a) + c + value.slice(b));
+    requestAnimationFrame(() => { if (el) { el.focus(); el.setSelectionRange(a + 1, a + 1); } });
+  };
+  return (
+    <form onSubmit={e => { e.preventDefault(); if (value.trim()) onSubmit(); }}>
+      <div className="flex gap-2">
+        <input ref={ref} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoFocus
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-base" />
+        <button type="submit" disabled={!value.trim()} className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">{takki}</button>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {SERSTAFIR.map(c => (
+          <button key={c} type="button" onClick={() => setja(c)} className="w-9 h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-light">{c}</button>
+        ))}
+      </div>
+    </form>
+  );
+}
+
+const Haus = ({ titill, undir, onBack }) => (
+  <header className="bg-white shadow-sm border-b border-gray-200">
+    <div className="max-w-4xl mx-auto px-6 py-6">
+      <button onClick={onBack || (() => window.history.back())} className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Til baka</button>
+      <h1 className="text-3xl font-light text-gray-800 mb-1">{titill}</h1>
+      <p className="text-gray-500 text-sm font-light">{undir}</p>
+    </div>
+  </header>
+);
+
+function Budin({ lag = false }) {
+  const hillur = [42, 82, 122];
+  const vorur = ['#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#a855f7', '#f97316', '#14b8a6'];
+  return (
+    <svg viewBox="0 0 500 200" role="img" aria-label="Teikning af búð með hillum, kæli og kassa" className={`w-full ${lag ? 'max-h-32' : 'max-h-52'} block`}>
+      <rect width="500" height="200" fill="#f5f1e8" />
+      <rect y="168" width="500" height="32" fill="#e7e2d6" />
+      {hillur.map((y, r) => (
+        <g key={r}>
+          {Array.from({ length: 7 }).map((_, i) => (
+            <rect key={i} x={28 + i * 27} y={y - 26 + ((i + r) % 3) * 3} width="21" height={26 - ((i + r) % 3) * 3} rx="2" fill={vorur.at((i + r * 2) % 7)} opacity="0.85" />
+          ))}
+          <rect x="20" y={y} width="200" height="6" rx="2" fill="#a8a29e" />
+        </g>
+      ))}
+      <rect x="300" y="22" width="176" height="146" rx="6" fill="#e0f2fe" stroke="#94a3b8" strokeWidth="2" />
+      <line x1="388" y1="22" x2="388" y2="168" stroke="#94a3b8" strokeWidth="2" />
+      <text x="388" y="16" textAnchor="middle" fontSize="11" fill="#475569" fontFamily="system-ui">KÆLIR</text>
+      {[52, 92, 132].map((y, r) => (
+        <g key={r}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <g key={i}>
+              <rect x={308 + i * 20 + (i > 3 ? 8 : 0)} y={y - 16} width="14" height="16" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+              <rect x={307 + i * 20 + (i > 3 ? 8 : 0)} y={y - 19} width="16" height="4" rx="2" fill={r === 1 ? '#22c55e' : '#2563eb'} />
+            </g>
+          ))}
+          <rect x="304" y={y} width="168" height="3" fill="#94a3b8" />
+        </g>
+      ))}
+      <rect x="140" y="140" width="220" height="40" rx="4" fill="#d6d3d1" />
+      <rect x="140" y="136" width="220" height="8" rx="3" fill="#a8a29e" />
+      <rect x="318" y="118" width="22" height="18" rx="3" fill="#334155" />
+      <rect x="322" y="122" width="14" height="6" rx="1" fill="#67e8f9" />
+    </svg>
+  );
+}
+
+// ================= Upphafsskjár =================
+function Upphaf({ stillingar, setStillingar, onByrja }) {
+  const { hamur, kyn, stig, inntak } = stillingar;
+  const set = (k, v) => setStillingar({ ...stillingar, [k]: v });
+  const Val = ({ virkt, onClick, children, disabled }) => (
+    <button onClick={onClick} disabled={disabled}
+      className={`text-left p-4 rounded-xl border-2 transition-colors ${virkt ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+      {children}
+    </button>
+  );
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-8 fade-in">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+        <Budin />
+        <div className="p-5">
+          <p className="text-gray-700 font-light">Þú ert í búð. Þú þarft að finna skyr, spyrja um verð og borga við kassann. Gunnar og Guðrún tala við þig, og þú svarar upphátt.</p>
+          <p className="text-xs text-gray-400 font-light mt-2">Frumgerð til að sýna hugmyndina. Teikning í stað ljósmyndar; ekkert vistast.</p>
+        </div>
+      </div>
+
+      <h2 className="text-lg font-medium text-gray-800 mb-3">Veldu ham</h2>
+      <div className="grid sm:grid-cols-2 gap-3 mb-6">
+        {HAMIR.map(h => (
+          <Val key={h.id} virkt={hamur === h.id} onClick={() => set('hamur', h.id)}>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center font-medium">{h.id}</span>
+              <span className="font-medium text-gray-800">{h.heiti}</span>
+            </div>
+            <p className="text-sm text-gray-500 font-light ml-10">{h.lysing}</p>
+          </Val>
+        ))}
+        <Val disabled>
+          <div className="flex items-center gap-3 mb-1">
+            <span className="w-7 h-7 rounded-full bg-gray-300 text-white text-sm flex items-center justify-center font-medium">5</span>
+            <span className="font-medium text-gray-800">Frjálst samtal</span>
+          </div>
+          <p className="text-sm text-gray-500 font-light ml-10">Gervigreind leikur Gunnar og Guðrúnu. Kemur síðar.</p>
+        </Val>
+      </div>
+
+      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="text-sm font-medium text-gray-800 mb-2">Ávarp</h3>
+          <p className="text-xs text-gray-500 font-light mb-2">„Ertu … að finna allt?“</p>
+          <div className="flex gap-2">
+            {Object.entries(KYN).map(([k, v]) => (
+              <button key={k} onClick={() => set('kyn', k)} className={`flex-1 py-2 rounded-lg border text-sm font-light ${kyn === k ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>{v.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="text-sm font-medium text-gray-800 mb-2">Nákvæmni <span className="font-light text-gray-400">(kennari velur)</span></h3>
+          <p className="text-xs text-gray-500 font-light mb-2">Hve líkt svarið þarf að vera</p>
+          <div className="flex gap-2">
+            {STIG.map(s => (
+              <button key={s.id} onClick={() => set('stig', s.id)} className={`flex-1 py-2 rounded-lg border text-sm font-light ${stig === s.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>{s.heiti}<span className="block text-[11px] opacity-75">{Math.round(s.gildi * 100)}%</span></button>
+            ))}
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="text-sm font-medium text-gray-800 mb-2">Svara með</h3>
+          <p className="text-xs text-gray-500 font-light mb-2">{!SR_TIL ? 'Vafrinn styður ekki talgreiningu' : I_RAMMA ? 'Hljóðnemi virkar líklega ekki í innfelldum glugga' : 'Íslensk talgreining í vafranum'}</p>
+          <div className="flex gap-2">
+            <button onClick={() => set('inntak', 'mic')} disabled={!SR_TIL} className={`flex-1 py-2 rounded-lg border text-sm font-light disabled:opacity-40 ${inntak === 'mic' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Hljóðnema</button>
+            <button onClick={() => set('inntak', 'skrifa')} className={`flex-1 py-2 rounded-lg border text-sm font-light ${inntak === 'skrifa' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>Skrifa</button>
+          </div>
+        </div>
+      </div>
+
+      <button onClick={onByrja} className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light text-lg">Byrja →</button>
+    </div>
+  );
+}
+
+// ================= Æfingin =================
+function Aefing({ stillingar, onLokid, onHaetta }) {
+  const { hamur, kyn } = stillingar;
+  const thr = STIG.find(s => s.id === stillingar.stig).gildi;
+  const [idx, setIdx] = useState(0);
+  const [saga, setSaga] = useState([]);
+  const [skref, setSkref] = useState('talar');
+  const [fb, setFb] = useState(null);
+  const [umritun, setUmritun] = useState('');
+  const [umritunFb, setUmritunFb] = useState(null);
+  const [svarTexti, setSvarTexti] = useState('');
+  const [inntak, setInntak] = useState(stillingar.inntak === 'mic' && SR_TIL ? 'mic' : 'skrifa');
+  const [skrifaNuna, setSkrifaNuna] = useState(false);
+  const [micSkilabod, setMicSkilabod] = useState('');
+  const [rodd, setRodd] = useState(null);
+  const [talar, setTalar] = useState(null);
+  const [synilegt, setSynilegt] = useState(new Set());
+  const [hjalp, setHjalp] = useState(false);
+  const [tilraunir, setTilraunir] = useState(0);
+  const log = useRef([]);
+  const besta = useRef(0);
+  const byrjun = useRef(Date.now());
+  const recRef = useRef(null);
+  const nidur = useRef(null);
+
+  const lina = LINUR[idx];
+  const markmid = texti(lina.svar, kyn);
+  const vidm = VIDM[lina.vidm];
+
+  const tala = async (text, hradi = 1, hver = 'vidm') => {
+    setTalar(hver);
+    const r = await spila(text, hradi);
+    setRodd(r); setTalar(null);
+    return r;
+  };
+
+  useEffect(() => {
+    setSaga(s => [...s, { hver: 'vidm', idx, texti: texti(lina.segir, kyn) }]);
+    setFb(null); setUmritun(''); setUmritunFb(null); setSvarTexti(''); setSkrifaNuna(false);
+    setHjalp(false); setTilraunir(0); setMicSkilabod(''); besta.current = 0; byrjun.current = Date.now();
+    setSkref('talar');
+    tala(texti(lina.segir, kyn)).then(() => setSkref(hamur === 2 ? 'umritun' : 'svar'));
+  }, [idx]);
+
+  useEffect(() => { if (nidur.current) nidur.current.scrollTop = nidur.current.scrollHeight; }, [saga, skref]);
+  useEffect(() => () => { try { recRef.current && recRef.current.abort(); } catch (e) {} if ('speechSynthesis' in window) speechSynthesis.cancel(); }, []);
+
+  const textiFalinn = i => rodd !== 'ekkert' && !synilegt.has(i) && (hamur === 2 || hamur === 4);
+  const syna = i => setSynilegt(s => new Set([...s, i]));
+
+  const athugaUmritun = () => {
+    const r = meta([umritun], [texti(lina.segir, kyn)], thr);
+    setUmritunFb(r); syna(idx); setSkref('umritad');
+  };
+
+  const metaSvar = (heyrt, hvernig) => {
+    const kynMyndir = typeof lina.svar === 'string' ? null : { label: KYN[kyn].label, adrar: Object.entries(lina.svar).filter(([k]) => k !== kyn).map(([, v]) => v) };
+    const r = meta(heyrt, [markmid, ...lina.samthykkt], thr, kynMyndir);
+    r.hvernig = hvernig;
+    besta.current = Math.max(besta.current, r.s);
+    setTilraunir(t => t + 1);
+    setFb(r); setSkref('endurgjof');
+  };
+
+  const byrjaHlusta = () => {
+    setMicSkilabod(''); pling(); setSkref('hlusta');
+    setTimeout(() => {
+      recRef.current = hlusta({
+        onNidurstada: alts => metaSvar(alts, 'mic'),
+        onVilla: kodi => {
+          if (kodi === 'no-speech' || kodi === 'aborted') { setMicSkilabod('Ég heyrði ekkert. Reyndu aftur þegar rauði punkturinn birtist.'); setSkref('svar'); return; }
+          setInntak('skrifa'); setMicSkilabod(VILLUR[kodi] || 'Talgreiningin virkaði ekki. Skrifaðu svarið í staðinn.'); setSkref('svar');
+        },
+      });
+    }, 250);
+  };
+
+  const naesta = (nidurstada, textiNem, litur) => {
+    log.current[idx] = {
+      nr: idx + 1, svar: markmid, tilraunir: tilraunir || (nidurstada === 'sleppt' ? 0 : 1), besta: besta.current, nidurstada,
+      hjalp: hjalp || (hamur === 4 && synilegt.has(idx)), umritun: umritunFb ? umritunFb.s : null,
+      sek: Math.round((Date.now() - byrjun.current) / 1000),
+    };
+    setSaga(s => [...s, { hver: 'nem', idx, texti: textiNem, litur }]);
+    if (idx < LINUR.length - 1) setIdx(idx + 1);
+    else setTimeout(() => onLokid(log.current), 600);
+  };
+
+  const reynaAftur = () => { setFb(null); setSvarTexti(''); setSkref('svar'); };
+  const skrifaIStadinn = () => { setFb(null); setSvarTexti(''); setSkrifaNuna(true); setSkref('svar'); };
+
+  const Visbending = () => (
+    <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-50 border border-blue-100">
+      <span className="text-4xl" aria-hidden="true">{lina.mynd}</span>
+      <div>
+        <p className="text-blue-800 font-light">{lina.enska}</p>
+        <p className="text-xs text-blue-600 font-light">Vísbending. Í fullri útgáfu kemur ljósmynd hér.</p>
+      </div>
+    </div>
+  );
+
+  const notaMic = inntak === 'mic' && !skrifaNuna;
+  const svarMerki = fb && fb.hvernig === 'mic' ? 'Ég heyrði' : 'Þú skrifaðir';
+  const hamurNafn = HAMIR.find(h => h.id === hamur).heiti;
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-6">
+      <ProgressBar current={idx} total={LINUR.length} />
+      {rodd === 'ekkert' && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 font-light">
+          Íslensk rödd fannst ekki í þessum vafra, svo línurnar birtast sem texti. Í Málstöðinni les Azure (Gunnar og Guðrún) þær upp. Í Edge er oft íslensk rödd.
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="relative" style={{ background: '#f5f1e8' }}>
+          <Budin lag />
+          <span className="absolute top-2 left-3 text-xs bg-white/90 rounded-full px-3 py-1 text-gray-600 font-light">Sena {lina.sena}: {SENUR[lina.sena]} · {hamurNafn}</span>
+        </div>
+
+        <div ref={nidur} className="p-4 space-y-3 overflow-y-auto" style={{ minHeight: 220, maxHeight: 360 }}>
+          {saga.map((m, i) => m.hver === 'vidm' ? (
+            <div key={i} className="flex items-start gap-3 fade-in">
+              <div className={`w-9 h-9 shrink-0 rounded-full border flex items-center justify-center text-sm font-medium ${VIDM[LINUR[m.idx].vidm].lit}`}>{VIDM[LINUR[m.idx].vidm].nafn[0]}</div>
+              <div>
+                <p className="text-xs text-gray-400 font-light mb-1">{VIDM[LINUR[m.idx].vidm].nafn}, {VIDM[LINUR[m.idx].vidm].hlutverk}</p>
+                <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-2 text-gray-800 font-light">
+                  {textiFalinn(m.idx) ? <span className="text-gray-400 tracking-widest" aria-label="Texti falinn">· · · · · ·</span> : m.texti}
+                </div>
+                {m.idx === idx && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <ListenPill onClick={() => tala(m.texti)} speaking={talar === 'vidm'} label={skref === 'talar' ? `${vidm.nafn} talar…` : 'Aftur'} />
+                    <ListenPill onClick={() => tala(m.texti, 0.75)} label="Hægar" />
+                    {hamur === 4 && textiFalinn(m.idx) && (
+                      <button onClick={() => syna(m.idx)} className="text-xs text-gray-500 underline font-light">Sýna texta</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div key={i} className="flex justify-end fade-in">
+              <div className={`max-w-[80%] rounded-2xl rounded-tr-sm px-4 py-2 font-light ${m.litur === 'skip' ? 'bg-gray-100 text-gray-400 italic' : 'bg-blue-600 text-white'}`}>
+                {m.texti}
+                {m.litur && m.litur !== 'skip' && <span className={`ml-2 inline-block w-2 h-2 rounded-full ${m.litur === 'green' ? 'bg-green-300' : m.litur === 'amber' ? 'bg-amber-300' : 'bg-red-300'}`} />}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-gray-100 p-5 bg-gray-50/60">
+          {skref === 'talar' && <p className="text-sm text-gray-500 font-light">{vidm.nafn} talar… Bíddu þar til röðin kemur að þér.</p>}
+
+          {(skref === 'umritun' || skref === 'umritad') && (
+            <div className="fade-in">
+              <p className="text-sm text-gray-700 font-light mb-2">Skrifaðu það sem {vidm.nafn} sagði.</p>
+              {skref === 'umritun'
+                ? <Innslattur value={umritun} onChange={setUmritun} onSubmit={athugaUmritun} placeholder="Það sem þú heyrðir…" takki="Athuga" />
+                : <>
+                    <FeedbackBadge fb={umritunFb} merki="Þú skrifaðir" rettMerki="Sagt var" />
+                    <button onClick={() => setSkref('svar')} className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">Svaraðu {vidm.nafn === 'Gunnar' ? 'Gunnari' : 'Guðrúnu'} →</button>
+                  </>}
+            </div>
+          )}
+
+          {(skref === 'svar' || skref === 'hlusta') && (
+            <div className="fade-in">
+              {(hamur === 1 || hamur === 2) && (
+                <div className="mb-4">
+                  <p className="text-xs text-gray-400 font-light mb-1">Segðu:</p>
+                  <p className="text-2xl font-light text-gray-800 mb-2">{markmid}</p>
+                  <div className="flex gap-2">
+                    <ListenPill onClick={() => tala(markmid, 1, 'svar')} speaking={talar === 'svar'} label="Hlustaðu á svarið" />
+                    <ListenPill onClick={() => tala(markmid, 0.75, 'svar')} label="Hægar" />
+                  </div>
+                </div>
+              )}
+              {hamur === 3 && <div className="mb-4"><Visbending /></div>}
+              {hamur === 4 && (hjalp ? <div className="mb-4"><Visbending /></div> : (
+                <button onClick={() => setHjalp(true)} className="mb-4 px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Hjálp</button>
+              ))}
+
+              {micSkilabod && <p className="mb-3 text-sm text-amber-700 font-light">{micSkilabod}</p>}
+
+              {notaMic ? (
+                skref === 'hlusta' ? (
+                  <div className="flex items-center gap-4">
+                    <span className="w-4 h-4 rounded-full bg-red-500 pulse-dot" />
+                    <span className="text-gray-700 font-light">Ég hlusta…</span>
+                    <button onClick={() => { try { recRef.current && recRef.current.stop(); } catch (e) {} }} className="ml-auto px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-light text-sm">Búin(n)</button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button onClick={byrjaHlusta} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">🎤 Tala</button>
+                    <button onClick={skrifaIStadinn} className="text-sm text-gray-500 underline font-light">Skrifa í staðinn</button>
+                  </div>
+                )
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 font-light mb-2">{inntak === 'skrifa' && !skrifaNuna ? 'Prufuhamur án hljóðnema: skrifaðu svarið eins og þú myndir segja það.' : 'Skrifaðu svarið.'}</p>
+                  <Innslattur value={svarTexti} onChange={setSvarTexti} onSubmit={() => metaSvar([svarTexti], 'skrifa')} placeholder="Svarið þitt…" />
+                </>
+              )}
+            </div>
+          )}
+
+          {skref === 'endurgjof' && fb && (
+            <div>
+              <FeedbackBadge fb={fb} merki={svarMerki} />
+              <div className="flex flex-wrap gap-3 mt-4">
+                {fb.litur === 'green' && <button onClick={() => naesta(skrifaNuna ? 'skrifad' : 'graent', fb.heyrt, 'green')} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">{idx < LINUR.length - 1 ? 'Næsta lína →' : 'Ljúka →'}</button>}
+                {fb.litur === 'amber' && <button onClick={() => naesta(skrifaNuna ? 'skrifad' : 'amber', fb.heyrt, 'amber')} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">Halda áfram →</button>}
+                {fb.litur !== 'green' && <button onClick={reynaAftur} className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Reyna aftur</button>}
+                {fb.litur === 'red' && notaMic && <button onClick={skrifaIStadinn} className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Skrifa í staðinn</button>}
+                {fb.litur === 'red' && <button onClick={() => naesta('sleppt', '(sleppt)', 'skip')} className="px-6 py-3 border-2 border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Sleppa</button>}
+              </div>
+              {fb.litur === 'red' && tilraunir >= 3 && notaMic && <p className="text-sm text-gray-500 font-light mt-3">Þrjár tilraunir. Prófaðu að skrifa svarið í staðinn.</p>}
+            </div>
+          )}
+        </div>
+      </div>
+      <button onClick={onHaetta} className="mt-4 text-sm text-gray-500 hover:text-gray-700 font-light">Hætta og velja annan ham</button>
+    </div>
+  );
+}
+
+// ================= Útgöngumiði =================
+const ANDLIT = [
+  { g: -2, e: '😣', t: 'Mjög illa' }, { g: -1, e: '🙁', t: 'Illa' }, { g: 0, e: '😐', t: 'Hlutlaust' }, { g: 1, e: '🙂', t: 'Vel' }, { g: 2, e: '😄', t: 'Mjög vel' },
+];
+const MERKI = ['Skildi allt', 'Kerfið skildi mig ekki', 'Of létt', 'Of erfitt', 'Lærði nýtt orð', 'Ég var stressaður/stressuð'];
+
+function Utgongumidi({ onSenda }) {
+  const [andlit, setAndlit] = useState(null);
+  const [merki, setMerki] = useState([]);
+  const [svar, setSvar] = useState('');
+  const vixla = m => setMerki(x => (x.includes(m) ? x.filter(y => y !== m) : [...x, m]));
+  return (
+    <div className="max-w-2xl mx-auto px-6 py-8 fade-in">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-xl font-light text-gray-800 mb-1">Útgöngumiði</h2>
+        <p className="text-sm text-gray-500 font-light mb-6">Um ein mínúta. Kennarinn sér svörin við hlið talgagnanna.</p>
+        <p className="text-sm font-medium text-gray-800 mb-2">Hvernig gekk?</p>
+        <div className="grid grid-cols-5 gap-2 mb-6">
+          {ANDLIT.map(a => (
+            <button key={a.g} onClick={() => setAndlit(a.g)} aria-pressed={andlit === a.g}
+              className={`py-3 rounded-xl border-2 transition-colors ${andlit === a.g ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <span className="text-2xl block" aria-hidden="true">{a.e}</span>
+              <span className="text-[11px] text-gray-500 font-light">{a.t}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-sm font-medium text-gray-800 mb-2">Hvað á við? <span className="font-light text-gray-400">(veldu eins mörg og þú vilt)</span></p>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {MERKI.map(m => (
+            <button key={m} onClick={() => vixla(m)} aria-pressed={merki.includes(m)}
+              className={`px-3 py-1.5 rounded-full border text-sm font-light ${merki.includes(m) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>{m}</button>
+          ))}
+        </div>
+        <p className="text-sm font-medium text-gray-800 mb-2">Hvað var erfiðast?</p>
+        <textarea value={svar} onChange={e => setSvar(e.target.value)} rows={3}
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 font-light resize-none mb-6 text-base" />
+        <button disabled={andlit === null} onClick={() => onSenda({ andlit, merki, svar })}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-light">Senda</button>
+      </div>
+    </div>
+  );
+}
+
+// ================= Kennarayfirlit =================
+const NIDURSTODUR = {
+  graent: { t: 'Rétt', c: 'bg-green-100 text-green-800' },
+  amber: { t: 'Nærri', c: 'bg-amber-100 text-amber-800' },
+  skrifad: { t: 'Skrifað', c: 'bg-blue-100 text-blue-800' },
+  sleppt: { t: 'Sleppt', c: 'bg-gray-100 text-gray-600' },
+};
+
+function Yfirlit({ log, midi, stillingar, onNyttHam, onAftur }) {
+  const rodir = log.filter(Boolean);
+  const metid = rodir.filter(r => r.nidurstada !== 'sleppt');
+  const medal = metid.length ? Math.round(100 * metid.reduce((a, r) => a + r.besta, 0) / metid.length) : 0;
+  const graen = rodir.filter(r => r.nidurstada === 'graent').length;
+  const sek = rodir.reduce((a, r) => a + r.sek, 0);
+  const a = ANDLIT.find(x => x.g === midi.andlit);
+  const synaUmritun = stillingar.hamur === 2;
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-8 fade-in">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h2 className="text-xl font-light text-gray-800 mb-1">Kennarayfirlit</h2>
+        <p className="text-sm text-gray-500 font-light mb-5">Svona gæti kennarinn séð lotuna. Í Málstöðinni færi þetta í Firebase; í frumgerðinni vistast ekkert.</p>
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="rounded-lg bg-gray-50 p-3"><p className="text-2xl font-light text-gray-800">{medal}%</p><p className="text-xs text-gray-500 font-light">meðallíkindi</p></div>
+          <div className="rounded-lg bg-gray-50 p-3"><p className="text-2xl font-light text-gray-800">{graen} af {LINUR.length}</p><p className="text-xs text-gray-500 font-light">línur réttar</p></div>
+          <div className="rounded-lg bg-gray-50 p-3"><p className="text-2xl font-light text-gray-800">{Math.floor(sek / 60)}:{String(sek % 60).padStart(2, '0')}</p><p className="text-xs text-gray-500 font-light">tími</p></div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                <th className="py-2 pr-3 font-light">#</th>
+                <th className="py-2 pr-3 font-light">Vænt svar</th>
+                {synaUmritun && <th className="py-2 pr-3 font-light text-right">Umritun</th>}
+                <th className="py-2 pr-3 font-light text-right">Tilraunir</th>
+                <th className="py-2 pr-3 font-light text-right">Besta</th>
+                <th className="py-2 pr-3 font-light">Niðurstaða</th>
+                <th className="py-2 font-light">Hjálp</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rodir.map(r => (
+                <tr key={r.nr} className="border-b border-gray-100">
+                  <td className="py-2 pr-3 text-gray-400 font-light">{r.nr}</td>
+                  <td className="py-2 pr-3 font-light text-gray-800">{r.svar}</td>
+                  {synaUmritun && <td className="py-2 pr-3 font-light text-right whitespace-nowrap">{r.umritun === null ? '–' : `${Math.round(r.umritun * 100)}%`}</td>}
+                  <td className="py-2 pr-3 font-light text-right">{r.tilraunir}</td>
+                  <td className="py-2 pr-3 font-light text-right whitespace-nowrap">{r.nidurstada === 'sleppt' && !r.besta ? '–' : `${Math.round(r.besta * 100)}%`}</td>
+                  <td className="py-2 pr-3"><span className={`px-2 py-0.5 rounded-full text-xs ${NIDURSTODUR[r.nidurstada].c}`}>{NIDURSTODUR[r.nidurstada].t}</span></td>
+                  <td className="py-2 font-light text-gray-500">{r.hjalp ? 'Já' : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <h3 className="text-base font-medium text-gray-800 mb-3">Útgöngumiði nemandans</h3>
+        <div className="flex items-start gap-4">
+          <span className="text-4xl" aria-hidden="true">{a.e}</span>
+          <div>
+            <p className="font-light text-gray-800">{a.t} ({a.g > 0 ? `+${a.g}` : a.g})</p>
+            {midi.merki.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{midi.merki.map(m => <span key={m} className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 text-xs">{m}</span>)}</div>}
+            <p className="font-light text-gray-600 mt-2">{midi.svar ? `„${midi.svar}“` : <em className="text-gray-400">Engu svarað um hvað var erfiðast.</em>}</p>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 font-light mt-4">Talan ein og sér segir lítið. Hún fær merkingu við hliðina á því sem nemandinn segir sjálfur (Ericsson o.fl., 2026).</p>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button onClick={onNyttHam} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">Prófa annan ham</button>
+        <button onClick={onAftur} className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm">Sama ham aftur</button>
+      </div>
+    </div>
+  );
+}
+
+// ================= Forritið =================
+function App() {
+  const [skjar, setSkjar] = useState('upphaf');
+  const [stillingar, setStillingar] = useState({ hamur: 1, kyn: 'kk', stig: 'midlungs', inntak: SR_TIL && !I_RAMMA ? 'mic' : 'skrifa' });
+  const [log, setLog] = useState([]);
+  const [midi, setMidi] = useState(null);
+  const [lota, setLota] = useState(0);
+  const hamur = HAMIR.find(h => h.id === stillingar.hamur);
+  const undir = {
+    upphaf: 'Talæfing · A1–A2 · frumgerð',
+    aefing: `Hamur ${hamur.id}: ${hamur.heiti}`,
+    midi: 'Útgöngumiði',
+    yfirlit: 'Kennarayfirlit (sýnishorn)',
+  }[skjar];
+  return (
+    <div>
+      <Haus titill="Í Bónus" undir={undir} onBack={skjar === 'upphaf' ? undefined : () => setSkjar('upphaf')} />
+      {skjar === 'upphaf' && <Upphaf stillingar={stillingar} setStillingar={setStillingar} onByrja={() => { setLota(l => l + 1); setSkjar('aefing'); }} />}
+      {skjar === 'aefing' && <Aefing key={lota} stillingar={stillingar} onLokid={l => { setLog(l); setSkjar('midi'); }} onHaetta={() => setSkjar('upphaf')} />}
+      {skjar === 'midi' && <Utgongumidi onSenda={m => { setMidi(m); setSkjar('yfirlit'); }} />}
+      {skjar === 'yfirlit' && <Yfirlit log={log} midi={midi} stillingar={stillingar} onNyttHam={() => setSkjar('upphaf')} onAftur={() => { setLota(l => l + 1); setSkjar('aefing'); }} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
