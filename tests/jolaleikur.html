@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Jólasveinninn kemst heim</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(to bottom, #f8f7f4 0%, #e8e6e1 100%);
+      min-height: 100vh;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+    @keyframes pop {
+      0% { transform: scale(0.6); opacity: 0; }
+      70% { transform: scale(1.06); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop { animation: pop 0.5s ease both; }
+    @media print {
+      body { background: white !important; }
+      .no-print { display: none !important; }
+      .kort { break-inside: avoid; page-break-inside: avoid; }
+      @page { size: A4; margin: 12mm; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* =====================================================================
+   STILLINGAR – breyttu hér
+   Hópur nr. i á orð nr. i og spyr um orð nr. i+1 (hringur), svo enginn
+   hópur fær sitt eigið orð sem ráðgátu.
+   Myndir og hljóð: settu skrár í MAPPA. Ef mynd vantar birtist táknið;
+   ef mp3-skrá vantar les Azure orðið í gegnum speak-fallið.
+   ===================================================================== */
+const MAPPA = 'media/jol/';
+const JOLASVEINN = 'Stekkjarstaur';
+
+const ORD = [
+  { id: 'hurd',   ord: 'hurð',   mynd: 'hurd.png',   emoji: '🚪' },
+  { id: 'gluggi', ord: 'gluggi', mynd: 'gluggi.png', emoji: '🪟' },
+  { id: 'skor',   ord: 'skór',   mynd: 'skor.png',   emoji: '👞' },
+  { id: 'kerti',  ord: 'kerti',  mynd: 'kerti.png',  emoji: '🕯️' },
+  { id: 'skyr',   ord: 'skyr',   mynd: 'skyr.png',   emoji: '🥣' },
+  { id: 'mjolk',  ord: 'mjólk',  mynd: 'mjolk.png',  emoji: '🥛' },
+];
+
+// Kóðarnir í QR-slóðunum segja ekkert um orðið sjálft.
+const HOPAR = [
+  { nafn: 'Rød',    litur: '#dc2626', ordKodi: 'q4m', gataKodi: 'z8t' },
+  { nafn: 'Blå',    litur: '#2563eb', ordKodi: 'h2x', gataKodi: 'c6p' },
+  { nafn: 'Grøn',   litur: '#16a34a', ordKodi: 'w9k', gataKodi: 'n3r' },
+  { nafn: 'Gul',    litur: '#ca8a04', ordKodi: 'j5v', gataKodi: 'b7f' },
+  { nafn: 'Lilla',  litur: '#9333ea', ordKodi: 'u2d', gataKodi: 'y4s' },
+  { nafn: 'Orange', litur: '#ea580c', ordKodi: 'e8g', gataKodi: 'l1w' },
+];
+
+const SETNINGAR = [
+  { id: 'spurning',  texti: 'Hvað er þetta?' },
+  { id: 'veit-ekki', texti: 'Veit ekki.' },
+  { id: 'takk',      texti: 'Takk!' },
+];
+
+const MYNDBOND = { upphaf: MAPPA + 'upphaf.mp4', lok: MAPPA + 'lok.mp4' };
+
+// Grunnslóð í QR-kóðunum. Tómt = slóð síðunnar sjálfrar.
+const GRUNNSLOD = '';
+
+/* ===================================================================== */
+
+const gataHops = i => ORD[(i + 1) % ORD.length];
+const grunnslod = () => GRUNNSLOD || (window.location.origin + window.location.pathname);
+const kortaslod = kodi => `${grunnslod()}?k=${kodi}`;
+
+const einfalda = s => s.toLowerCase().trim()
+  .replace(/ð/g, 'd').replace(/þ/g, 'th').replace(/æ/g, 'ae').replace(/ö/g, 'o')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z]/g, '');
+
+/* ---------- Hljóð ----------
+   iPad (Safari) spilar aðeins hljóð sem byrjar beint við snertingu.
+   Þess vegna er hljóðið sótt um leið og síðan opnast og spilað
+   samstundis þegar barnið ýtir á takkann. */
+const hljodCache = {};
+
+async function erTilHljodskra(slod) {
+  try {
+    const r = await fetch(slod, { method: 'HEAD', cache: 'no-store' });
+    const tegund = r.headers.get('content-type') || '';
+    return r.ok && tegund.includes('audio');
+  } catch (e) {
+    return false;
+  }
+}
+
+async function saekjaTTS(texti) {
+  const r = await fetch('/.netlify/functions/speak', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text_to_speak: texti })
+  });
+  const data = await r.json();
+  if (!r.ok || data.error || !data.audio_base64) throw new Error(data.error || `HTTP ${r.status}`);
+  return data.audio_base64;
+}
+
+function saekjaHljod(key, texti) {
+  if (!hljodCache[key]) {
+    hljodCache[key] = (async () => {
+      const slod = MAPPA + key + '.mp3';
+      if (await erTilHljodskra(slod)) return slod;
+      const b64 = await saekjaTTS(texti);
+      return `data:audio/mp3;base64,${b64}`;
+    })();
+    hljodCache[key].catch(() => { delete hljodCache[key]; });
+  }
+  return hljodCache[key];
+}
+
+function useHljod(key, texti) {
+  const [src, setSrc] = useState(null);
+  const [villa, setVilla] = useState(false);
+  const [spilar, setSpilar] = useState(false);
+
+  useEffect(() => {
+    let lifandi = true;
+    setSrc(null);
+    setVilla(false);
+    saekjaHljod(key, texti)
+      .then(s => { if (lifandi) setSrc(s); })
+      .catch(() => { if (lifandi) setVilla(true); });
+    return () => { lifandi = false; };
+  }, [key, texti]);
+
+  const spila = () => {
+    if (!src) return;
+    const a = new Audio(src);
+    setSpilar(true);
+    a.onended = () => setSpilar(false);
+    a.onerror = () => setSpilar(false);
+    a.play().catch(() => setSpilar(false));
+  };
+
+  return { tilbuid: !!src, villa, spilar, spila };
+}
+
+/* ---------- Sameiginlegir íhlutir ---------- */
+
+function Mynd({ ord, className = '', emojiStaerd = 'text-8xl' }) {
+  const [villa, setVilla] = useState(false);
+  if (villa || !ord.mynd) {
+    return <div className={`flex items-center justify-center ${emojiStaerd} ${className}`}>{ord.emoji}</div>;
+  }
+  return <img src={MAPPA + ord.mynd} alt="" onError={() => setVilla(true)} className={`object-contain ${className}`} />;
+}
+
+function HljodTakki({ hljod, merki, stor = false }) {
+  const { tilbuid, villa, spilar, spila } = hljod;
+  const staerd = stor ? 'px-8 py-5 text-2xl' : 'px-5 py-3 text-lg';
+  const utlit = spilar
+    ? 'bg-green-50 text-green-700 border-green-300'
+    : tilbuid
+      ? 'bg-white text-gray-700 border-green-200 hover:bg-green-50 active:scale-95'
+      : 'bg-gray-100 text-gray-400 border-gray-200';
+  return (
+    <button onClick={spila} disabled={!tilbuid}
+      className={`inline-flex items-center gap-3 rounded-2xl border-2 font-light transition-all ${staerd} ${utlit}`}>
+      <span className={`text-green-600 ${spilar ? 'animate-pulse' : ''}`}>🔊</span>
+      <span>{villa ? 'Lyden virker ikke' : tilbuid ? merki : 'Henter lyd …'}</span>
+    </button>
+  );
+}
+
+function LitaBordi({ hopur, titill }) {
+  return (
+    <div className="text-white px-6 py-5" style={{ background: hopur.litur }}>
+      <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+        <span className="text-2xl font-medium">{hopur.nafn} gruppe</span>
+        <span className="text-lg font-light opacity-90">{titill}</span>
+      </div>
+    </div>
+  );
+}
+
+function Kennarahaus({ titill, undirtitill, tilBaka = true }) {
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200 no-print">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        {tilBaka && (
+          <a href="?" className="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-block font-light">← Yfirlit</a>
+        )}
+        <h1 className="text-3xl font-light text-gray-800 mb-2">{titill}</h1>
+        {undirtitill && <p className="text-gray-500 text-sm font-light">{undirtitill}</p>}
+      </div>
+    </header>
+  );
+}
+
+function Myndband({ src, onClose }) {
+  const [villa, setVilla] = useState(false);
+  return (
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-6" onClick={onClose}>
+      {villa ? (
+        <p className="text-white text-xl font-light">Myndbandið fannst ekki: {src}</p>
+      ) : (
+        <video src={src} autoPlay controls playsInline onError={() => setVilla(true)}
+          onClick={e => e.stopPropagation()} className="max-w-full max-h-full rounded-xl" />
+      )}
+      <button onClick={onClose}
+        className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/20 text-white text-2xl hover:bg-white/30">✕</button>
+    </div>
+  );
+}
+
+/* ---------- Spjöld barnanna (iPad) ---------- */
+
+function OrdaSpjald({ hopur, ord }) {
+  const ordHljod = useHljod(ord.id, ord.ord);
+  const veitEkki = useHljod('veit-ekki', 'Veit ekki.');
+  const takk = useHljod('takk', 'Takk!');
+  return (
+    <div className="min-h-screen">
+      <LitaBordi hopur={hopur} titill="Jeres hemmelige ord 🤫" />
+      <main className="max-w-2xl mx-auto px-6 py-8 space-y-6 fade-in">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+          <Mynd ord={ord} className="h-64 w-full mx-auto" emojiStaerd="text-[10rem]" />
+          <h1 className="text-6xl font-medium text-gray-800 mt-6 mb-6">{ord.ord}</h1>
+          <HljodTakki hljod={ordHljod} merki="Lyt" stor />
+          <p className="text-gray-500 font-light mt-4 text-lg">Lyt og sig ordet efter. Øv jer, til I alle kan sige det.</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <p className="text-xl text-gray-700 font-light mb-4">
+            Når nogen spørger <span className="font-medium">Hvað er þetta?</span>
+          </p>
+          <ul className="space-y-5 text-gray-600 font-light text-lg">
+            <li>Er det <span className="font-medium">jeres</span> billede? Så sig ordet. Tryk bagefter på <span className="font-medium">Lyt</span> sammen og tjek, om det var rigtigt.</li>
+            <li className="flex flex-wrap items-center gap-3">Er det et andet billede? Så sig: <HljodTakki hljod={veitEkki} merki="Veit ekki." /></li>
+            <li className="flex flex-wrap items-center gap-3">Når man har fået hjælp, siger man: <HljodTakki hljod={takk} merki="Takk!" /></li>
+          </ul>
+        </div>
+        <p className="text-center text-gray-500 font-light text-lg">Vis ikke billedet til de andre grupper!</p>
+      </main>
+    </div>
+  );
+}
+
+function RadgataSpjald({ hopur, ord }) {
+  const spurning = useHljod('spurning', 'Hvað er þetta?');
+  const takk = useHljod('takk', 'Takk!');
+  return (
+    <div className="min-h-screen">
+      <LitaBordi hopur={hopur} titill="Jeres gåde ❓" />
+      <main className="max-w-2xl mx-auto px-6 py-8 space-y-6 fade-in">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+          <Mynd ord={ord} className="h-64 w-full mx-auto" emojiStaerd="text-[10rem]" />
+          <div className="text-7xl font-medium text-gray-300 mt-4 mb-6">?</div>
+          <HljodTakki hljod={spurning} merki="Hvað er þetta?" stor />
+          <p className="text-gray-500 font-light mt-4 text-lg">Lyt og sig spørgsmålet efter.</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <ol className="list-decimal ml-6 space-y-4 text-gray-600 font-light text-lg">
+            <li>To af jer tager billedkortet og går ud for at spørge. De andre bliver ved bordet med iPad'en.</li>
+            <li>Vis billedet til en anden gruppe og spørg: <span className="font-medium">Hvað er þetta?</span></li>
+            <li>Svarer de <span className="font-medium">Veit ekki</span>, så prøv en ny gruppe.</li>
+            <li>Når I har fået ordet, siger I <span className="font-medium">Takk!</span> Gå så hjem og lær jeres gruppe ordet.</li>
+          </ol>
+          <div className="mt-5"><HljodTakki hljod={takk} merki="Takk!" /></div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/* ---------- Hliðið (skjávarpi) ---------- */
+
+function Hlid() {
+  const [komin, setKomin] = useState([]);
+  const [inntak, setInntak] = useState('');
+  const [skilabod, setSkilabod] = useState('');
+  const [srcs, setSrcs] = useState({});
+  const [myndband, setMyndband] = useState(null);
+  const inntakRef = useRef(null);
+
+  useEffect(() => {
+    ORD.forEach(o => {
+      saekjaHljod(o.id, o.ord)
+        .then(s => setSrcs(fyrra => ({ ...fyrra, [o.id]: s })))
+        .catch(() => {});
+    });
+  }, []);
+
+  const spila = id => {
+    if (srcs[id]) new Audio(srcs[id]).play().catch(() => {});
+  };
+
+  const opna = o => {
+    if (komin.includes(o.id)) return;
+    setKomin(fyrra => [...fyrra, o.id]);
+    spila(o.id);
+  };
+
+  const senda = e => {
+    e.preventDefault();
+    const leit = einfalda(inntak);
+    if (!leit) return;
+    const o = ORD.find(x => einfalda(x.ord) === leit);
+    if (!o) setSkilabod(`„${inntak}“ er ekki á listanum.`);
+    else if (komin.includes(o.id)) setSkilabod(`${o.ord} er þegar komið.`);
+    else { opna(o); setSkilabod(''); }
+    setInntak('');
+    if (inntakRef.current) inntakRef.current.focus();
+  };
+
+  const allt = komin.length === ORD.length;
+
+  return (
+    <div className="min-h-screen">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-5xl mx-auto px-6 py-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <a href="?" className="text-sm text-gray-400 hover:text-gray-600 font-light">← Yfirlit</a>
+            <h1 className="text-4xl font-light text-gray-800">Porten hjem</h1>
+            <p className="text-gray-500 font-light text-lg">{JOLASVEINN} skal bruge seks islandske tryllord for at komme hjem.</p>
+          </div>
+          <button onClick={() => setMyndband(MYNDBOND.upphaf)}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+            ▶ Upphafsmyndband
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-3 gap-6">
+          {ORD.map(o => {
+            const opid = komin.includes(o.id);
+            return (
+              <button key={o.id} onClick={() => (opid ? spila(o.id) : opna(o))}
+                className={`bg-white rounded-xl shadow-sm border-2 aspect-[4/3] flex flex-col items-center justify-center p-4 transition-colors ${opid ? 'border-green-300 pop' : 'border-gray-100'}`}>
+                {opid ? (
+                  <>
+                    <Mynd ord={o} className="h-28 w-full" emojiStaerd="text-7xl" />
+                    <span className="text-4xl font-medium text-gray-800 mt-3">{o.ord}</span>
+                  </>
+                ) : (
+                  <span className="text-7xl text-gray-200 font-light">?</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {allt ? (
+          <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center fade-in">
+            <p className="text-3xl font-light text-gray-800 mb-6">Sig alle seks ord sammen!</p>
+            <button onClick={() => setMyndband(MYNDBOND.lok)}
+              className="px-10 py-5 bg-green-600 text-white text-2xl rounded-xl hover:bg-green-700 transition-colors font-light">
+              🔓 Åbn porten
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={senda} className="mt-8 flex flex-wrap items-center gap-3">
+            <input ref={inntakRef} value={inntak} onChange={e => setInntak(e.target.value)}
+              placeholder="Skrifaðu orðið og ýttu á Enter"
+              className="flex-1 min-w-[16rem] px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-light text-xl" />
+            <span className="text-gray-400 font-light">{komin.length}/{ORD.length}</span>
+          </form>
+        )}
+        {skilabod && <p className="mt-3 text-amber-700 font-light">{skilabod}</p>}
+
+        <div className="mt-10 text-right">
+          <button onClick={() => { setKomin([]); setSkilabod(''); }}
+            className="text-sm text-gray-400 hover:text-gray-600 font-light">Byrja upp á nýtt</button>
+        </div>
+      </main>
+
+      {myndband && <Myndband src={myndband} onClose={() => setMyndband(null)} />}
+    </div>
+  );
+}
+
+/* ---------- Prentun QR-spjalda ---------- */
+
+function QR({ slod, staerd = 6, className = 'w-40 h-40' }) {
+  const [gogn, setGogn] = useState(null);
+  useEffect(() => {
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(slod);
+      qr.make();
+      setGogn(qr.createDataURL(staerd, 2));
+    } catch (e) {
+      setGogn(null);
+    }
+  }, [slod, staerd]);
+  return gogn
+    ? <img src={gogn} alt="QR" className={className} style={{ imageRendering: 'pixelated' }} />
+    : <div className={`${className} bg-gray-100`} />;
+}
+
+function Prentun() {
+  const fraTolvu = window.location.protocol === 'file:';
+  return (
+    <div className="min-h-screen">
+      <Kennarahaus titill="Prenta QR-spjöld" undirtitill="Tvö spjöld á hvern hóp og yfirlit fyrir kennarann" />
+      <div className="no-print max-w-4xl mx-auto px-6 pt-6 space-y-3">
+        <p className="text-gray-600 font-light">
+          <span className="font-medium">Orðaspjaldið</span> er án myndar og liggur á borði hópsins.
+          <span className="font-medium"> Ráðgátuspjaldið</span> er með mynd og sendiboðarnir taka það með sér.
+        </p>
+        {fraTolvu && (
+          <p className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-700 font-light">
+            Síðan er opnuð úr skrá á tölvunni. Opnaðu hana á malstodin.org áður en þú prentar, annars vísa kóðarnir á tölvuna þína.
+          </p>
+        )}
+        <p className="text-sm text-gray-500 font-light">Kóðarnir vísa á: {grunnslod()}</p>
+        <button onClick={() => window.print()}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-light">
+          🖨️ Prenta
+        </button>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-6 py-8 grid grid-cols-2 gap-6">
+        {HOPAR.map((h, i) => (
+          <React.Fragment key={h.nafn}>
+            <div className="kort bg-white rounded-xl border-4 p-6 flex flex-col items-center text-center" style={{ borderColor: h.litur }}>
+              <div className="text-2xl font-medium" style={{ color: h.litur }}>{h.nafn} gruppe</div>
+              <div className="text-gray-500 font-light mb-4">Jeres hemmelige ord 🤫</div>
+              <QR slod={kortaslod(h.ordKodi)} />
+              <div className="text-gray-400 text-sm font-light mt-4">Scan ved jeres bord</div>
+            </div>
+            <div className="kort bg-white rounded-xl border-4 p-6 flex flex-col items-center text-center" style={{ borderColor: h.litur }}>
+              <div className="text-2xl font-medium" style={{ color: h.litur }}>{h.nafn} gruppe</div>
+              <Mynd ord={gataHops(i)} className="h-32 w-full my-3" emojiStaerd="text-8xl" />
+              <div className="text-3xl font-medium text-gray-800 mb-3">Hvað er þetta?</div>
+              <QR slod={kortaslod(h.gataKodi)} staerd={4} className="w-28 h-28" />
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div className="kort max-w-4xl mx-auto px-6 pb-10">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-medium text-gray-800 mb-4">Yfirlit kennarans</h2>
+          <table className="w-full text-left font-light text-gray-700">
+            <thead>
+              <tr className="text-sm text-gray-500 border-b border-gray-200">
+                <th className="py-2 font-medium">Hópur</th>
+                <th className="py-2 font-medium">Á orðið</th>
+                <th className="py-2 font-medium">Spyr um</th>
+              </tr>
+            </thead>
+            <tbody>
+              {HOPAR.map((h, i) => (
+                <tr key={h.nafn} className="border-b border-gray-100">
+                  <td className="py-2" style={{ color: h.litur }}>{h.nafn}</td>
+                  <td className="py-2">{ORD[i].ord}</td>
+                  <td className="py-2">{gataHops(i).ord}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Yfirlit kennarans ---------- */
+
+function HljodLina({ id, texti }) {
+  const [stada, setStada] = useState('athuga');
+  useEffect(() => {
+    erTilHljodskra(MAPPA + id + '.mp3').then(til => setStada(til ? 'til' : 'vantar'));
+  }, [id]);
+
+  const saekja = async () => {
+    setStada('saeki');
+    try {
+      const b64 = await saekjaTTS(texti);
+      const baeti = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([baeti], { type: 'audio/mpeg' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${id}.mp3`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStada('sott');
+    } catch (e) {
+      setStada('villa');
+    }
+  };
+
+  const merki = {
+    athuga: ['Athuga …', 'text-gray-400'],
+    til: ['Skráin er komin', 'text-green-700'],
+    vantar: ['Vantar – Azure les', 'text-amber-700'],
+    saeki: ['Sæki …', 'text-gray-400'],
+    sott: ['Sótt – settu í möppuna', 'text-blue-700'],
+    villa: ['Speak-fallið svaraði ekki', 'text-red-700'],
+  }[stada];
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-gray-100">
+      <div>
+        <span className="font-medium text-gray-800">{texti}</span>
+        <span className="text-sm text-gray-400 font-light ml-2">{id}.mp3</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className={`text-sm font-light ${merki[1]}`}>{merki[0]}</span>
+        <button onClick={saekja} disabled={stada === 'saeki'}
+          className="px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-light text-sm disabled:opacity-50">
+          Sækja mp3
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Yfirlit() {
+  return (
+    <div className="min-h-screen">
+      <Kennarahaus titill="Jólasveinninn kemst heim" undirtitill={`Ratleikur fyrir 2.c · ${JOLASVEINN} · stjórnborð kennara`} tilBaka={false} />
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-6 fade-in">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <a href="?s=hlid" className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:border-blue-200 transition-colors">
+            <div className="text-2xl mb-2">🔓</div>
+            <div className="text-lg font-medium text-gray-800">Hliðið</div>
+            <div className="text-sm text-gray-500 font-light">Á skjávarpann: myndböndin og orðin sex</div>
+          </a>
+          <a href="?s=prenta" className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:border-blue-200 transition-colors">
+            <div className="text-2xl mb-2">🖨️</div>
+            <div className="text-lg font-medium text-gray-800">Prenta QR-spjöld</div>
+            <div className="text-sm text-gray-500 font-light">Tólf spjöld og yfirlit kennarans</div>
+          </a>
+        </div>
+
+        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-medium text-gray-800 mb-4">Hóparnir</h2>
+          <table className="w-full text-left font-light text-gray-700">
+            <thead>
+              <tr className="text-sm text-gray-500 border-b border-gray-200">
+                <th className="py-2 font-medium">Hópur</th>
+                <th className="py-2 font-medium">Orðaspjald</th>
+                <th className="py-2 font-medium">Ráðgátuspjald</th>
+              </tr>
+            </thead>
+            <tbody>
+              {HOPAR.map((h, i) => (
+                <tr key={h.nafn} className="border-b border-gray-100">
+                  <td className="py-2" style={{ color: h.litur }}>{h.nafn}</td>
+                  <td className="py-2"><a className="text-blue-600 hover:underline" href={`?k=${h.ordKodi}`}>{ORD[i].ord}</a></td>
+                  <td className="py-2"><a className="text-blue-600 hover:underline" href={`?k=${h.gataKodi}`}>{gataHops(i).ord}</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-medium text-gray-800 mb-2">Hljóð</h2>
+          <p className="text-sm text-gray-500 font-light mb-4">
+            Spjöldin nota mp3-skrár úr {MAPPA} ef þær eru til, annars les Azure í gegnum speak-fallið.
+            Sæktu skrárnar hér og settu þær í möppuna, svo leikurinn verði ekki háður speak-fallinu á sjálfan daginn.
+            Eigin upptökur með sama skráarnafni virka líka.
+          </p>
+          {[...ORD.map(o => ({ id: o.id, texti: o.ord })), ...SETNINGAR].map(h => (
+            <HljodLina key={h.id} id={h.id} texti={h.texti} />
+          ))}
+        </section>
+
+        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-lg font-medium text-gray-800 mb-2">Myndir og myndbönd</h2>
+          <p className="text-sm text-gray-500 font-light mb-3">Settu þessar skrár í {MAPPA}. Á meðan mynd vantar birtist táknið.</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {ORD.map(o => (
+              <div key={o.id} className="text-center">
+                <Mynd ord={o} className="h-16 w-full" emojiStaerd="text-4xl" />
+                <div className="text-xs text-gray-500 font-light mt-1">{o.mynd}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-gray-500 font-light mt-4">Myndbönd: upphaf.mp4 og lok.mp4</p>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function Ovitad() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <p className="text-2xl font-light text-gray-600">Denne kode kender jeg ikke. Spørg Viðar!</p>
+    </div>
+  );
+}
+
+/* ---------- Leiðir ---------- */
+
+function App() {
+  const p = new URLSearchParams(window.location.search);
+  const k = p.get('k');
+  if (k) {
+    const i = HOPAR.findIndex(h => h.ordKodi === k);
+    if (i >= 0) return <OrdaSpjald hopur={HOPAR[i]} ord={ORD[i]} />;
+    const j = HOPAR.findIndex(h => h.gataKodi === k);
+    if (j >= 0) return <RadgataSpjald hopur={HOPAR[j]} ord={gataHops(j)} />;
+    return <Ovitad />;
+  }
+  const s = p.get('s');
+  if (s === 'hlid') return <Hlid />;
+  if (s === 'prenta') return <Prentun />;
+  return <Yfirlit />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
